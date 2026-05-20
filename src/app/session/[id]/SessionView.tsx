@@ -28,6 +28,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { PaymentConfetti } from "@/components/PaymentConfetti";
 import {
   addOrderItem,
   removeOrderItem,
@@ -83,6 +84,7 @@ interface SessionViewProps {
     notes: string | null;
     status: OrderItemStatus;
     created_at: string;
+    queue_number: number | null;
     menu_item: { id: string; name: string; image_url: string | null };
     added_by: {
       member_id: string;
@@ -131,9 +133,11 @@ export function SessionView(props: SessionViewProps) {
     .filter((p) => p.status === "paid")
     .reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, subtotal - totalPaid);
+  const isLunas = subtotal > 0 && remaining === 0;
 
   return (
     <main className="flex-1 pb-32">
+      <PaymentConfetti trigger={isLunas} />
       {/* Header */}
       <SessionHeader {...props} />
 
@@ -525,10 +529,17 @@ function BillTab({
           </div>
           <div className="space-y-2">
             {g.items.map((i) => (
-              <div key={i.id} className="flex items-start gap-2 text-sm">
+              <div key={i.id} className="flex items-start gap-2 text-sm slide-in-top">
                 <span className="text-muted-foreground w-6 shrink-0">{i.quantity}×</span>
                 <div className="flex-1 min-w-0">
-                  <p className="truncate">{i.menu_item.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate">{i.menu_item.name}</p>
+                    {i.queue_number !== null && (
+                      <span className="text-[10px] font-mono text-primary/70 shrink-0">
+                        #{String(i.queue_number).padStart(3, "0")}
+                      </span>
+                    )}
+                  </div>
                   {i.notes && (
                     <p className="text-xs text-muted-foreground truncate">{i.notes}</p>
                   )}

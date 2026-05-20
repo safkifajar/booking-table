@@ -639,6 +639,49 @@ export async function signOut() {
 }
 
 // ============================================================
+// STAFF / WAITER ACTIONS
+// ============================================================
+
+async function requireStaff() {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+  const { data: staff } = await supabase
+    .from("staff_roles")
+    .select("role, bar_id")
+    .eq("profile_id", profile.id)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (!staff) {
+    throw new Error("Akses staff diperlukan");
+  }
+  return { profile, staff };
+}
+
+export async function markOrderItemStatus(
+  itemId: string,
+  newStatus: "preparing" | "served"
+) {
+  await requireStaff();
+  const supabase = await createClient();
+
+  const patch: { status: "preparing" | "served"; served_at?: string } = {
+    status: newStatus,
+  };
+  if (newStatus === "served") {
+    patch.served_at = new Date().toISOString();
+  }
+
+  const { error } = await supabase
+    .from("order_items")
+    .update(patch)
+    .eq("id", itemId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/staff");
+}
+
+// ============================================================
 // RATINGS (member-to-member after session closed)
 // ============================================================
 

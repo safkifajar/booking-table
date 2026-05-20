@@ -119,7 +119,8 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
           rx={table.width * 0.9}
           ry={table.height * 0.9}
           fill="url(#open-glow)"
-          className="animate-pulse"
+          className="table-breathe-glow"
+          style={{ transformOrigin: `${cx}px ${cy}px` }}
         />
       )}
 
@@ -133,6 +134,7 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
           fill={fill}
           stroke={stroke}
           strokeWidth={strokeWidth}
+          className={isOpen ? "table-breathe-shape" : undefined}
           transform={table.rotation ? `rotate(${table.rotation} ${cx} ${cy})` : undefined}
         />
       ) : (
@@ -145,6 +147,7 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
           fill={fill}
           stroke={stroke}
           strokeWidth={strokeWidth}
+          className={isOpen ? "table-breathe-shape" : undefined}
           transform={table.rotation ? `rotate(${table.rotation} ${cx} ${cy})` : undefined}
         />
       )}

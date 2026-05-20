@@ -1,10 +1,23 @@
 import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/utils";
-import { LogIn, User } from "lucide-react";
+import { LogIn, User, ChefHat } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
+
+async function getStaffRole(profileId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("staff_roles")
+    .select("role")
+    .eq("profile_id", profileId)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  return data?.role ?? null;
+}
 
 /**
  * Server Component: tampilkan avatar + nama user kalau login, atau tombol Sign In.
@@ -22,6 +35,8 @@ export async function UserMenu() {
       </Button>
     );
   }
+
+  const staffRole = await getStaffRole(profile.id);
 
   return (
     <details className="relative group">
@@ -43,7 +58,20 @@ export async function UserMenu() {
             Masuk sebagai
           </div>
           <div className="text-sm font-medium truncate">{profile.display_name}</div>
+          {staffRole && (
+            <div className="text-[10px] text-primary mt-0.5 capitalize">
+              {staffRole}
+            </div>
+          )}
         </div>
+        {staffRole && (
+          <Link
+            href="/staff"
+            className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+          >
+            <ChefHat className="h-4 w-4" /> Staff Dashboard
+          </Link>
+        )}
         <SignOutButton displayName={profile.display_name} />
       </div>
     </details>
@@ -66,6 +94,8 @@ export async function UserMenuCompact() {
     );
   }
 
+  const staffRole = await getStaffRole(profile.id);
+
   return (
     <details className="relative">
       <summary className="list-none cursor-pointer">
@@ -83,7 +113,20 @@ export async function UserMenuCompact() {
             Masuk sebagai
           </div>
           <div className="text-sm font-medium truncate">{profile.display_name}</div>
+          {staffRole && (
+            <div className="text-[10px] text-primary mt-0.5 capitalize">
+              {staffRole}
+            </div>
+          )}
         </div>
+        {staffRole && (
+          <Link
+            href="/staff"
+            className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+          >
+            <ChefHat className="h-4 w-4" /> Staff Dashboard
+          </Link>
+        )}
         <SignOutButton displayName={profile.display_name} />
       </div>
     </details>

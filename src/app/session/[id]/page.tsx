@@ -151,6 +151,7 @@ export default async function SessionPage({ params }: PageProps) {
           notes: oi.notes,
           status: oi.status,
           created_at: oi.created_at,
+          queue_number: oi.queue_number,
           menu_item: { id: mi.id, name: mi.name, image_url: mi.image_url },
           added_by: {
             member_id: m.id,
