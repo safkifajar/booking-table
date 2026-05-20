@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea } from "@/lib/queries";
 import { BarFloorView } from "./BarFloorView";
+import { UserMenu } from "@/components/UserMenu";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
 
 interface PageProps {
@@ -28,5 +29,11 @@ export default async function BarPage({ params }: PageProps) {
     })
   );
 
-  return <BarFloorView bar={bar} areasWithTables={areasWithTables} />;
+  return (
+    <BarFloorView
+      bar={bar}
+      areasWithTables={areasWithTables}
+      userMenu={<UserMenu />}
+    />
+  );
 }

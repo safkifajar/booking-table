@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowLeft, Users, Crown } from "lucide-react";
 import { joinByCode } from "@/lib/actions";
-import { initials } from "@/lib/utils";
+import { initials, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
   code: string;
@@ -45,7 +45,7 @@ export function JoinForm(props: Props) {
       await joinByCode({ code: props.code });
       // redirects on success
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal join");
+      toast.error(getActionErrorMessage(err, "Gagal join"));
       setLoading(false);
     }
   }

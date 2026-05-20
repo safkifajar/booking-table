@@ -49,3 +49,33 @@ export function initials(name: string): string {
     .join("")
     .toUpperCase();
 }
+
+/**
+ * Detect Next.js internal `redirect()` exception so we don't show it as a
+ * user-facing error. Re-throw it from try/catch blocks in client components
+ * that call Server Actions which redirect.
+ *
+ * Next sets a digest like "NEXT_REDIRECT;replace;/foo;..." on the Error.
+ */
+export function isRedirectError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const digest = (err as { digest?: string }).digest;
+  const message = (err as { message?: string }).message;
+  return (
+    (typeof digest === "string" && digest.startsWith("NEXT_REDIRECT")) ||
+    message === "NEXT_REDIRECT"
+  );
+}
+
+/**
+ * Use inside `catch` of client-side Server Action calls. Re-throws Next's
+ * internal redirect signal so it can complete navigation, otherwise returns
+ * the user-facing message for `toast.error()`.
+ */
+export function getActionErrorMessage(err: unknown, fallback = "Terjadi kesalahan"): string {
+  if (isRedirectError(err)) {
+    // Re-throw so Next.js can process the redirect.
+    throw err;
+  }
+  return err instanceof Error ? err.message : fallback;
+}

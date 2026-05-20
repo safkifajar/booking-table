@@ -148,6 +148,141 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
   return { ok: true, sessionId };
 }
 
+// Request join: insert member dengan status='pending'. Host harus approve dulu.
+// Bedanya dengan joinSession (yang langsung joined) — request join dipakai saat
+// user akses dari halaman preview tanpa invite code.
+export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
+  const profile = await requireProfile();
+  const { sessionId } = joinSchema.parse(input);
+  const supabase = await createClient();
+
+  const { data: session } = await supabase
+    .from("table_sessions")
+    .select("id, status, host_id, table_id, tables(capacity)")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) throw new Error("Session tidak ditemukan");
+  if (session.status !== "open") throw new Error("Session sudah tidak terbuka");
+  if (session.host_id === profile.id) {
+    throw new Error("Kamu adalah host, tidak perlu request");
+  }
+
+  // Cek kapasitas (count yang joined saja)
+  const { count } = await supabase
+    .from("session_members")
+    .select("*", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .eq("status", "joined");
+
+  const cap = Array.isArray(session.tables)
+    ? session.tables[0]?.capacity
+    : (session.tables as { capacity: number } | null)?.capacity;
+  if (count !== null && cap && count >= cap) {
+    throw new Error("Meja sudah penuh");
+  }
+
+  // Cek apakah sudah ada request/membership sebelumnya
+  const { data: existing } = await supabase
+    .from("session_members")
+    .select("id, status")
+    .eq("session_id", sessionId)
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === "joined") {
+      return { status: "joined" as const };
+    }
+    if (existing.status === "pending") {
+      return { status: "pending" as const };
+    }
+    if (existing.status === "kicked") {
+      throw new Error("Kamu pernah dikeluarkan dari meja ini oleh host");
+    }
+    // status 'left' — boleh request lagi
+    const { error } = await supabase
+      .from("session_members")
+      .update({ status: "pending", left_at: null })
+      .eq("id", existing.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from("session_members").insert({
+      session_id: sessionId,
+      profile_id: profile.id,
+      role: "member" as MemberRole,
+      status: "pending",
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath(`/session/${sessionId}`);
+  revalidatePath(`/session/${sessionId}/preview`);
+  return { status: "pending" as const };
+}
+
+export async function approveJoinRequest(memberId: string, sessionId: string) {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const { data: session } = await supabase
+    .from("table_sessions")
+    .select("host_id, tables(capacity)")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) throw new Error("Session tidak ditemukan");
+  if (session.host_id !== profile.id) {
+    throw new Error("Hanya host yang bisa approve");
+  }
+
+  const { count } = await supabase
+    .from("session_members")
+    .select("*", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .eq("status", "joined");
+
+  const cap = Array.isArray(session.tables)
+    ? session.tables[0]?.capacity
+    : (session.tables as { capacity: number } | null)?.capacity;
+  if (count !== null && cap && count >= cap) {
+    throw new Error("Meja sudah penuh, request tidak bisa di-approve");
+  }
+
+  const { error } = await supabase
+    .from("session_members")
+    .update({ status: "joined", joined_at: new Date().toISOString() })
+    .eq("id", memberId)
+    .eq("session_id", sessionId)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/session/${sessionId}`);
+}
+
+export async function rejectJoinRequest(memberId: string, sessionId: string) {
+  const profile = await requireProfile();
+  const supabase = await createClient();
+
+  const { data: session } = await supabase
+    .from("table_sessions")
+    .select("host_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) throw new Error("Session tidak ditemukan");
+  if (session.host_id !== profile.id) {
+    throw new Error("Hanya host yang bisa reject");
+  }
+
+  const { error } = await supabase
+    .from("session_members")
+    .delete()
+    .eq("id", memberId)
+    .eq("session_id", sessionId)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/session/${sessionId}`);
+}
+
 export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
   const profile = await requireProfile();
   const { code } = joinByCodeSchema.parse(input);
@@ -221,6 +356,15 @@ export async function closeSession(sessionId: string) {
     .eq("session_id", sessionId);
 
   revalidatePath(`/session/${sessionId}`);
+  // Host & member diarahkan ke halaman rate — kalau solo, page itu sendiri akan
+  // tampilkan empty state dan tombol ke home.
+  redirect(`/session/${sessionId}/rate`);
+}
+
+export async function leaveSessionAndRate(sessionId: string) {
+  // Helper untuk member: leave + langsung ke halaman rate kalau session sudah closed.
+  // (Untuk sekarang behavior cukup leave; rate page hanya tersedia setelah host close.)
+  await leaveSession(sessionId);
   redirect("/");
 }
 
@@ -405,10 +549,129 @@ export async function signInWithMagicLink(email: string, next?: string) {
   if (error) throw new Error(error.message);
 }
 
+const signUpSchema = z.object({
+  email: z.string().email("Email tidak valid"),
+  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  next: z.string().optional(),
+});
+
+const signInSchema = z.object({
+  email: z.string().email("Email tidak valid"),
+  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+  next: z.string().optional(),
+});
+
+export async function signUpWithPassword(input: z.infer<typeof signUpSchema>) {
+  const supabase = await createClient();
+  const data = parseOrThrow(signUpSchema, input);
+
+  const { data: result, error } = await supabase.auth.signUp({
+    email: data.email,
+    password: data.password,
+    options: {
+      data: { display_name: data.displayName },
+    },
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+  if (!result.user) throw new Error("Signup gagal — tidak ada user dibuat");
+
+  // Update profile display_name (trigger sudah set, tapi pastikan)
+  await supabase
+    .from("profiles")
+    .update({ display_name: data.displayName })
+    .eq("id", result.user.id);
+
+  // Kalau confirm email OFF, session langsung aktif → redirect.
+  // Kalau ON, session null → return info ke caller.
+  if (result.session) {
+    redirect(data.next ?? "/");
+  }
+  return { needsEmailConfirm: true };
+}
+
+export async function signInWithPassword(input: z.infer<typeof signInSchema>) {
+  const supabase = await createClient();
+  const data = parseOrThrow(signInSchema, input);
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+
+  redirect(data.next ?? "/");
+}
+
+function parseOrThrow<T>(schema: z.ZodSchema<T>, input: unknown): T {
+  const result = schema.safeParse(input);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    throw new Error(first?.message ?? "Input tidak valid");
+  }
+  return result.data;
+}
+
+function translateAuthError(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials")) return "Email atau password salah";
+  if (m.includes("user already registered")) return "Email sudah terdaftar — coba sign in";
+  if (m.includes("email not confirmed")) return "Cek inbox kamu untuk konfirmasi email";
+  if (m.includes("password should be at least")) return "Password minimal 6 karakter";
+  if (m.includes("rate limit")) return "Terlalu banyak percobaan, coba lagi nanti";
+  // Zod validation errors come as JSON arrays — extract first message
+  if (msg.startsWith("[") && msg.includes("message")) {
+    try {
+      const parsed = JSON.parse(msg) as Array<{ message?: string }>;
+      const first = parsed[0]?.message;
+      if (first) return first;
+    } catch {
+      /* fallthrough */
+    }
+  }
+  return msg;
+}
+
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/");
+}
+
+// ============================================================
+// RATINGS (member-to-member after session closed)
+// ============================================================
+
+const submitRatingSchema = z.object({
+  sessionId: z.string().uuid(),
+  rateeId: z.string().uuid(),
+  stars: z.number().int().min(1).max(5),
+  tags: z.array(z.string().max(30)).max(5).optional(),
+});
+
+export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
+  const profile = await requireProfile();
+  const data = submitRatingSchema.parse(input);
+
+  if (data.rateeId === profile.id) {
+    throw new Error("Tidak bisa rate diri sendiri");
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("member_ratings").upsert(
+    {
+      session_id: data.sessionId,
+      rater_id: profile.id,
+      ratee_id: data.rateeId,
+      stars: data.stars,
+      tags: data.tags ?? [],
+    },
+    { onConflict: "session_id,rater_id,ratee_id" }
+  );
+  if (error) throw new Error(error.message);
+
+  revalidatePath(`/session/${data.sessionId}/rate`);
 }
 
 // Demo helper: sign in as anonymous user with a display name

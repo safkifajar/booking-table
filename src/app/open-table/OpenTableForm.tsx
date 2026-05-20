@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Users, Lock, Globe, UserPlus } from "lucide-react";
 import { openTable } from "@/lib/actions";
-import { formatIDR } from "@/lib/utils";
+import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import type { TableShape, SessionVisibility } from "@/types/db";
 
 interface Props {
@@ -50,7 +50,7 @@ export function OpenTableForm({ table, areaName, barSlug }: Props) {
       });
       // openTable redirects on success
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal membuka meja");
+      toast.error(getActionErrorMessage(err, "Gagal membuka meja"));
       setLoading(false);
     }
   }

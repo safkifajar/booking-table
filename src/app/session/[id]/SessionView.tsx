@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -18,19 +19,23 @@ import {
   Crown,
   X,
   LogOut,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { formatIDR, initials, cn } from "@/lib/utils";
+import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 import { RelativeTime } from "@/components/ui/relative-time";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   addOrderItem,
   removeOrderItem,
   closeSession,
   leaveSession,
   payShare,
+  approveJoinRequest,
+  rejectJoinRequest,
 } from "@/lib/actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicker";
@@ -47,7 +52,7 @@ import type {
   SplitMode,
 } from "@/types/db";
 
-type Tab = "vibe" | "menu" | "bill" | "split";
+type Tab = "vibe" | "menu" | "bill" | "pay";
 
 interface SessionViewProps {
   session: {
@@ -69,6 +74,7 @@ interface SessionViewProps {
     status: MemberStatus;
     joined_at: string;
     profile: { id: string; display_name: string; avatar_url: string | null };
+    rating: { avg_stars: number; rating_count: number; top_tags: string[] | null } | null;
   }>;
   orderItems: Array<{
     id: string;
@@ -101,11 +107,21 @@ interface SessionViewProps {
   isHost: boolean;
   isMember: boolean;
   inviteCode: string | null;
+  userMenu?: React.ReactNode;
 }
 
 export function SessionView(props: SessionViewProps) {
   const [tab, setTab] = React.useState<Tab>("vibe");
+  const router = useRouter();
   useSessionRealtime(props.session.id);
+
+  // Auto-redirect member ke halaman rate saat host menutup session.
+  // Host sendiri sudah di-redirect via Server Action closeSession().
+  React.useEffect(() => {
+    if (props.session.status === "closed") {
+      router.replace(`/session/${props.session.id}/rate`);
+    }
+  }, [props.session.status, props.session.id, router]);
 
   const subtotal = props.orderItems.reduce(
     (acc, item) => acc + item.quantity * item.unit_price,
@@ -131,6 +147,10 @@ export function SessionView(props: SessionViewProps) {
               active={tab === "vibe"}
               onClick={() => setTab("vibe")}
               badge={props.members.filter((m) => m.status === "joined").length}
+              alert={
+                props.isHost &&
+                props.members.some((m) => m.status === "pending")
+              }
             />
             <TabButton
               icon={<Utensils className="h-4 w-4" />}
@@ -147,9 +167,9 @@ export function SessionView(props: SessionViewProps) {
             />
             <TabButton
               icon={<Wallet className="h-4 w-4" />}
-              label="Split"
-              active={tab === "split"}
-              onClick={() => setTab("split")}
+              label="Bayar"
+              active={tab === "pay"}
+              onClick={() => setTab("pay")}
             />
           </div>
         </div>
@@ -174,7 +194,7 @@ export function SessionView(props: SessionViewProps) {
             subtotal={subtotal}
           />
         )}
-        {tab === "split" && (
+        {tab === "pay" && (
           <SplitTab
             sessionId={props.session.id}
             items={props.orderItems}
@@ -226,7 +246,7 @@ function SessionHeader(props: SessionViewProps) {
   }
 
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
         <Button asChild variant="ghost" size="icon">
           <Link href={`/bar/${props.bar.slug}`} aria-label="Back">
@@ -253,6 +273,7 @@ function SessionHeader(props: SessionViewProps) {
             <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
           </Button>
         )}
+        {props.userMenu}
       </div>
     </header>
   );
@@ -274,18 +295,20 @@ function TabButton({
   active,
   onClick,
   badge,
+  alert,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
   badge?: number;
+  alert?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium border-b-2 transition",
+        "relative flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium border-b-2 transition",
         active
           ? "text-primary border-primary"
           : "text-muted-foreground border-transparent hover:text-foreground"
@@ -303,6 +326,9 @@ function TabButton({
           {badge}
         </span>
       )}
+      {alert && (
+        <span className="absolute top-2 right-2 sm:right-4 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+      )}
     </button>
   );
 }
@@ -310,6 +336,7 @@ function TabButton({
 // VIBE / MEMBERS TAB
 function VibeTab(props: SessionViewProps) {
   const joined = props.members.filter((m) => m.status === "joined");
+  const pending = props.members.filter((m) => m.status === "pending");
 
   return (
     <div className="space-y-4">
@@ -322,6 +349,11 @@ function VibeTab(props: SessionViewProps) {
             </Badge>
           ))}
         </div>
+      )}
+
+      {/* Pending requests — host only */}
+      {props.isHost && pending.length > 0 && (
+        <PendingRequests sessionId={props.session.id} pending={pending} />
       )}
 
       {/* Members */}
@@ -350,10 +382,29 @@ function VibeTab(props: SessionViewProps) {
                       kamu
                     </Badge>
                   )}
+                  {m.rating && m.rating.rating_count > 0 && (
+                    <span className="flex items-center gap-0.5 text-[11px] text-primary">
+                      <Star className="h-3 w-3 fill-primary" />
+                      {m.rating.avg_stars}
+                      <span className="text-muted-foreground">
+                        ({m.rating.rating_count})
+                      </span>
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Join <RelativeTime date={m.joined_at} />
-                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    Join <RelativeTime date={m.joined_at} />
+                  </span>
+                  {m.rating?.top_tags && m.rating.top_tags.length > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="truncate">
+                        {m.rating.top_tags.slice(0, 2).join(" · ")}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -401,7 +452,7 @@ function MenuTab({
           await addOrderItem({ sessionId, menuItemId, quantity, notes });
           toast.success("Pesanan ditambahkan");
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : "Gagal menambah");
+          toast.error(getActionErrorMessage(err, "Gagal menambah"));
         }
       }}
     />
@@ -496,7 +547,7 @@ function BillTab({
                           await removeOrderItem(i.id, sessionId);
                           toast.success("Item dihapus");
                         } catch (err) {
-                          toast.error(err instanceof Error ? err.message : "Gagal");
+                          toast.error(getActionErrorMessage(err, "Gagal"));
                         }
                       }}
                       className="text-muted-foreground hover:text-red-400"
@@ -555,7 +606,7 @@ function SplitTab({
           await payShare({ sessionId, ...input });
           toast.success("Pembayaran tercatat");
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : "Gagal membayar");
+          toast.error(getActionErrorMessage(err, "Gagal membayar"));
         }
       }}
     />
@@ -565,6 +616,101 @@ function SplitTab({
 // ============================================================
 // FOOTER
 // ============================================================
+
+// ============================================================
+// PENDING REQUESTS (host only — di tab Meja)
+// ============================================================
+function PendingRequests({
+  sessionId,
+  pending,
+}: {
+  sessionId: string;
+  pending: SessionViewProps["members"];
+}) {
+  const confirm = useConfirm();
+  const [loadingId, setLoadingId] = React.useState<string | null>(null);
+
+  async function approve(memberId: string, name: string) {
+    setLoadingId(memberId);
+    try {
+      await approveJoinRequest(memberId, sessionId);
+      toast.success(`${name} berhasil di-approve`);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal approve"));
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  async function reject(memberId: string, name: string) {
+    const ok = await confirm({
+      title: `Tolak request ${name}?`,
+      description: "Request akan dihapus. Orang bisa request lagi nanti.",
+      confirmText: "Tolak",
+      cancelText: "Batal",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    setLoadingId(memberId);
+    try {
+      await rejectJoinRequest(memberId, sessionId);
+      toast.success("Request ditolak");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal reject"));
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
+  return (
+    <Card className="p-5 border-amber-500/40 bg-amber-500/5">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">
+        <UserPlus className="h-4 w-4" />
+        Request masuk ({pending.length})
+      </h2>
+      <div className="space-y-3">
+        {pending.map((m) => (
+          <div key={m.id} className="flex items-center gap-3">
+            <Avatar>
+              {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
+              <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{m.profile.display_name}</p>
+              {m.rating && m.rating.rating_count > 0 && (
+                <p className="text-xs text-muted-foreground flex items-center gap-0.5">
+                  <Star className="h-3 w-3 fill-primary text-primary" />
+                  {m.rating.avg_stars}{" "}
+                  <span className="text-muted-foreground/60">
+                    ({m.rating.rating_count})
+                  </span>
+                </p>
+              )}
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingId === m.id}
+                onClick={() => reject(m.id, m.profile.display_name)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="gold"
+                size="sm"
+                disabled={loadingId === m.id}
+                onClick={() => approve(m.id, m.profile.display_name)}
+              >
+                {loadingId === m.id ? "..." : <Check className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function SessionFooter({
   subtotal,
@@ -580,6 +726,7 @@ function SessionFooter({
   sessionId: string;
 }) {
   const [showActions, setShowActions] = React.useState(false);
+  const confirm = useConfirm();
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur-md">
@@ -614,11 +761,20 @@ function SessionFooter({
                 <button
                   className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
                   onClick={async () => {
-                    if (!confirm("Tutup meja & bayar?")) return;
+                    setShowActions(false);
+                    const ok = await confirm({
+                      title: "Tutup meja & selesaikan bill?",
+                      description:
+                        "Setelah ditutup, pesanan dikunci dan kalian diarahkan ke halaman rating untuk anggota lain.",
+                      confirmText: "Tutup meja",
+                      cancelText: "Belum dulu",
+                      variant: "danger",
+                    });
+                    if (!ok) return;
                     try {
                       await closeSession(sessionId);
                     } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Gagal");
+                      toast.error(getActionErrorMessage(err, "Gagal"));
                     }
                   }}
                 >
@@ -629,12 +785,21 @@ function SessionFooter({
                 <button
                   className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 text-red-400"
                   onClick={async () => {
-                    if (!confirm("Yakin keluar dari meja?")) return;
+                    setShowActions(false);
+                    const ok = await confirm({
+                      title: "Keluar dari meja ini?",
+                      description:
+                        "Bagian bill yang sudah kamu pesan tetap muncul untuk anggota lain. Kamu bisa join lagi via link invite kalau berubah pikiran.",
+                      confirmText: "Keluar",
+                      cancelText: "Tetap di meja",
+                      variant: "destructive",
+                    });
+                    if (!ok) return;
                     try {
                       await leaveSession(sessionId);
                       toast.success("Kamu meninggalkan meja");
                     } catch (err) {
-                      toast.error(err instanceof Error ? err.message : "Gagal");
+                      toast.error(getActionErrorMessage(err, "Gagal"));
                     }
                   }}
                 >

@@ -1,10 +1,18 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { UserMenu } from "@/components/UserMenu";
 
 export default function HomePage() {
   return (
     <main className="flex-1">
+      {/* Top bar with user menu */}
+      <div className="absolute top-0 inset-x-0 z-20">
+        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end">
+          <UserMenu />
+        </div>
+      </div>
+
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(201,169,97,0.15),transparent_60%)]" />

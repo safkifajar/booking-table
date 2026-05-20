@@ -176,6 +176,31 @@ export interface ActiveSessionView {
   table_capacity: number;
 }
 
+// Ratings
+export interface MemberRating {
+  id: string;
+  session_id: string;
+  rater_id: string;
+  ratee_id: string;
+  stars: number;
+  tags: string[];
+  created_at: string;
+}
+
+export interface UserRatingSummary {
+  avg_stars: number;
+  rating_count: number;
+  top_tags: string[] | null;
+}
+
+export interface RatableMember {
+  member_id: string;
+  profile_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  already_rated: boolean;
+}
+
 // Composite types used in UI
 export interface TableWithSession extends BarTable {
   active_session: ActiveSessionView | null;

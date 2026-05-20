@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { TopProgressBar } from "@/components/TopProgressBar";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +33,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
+        <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster
           position="top-center"
           theme="dark"

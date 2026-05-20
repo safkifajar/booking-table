@@ -1,8 +1,9 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth";
-import { getMenuByBar } from "@/lib/queries";
+import { getMenuByBar, getUserRatingsBatch } from "@/lib/queries";
 import { SessionView } from "./SessionView";
+import { UserMenu } from "@/components/UserMenu";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -98,6 +99,13 @@ export default async function SessionPage({ params }: PageProps) {
   });
   const isMember = !!myMember && myMember.status === "joined";
 
+  // Fetch rating summary for all members (so we can show stars on profile cards)
+  const memberProfileIds = (members ?? []).map((m) => {
+    const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
+    return p.id;
+  });
+  const ratingsBatch = await getUserRatingsBatch(memberProfileIds);
+
   return (
     <SessionView
       session={{
@@ -129,6 +137,7 @@ export default async function SessionPage({ params }: PageProps) {
           status: m.status,
           joined_at: m.joined_at,
           profile: p,
+          rating: ratingsBatch[p.id] ?? null,
         };
       })}
       orderItems={(orderItems ?? []).map((oi) => {
@@ -171,6 +180,7 @@ export default async function SessionPage({ params }: PageProps) {
       isHost={isHost}
       isMember={isMember}
       inviteCode={invite?.code ?? null}
+      userMenu={<UserMenu />}
     />
   );
 }

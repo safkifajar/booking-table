@@ -69,8 +69,17 @@ export function SplitPayment(props: Props) {
     .filter((i) => i.added_by.member_id === props.myMemberId)
     .reduce((acc, i) => acc + i.quantity * i.unit_price, 0);
 
+  // Treat all: bayarin penuh sisa tagihan
+  const treatAmount = props.remaining;
+
   const myAmount =
-    mode === "equal" ? equalShare : mode === "itemized" ? myItemsTotal : 0;
+    mode === "equal"
+      ? equalShare
+      : mode === "itemized"
+        ? myItemsTotal
+        : mode === "custom"
+          ? treatAmount
+          : 0;
 
   // What I already paid
   const myPaymentsTotal = props.payments
@@ -117,23 +126,23 @@ export function SplitPayment(props: Props) {
 
       {/* Mode selector */}
       <div>
-        <h3 className="text-sm font-semibold mb-2">Cara split</h3>
+        <h3 className="text-sm font-semibold mb-2">Cara bayar</h3>
         <div className="grid grid-cols-3 gap-2">
           <ModeOption
-            label="Equal"
+            label="Patungan"
             desc={`${formatIDR(equalShare)}/orang`}
             active={mode === "equal"}
             onClick={() => setMode("equal")}
           />
           <ModeOption
-            label="Itemized"
-            desc="Bayar punya sendiri"
+            label="Pesanan saya"
+            desc="Bayar yang aku pesan"
             active={mode === "itemized"}
             onClick={() => setMode("itemized")}
           />
           <ModeOption
-            label="Custom"
-            desc="Tentukan sendiri"
+            label="Aku traktir"
+            desc="Bayar penuh semua"
             active={mode === "custom"}
             onClick={() => setMode("custom")}
           />
@@ -190,11 +199,24 @@ export function SplitPayment(props: Props) {
       )}
 
       {mode === "custom" && (
-        <Card className="p-4 border-dashed text-center text-sm text-muted-foreground">
-          <Sparkles className="h-5 w-5 mx-auto mb-2 text-primary/40" />
-          Custom split — masukkan jumlah sendiri (fitur full di milestone selanjutnya).
-          <br />
-          Untuk demo, gunakan Equal atau Itemized.
+        <Card className="p-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
+          <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4 text-primary" />
+            Kamu yang traktir
+          </h3>
+          {treatAmount > 0 ? (
+            <div className="space-y-2 text-sm">
+              <p className="text-muted-foreground">
+                Sisa tagihan akan kamu bayar penuh. Anggota lain tidak perlu bayar.
+              </p>
+              <div className="flex justify-between font-semibold pt-2 border-t border-border">
+                <span>Yang kamu bayar</span>
+                <span className="text-primary text-base">{formatIDR(treatAmount)}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Tagihan sudah lunas.</p>
+          )}
         </Card>
       )}
 
@@ -237,13 +259,15 @@ export function SplitPayment(props: Props) {
         variant="gold"
         size="lg"
         className="w-full"
-        disabled={loading || myAmount <= 0 || mode === "custom"}
+        disabled={loading || myAmount <= 0}
         onClick={handlePay}
       >
         {loading
           ? "Memproses..."
           : myAmount > 0
-            ? `Bayar ${formatIDR(myAmount)}`
+            ? mode === "custom"
+              ? `Traktir ${formatIDR(myAmount)}`
+              : `Bayar ${formatIDR(myAmount)}`
             : "Tidak ada yang dibayar"}
       </Button>
 
@@ -263,7 +287,7 @@ export function SplitPayment(props: Props) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{p.paid_by}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.method.toUpperCase()} · {p.split_mode}
+                    {p.method.toUpperCase()} · {splitModeLabel(p.split_mode)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -285,6 +309,13 @@ export function SplitPayment(props: Props) {
       )}
     </div>
   );
+}
+
+function splitModeLabel(mode: SplitMode): string {
+  if (mode === "equal") return "Patungan";
+  if (mode === "itemized") return "Pesanan sendiri";
+  if (mode === "custom") return "Traktir";
+  return mode;
 }
 
 function ModeOption({

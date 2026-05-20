@@ -14,9 +14,10 @@ import type { Bar, FloorArea } from "@/types/db";
 interface Props {
   bar: Bar;
   areasWithTables: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
+  userMenu?: React.ReactNode;
 }
 
-export function BarFloorView({ bar, areasWithTables }: Props) {
+export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     areasWithTables[0]?.area.slug ?? ""
   );
@@ -27,7 +28,7 @@ export function BarFloorView({ bar, areasWithTables }: Props) {
   return (
     <main className="flex-1 pb-32">
       {/* Top bar */}
-      <header className="sticky top-0 z-10 border-b border-border bg-background/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
             <Link href="/" aria-label="Back to home">
@@ -44,6 +45,7 @@ export function BarFloorView({ bar, areasWithTables }: Props) {
             <MapPin className="h-3.5 w-3.5" />
             <span className="truncate max-w-[200px]">{bar.address}</span>
           </div>
+          {userMenu}
         </div>
 
         {/* Area tabs */}
@@ -239,8 +241,8 @@ function TableSheet({
             </Button>
           )}
           {isOpen && (
-            <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
-              <Link href={`/session/${session.id}`}>Join Table</Link>
+            <Button variant="outline" size="lg" className="flex-1 min-w-[140px]" asChild>
+              <Link href={`/session/${session.id}/preview`}>Lihat Meja</Link>
             </Button>
           )}
           {session?.status === "locked" && (
@@ -248,10 +250,15 @@ function TableSheet({
               <Lock className="h-4 w-4" /> Locked
             </Button>
           )}
-          <Button variant="outline" size="lg" onClick={onClose}>
-            Cancel
+          <Button variant="ghost" size="lg" onClick={onClose}>
+            Tutup
           </Button>
         </div>
+        {isOpen && (
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            Meja ini hanya bisa di-join lewat link invite dari host
+          </p>
+        )}
       </div>
     </div>
   );
