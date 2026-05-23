@@ -181,4 +181,4 @@ Setiap event memicu `router.refresh()` → server re-fetch & update UI. Cocok un
 
 ---
 
-Built by Cazh as demo for SOHO Social House Purwokerto.
+Demo for SOHO Social House Purwokerto.

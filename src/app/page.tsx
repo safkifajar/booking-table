@@ -104,7 +104,7 @@ export default function HomePage() {
       <footer className="border-t border-border">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} SOHO Social House · Demo by Cazh
+            © {new Date().getFullYear()} SOHO Social House
           </div>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <Link href="/admin" className="hover:text-primary transition">
