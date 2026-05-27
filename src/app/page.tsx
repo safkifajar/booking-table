@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserMenu } from "@/components/UserMenu";
+import { StaffShortcut } from "@/components/StaffShortcut";
 
 export default function HomePage() {
   return (
@@ -11,6 +12,11 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-end">
           <UserMenu />
         </div>
+      </div>
+
+      {/* Staff shortcut banner (only renders if user has staff_roles) */}
+      <div className="pt-16">
+        <StaffShortcut />
       </div>
 
       {/* Hero */}
