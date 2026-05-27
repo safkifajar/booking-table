@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/utils";
-import { LogIn, User, ChefHat } from "lucide-react";
+import { LogIn, User, ChefHat, TrendingUp } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
 
 async function getStaffRole(profileId: string): Promise<string | null> {
@@ -65,12 +65,22 @@ export async function UserMenu() {
           )}
         </div>
         {staffRole && (
-          <Link
-            href="/staff"
-            className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
-          >
-            <ChefHat className="h-4 w-4" /> Staff Dashboard
-          </Link>
+          <>
+            {(staffRole === "admin" || staffRole === "manager") && (
+              <Link
+                href="/admin"
+                className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+              >
+                <TrendingUp className="h-4 w-4" /> Admin Dashboard
+              </Link>
+            )}
+            <Link
+              href="/staff"
+              className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+            >
+              <ChefHat className="h-4 w-4" /> Staff Dashboard
+            </Link>
+          </>
         )}
         <SignOutButton displayName={profile.display_name} />
       </div>
@@ -120,12 +130,22 @@ export async function UserMenuCompact() {
           )}
         </div>
         {staffRole && (
-          <Link
-            href="/staff"
-            className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
-          >
-            <ChefHat className="h-4 w-4" /> Staff Dashboard
-          </Link>
+          <>
+            {(staffRole === "admin" || staffRole === "manager") && (
+              <Link
+                href="/admin"
+                className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+              >
+                <TrendingUp className="h-4 w-4" /> Admin Dashboard
+              </Link>
+            )}
+            <Link
+              href="/staff"
+              className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border text-primary"
+            >
+              <ChefHat className="h-4 w-4" /> Staff Dashboard
+            </Link>
+          </>
         )}
         <SignOutButton displayName={profile.display_name} />
       </div>
