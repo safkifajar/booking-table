@@ -638,6 +638,51 @@ export async function signOut() {
   redirect("/");
 }
 
+const resetRequestSchema = z.object({
+  email: z.string().email("Email tidak valid"),
+});
+
+export async function requestPasswordReset(input: z.infer<typeof resetRequestSchema>) {
+  const data = parseOrThrow(resetRequestSchema, input);
+  const supabase = await createClient();
+  const headers = await import("next/headers").then((m) => m.headers());
+  const h = await headers;
+  const host = h.get("host") ?? "localhost:3000";
+  const protocol = host.includes("localhost") ? "http" : "https";
+
+  const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
+    redirectTo: `${protocol}://${host}/auth/callback?next=${encodeURIComponent("/auth/reset")}`,
+  });
+  // Hindari "user enumeration": tetap return ok meski email tidak terdaftar.
+  // Tapi log internal error kalau bukan "user not found".
+  if (error && !error.message.toLowerCase().includes("not found")) {
+    throw new Error(translateAuthError(error.message));
+  }
+}
+
+const updatePasswordSchema = z.object({
+  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+});
+
+export async function updatePassword(input: z.infer<typeof updatePasswordSchema>) {
+  const data = parseOrThrow(updatePasswordSchema, input);
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error("Sesi recovery sudah kedaluwarsa. Coba minta link baru.");
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: data.password,
+  });
+  if (error) throw new Error(translateAuthError(error.message));
+
+  redirect("/");
+}
+
 // ============================================================
 // STAFF / WAITER ACTIONS
 // ============================================================

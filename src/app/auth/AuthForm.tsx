@@ -273,6 +273,17 @@ function PasswordForm({
           {mode === "signin" ? "Belum punya akun? Daftar" : "Sudah punya akun? Masuk"}
         </button>
       </div>
+
+      {mode === "signin" && (
+        <div className="pt-1 text-center">
+          <Link
+            href="/auth/forgot"
+            className="text-xs text-muted-foreground hover:text-primary transition"
+          >
+            Lupa password?
+          </Link>
+        </div>
+      )}
     </form>
   );
 }

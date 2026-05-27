@@ -144,18 +144,29 @@ begin
       v_closed_at := now() - interval '5 minutes';
     end if;
 
-    -- Insert session
-    insert into table_sessions (
-      table_id, host_id, status, visibility, title, vibe_tags,
-      started_at, closed_at
-    ) values (
-      v_table_id, v_host_id, 'closed', 'public',
-      (array['Friday night', 'Hangout', 'Anniversary', 'After work', 'Catch up',
-             'Birthday', 'Date night', 'Reunion', 'Cocktail night'])[1 + floor(random() * 9)::int],
-      (array[array['chill', 'fun'], array['celebrate'], array['networking', 'chill'],
-             array['date'], array['loud', 'fun']])[1 + floor(random() * 5)::int],
-      v_started_at, v_closed_at
-    ) returning id into v_session_id;
+    -- Insert session (pilih title + vibe_tags via local block)
+    declare
+      v_title text;
+      v_vibe text[];
+    begin
+      v_title := (array['Friday night', 'Hangout', 'Anniversary', 'After work',
+                        'Catch up', 'Birthday', 'Date night', 'Reunion',
+                        'Cocktail night'])[1 + floor(random() * 9)::int];
+      v_vibe := case floor(random() * 5)::int
+        when 0 then array['chill', 'fun']
+        when 1 then array['celebrate']
+        when 2 then array['networking', 'chill']
+        when 3 then array['date']
+        else array['loud', 'fun']
+      end;
+      insert into table_sessions (
+        table_id, host_id, status, visibility, title, vibe_tags,
+        started_at, closed_at
+      ) values (
+        v_table_id, v_host_id, 'closed', 'public',
+        v_title, v_vibe, v_started_at, v_closed_at
+      ) returning id into v_session_id;
+    end;
 
     -- Members: host + 1-5 random tambahan (yang bukan host)
     member_count := 1 + floor(random() * 5)::int;
@@ -193,14 +204,18 @@ begin
     v_subtotal := 0;
     for j in 1..item_count loop
       -- Distribusi kategori (cocktails paling sering)
-      v_picked_menu := case floor(random() * 10)::int
-        when 0,1,2 then v_menu_signature[1 + floor(random() * array_length(v_menu_signature, 1))::int]
-        when 3,4 then v_menu_classic[1 + floor(random() * array_length(v_menu_classic, 1))::int]
-        when 5 then v_menu_beer[1 + floor(random() * array_length(v_menu_beer, 1))::int]
-        when 6 then v_menu_wine[1 + floor(random() * array_length(v_menu_wine, 1))::int]
-        when 7 then v_menu_mocktail[1 + floor(random() * array_length(v_menu_mocktail, 1))::int]
-        when 8 then v_menu_bites[1 + floor(random() * array_length(v_menu_bites, 1))::int]
-        else v_menu_mains[1 + floor(random() * array_length(v_menu_mains, 1))::int]
+      declare
+        v_cat_pick int := floor(random() * 10)::int;
+      begin
+        v_picked_menu := case
+          when v_cat_pick < 3 then v_menu_signature[1 + floor(random() * array_length(v_menu_signature, 1))::int]
+          when v_cat_pick < 5 then v_menu_classic[1 + floor(random() * array_length(v_menu_classic, 1))::int]
+          when v_cat_pick = 5 then v_menu_beer[1 + floor(random() * array_length(v_menu_beer, 1))::int]
+          when v_cat_pick = 6 then v_menu_wine[1 + floor(random() * array_length(v_menu_wine, 1))::int]
+          when v_cat_pick = 7 then v_menu_mocktail[1 + floor(random() * array_length(v_menu_mocktail, 1))::int]
+          when v_cat_pick = 8 then v_menu_bites[1 + floor(random() * array_length(v_menu_bites, 1))::int]
+          else v_menu_mains[1 + floor(random() * array_length(v_menu_mains, 1))::int]
+        end;
       end;
 
       v_qty := 1 + floor(random() * 3)::int;
@@ -223,10 +238,11 @@ begin
     -- Payments: variasi mode
     -- 70% lunas, 30% partial
     if random() < 0.7 then
-      -- Lunas
-      -- 50% equal split, 30% itemized (1 payment per member), 20% one person treats
-      case floor(random() * 10)::int
-        when 0,1,2,3,4 then
+      -- Lunas — pilih split mode acak (1 keputusan per session)
+      declare
+        v_split_pick int := floor(random() * 10)::int;
+      begin
+        if v_split_pick < 5 then
           -- Equal split: bagi rata, 1 payment per member
           for j in 1..array_length(v_member_record_ids, 1) loop
             insert into payments (
@@ -238,7 +254,7 @@ begin
               'paid', 'equal', v_closed_at - interval '2 minutes'
             );
           end loop;
-        when 5,6,7 then
+        elsif v_split_pick < 8 then
           -- Itemized: simplified — satu payment besar dari split itemized
           insert into payments (
             order_id, paid_by_member_id, amount, method, status, split_mode, paid_at
@@ -256,7 +272,8 @@ begin
             (array['card','qris'])[1 + floor(random() * 2)::int]::payment_method,
             'paid', 'custom', v_closed_at - interval '2 minutes'
           );
-      end case;
+        end if;
+      end;
     else
       -- Partial: bayar 60-90% saja
       insert into payments (
