@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   requireAdmin,
   getTransactions,
@@ -7,10 +6,10 @@ import {
 } from "@/lib/admin";
 import { DateRangeFilter } from "../DateRangeFilter";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Receipt, ArrowRight, Users, Clock } from "lucide-react";
+import { Receipt } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { ExportButton } from "../components/ExportButton";
+import { TransactionsList } from "./TransactionsList";
 
 interface PageProps {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
@@ -86,72 +85,8 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           </Card>
         )}
 
-        {/* List */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {transactions.map((t) => (
-            <Link
-              key={t.session_id}
-              href={`/admin/transactions/${t.session_id}`}
-              className="block group"
-            >
-              <Card className="p-4 hover:border-primary/40 transition h-full">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Badge variant="default" className="text-[10px]">
-                      {t.table_label}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground truncate">
-                      {t.area_name}
-                    </span>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
-                </div>
-
-                <h3 className="font-medium text-sm truncate mb-1">
-                  {t.session_title ?? "Open Table"}
-                </h3>
-                <p className="text-xs text-muted-foreground truncate mb-3">
-                  Host: {t.host_name}
-                </p>
-
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground mb-2">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3 w-3" /> {t.member_count}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {t.duration_minutes}m
-                  </span>
-                  <span>{t.item_count} items</span>
-                </div>
-
-                <div className="pt-3 border-t border-border flex justify-between items-end">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Subtotal
-                    </div>
-                    <div className="text-sm font-semibold text-primary">
-                      {formatIDR(t.subtotal)}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] text-muted-foreground">
-                      {new Date(t.closed_at).toLocaleDateString("id-ID", {
-                        day: "numeric",
-                        month: "short",
-                      })}{" "}
-                      ·{" "}
-                      {new Date(t.closed_at).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        {/* List + drawer (client component) */}
+        <TransactionsList transactions={transactions} />
       </div>
     </>
   );

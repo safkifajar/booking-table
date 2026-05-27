@@ -10,8 +10,8 @@ interface DataPoint {
 }
 
 /**
- * Simple SVG bar chart — no library. Hover shows tooltip with full value.
- * Gold gradient bars on dark bg.
+ * Bar chart pakai HTML+flexbox (bukan SVG) supaya text labels
+ * tidak distorsi & responsive. Hover di bar tampilkan tooltip.
  */
 export function SalesChart({ data }: { data: DataPoint[] }) {
   const [hovered, setHovered] = React.useState<number | null>(null);
@@ -25,87 +25,73 @@ export function SalesChart({ data }: { data: DataPoint[] }) {
   }
 
   const maxValue = Math.max(...data.map((d) => d.value), 1);
-  const width = 100; // viewBox 100×100
-  const height = 100;
-  const barCount = data.length;
-  const gap = 1.5;
-  const barWidth = (width - gap * (barCount - 1)) / barCount;
+
+  // Tentukan stride label supaya tidak overlap.
+  // Asumsi tiap label butuh sekitar 60px lebar layar.
+  // Untuk >= 24 data points, kita show every 3rd; >= 16 every 2nd; else all.
+  const labelStride =
+    data.length >= 24 ? 4 : data.length >= 16 ? 3 : data.length >= 10 ? 2 : 1;
 
   return (
-    <div className="space-y-2">
-      <svg
-        viewBox={`0 0 ${width} ${height + 14}`}
-        className="w-full h-48 sm:h-56"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id="bar-gold" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#e6c478" stopOpacity="1" />
-            <stop offset="100%" stopColor="#c9a961" stopOpacity="0.6" />
-          </linearGradient>
-        </defs>
-
-        {/* Bars */}
+    <div className="space-y-3">
+      {/* Bars */}
+      <div className="relative h-44 sm:h-52 flex items-end gap-[2px] overflow-hidden">
         {data.map((d, i) => {
-          const h = (d.value / maxValue) * height;
-          const x = i * (barWidth + gap);
-          const y = height - h;
+          const h = (d.value / maxValue) * 100;
           const isHovered = hovered === i;
           return (
-            <g key={i}>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={Math.max(h, 0.5)}
-                fill="url(#bar-gold)"
-                opacity={hovered === null || isHovered ? 1 : 0.55}
-                rx={0.5}
-                onMouseEnter={() => setHovered(i)}
-                onMouseLeave={() => setHovered(null)}
-                style={{ transition: "opacity 150ms" }}
-              />
-              {/* invisible wider hit area */}
-              <rect
-                x={x}
-                y={0}
-                width={barWidth + gap}
-                height={height}
-                fill="transparent"
-                onMouseEnter={() => setHovered(i)}
-                onMouseLeave={() => setHovered(null)}
-              />
-            </g>
-          );
-        })}
-
-        {/* X-axis labels — only show subset to avoid clutter */}
-        {data.map((d, i) => {
-          const showEvery = Math.max(1, Math.ceil(barCount / 8));
-          if (i % showEvery !== 0 && i !== barCount - 1) return null;
-          const x = i * (barWidth + gap) + barWidth / 2;
-          return (
-            <text
-              key={`label-${i}`}
-              x={x}
-              y={height + 8}
-              textAnchor="middle"
-              fontSize="3.5"
-              fill="rgba(255,255,255,0.4)"
+            <button
+              key={i}
+              type="button"
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+              onFocus={() => setHovered(i)}
+              onBlur={() => setHovered(null)}
+              className="group relative flex-1 h-full flex flex-col justify-end transition-opacity"
+              style={{
+                opacity: hovered === null || isHovered ? 1 : 0.55,
+              }}
+              aria-label={`${d.label}: ${formatIDR(d.value)}, ${d.count} transaksi`}
             >
-              {d.label}
-            </text>
+              <div
+                className="w-full rounded-t-sm transition-all"
+                style={{
+                  height: `${Math.max(h, 0.5)}%`,
+                  background:
+                    "linear-gradient(180deg, #e6c478 0%, #c9a961 60%, rgba(201,169,97,0.55) 100%)",
+                  boxShadow: isHovered
+                    ? "0 0 12px rgba(201,169,97,0.5)"
+                    : "none",
+                }}
+              />
+            </button>
           );
         })}
-      </svg>
+      </div>
 
-      {/* Tooltip below chart */}
+      {/* X-axis labels */}
+      <div className="flex gap-[2px]">
+        {data.map((d, i) => {
+          const showLabel =
+            i % labelStride === 0 || i === data.length - 1;
+          return (
+            <div
+              key={`label-${i}`}
+              className="flex-1 text-center text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden"
+            >
+              {showLabel ? d.label : ""}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tooltip / footer */}
       <div className="min-h-[2.5rem] text-xs">
         {hovered !== null && data[hovered] ? (
           <div className="flex items-center justify-between gap-3 p-2 rounded-md bg-muted/40 border border-border">
             <span className="text-muted-foreground">{data[hovered].label}</span>
             <div className="text-right">
-              <div className="font-semibold text-primary">
+              <div className="font-semibold text-primary tabular-nums">
                 {formatIDR(data[hovered].value)}
               </div>
               <div className="text-[10px] text-muted-foreground">

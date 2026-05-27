@@ -1,15 +1,15 @@
 import {
   requireAdmin,
-  getTopItems,
+  getAllItemsPerformance,
   getSalesSummary,
   resolveDateRange,
   type DateRangePreset,
 } from "@/lib/admin";
 import { DateRangeFilter } from "../DateRangeFilter";
-import { TopItemsList } from "../components/TopItemsList";
 import { ExportButton } from "../components/ExportButton";
+import { ItemsList } from "./ItemsList";
 import { Card } from "@/components/ui/card";
-import { Utensils, TrendingDown } from "lucide-react";
+import { Utensils } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface PageProps {
@@ -25,20 +25,18 @@ export default async function ItemsPage({ searchParams }: PageProps) {
     params.to
   );
 
-  const [topItems, allItems, summary] = await Promise.all([
-    getTopItems(bar.id, range.from, range.to, 20),
-    getTopItems(bar.id, range.from, range.to, 1000),
+  const [allItems, summary] = await Promise.all([
+    getAllItemsPerformance(bar.id, range.from, range.to),
     getSalesSummary(bar.id, range.from, range.to),
   ]);
 
-  // Worst sellers = bottom 5 (sorted by total_revenue asc)
-  const worstItems = [...allItems].sort((a, b) => a.total_revenue - b.total_revenue).slice(0, 5);
+  const soldCount = allItems.filter((i) => i.total_qty > 0).length;
 
   return (
     <>
       <DateRangeFilter currentLabel={range.label} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -47,7 +45,8 @@ export default async function ItemsPage({ searchParams }: PageProps) {
               Item Performance
             </h2>
             <p className="text-xs text-muted-foreground">
-              {allItems.length} item terjual · {formatIDR(summary.total_revenue)} total revenue
+              {soldCount} dari {allItems.length} item terjual ·{" "}
+              {formatIDR(summary.total_revenue)} total revenue
             </p>
           </div>
           <ExportButton
@@ -74,47 +73,10 @@ export default async function ItemsPage({ searchParams }: PageProps) {
           />
         </div>
 
-        {/* Top 20 */}
+        {/* Full list dengan pagination + search + filter kategori */}
         <Card className="p-5">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-            Top 20 Best Sellers
-          </h3>
-          <TopItemsList items={topItems} totalRevenue={summary.total_revenue} />
+          <ItemsList items={allItems} totalRevenue={summary.total_revenue} />
         </Card>
-
-        {/* Worst sellers */}
-        {worstItems.length > 0 && (
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-4 flex items-center gap-2">
-              <TrendingDown className="h-4 w-4" />
-              Bottom 5 (Perlu perhatian)
-            </h3>
-            <p className="text-xs text-muted-foreground mb-3">
-              Item dengan revenue terendah di periode ini. Pertimbangkan untuk evaluasi
-              (drop dari menu, ubah resep, atau promosi).
-            </p>
-            <div className="space-y-2">
-              {worstItems.map((item) => (
-                <div
-                  key={item.menu_item_id}
-                  className="p-3 rounded-md bg-muted/20 border border-border flex items-center gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {item.category_name} · {item.total_qty} pcs
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-semibold text-amber-400">
-                      {formatIDR(item.total_revenue)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
       </div>
     </>
   );

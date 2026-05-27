@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Calendar, ChevronDown, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Preset =
@@ -24,6 +23,57 @@ const PRESETS: { value: Preset; label: string }[] = [
   { value: "last_month", label: "Bulan lalu" },
 ];
 
+/**
+ * Hitung [from, to] date YYYY-MM-DD (jakarta timezone) untuk preset.
+ * Untuk display di input — to-nya inklusif (bukan eksklusif seperti di resolveDateRange).
+ */
+function presetToDates(preset: Preset): { from: string; to: string } {
+  const TZ_OFFSET_HOURS = 7;
+  const nowUtc = new Date();
+  const nowJkt = new Date(nowUtc.getTime() + TZ_OFFSET_HOURS * 60 * 60 * 1000);
+  const todayJkt = new Date(
+    Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), nowJkt.getUTCDate())
+  );
+  const day = 24 * 60 * 60 * 1000;
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  switch (preset) {
+    case "today":
+      return { from: fmt(todayJkt), to: fmt(todayJkt) };
+    case "yesterday": {
+      const y = new Date(todayJkt.getTime() - day);
+      return { from: fmt(y), to: fmt(y) };
+    }
+    case "last7":
+      return {
+        from: fmt(new Date(todayJkt.getTime() - 6 * day)),
+        to: fmt(todayJkt),
+      };
+    case "last30":
+      return {
+        from: fmt(new Date(todayJkt.getTime() - 29 * day)),
+        to: fmt(todayJkt),
+      };
+    case "this_month": {
+      const first = new Date(
+        Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), 1)
+      );
+      return { from: fmt(first), to: fmt(todayJkt) };
+    }
+    case "last_month": {
+      const first = new Date(
+        Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth() - 1, 1)
+      );
+      const lastDay = new Date(
+        Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), 0)
+      );
+      return { from: fmt(first), to: fmt(lastDay) };
+    }
+    default:
+      return { from: "", to: "" };
+  }
+}
+
 export function DateRangeFilter({ currentLabel }: { currentLabel: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -32,9 +82,22 @@ export function DateRangeFilter({ currentLabel }: { currentLabel: string }) {
   const customFrom = searchParams.get("from") ?? "";
   const customTo = searchParams.get("to") ?? "";
 
-  const [showCustom, setShowCustom] = React.useState(current === "custom");
-  const [fromValue, setFromValue] = React.useState(customFrom);
-  const [toValue, setToValue] = React.useState(customTo);
+  // Date input value: kalau preset → derive dari preset, kalau custom → ambil dari URL
+  const derivedDates = React.useMemo(() => {
+    if (current === "custom") {
+      return { from: customFrom, to: customTo };
+    }
+    return presetToDates(current);
+  }, [current, customFrom, customTo]);
+
+  const [fromValue, setFromValue] = React.useState(derivedDates.from);
+  const [toValue, setToValue] = React.useState(derivedDates.to);
+
+  // Sync ketika preset/URL berubah dari luar
+  React.useEffect(() => {
+    setFromValue(derivedDates.from);
+    setToValue(derivedDates.to);
+  }, [derivedDates.from, derivedDates.to]);
 
   function setPreset(p: Preset) {
     const params = new URLSearchParams(searchParams);
@@ -42,35 +105,57 @@ export function DateRangeFilter({ currentLabel }: { currentLabel: string }) {
     if (p !== "custom") {
       params.delete("from");
       params.delete("to");
-      setShowCustom(false);
     }
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function applyCustom() {
-    if (!fromValue || !toValue) return;
+  function applyCustom(from: string, to: string) {
+    if (!from || !to) return;
     const params = new URLSearchParams(searchParams);
     params.set("range", "custom");
-    params.set("from", fromValue);
-    params.set("to", toValue);
+    params.set("from", from);
+    params.set("to", to);
     router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function onFromChange(value: string) {
+    setFromValue(value);
+    if (value && toValue) applyCustom(value, toValue);
+  }
+
+  function onToChange(value: string) {
+    setToValue(value);
+    if (fromValue && value) applyCustom(fromValue, value);
   }
 
   return (
     <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
-        <div className="flex items-center justify-between gap-3">
+        {/* Top row — label + custom date inputs langsung */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
             <Calendar className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-medium truncate">{currentLabel}</span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowCustom((v) => !v)}
-          >
-            Custom <ChevronDown className={cn("h-3 w-3 transition", showCustom && "rotate-180")} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={fromValue}
+              onChange={(e) => onFromChange(e.target.value)}
+              placeholder="Dari"
+              aria-label="Tanggal mulai"
+              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+            />
+            <span className="text-muted-foreground text-xs">→</span>
+            <input
+              type="date"
+              value={toValue}
+              onChange={(e) => onToChange(e.target.value)}
+              placeholder="Sampai"
+              aria-label="Tanggal selesai"
+              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+            />
+          </div>
         </div>
 
         {/* Preset chips */}
@@ -90,47 +175,6 @@ export function DateRangeFilter({ currentLabel }: { currentLabel: string }) {
             </button>
           ))}
         </div>
-
-        {/* Custom range */}
-        {showCustom && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground">Dari</label>
-              <input
-                type="date"
-                value={fromValue}
-                onChange={(e) => setFromValue(e.target.value)}
-                className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground">Sampai</label>
-              <input
-                type="date"
-                value={toValue}
-                onChange={(e) => setToValue(e.target.value)}
-                className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="gold"
-              disabled={!fromValue || !toValue}
-              onClick={applyCustom}
-            >
-              Apply
-            </Button>
-            {current === "custom" && (
-              <button
-                onClick={() => setPreset("today")}
-                className="text-xs text-muted-foreground hover:text-foreground p-1"
-                aria-label="Clear custom"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

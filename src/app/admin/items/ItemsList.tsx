@@ -1,0 +1,354 @@
+"use client";
+
+import * as React from "react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TopItemsList } from "../components/TopItemsList";
+import { cn } from "@/lib/utils";
+import type { TopItem } from "@/lib/admin";
+
+interface Props {
+  items: TopItem[];
+  totalRevenue: number;
+}
+
+const PAGE_SIZE = 20;
+
+export function ItemsList({ items, totalRevenue }: Props) {
+  const [query, setQuery] = React.useState("");
+  const [activeCategory, setActiveCategory] = React.useState<string | "all">("all");
+  const [page, setPage] = React.useState(0);
+
+  // Unique categories dari data
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((i) => set.add(i.category_name));
+    return Array.from(set).sort();
+  }, [items]);
+
+  // Filter berdasar search + kategori
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((it) => {
+      if (activeCategory !== "all" && it.category_name !== activeCategory)
+        return false;
+      if (!q) return true;
+      return (
+        it.name.toLowerCase().includes(q) ||
+        it.category_name.toLowerCase().includes(q)
+      );
+    });
+  }, [items, query, activeCategory]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const start = safePage * PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+  // Hitung rank global biar konsisten (#1 = paling laris keseluruhan, bukan di page)
+  // Items prop sudah pre-sorted by rank, jadi index global == rank-1.
+  const rankMap = React.useMemo(() => {
+    const m = new Map<string, number>();
+    items.forEach((it, idx) => m.set(it.menu_item_id, idx + 1));
+    return m;
+  }, [items]);
+
+  // Reset ke page 0 saat filter berubah
+  React.useEffect(() => {
+    setPage(0);
+  }, [query, activeCategory]);
+
+  return (
+    <div className="space-y-3">
+      {/* Search + category filter */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari item..."
+            className="w-full h-9 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+          />
+        </div>
+      </div>
+
+      {/* Category chips */}
+      {categories.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <CategoryChip
+            label="Semua"
+            count={items.length}
+            active={activeCategory === "all"}
+            onClick={() => setActiveCategory("all")}
+          />
+          {categories.map((c) => {
+            const count = items.filter((i) => i.category_name === c).length;
+            return (
+              <CategoryChip
+                key={c}
+                label={c}
+                count={count}
+                active={activeCategory === c}
+                onClick={() => setActiveCategory(c)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Result summary */}
+      <div className="text-xs text-muted-foreground">
+        {filtered.length === items.length ? (
+          <>Menampilkan {filtered.length} item</>
+        ) : (
+          <>
+            {filtered.length} dari {items.length} item
+            {query && <> · pencarian &quot;{query}&quot;</>}
+          </>
+        )}
+      </div>
+
+      {/* List dengan rank global */}
+      <ItemsListWithRank
+        items={pageItems}
+        totalRevenue={totalRevenue}
+        rankMap={rankMap}
+      />
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          onChange={(p) => {
+            setPage(p);
+            // Scroll up ke top of list
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Wrap TopItemsList tapi dengan rank yang fixed (rank global, bukan per page).
+ * Untuk simplicity kita panggil TopItemsList dengan items page only, tapi
+ * label "#X" akan jadi index per page.
+ *
+ * Solusi: passing label ke TopItemsList via prop tambahan, atau buat list-nya
+ * inline di sini. Saya copy logic-nya supaya bisa pass startRank.
+ */
+function ItemsListWithRank({
+  items,
+  totalRevenue,
+  rankMap,
+}: {
+  items: TopItem[];
+  totalRevenue: number;
+  rankMap: Map<string, number>;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="text-center text-sm text-muted-foreground py-8 border border-dashed border-border rounded-md">
+        Tidak ada item yang cocok.
+      </div>
+    );
+  }
+
+  // Max revenue dari current page untuk bar width
+  const maxRevenue = Math.max(...items.map((i) => i.total_revenue), 1);
+
+  return (
+    <div className="space-y-2">
+      {items.map((item) => {
+        const rank = rankMap.get(item.menu_item_id) ?? 0;
+        const pct =
+          totalRevenue > 0 ? (item.total_revenue / totalRevenue) * 100 : 0;
+        const barWidth =
+          item.total_revenue > 0 ? (item.total_revenue / maxRevenue) * 100 : 0;
+        const isUnsold = item.total_qty === 0;
+        return (
+          <div
+            key={item.menu_item_id}
+            className={cn(
+              "relative p-3 rounded-md bg-muted/20 border border-border overflow-hidden",
+              isUnsold && "opacity-60"
+            )}
+          >
+            {!isUnsold && (
+              <div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent"
+                style={{ width: `${barWidth}%` }}
+              />
+            )}
+            <div className="relative flex items-center gap-3">
+              <span
+                className={cn(
+                  "w-10 text-xs font-bold shrink-0 tabular-nums",
+                  isUnsold ? "text-muted-foreground/60" : "text-primary/70"
+                )}
+              >
+                #{rank}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{item.name}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {item.category_name}
+                  {!isUnsold && (
+                    <>
+                      {" · "}
+                      {item.total_qty} pcs · {item.transaction_count} transaksi
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                {isUnsold ? (
+                  <span className="text-[10px] text-muted-foreground italic">
+                    belum terjual
+                  </span>
+                ) : (
+                  <>
+                    <div className="text-sm font-semibold text-primary tabular-nums">
+                      {formatIDR(item.total_revenue)}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {pct.toFixed(1)}% share
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatIDR(n: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(n);
+}
+
+function CategoryChip({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition inline-flex items-center gap-1.5",
+        active
+          ? "bg-primary/15 border-primary/40 text-primary"
+          : "border-border text-muted-foreground hover:text-foreground"
+      )}
+    >
+      <span>{label}</span>
+      <span
+        className={cn(
+          "text-[10px] tabular-nums",
+          active ? "opacity-80" : "opacity-60"
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  // Build page number list yang ditampilkan: first, prev neighbours, current, next neighbours, last
+  const pages = getPageNumbers(page, totalPages);
+
+  return (
+    <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={page === 0}
+        onClick={() => onChange(page - 1)}
+      >
+        <ChevronLeft className="h-4 w-4" />
+        <span className="hidden sm:inline">Sebelumnya</span>
+      </Button>
+
+      <div className="flex items-center gap-1">
+        {pages.map((p, i) =>
+          p === "..." ? (
+            <span
+              key={`gap-${i}`}
+              className="px-2 text-xs text-muted-foreground"
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={cn(
+                "min-w-[32px] h-8 px-2 rounded-md text-xs font-medium border transition tabular-nums",
+                p === page
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {p + 1}
+            </button>
+          )
+        )}
+      </div>
+
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={page >= totalPages - 1}
+        onClick={() => onChange(page + 1)}
+      >
+        <span className="hidden sm:inline">Berikutnya</span>
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function getPageNumbers(current: number, total: number): (number | "...")[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i);
+  }
+  const pages: (number | "...")[] = [];
+  // Always show: 0, total-1, current-1, current, current+1
+  const around = new Set<number>([0, total - 1, current - 1, current, current + 1]);
+  const sorted = Array.from(around)
+    .filter((n) => n >= 0 && n < total)
+    .sort((a, b) => a - b);
+  let prev = -1;
+  for (const n of sorted) {
+    if (prev !== -1 && n - prev > 1) pages.push("...");
+    pages.push(n);
+    prev = n;
+  }
+  return pages;
+}

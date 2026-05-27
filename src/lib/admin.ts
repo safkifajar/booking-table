@@ -181,6 +181,56 @@ export async function getTopItems(
   return (data ?? []) as TopItem[];
 }
 
+/**
+ * Semua menu item di bar (termasuk yang belum laku di periode ini).
+ * Sort by revenue desc — yang paling laris di atas, yang belum terjual di bawah.
+ */
+export async function getAllItemsPerformance(
+  barId: string,
+  from: string,
+  to: string
+): Promise<TopItem[]> {
+  const supabase = await createClient();
+
+  // Get all menu items in bar
+  const { data: allItems } = await supabase
+    .from("menu_items")
+    .select(
+      `id, name,
+       category:menu_categories!inner(name, bar_id)`
+    )
+    .eq("category.bar_id", barId);
+
+  // Get stats untuk periode
+  const stats = await getTopItems(barId, from, to, 10000);
+  const statsMap = new Map(stats.map((s) => [s.menu_item_id, s]));
+
+  // Merge: kalau ada di stats pakai stats, kalau tidak buat dengan 0
+  const merged: TopItem[] = (allItems ?? []).map((it) => {
+    const cat = Array.isArray(it.category) ? it.category[0] : it.category;
+    const s = statsMap.get(it.id);
+    if (s) return s;
+    return {
+      menu_item_id: it.id,
+      name: it.name,
+      category_name: cat.name,
+      total_qty: 0,
+      total_revenue: 0,
+      transaction_count: 0,
+    };
+  });
+
+  // Sort by revenue desc, lalu qty desc, lalu nama
+  merged.sort((a, b) => {
+    if (b.total_revenue !== a.total_revenue)
+      return b.total_revenue - a.total_revenue;
+    if (b.total_qty !== a.total_qty) return b.total_qty - a.total_qty;
+    return a.name.localeCompare(b.name);
+  });
+
+  return merged;
+}
+
 export async function getSalesByHour(
   barId: string,
   from: string,
@@ -239,6 +289,172 @@ export async function getTransactions(
     p_offset: offset,
   });
   return (data ?? []) as AdminTransaction[];
+}
+
+// ============================================================
+// TRANSACTION DETAIL — untuk drawer
+// ============================================================
+
+export interface TransactionDetailItem {
+  id: string;
+  quantity: number;
+  unit_price: number;
+  notes: string | null;
+  status: string;
+  queue_number: number | null;
+  menu_item_name: string;
+  added_by_name: string;
+}
+
+export interface TransactionDetailPayment {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  split_mode: string;
+  paid_at: string | null;
+  paid_by_name: string;
+}
+
+export interface TransactionDetail {
+  session_id: string;
+  status: string;
+  title: string | null;
+  visibility: string;
+  vibe_tags: string[];
+  started_at: string;
+  closed_at: string | null;
+  table_label: string;
+  table_shape: string;
+  table_capacity: number;
+  area_name: string;
+  host_name: string;
+  host_avatar: string | null;
+  member_count: number;
+  items: TransactionDetailItem[];
+  payments: TransactionDetailPayment[];
+  subtotal: number;
+  total_paid: number;
+}
+
+export async function getTransactionDetail(
+  barId: string,
+  sessionId: string
+): Promise<TransactionDetail | null> {
+  const supabase = await createClient();
+
+  const { data: session } = await supabase
+    .from("table_sessions")
+    .select(
+      `id, status, title, visibility, vibe_tags, started_at, closed_at,
+       tables!inner(label, capacity, shape, area_id,
+         floor_areas!inner(name, bar_id)
+       ),
+       host:profiles!table_sessions_host_id_fkey(display_name, avatar_url)`
+    )
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (!session) return null;
+  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
+  const area = Array.isArray(table.floor_areas) ? table.floor_areas[0] : table.floor_areas;
+  if (area.bar_id !== barId) return null;
+
+  const host = Array.isArray(session.host) ? session.host[0] : session.host;
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("session_id", sessionId)
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+
+  let items: TransactionDetailItem[] = [];
+  let payments: TransactionDetailPayment[] = [];
+
+  if (order) {
+    const { data: itemsData } = await supabase
+      .from("order_items")
+      .select(
+        `id, quantity, unit_price, notes, status, queue_number,
+         menu_item:menu_items!inner(name),
+         added_by:session_members!inner(profile:profiles!inner(display_name))`
+      )
+      .eq("order_id", order.id)
+      .neq("status", "void")
+      .order("queue_number");
+
+    items = (itemsData ?? []).map((oi) => {
+      const mi = Array.isArray(oi.menu_item) ? oi.menu_item[0] : oi.menu_item;
+      const ab = Array.isArray(oi.added_by) ? oi.added_by[0] : oi.added_by;
+      const abp = Array.isArray(ab.profile) ? ab.profile[0] : ab.profile;
+      return {
+        id: oi.id,
+        quantity: oi.quantity,
+        unit_price: oi.unit_price,
+        notes: oi.notes,
+        status: oi.status,
+        queue_number: oi.queue_number,
+        menu_item_name: mi.name,
+        added_by_name: abp.display_name,
+      };
+    });
+
+    const { data: paymentsData } = await supabase
+      .from("payments")
+      .select(
+        `id, amount, method, status, split_mode, paid_at,
+         member:session_members!inner(profile:profiles!inner(display_name))`
+      )
+      .eq("order_id", order.id)
+      .order("created_at");
+
+    payments = (paymentsData ?? []).map((p) => {
+      const m = Array.isArray(p.member) ? p.member[0] : p.member;
+      const mp = Array.isArray(m.profile) ? m.profile[0] : m.profile;
+      return {
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        status: p.status,
+        split_mode: p.split_mode,
+        paid_at: p.paid_at,
+        paid_by_name: mp.display_name,
+      };
+    });
+  }
+
+  const { count: memberCount } = await supabase
+    .from("session_members")
+    .select("*", { count: "exact", head: true })
+    .eq("session_id", sessionId);
+
+  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const totalPaid = payments
+    .filter((p) => p.status === "paid")
+    .reduce((s, p) => s + p.amount, 0);
+
+  return {
+    session_id: session.id,
+    status: session.status,
+    title: session.title,
+    visibility: session.visibility,
+    vibe_tags: session.vibe_tags ?? [],
+    started_at: session.started_at,
+    closed_at: session.closed_at,
+    table_label: table.label,
+    table_shape: table.shape,
+    table_capacity: table.capacity,
+    area_name: area.name,
+    host_name: host.display_name,
+    host_avatar: host.avatar_url,
+    member_count: memberCount ?? 0,
+    items,
+    payments,
+    subtotal,
+    total_paid: totalPaid,
+  };
 }
 
 // ============================================================

@@ -49,6 +49,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Cursor pointer untuk semua interactive elements — kasih UX yang jelas */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for],
+select,
+a[href],
+[role="tab"],
+[role="menuitem"],
+[role="option"] {
+  cursor: pointer;
+}
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* Subtle gold scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -164,4 +181,62 @@ body {
 }
 [data-state="closed"][data-radix-dialog-overlay] {
   animation: dialog-overlay-out 160ms ease-out;
+}
+
+/* Print mode: only drawer content visible, everything else hidden */
+@media print {
+  /* Hide app shell ketika drawer terbuka */
+  body.printing-drawer > *:not([data-print-portal]) {
+    visibility: hidden;
+  }
+  body.printing-drawer [data-radix-drawer-overlay] {
+    display: none !important;
+  }
+  body.printing-drawer [data-drawer-content] {
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    animation: none !important;
+    transform: none !important;
+  }
+  body.printing-drawer [data-drawer-content] * {
+    visibility: visible;
+  }
+  body.printing-drawer [data-drawer-content] button[aria-label="Close"],
+  body.printing-drawer [data-drawer-content] [data-drawer-footer] {
+    display: none !important;
+  }
+  body.printing-drawer .text-gold-gradient {
+    color: black !important;
+    background: none !important;
+    -webkit-text-fill-color: black !important;
+  }
+}
+
+/* Drawer slide-in from right */
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes drawer-slide-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+[data-state="open"][data-radix-drawer-overlay] {
+  animation: dialog-overlay-in 240ms ease-out;
+}
+[data-state="closed"][data-radix-drawer-overlay] {
+  animation: dialog-overlay-out 180ms ease-in;
+}
+/* Override center-dialog animation kalau dia drawer */
+[role="dialog"][data-drawer-content][data-state="open"] {
+  animation: drawer-slide-in 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[role="dialog"][data-drawer-content][data-state="closed"] {
+  animation: drawer-slide-out 220ms cubic-bezier(0.4, 0, 0.6, 1);
 }

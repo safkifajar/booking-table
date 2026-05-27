@@ -1,15 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { UserMenu } from "@/components/UserMenu";
-import {
-  LayoutDashboard,
-  Receipt,
-  Utensils,
-  TrendingUp,
-  Settings,
-  ArrowLeft,
-} from "lucide-react";
-import { AdminNavLink } from "./AdminNavLink";
+import { TrendingUp, Settings, ArrowLeft } from "lucide-react";
+import { AdminSidebarNav, AdminMobileNav } from "./AdminSidebarNav";
 
 export default async function AdminLayout({
   children,
@@ -51,20 +44,9 @@ export default async function AdminLayout({
       </header>
 
       <div className="flex-1 flex">
-        {/* Sidebar */}
-        <aside className="hidden md:flex w-56 border-r border-border bg-card/30 flex-col p-3 gap-1 shrink-0 sticky top-[57px] h-[calc(100vh-57px)]">
-          <AdminNavLink href="/admin" icon={<LayoutDashboard className="h-4 w-4" />}>
-            Overview
-          </AdminNavLink>
-          <AdminNavLink
-            href="/admin/transactions"
-            icon={<Receipt className="h-4 w-4" />}
-          >
-            Transaksi
-          </AdminNavLink>
-          <AdminNavLink href="/admin/items" icon={<Utensils className="h-4 w-4" />}>
-            Item Performance
-          </AdminNavLink>
+        {/* Sidebar (desktop) */}
+        <aside className="hidden md:flex w-56 border-r border-border bg-card/30 flex-col p-3 shrink-0 sticky top-[57px] h-[calc(100vh-57px)]">
+          <AdminSidebarNav />
 
           <div className="mt-auto pt-4 border-t border-border space-y-1">
             <Link
@@ -78,27 +60,7 @@ export default async function AdminLayout({
 
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t border-border flex">
-          <AdminNavLink
-            href="/admin"
-            icon={<LayoutDashboard className="h-4 w-4" />}
-            mobile
-          >
-            Overview
-          </AdminNavLink>
-          <AdminNavLink
-            href="/admin/transactions"
-            icon={<Receipt className="h-4 w-4" />}
-            mobile
-          >
-            Transaksi
-          </AdminNavLink>
-          <AdminNavLink
-            href="/admin/items"
-            icon={<Utensils className="h-4 w-4" />}
-            mobile
-          >
-            Items
-          </AdminNavLink>
+          <AdminMobileNav />
         </nav>
 
         {/* Main */}
