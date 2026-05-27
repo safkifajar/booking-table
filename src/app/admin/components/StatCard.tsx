@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export function StatCard({
   icon,
@@ -6,12 +7,15 @@ export function StatCard({
   value,
   sub,
   accent,
+  deltaPct,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
   accent?: "gold" | "default";
+  /** Persentase perubahan vs periode sebelumnya. null = data baru (∞). */
+  deltaPct?: number | null;
 }) {
   return (
     <div
@@ -36,9 +40,47 @@ export function StatCard({
       >
         {value}
       </div>
-      {sub && (
-        <div className="text-[10px] text-muted-foreground mt-1 truncate">{sub}</div>
-      )}
+      <div className="flex items-center gap-2 mt-1">
+        {deltaPct !== undefined && <DeltaBadge pct={deltaPct} />}
+        {sub && (
+          <div className="text-[10px] text-muted-foreground truncate">{sub}</div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function DeltaBadge({ pct }: { pct: number | null }) {
+  if (pct === null) {
+    return (
+      <span className="text-[10px] text-primary/80 font-medium">Baru</span>
+    );
+  }
+  if (pct === 0) {
+    return (
+      <span className="text-[10px] text-muted-foreground inline-flex items-center gap-0.5">
+        <Minus className="h-2.5 w-2.5" />
+        <span>0%</span>
+      </span>
+    );
+  }
+  const up = pct > 0;
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold inline-flex items-center gap-0.5",
+        up ? "text-emerald-400" : "text-red-400"
+      )}
+    >
+      {up ? (
+        <TrendingUp className="h-2.5 w-2.5" />
+      ) : (
+        <TrendingDown className="h-2.5 w-2.5" />
+      )}
+      <span>
+        {up ? "+" : ""}
+        {pct}%
+      </span>
+    </span>
   );
 }

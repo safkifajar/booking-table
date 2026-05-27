@@ -49,6 +49,35 @@ export interface SalesSummary {
   avg_items_per_transaction: number;
 }
 
+export interface SummaryWithDelta extends SalesSummary {
+  prev: SalesSummary;
+  delta_revenue_pct: number | null;
+  delta_transaction_pct: number | null;
+  delta_visitors_pct: number | null;
+}
+
+/**
+ * Hitung period sebelumnya dengan durasi sama.
+ * Range "Bulan ini" → prev = "Bulan lalu" (durasi sama dari from).
+ */
+export function getPreviousRange(from: string, to: string): { from: string; to: string } {
+  const fromMs = new Date(from).getTime();
+  const toMs = new Date(to).getTime();
+  const duration = toMs - fromMs;
+  return {
+    from: new Date(fromMs - duration).toISOString(),
+    to: from,
+  };
+}
+
+function pctDelta(curr: number, prev: number): number | null {
+  if (prev === 0) {
+    if (curr === 0) return 0;
+    return null; // ∞ — tampilkan "Baru"
+  }
+  return Math.round(((curr - prev) / prev) * 100);
+}
+
 export interface TopItem {
   menu_item_id: string;
   name: string;
@@ -111,6 +140,28 @@ export async function getSalesSummary(
     avg_bill: Number(row?.avg_bill ?? 0),
     total_items: Number(row?.total_items ?? 0),
     avg_items_per_transaction: Number(row?.avg_items_per_transaction ?? 0),
+  };
+}
+
+export async function getSummaryWithDelta(
+  barId: string,
+  from: string,
+  to: string
+): Promise<SummaryWithDelta> {
+  const prev = getPreviousRange(from, to);
+  const [curr, prevSummary] = await Promise.all([
+    getSalesSummary(barId, from, to),
+    getSalesSummary(barId, prev.from, prev.to),
+  ]);
+  return {
+    ...curr,
+    prev: prevSummary,
+    delta_revenue_pct: pctDelta(curr.total_revenue, prevSummary.total_revenue),
+    delta_transaction_pct: pctDelta(
+      curr.transaction_count,
+      prevSummary.transaction_count
+    ),
+    delta_visitors_pct: pctDelta(curr.unique_visitors, prevSummary.unique_visitors),
   };
 }
 
