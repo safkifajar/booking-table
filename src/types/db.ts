@@ -18,6 +18,7 @@ export interface Profile {
   display_name: string;
   avatar_url: string | null;
   phone: string | null;
+  hobbies: string[];
   created_at: string;
 }
 

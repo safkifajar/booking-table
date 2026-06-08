@@ -74,7 +74,7 @@ interface SessionViewProps {
     role: MemberRole;
     status: MemberStatus;
     joined_at: string;
-    profile: { id: string; display_name: string; avatar_url: string | null };
+    profile: { id: string; display_name: string; avatar_url: string | null; hobbies?: string[] };
     rating: { avg_stars: number; rating_count: number; top_tags: string[] | null } | null;
   }>;
   orderItems: Array<{
@@ -409,6 +409,23 @@ function VibeTab(props: SessionViewProps) {
                     </>
                   )}
                 </div>
+                {m.profile.hobbies && m.profile.hobbies.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {m.profile.hobbies.slice(0, 4).map((h) => (
+                      <span
+                        key={h}
+                        className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                      >
+                        {h}
+                      </span>
+                    ))}
+                    {m.profile.hobbies.length > 4 && (
+                      <span className="text-[10px] text-muted-foreground/60 px-1">
+                        +{m.profile.hobbies.length - 4}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -696,6 +713,23 @@ function PendingRequests({
                     ({m.rating.rating_count})
                   </span>
                 </p>
+              )}
+              {m.profile.hobbies && m.profile.hobbies.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {m.profile.hobbies.slice(0, 3).map((h) => (
+                    <span
+                      key={h}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                    >
+                      {h}
+                    </span>
+                  ))}
+                  {m.profile.hobbies.length > 3 && (
+                    <span className="text-[10px] text-muted-foreground/60 px-1">
+                      +{m.profile.hobbies.length - 3}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             <div className="flex gap-1.5">

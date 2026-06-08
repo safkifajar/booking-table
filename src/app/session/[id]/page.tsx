@@ -43,7 +43,7 @@ export default async function SessionPage({ params }: PageProps) {
   const { data: members } = await supabase
     .from("session_members")
     .select(
-      "id, role, status, joined_at, profile:profiles!inner(id, display_name, avatar_url)"
+      "id, role, status, joined_at, profile:profiles!inner(id, display_name, avatar_url, hobbies)"
     )
     .eq("session_id", id)
     .order("joined_at");

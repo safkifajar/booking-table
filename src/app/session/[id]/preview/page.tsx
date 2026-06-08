@@ -76,7 +76,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
   const { data: members } = await supabase
     .from("session_members")
     .select(
-      "id, role, joined_at, profile:profiles!inner(id, display_name, avatar_url)"
+      "id, role, joined_at, profile:profiles!inner(id, display_name, avatar_url, hobbies)"
     )
     .eq("session_id", id)
     .eq("status", "joined")
@@ -247,6 +247,20 @@ export default async function SessionPreviewPage({ params }: PageProps) {
                       <p className="text-xs text-muted-foreground">
                         Join <RelativeTime date={m.joined_at} />
                       </p>
+                      {(m.profile as { hobbies?: string[] }).hobbies && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(m.profile as { hobbies: string[] }).hobbies
+                            .slice(0, 4)
+                            .map((h) => (
+                              <span
+                                key={h}
+                                className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                              >
+                                {h}
+                              </span>
+                            ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

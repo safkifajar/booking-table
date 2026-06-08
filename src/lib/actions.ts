@@ -762,6 +762,39 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
   revalidatePath(`/session/${data.sessionId}/rate`);
 }
 
+// ============================================================
+// PROFILE
+// ============================================================
+
+const updateProfileSchema = z.object({
+  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
+});
+
+export async function updateProfile(input: z.infer<typeof updateProfileSchema>) {
+  const profile = await requireProfile();
+  const data = parseOrThrow(updateProfileSchema, input);
+  const supabase = await createClient();
+
+  // Clean hobbies: trim, lowercase, dedup
+  const hobbies = (data.hobbies ?? [])
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0)
+    .filter((h, i, arr) => arr.indexOf(h) === i);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      display_name: data.displayName,
+      hobbies,
+    })
+    .eq("id", profile.id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout");
+}
+
 // Demo helper: sign in as anonymous user with a display name
 // Useful when client tidak punya email setup, atau untuk demo cepat.
 export async function signInAnonymous(displayName: string, next?: string) {
