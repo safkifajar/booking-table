@@ -1,5 +1,8 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import type { Config } from "drizzle-kit";
+
+// Load .env.local (Next.js convention) sebelum read env
+config({ path: ".env.local" });
 
 /**
  * Drizzle Kit config — pakai untuk generate migration, push schema, introspect.
@@ -20,4 +23,3 @@ export default {
   verbose: true,
   strict: true,
 } satisfies Config;
-

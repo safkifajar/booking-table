@@ -20,7 +20,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Init scripts (kalau perlu seed automatis nanti)
       - ./docker/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d booking_table"]
@@ -28,7 +27,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Optional: web UI untuk browse data. Akses http://localhost:8080
   adminer:
     image: adminer:latest
     container_name: booking_table_adminer
@@ -41,4 +39,3 @@ services:
 volumes:
   postgres_data:
     name: booking_table_postgres_data
-</content>
