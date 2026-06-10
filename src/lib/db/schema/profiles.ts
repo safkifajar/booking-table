@@ -1,0 +1,35 @@
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  index,
+} from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
+import { users } from "./auth";
+
+/**
+ * Profile = extra data per user (display name, avatar, hobbies, dll).
+ * One-to-one dengan users.
+ *
+ * id = same as users.id (FK + PK)
+ */
+export const profiles = pgTable(
+  "profiles",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    avatarUrl: text("avatar_url"),
+    phone: text("phone"),
+    hobbies: text("hobbies").array().notNull().default([]),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_profiles_hobbies").using("gin", t.hobbies)]
+);
+
+export const profilesRelations = relations(profiles, ({ one }) => ({
+  user: one(users, { fields: [profiles.id], references: [users.id] }),
+}));
+

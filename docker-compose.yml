@@ -1,0 +1,44 @@
+# Local development infrastructure.
+# Mirror production setup: PostgreSQL 16, optional Adminer untuk lihat data.
+#
+# Usage:
+#   docker compose up -d        # start (background)
+#   docker compose down         # stop
+#   docker compose down -v      # stop + hapus volume (reset data)
+#   docker compose logs -f db   # tail logs
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: booking_table_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev_only
+      POSTGRES_DB: booking_table
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts (kalau perlu seed automatis nanti)
+      - ./docker/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booking_table"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional: web UI untuk browse data. Akses http://localhost:8080
+  adminer:
+    image: adminer:latest
+    container_name: booking_table_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
+    name: booking_table_postgres_data
+</content>
