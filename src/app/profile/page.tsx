@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentProfile } from "@/lib/auth";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -26,7 +26,7 @@ export default async function ProfilePage() {
               Profil
             </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
-              {profile.display_name}
+              {profile.displayName}
             </h1>
           </div>
           <UserMenu />
@@ -35,7 +35,7 @@ export default async function ProfilePage() {
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         <ProfileForm
-          initialDisplayName={profile.display_name}
+          initialDisplayName={profile.displayName}
           initialHobbies={profile.hobbies ?? []}
         />
       </div>

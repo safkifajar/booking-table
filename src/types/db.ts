@@ -1,5 +1,6 @@
-// Type definitions reflecting Supabase schema.
-// These map to the tables in supabase/migrations/0001_schema.sql
+// Type definitions reflecting Postgres schema (snake_case).
+// Mirror dari src/lib/db/schema/* (Drizzle camelCase fields) — translation
+// layer di queries.ts & admin.ts maps Drizzle → snake_case match these types.
 
 export type SessionStatus = "open" | "locked" | "closed" | "cancelled";
 export type SessionVisibility = "public" | "friends" | "invite_only";
