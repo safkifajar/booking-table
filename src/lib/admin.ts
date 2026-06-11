@@ -1,8 +1,33 @@
-// Admin-side data fetching helpers
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+/**
+ * Admin-side data fetching helpers.
+ *
+ * Migrated dari Supabase client ke Drizzle ORM (Phase 3b).
+ *
+ * Strategy:
+ * - requireAdmin: pakai auth-v2/current.ts (Auth.js + Drizzle staff_roles lookup)
+ * - Sales report queries: panggil Postgres RPC functions (admin_sales_summary,
+ *   admin_top_items, dst.) via db.execute(sql`...`). RPC sudah port ke
+ *   local Postgres via migration 0012_admin_reports.sql.
+ * - getAllItemsPerformance: pure Drizzle (gabungan menu_items + RPC result).
+ * - getTransactionDetail: pure Drizzle joins (no RPC).
+ *
+ * Return shape preserve snake_case match types/db.ts contract.
+ */
+
 import { redirect } from "next/navigation";
+import { and, eq, sql } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { menuCategories, menuItems } from "@/lib/db/schema/menu";
+import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { profiles } from "@/lib/db/schema/profiles";
+import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { requireAdmin as requireAdminAuth } from "@/lib/auth-v2/current";
 import type { PaymentMethod } from "@/types/db";
+
+// ============================================================
+// AUTH GUARD
+// ============================================================
 
 export interface AdminBar {
   id: string;
@@ -13,32 +38,21 @@ export interface AdminBar {
 
 /**
  * Server-side guard: redirect kalau bukan admin atau manager.
- * Return bar context + role kalau valid.
+ * Wraps auth-v2/current.ts requireAdmin — preserve AdminBar shape untuk callers.
  */
 export async function requireAdmin(): Promise<AdminBar> {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/auth?next=/admin");
-
-  const supabase = await createClient();
-  const { data: staff } = await supabase
-    .from("staff_roles")
-    .select("role, bar_id, bars!inner(id, slug, name)")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .in("role", ["admin", "manager"])
-    .limit(1)
-    .maybeSingle();
-
-  if (!staff) redirect("/");
-
-  const bar = Array.isArray(staff.bars) ? staff.bars[0] : staff.bars;
+  const ctx = await requireAdminAuth();
   return {
-    id: bar.id,
-    slug: bar.slug,
-    name: bar.name,
-    role: staff.role as "admin" | "manager",
+    id: ctx.barId,
+    slug: ctx.barSlug,
+    name: ctx.barName,
+    role: ctx.role,
   };
 }
+
+// ============================================================
+// SHARED TYPES
+// ============================================================
 
 export interface SalesSummary {
   total_revenue: number;
@@ -54,28 +68,6 @@ export interface SummaryWithDelta extends SalesSummary {
   delta_revenue_pct: number | null;
   delta_transaction_pct: number | null;
   delta_visitors_pct: number | null;
-}
-
-/**
- * Hitung period sebelumnya dengan durasi sama.
- * Range "Bulan ini" → prev = "Bulan lalu" (durasi sama dari from).
- */
-export function getPreviousRange(from: string, to: string): { from: string; to: string } {
-  const fromMs = new Date(from).getTime();
-  const toMs = new Date(to).getTime();
-  const duration = toMs - fromMs;
-  return {
-    from: new Date(fromMs - duration).toISOString(),
-    to: from,
-  };
-}
-
-function pctDelta(curr: number, prev: number): number | null {
-  if (prev === 0) {
-    if (curr === 0) return 0;
-    return null; // ∞ — tampilkan "Baru"
-  }
-  return Math.round(((curr - prev) / prev) * 100);
 }
 
 export interface TopItem {
@@ -121,18 +113,60 @@ export interface AdminTransaction {
   session_title: string | null;
 }
 
+// ============================================================
+// DATE RANGE
+// ============================================================
+
+/**
+ * Hitung period sebelumnya dengan durasi sama.
+ * Range "Bulan ini" → prev = "Bulan lalu" (durasi sama dari from).
+ */
+export function getPreviousRange(from: string, to: string): { from: string; to: string } {
+  const fromMs = new Date(from).getTime();
+  const toMs = new Date(to).getTime();
+  const duration = toMs - fromMs;
+  return {
+    from: new Date(fromMs - duration).toISOString(),
+    to: from,
+  };
+}
+
+function pctDelta(curr: number, prev: number): number | null {
+  if (prev === 0) {
+    if (curr === 0) return 0;
+    return null;
+  }
+  return Math.round(((curr - prev) / prev) * 100);
+}
+
+// ============================================================
+// SALES REPORTS — call Postgres RPC via db.execute
+// ============================================================
+
+/**
+ * Wrapper untuk call RPC + cast result type.
+ * Pakai db.execute() supaya postgres.js return raw array of rows.
+ */
+async function callRpc<T>(sqlQuery: ReturnType<typeof sql>): Promise<T[]> {
+  const rows = (await db.execute(sqlQuery)) as unknown as T[];
+  return rows;
+}
+
 export async function getSalesSummary(
   barId: string,
   from: string,
   to: string
 ): Promise<SalesSummary> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_sales_summary", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-  });
-  const row = Array.isArray(data) ? data[0] : data;
+  const rows = await callRpc<{
+    total_revenue: string | number;
+    transaction_count: number;
+    unique_visitors: number;
+    avg_bill: string | number;
+    total_items: number;
+    avg_items_per_transaction: string | number;
+  }>(sql`SELECT * FROM admin_sales_summary(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`);
+
+  const row = rows[0];
   return {
     total_revenue: Number(row?.total_revenue ?? 0),
     transaction_count: Number(row?.transaction_count ?? 0),
@@ -171,49 +205,52 @@ export async function getTopItems(
   to: string,
   limit = 20
 ): Promise<TopItem[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_top_items", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-    p_limit: limit,
-  });
-  return (data ?? []) as TopItem[];
+  const rows = await callRpc<TopItem>(
+    sql`SELECT * FROM admin_top_items(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz, ${limit})`
+  );
+  return rows.map((r) => ({
+    ...r,
+    total_qty: Number(r.total_qty),
+    total_revenue: Number(r.total_revenue),
+    transaction_count: Number(r.transaction_count),
+  }));
 }
 
 /**
  * Semua menu item di bar (termasuk yang belum laku di periode ini).
  * Sort by revenue desc — yang paling laris di atas, yang belum terjual di bawah.
+ *
+ * Pure Drizzle: ambil semua items + categories untuk bar, merge dengan
+ * stats hasil RPC admin_top_items.
  */
 export async function getAllItemsPerformance(
   barId: string,
   from: string,
   to: string
 ): Promise<TopItem[]> {
-  const supabase = await createClient();
+  // Get all menu items in bar (join via categories)
+  const allItems = await db
+    .select({
+      id: menuItems.id,
+      name: menuItems.name,
+      category_name: menuCategories.name,
+    })
+    .from(menuItems)
+    .innerJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+    .where(eq(menuCategories.barId, barId));
 
-  // Get all menu items in bar
-  const { data: allItems } = await supabase
-    .from("menu_items")
-    .select(
-      `id, name,
-       category:menu_categories!inner(name, bar_id)`
-    )
-    .eq("category.bar_id", barId);
-
-  // Get stats untuk periode
+  // Stats untuk periode (limit besar = ambil semua)
   const stats = await getTopItems(barId, from, to, 10000);
   const statsMap = new Map(stats.map((s) => [s.menu_item_id, s]));
 
   // Merge: kalau ada di stats pakai stats, kalau tidak buat dengan 0
-  const merged: TopItem[] = (allItems ?? []).map((it) => {
-    const cat = Array.isArray(it.category) ? it.category[0] : it.category;
+  const merged: TopItem[] = allItems.map((it) => {
     const s = statsMap.get(it.id);
     if (s) return s;
     return {
       menu_item_id: it.id,
       name: it.name,
-      category_name: cat.name,
+      category_name: it.category_name,
       total_qty: 0,
       total_revenue: 0,
       transaction_count: 0,
@@ -236,13 +273,15 @@ export async function getSalesByHour(
   from: string,
   to: string
 ): Promise<SalesByHour[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_sales_by_hour", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-  });
-  return (data ?? []) as SalesByHour[];
+  const rows = await callRpc<SalesByHour>(
+    sql`SELECT * FROM admin_sales_by_hour(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`
+  );
+  return rows.map((r) => ({
+    ...r,
+    hour_of_day: Number(r.hour_of_day),
+    total_revenue: Number(r.total_revenue),
+    transaction_count: Number(r.transaction_count),
+  }));
 }
 
 export async function getSalesByDay(
@@ -250,13 +289,16 @@ export async function getSalesByDay(
   from: string,
   to: string
 ): Promise<SalesByDay[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_sales_by_day", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-  });
-  return (data ?? []) as SalesByDay[];
+  const rows = await callRpc<{
+    sale_date: Date | string;
+    total_revenue: string | number;
+    transaction_count: number;
+  }>(sql`SELECT * FROM admin_sales_by_day(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`);
+  return rows.map((r) => ({
+    sale_date: typeof r.sale_date === "string" ? r.sale_date : r.sale_date.toISOString().slice(0, 10),
+    total_revenue: Number(r.total_revenue),
+    transaction_count: Number(r.transaction_count),
+  }));
 }
 
 export async function getPaymentMethods(
@@ -264,13 +306,15 @@ export async function getPaymentMethods(
   from: string,
   to: string
 ): Promise<PaymentMethodSummary[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_payment_methods", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-  });
-  return (data ?? []) as PaymentMethodSummary[];
+  const rows = await callRpc<PaymentMethodSummary>(
+    sql`SELECT * FROM admin_payment_methods(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`
+  );
+  return rows.map((r) => ({
+    ...r,
+    total_amount: Number(r.total_amount),
+    payment_count: Number(r.payment_count),
+    pct_share: Number(r.pct_share),
+  }));
 }
 
 export async function getTransactions(
@@ -280,19 +324,39 @@ export async function getTransactions(
   limit = 100,
   offset = 0
 ): Promise<AdminTransaction[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("admin_transactions", {
-    p_bar_id: barId,
-    p_from: from,
-    p_to: to,
-    p_limit: limit,
-    p_offset: offset,
-  });
-  return (data ?? []) as AdminTransaction[];
+  const rows = await callRpc<{
+    session_id: string;
+    closed_at: Date | string;
+    started_at: Date | string;
+    duration_minutes: number;
+    table_label: string;
+    area_name: string;
+    host_name: string;
+    member_count: number;
+    item_count: number;
+    subtotal: string | number;
+    paid_total: string | number;
+    session_title: string | null;
+  }>(sql`SELECT * FROM admin_transactions(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz, ${limit}, ${offset})`);
+
+  return rows.map((r) => ({
+    session_id: r.session_id,
+    closed_at: typeof r.closed_at === "string" ? r.closed_at : r.closed_at.toISOString(),
+    started_at: typeof r.started_at === "string" ? r.started_at : r.started_at.toISOString(),
+    duration_minutes: Number(r.duration_minutes),
+    table_label: r.table_label,
+    area_name: r.area_name,
+    host_name: r.host_name,
+    member_count: Number(r.member_count),
+    item_count: Number(r.item_count),
+    subtotal: Number(r.subtotal),
+    paid_total: Number(r.paid_total),
+    session_title: r.session_title,
+  }));
 }
 
 // ============================================================
-// TRANSACTION DETAIL — untuk drawer
+// TRANSACTION DETAIL — untuk drawer (pure Drizzle, no RPC)
 // ============================================================
 
 export interface TransactionDetailItem {
@@ -341,124 +405,139 @@ export async function getTransactionDetail(
   barId: string,
   sessionId: string
 ): Promise<TransactionDetail | null> {
-  const supabase = await createClient();
+  // 1. Session + table + area + host
+  const [sessionRow] = await db
+    .select({
+      id: tableSessions.id,
+      status: tableSessions.status,
+      title: tableSessions.title,
+      visibility: tableSessions.visibility,
+      vibe_tags: tableSessions.vibeTags,
+      started_at: tableSessions.startedAt,
+      closed_at: tableSessions.closedAt,
+      table_label: tables.label,
+      table_shape: tables.shape,
+      table_capacity: tables.capacity,
+      area_name: floorAreas.name,
+      bar_id: floorAreas.barId,
+      host_name: profiles.displayName,
+      host_avatar: profiles.avatarUrl,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(eq(tableSessions.id, sessionId));
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select(
-      `id, status, title, visibility, vibe_tags, started_at, closed_at,
-       tables!inner(label, capacity, shape, area_id,
-         floor_areas!inner(name, bar_id)
-       ),
-       host:profiles!table_sessions_host_id_fkey(display_name, avatar_url)`
-    )
-    .eq("id", sessionId)
-    .maybeSingle();
+  if (!sessionRow) return null;
+  if (sessionRow.bar_id !== barId) return null;
 
-  if (!session) return null;
-  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
-  const area = Array.isArray(table.floor_areas) ? table.floor_areas[0] : table.floor_areas;
-  if (area.bar_id !== barId) return null;
+  // 2. Order(s) — ambil yg pertama dibuat
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.sessionId, sessionId))
+    .orderBy(orders.createdAt)
+    .limit(1);
 
-  const host = Array.isArray(session.host) ? session.host[0] : session.host;
+  // 3. Items + Payments (kalau ada order)
+  // pakai profile aliases supaya bisa join 2x (menu_item, added_by member)
+  const itemsRaw = order
+    ? await db
+        .select({
+          id: orderItems.id,
+          quantity: orderItems.quantity,
+          unit_price: orderItems.unitPrice,
+          notes: orderItems.notes,
+          status: orderItems.status,
+          queue_number: orderItems.queueNumber,
+          menu_item_name: menuItems.name,
+          added_by_name: profiles.displayName,
+        })
+        .from(orderItems)
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .innerJoin(sessionMembers, eq(sessionMembers.id, orderItems.addedByMemberId))
+        .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+        .where(
+          and(eq(orderItems.orderId, order.id), sql`${orderItems.status} <> 'void'`)
+        )
+        .orderBy(orderItems.queueNumber)
+    : [];
 
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("session_id", sessionId)
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
+  const paymentsRaw = order
+    ? await db
+        .select({
+          id: payments.id,
+          amount: payments.amount,
+          method: payments.method,
+          status: payments.status,
+          split_mode: payments.splitMode,
+          paid_at: payments.paidAt,
+          paid_by_name: profiles.displayName,
+        })
+        .from(payments)
+        .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+        .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+        .where(eq(payments.orderId, order.id))
+        .orderBy(payments.createdAt)
+    : [];
 
-  let items: TransactionDetailItem[] = [];
-  let payments: TransactionDetailPayment[] = [];
+  // 4. Member count
+  const [memberCountRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(eq(sessionMembers.sessionId, sessionId));
 
-  if (order) {
-    const { data: itemsData } = await supabase
-      .from("order_items")
-      .select(
-        `id, quantity, unit_price, notes, status, queue_number,
-         menu_item:menu_items!inner(name),
-         added_by:session_members!inner(profile:profiles!inner(display_name))`
-      )
-      .eq("order_id", order.id)
-      .neq("status", "void")
-      .order("queue_number");
+  const items: TransactionDetailItem[] = itemsRaw.map((i) => ({
+    id: i.id,
+    quantity: i.quantity,
+    unit_price: i.unit_price,
+    notes: i.notes,
+    status: i.status,
+    queue_number: i.queue_number,
+    menu_item_name: i.menu_item_name,
+    added_by_name: i.added_by_name,
+  }));
 
-    items = (itemsData ?? []).map((oi) => {
-      const mi = Array.isArray(oi.menu_item) ? oi.menu_item[0] : oi.menu_item;
-      const ab = Array.isArray(oi.added_by) ? oi.added_by[0] : oi.added_by;
-      const abp = Array.isArray(ab.profile) ? ab.profile[0] : ab.profile;
-      return {
-        id: oi.id,
-        quantity: oi.quantity,
-        unit_price: oi.unit_price,
-        notes: oi.notes,
-        status: oi.status,
-        queue_number: oi.queue_number,
-        menu_item_name: mi.name,
-        added_by_name: abp.display_name,
-      };
-    });
-
-    const { data: paymentsData } = await supabase
-      .from("payments")
-      .select(
-        `id, amount, method, status, split_mode, paid_at,
-         member:session_members!inner(profile:profiles!inner(display_name))`
-      )
-      .eq("order_id", order.id)
-      .order("created_at");
-
-    payments = (paymentsData ?? []).map((p) => {
-      const m = Array.isArray(p.member) ? p.member[0] : p.member;
-      const mp = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-      return {
-        id: p.id,
-        amount: p.amount,
-        method: p.method,
-        status: p.status,
-        split_mode: p.split_mode,
-        paid_at: p.paid_at,
-        paid_by_name: mp.display_name,
-      };
-    });
-  }
-
-  const { count: memberCount } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", sessionId);
+  const paymentsList: TransactionDetailPayment[] = paymentsRaw.map((p) => ({
+    id: p.id,
+    amount: p.amount,
+    method: p.method,
+    status: p.status,
+    split_mode: p.split_mode,
+    paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+    paid_by_name: p.paid_by_name,
+  }));
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
-  const totalPaid = payments
+  const totalPaid = paymentsList
     .filter((p) => p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
 
   return {
-    session_id: session.id,
-    status: session.status,
-    title: session.title,
-    visibility: session.visibility,
-    vibe_tags: session.vibe_tags ?? [],
-    started_at: session.started_at,
-    closed_at: session.closed_at,
-    table_label: table.label,
-    table_shape: table.shape,
-    table_capacity: table.capacity,
-    area_name: area.name,
-    host_name: host.display_name,
-    host_avatar: host.avatar_url,
-    member_count: memberCount ?? 0,
+    session_id: sessionRow.id,
+    status: sessionRow.status,
+    title: sessionRow.title,
+    visibility: sessionRow.visibility,
+    vibe_tags: sessionRow.vibe_tags ?? [],
+    started_at: sessionRow.started_at.toISOString(),
+    closed_at: sessionRow.closed_at ? sessionRow.closed_at.toISOString() : null,
+    table_label: sessionRow.table_label,
+    table_shape: sessionRow.table_shape,
+    table_capacity: sessionRow.table_capacity,
+    area_name: sessionRow.area_name,
+    host_name: sessionRow.host_name,
+    host_avatar: sessionRow.host_avatar,
+    member_count: Number(memberCountRow?.count ?? 0),
     items,
-    payments,
+    payments: paymentsList,
     subtotal,
     total_paid: totalPaid,
   };
 }
 
 // ============================================================
-// Date range helpers
+// Date range helpers (unchanged from Phase 0 — pure TS, no DB)
 // ============================================================
 
 export type DateRangePreset =
@@ -471,8 +550,8 @@ export type DateRangePreset =
   | "custom";
 
 export interface DateRange {
-  from: string; // ISO timestamp
-  to: string; // ISO timestamp (exclusive)
+  from: string;
+  to: string;
   preset: DateRangePreset;
   label: string;
 }
@@ -488,11 +567,9 @@ export function resolveDateRange(
 ): DateRange {
   const TZ_OFFSET_HOURS = 7;
 
-  // "Now" di Jakarta
   const nowUtc = new Date();
   const nowJkt = new Date(nowUtc.getTime() + TZ_OFFSET_HOURS * 60 * 60 * 1000);
 
-  // Today @ 00:00 Jakarta → konversi balik ke UTC
   const startOfTodayJkt = new Date(
     Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), nowJkt.getUTCDate())
   );
@@ -550,13 +627,11 @@ export function resolveDateRange(
     }
     case "custom":
     default: {
-      // customFrom, customTo expected as YYYY-MM-DD (jakarta date)
       const f = customFrom ? new Date(`${customFrom}T00:00:00+07:00`) : startOfToday;
       const t = customTo
         ? new Date(`${customTo}T00:00:00+07:00`)
         : new Date(startOfToday.getTime() + day);
       from = f;
-      // to is exclusive, but custom usually means inclusive end → add 1 day
       to = new Date(t.getTime() + day);
       label = `${customFrom ?? ""} → ${customTo ?? ""}`;
       break;
