@@ -33,3 +33,11 @@ export type { SendEmailInput, SendEmailResult } from "./email-service";
 
 // Auth.js core re-exports (untuk Server Action callers)
 export { signIn, signOut, auth } from "@/auth";
+
+// Server Actions (callable dari Client Components / forms)
+export {
+  signUpAction,
+  signInAction,
+  magicLinkAction,
+  signOutAction,
+} from "./actions";

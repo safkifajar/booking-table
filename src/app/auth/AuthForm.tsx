@@ -5,11 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  signInAnonymous,
-  signInWithMagicLink,
-  signInWithPassword,
-  signUpWithPassword,
-} from "@/lib/actions";
+  signInAction,
+  signUpAction,
+  magicLinkAction,
+} from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,15 +17,16 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Mail, Sparkles, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
-import { cn, getActionErrorMessage } from "@/lib/utils";
+import { Mail, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-type Mode = "choose" | "signin" | "signup" | "magic" | "guest";
+type Mode = "choose" | "signin" | "signup" | "magic";
 
 export function AuthForm() {
   const sp = useSearchParams();
   const next = sp.get("next") ?? "/";
-  const [mode, setMode] = React.useState<Mode>("choose");
+  const checkEmail = sp.get("check_email");
+  const [mode, setMode] = React.useState<Mode>(checkEmail ? "magic" : "choose");
 
   return (
     <Card className="w-full max-w-md">
@@ -64,8 +64,13 @@ export function AuthForm() {
             onSwitch={() => setMode("signin")}
           />
         )}
-        {mode === "magic" && <MagicLinkForm next={next} onBack={() => setMode("choose")} />}
-        {mode === "guest" && <GuestForm next={next} onBack={() => setMode("choose")} />}
+        {mode === "magic" && (
+          <MagicLinkForm
+            next={next}
+            initialSent={!!checkEmail}
+            onBack={() => setMode("choose")}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -75,7 +80,6 @@ function titleFor(mode: Mode): string {
   if (mode === "signin") return "Sign in";
   if (mode === "signup") return "Bikin akun baru";
   if (mode === "magic") return "Sign in dengan email";
-  if (mode === "guest") return "Mulai sebagai tamu";
   return "Welcome";
 }
 
@@ -83,7 +87,6 @@ function descFor(mode: Mode): string {
   if (mode === "signin") return "Masuk dengan email & password kamu.";
   if (mode === "signup") return "Daftar sekali, login kapan saja.";
   if (mode === "magic") return "Kami kirimkan magic link — tinggal klik.";
-  if (mode === "guest") return "Cukup masukkan nama — cocok untuk demo cepat.";
   return "Pilih cara masuk untuk reserve meja atau join malam ini.";
 }
 
@@ -125,14 +128,6 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
       >
         <Mail className="h-4 w-4" /> Magic Link
       </Button>
-      <Button
-        variant="ghost"
-        size="lg"
-        className="w-full"
-        onClick={() => setMode("guest")}
-      >
-        <Sparkles className="h-4 w-4" /> Tamu (demo cepat)
-      </Button>
     </>
   );
 }
@@ -156,7 +151,6 @@ function PasswordForm({
   const [displayName, setDisplayName] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
-  const [needsConfirm, setNeedsConfirm] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -167,38 +161,28 @@ function PasswordForm({
 
     setLoading(true);
     try {
-      if (mode === "signup") {
-        const result = await signUpWithPassword({
-          email,
-          password,
-          displayName: displayName.trim(),
-          next,
-        });
-        if (result?.needsEmailConfirm) {
-          setNeedsConfirm(true);
-        }
-        // kalau confirm OFF, sudah redirect via signUpWithPassword
-      } else {
-        await signInWithPassword({ email, password, next });
+      const result =
+        mode === "signup"
+          ? await signUpAction({
+              email,
+              password,
+              displayName: displayName.trim(),
+              next,
+            })
+          : await signInAction({ email, password, next });
+
+      // Kalau action return ke sini (bukan throw NEXT_REDIRECT), berarti error
+      if (!result.ok && result.error) {
+        toast.error(result.error);
+        setLoading(false);
       }
+      // Kalau sukses, sudah redirect — tidak perlu setLoading(false)
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal masuk"));
+      // NEXT_REDIRECT akan di-handle Next.js, tidak sampai sini
+      const message = err instanceof Error ? err.message : "Gagal masuk";
+      toast.error(message);
       setLoading(false);
     }
-  }
-
-  if (needsConfirm) {
-    return (
-      <div className="space-y-3">
-        <div className="rounded-md bg-primary/10 border border-primary/30 p-3 text-sm">
-          Akun dibuat! Cek inbox <strong>{email}</strong> untuk konfirmasi sebelum
-          login. Kalau email tidak masuk, cek folder Spam.
-        </div>
-        <Button variant="outline" className="w-full" onClick={onSwitch}>
-          Sudah konfirmasi? Sign in
-        </Button>
-      </div>
-    );
   }
 
   return (
@@ -273,17 +257,6 @@ function PasswordForm({
           {mode === "signin" ? "Belum punya akun? Daftar" : "Sudah punya akun? Masuk"}
         </button>
       </div>
-
-      {mode === "signin" && (
-        <div className="pt-1 text-center">
-          <Link
-            href="/auth/forgot"
-            className="text-xs text-muted-foreground hover:text-primary transition"
-          >
-            Lupa password?
-          </Link>
-        </div>
-      )}
     </form>
   );
 }
@@ -291,20 +264,33 @@ function PasswordForm({
 // ============================================================
 // MODE: MAGIC LINK
 // ============================================================
-function MagicLinkForm({ next, onBack }: { next: string; onBack: () => void }) {
+function MagicLinkForm({
+  next,
+  initialSent,
+  onBack,
+}: {
+  next: string;
+  initialSent: boolean;
+  onBack: () => void;
+}) {
   const [email, setEmail] = React.useState("");
   const [loading, setLoading] = React.useState(false);
-  const [sent, setSent] = React.useState(false);
+  const [sent, setSent] = React.useState(initialSent);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.includes("@")) return toast.error("Email tidak valid");
     setLoading(true);
     try {
-      await signInWithMagicLink(email, next);
-      setSent(true);
+      const result = await magicLinkAction({ email, next });
+      if (result.ok) {
+        setSent(true);
+      } else if (result.error) {
+        toast.error(result.error);
+      }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim email"));
+      const message = err instanceof Error ? err.message : "Gagal kirim email";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -314,7 +300,7 @@ function MagicLinkForm({ next, onBack }: { next: string; onBack: () => void }) {
     return (
       <div className="space-y-3">
         <div className="rounded-md bg-primary/10 border border-primary/30 p-3 text-sm">
-          Link dikirim ke {email}. Buka untuk lanjut. Bisa tutup tab ini.
+          Link dikirim{email && ` ke ${email}`}. Buka email & klik link untuk masuk. Bisa tutup tab ini.
         </div>
         <button
           onClick={() => {
@@ -343,57 +329,6 @@ function MagicLinkForm({ next, onBack }: { next: string; onBack: () => void }) {
       <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
         {loading ? "Mengirim..." : "Kirim Magic Link"}
       </Button>
-      <button
-        type="button"
-        onClick={onBack}
-        className="block w-full text-xs text-muted-foreground hover:text-foreground"
-      >
-        ← Pilihan lain
-      </button>
-    </form>
-  );
-}
-
-// ============================================================
-// MODE: GUEST (anonymous)
-// ============================================================
-function GuestForm({ next, onBack }: { next: string; onBack: () => void }) {
-  const [name, setName] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (trimmed.length < 2) return toast.error("Nama minimal 2 karakter");
-    setLoading(true);
-    try {
-      await signInAnonymous(trimmed, next);
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal sign in"));
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <input
-        type="text"
-        placeholder="Nama panggilan kamu"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        autoFocus
-        required
-        minLength={2}
-        maxLength={30}
-        className={inputCls}
-      />
-      <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
-        {loading ? "Masuk..." : "Mulai"}
-      </Button>
-      <p className="text-[10px] text-muted-foreground text-center">
-        Mode tamu: akun tidak bisa di-login lagi setelah logout. Untuk akses berulang,
-        gunakan Sign In dengan Email + Password.
-      </p>
       <button
         type="button"
         onClick={onBack}

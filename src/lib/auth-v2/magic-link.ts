@@ -8,33 +8,30 @@
  * 4. Kirim email berisi link `https://app/api/auth/callback/resend?token=...`
  * 5. User klik link → Auth.js verify token → upsert user → sign in
  *
- * Pakai Auth.js bawaan `Email` provider type tapi dengan custom
- * `sendVerificationRequest` yang pakai Resend (bukan Nodemailer SMTP).
+ * Pakai Auth.js built-in `Resend` provider (next-auth/providers/resend).
+ * Bukan EmailProvider/nodemailer, karena nodemailer construct SMTP transport
+ * di module-init time yang crash worker walaupun sendVerificationRequest
+ * di-override.
  *
  * Token lifetime: 10 menit (lebih singkat = lebih aman dari email leak).
  */
 
-import EmailProvider from "next-auth/providers/nodemailer";
+import Resend from "next-auth/providers/resend";
 import { sendEmail } from "./email-service";
 import { magicLinkEmail } from "./email-template";
 
-export const magicLinkProvider = EmailProvider({
+export const magicLinkProvider = Resend({
   id: "resend",
   name: "Email Magic Link",
-  // Token TTL 10 menit
+  // Token TTL 10 menit (default Resend provider 24 jam — kita override)
   maxAge: 10 * 60,
-
-  // server config tidak dipakai karena kita override sendVerificationRequest,
-  // tapi Auth.js validate-nya, jadi kasih dummy.
-  server: {
-    host: "smtp.resend.com",
-    port: 587,
-    auth: { user: "resend", pass: "dummy" },
-  },
+  // apiKey tetap dibaca dari env (Auth.js convention: AUTH_RESEND_KEY)
+  // tapi kita override sendVerificationRequest jadi tidak dipakai.
+  apiKey: process.env.RESEND_API_KEY ?? "dry-run",
   from: process.env.RESEND_FROM ?? "noreply@booking-table.dev",
 
   /**
-   * Override default Nodemailer send dengan Resend SDK.
+   * Override default Resend send dengan branded SOHO template.
    * Dipanggil otomatis oleh Auth.js saat user request magic link.
    */
   async sendVerificationRequest({ identifier: email, url }) {

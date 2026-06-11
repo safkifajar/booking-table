@@ -1,23 +1,10 @@
 import Link from "next/link";
-import { getCurrentProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { initials } from "@/lib/utils";
 import { LogIn, User, ChefHat, TrendingUp, UserCircle } from "lucide-react";
 import { SignOutButton } from "@/components/SignOutButton";
-
-async function getStaffRole(profileId: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("staff_roles")
-    .select("role")
-    .eq("profile_id", profileId)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-  return data?.role ?? null;
-}
 
 /**
  * Server Component: tampilkan avatar + nama user kalau login, atau tombol Sign In.
@@ -36,19 +23,20 @@ export async function UserMenu() {
     );
   }
 
-  const staffRole = await getStaffRole(profile.id);
+  const staff = await getStaffRole();
+  const staffRole = staff?.role ?? null;
 
   return (
     <details className="relative group">
       <summary className="list-none cursor-pointer flex items-center gap-2 px-2 py-1 rounded-full hover:bg-muted transition">
         <Avatar className="h-8 w-8">
-          {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
+          {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} />}
           <AvatarFallback className="text-[10px]">
-            {initials(profile.display_name)}
+            {initials(profile.displayName)}
           </AvatarFallback>
         </Avatar>
         <span className="text-sm font-medium hidden sm:inline max-w-[120px] truncate">
-          {profile.display_name}
+          {profile.displayName}
         </span>
       </summary>
 
@@ -57,7 +45,7 @@ export async function UserMenu() {
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Masuk sebagai
           </div>
-          <div className="text-sm font-medium truncate">{profile.display_name}</div>
+          <div className="text-sm font-medium truncate">{profile.displayName}</div>
           {staffRole && (
             <div className="text-[10px] text-primary mt-0.5 capitalize">
               {staffRole}
@@ -88,7 +76,7 @@ export async function UserMenu() {
             </Link>
           </>
         )}
-        <SignOutButton displayName={profile.display_name} />
+        <SignOutButton displayName={profile.displayName} />
       </div>
     </details>
   );
@@ -110,15 +98,16 @@ export async function UserMenuCompact() {
     );
   }
 
-  const staffRole = await getStaffRole(profile.id);
+  const staff = await getStaffRole();
+  const staffRole = staff?.role ?? null;
 
   return (
     <details className="relative">
       <summary className="list-none cursor-pointer">
         <Avatar className="h-8 w-8 hover:ring-2 hover:ring-primary/40 transition">
-          {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
+          {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} />}
           <AvatarFallback className="text-[10px]">
-            {initials(profile.display_name)}
+            {initials(profile.displayName)}
           </AvatarFallback>
         </Avatar>
       </summary>
@@ -128,7 +117,7 @@ export async function UserMenuCompact() {
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
             Masuk sebagai
           </div>
-          <div className="text-sm font-medium truncate">{profile.display_name}</div>
+          <div className="text-sm font-medium truncate">{profile.displayName}</div>
           {staffRole && (
             <div className="text-[10px] text-primary mt-0.5 capitalize">
               {staffRole}
@@ -159,7 +148,7 @@ export async function UserMenuCompact() {
             </Link>
           </>
         )}
-        <SignOutButton displayName={profile.display_name} />
+        <SignOutButton displayName={profile.displayName} />
       </div>
     </details>
   );

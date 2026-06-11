@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { LogOut } from "lucide-react";
-import { signOut } from "@/lib/actions";
+import { signOutAction } from "@/lib/auth-v2/actions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { getActionErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
@@ -22,7 +22,7 @@ export function SignOutButton({ displayName }: { displayName: string }) {
     if (!ok) return;
     setLoading(true);
     try {
-      await signOut();
+      await signOutAction();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal keluar"));
       setLoading(false);

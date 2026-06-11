@@ -23,6 +23,7 @@ import { users, accounts, sessions, verificationTokens } from "@/lib/db/schema/a
 import { credentialsProvider } from "@/lib/auth-v2/credentials";
 import { magicLinkProvider } from "@/lib/auth-v2/magic-link";
 import { bootstrapProfile } from "@/lib/auth-v2/profile-bootstrap";
+import { authConfig } from "@/auth.config";
 
 /**
  * Exports:
@@ -37,7 +38,10 @@ export const {
   signIn,
   signOut,
 } = NextAuth({
-  // Drizzle adapter — wire ke schema tables yang sudah kita define
+  // Spread base config (edge-safe parts) — pages, session, callbacks
+  ...authConfig,
+
+  // Drizzle adapter — Node.js only (postgres driver), tidak ada di authConfig
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
@@ -45,36 +49,16 @@ export const {
     verificationTokensTable: verificationTokens,
   }),
 
-  // JWT strategy → session disimpan di cookie, no DB lookup per request
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 hari
-    updateAge: 24 * 60 * 60, // refresh token tiap 24 jam kalau ada aktivitas
-  },
-
-  // Cookie config — secure di production, lax di dev
-  useSecureCookies: process.env.NODE_ENV === "production",
-
-  // Halaman custom (route exists di app, akan refactor di step lain)
-  pages: {
-    signIn: "/auth",
-    error: "/auth?error=auth_error",
-    verifyRequest: "/auth?check_email=1",
-  },
-
-  // Providers
-  // - credentials: email + password (existing user sign in)
-  // - resend (magic link): passwordless via email — juga handle signup baru
+  // Providers full — di authConfig cuma metadata kosong
   providers: [credentialsProvider, magicLinkProvider],
 
-  // Events — side effects setelah auth action (tidak block flow kalau error)
+  // Events — Node.js only (bootstrapProfile hit DB)
   events: {
     /**
      * Dipanggil setelah Auth.js create user baru (dari magic link / OAuth).
-     * Credentials signup tidak trigger ini karena kita create user manual
-     * (bukan lewat adapter.createUser).
+     * Credentials signup tidak trigger ini karena kita create user manual.
      *
-     * Kita auto-create profile supaya helper requireProfile() tidak balik null
+     * Auto-create profile supaya requireProfile() tidak balik null
      * di first session setelah magic link signup.
      */
     async createUser({ user }) {
@@ -90,31 +74,6 @@ export const {
         // bisa di-create lewat /profile page nanti
         console.error("[auth] bootstrapProfile failed:", err);
       }
-    },
-  },
-
-  // Callbacks — kontrol token payload & session shape
-  callbacks: {
-    /**
-     * jwt() dipanggil setiap kali token di-create / di-update.
-     * Tempat masukin custom claims ke JWT (userId, dll).
-     */
-    async jwt({ token, user }) {
-      if (user) {
-        token.sub = user.id;
-      }
-      return token;
-    },
-
-    /**
-     * session() dipanggil saat client request session (via useSession atau auth()).
-     * Map JWT claims → session shape yang dipakai app.
-     */
-    async session({ session, token }) {
-      if (token.sub && session.user) {
-        session.user.id = token.sub;
-      }
-      return session;
     },
   },
 
