@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { getCurrentUser } from "@/lib/auth-v2/current";
 import { OpenTableForm } from "./OpenTableForm";
 
 interface PageProps {
@@ -17,38 +19,39 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
     redirect(`/auth?next=${encodeURIComponent(`/open-table?tableId=${tableId}`)}`);
   }
 
-  const supabase = await createClient();
-  const { data: table } = await supabase
-    .from("tables")
-    .select("*, floor_areas(name, bars(name, slug))")
-    .eq("id", tableId)
-    .maybeSingle();
+  // Single join: table → area → bar
+  const [row] = await db
+    .select({
+      table_id: tables.id,
+      label: tables.label,
+      shape: tables.shape,
+      capacity: tables.capacity,
+      min_spend: tables.minSpend,
+      area_name: floorAreas.name,
+      bar_name: bars.name,
+      bar_slug: bars.slug,
+    })
+    .from(tables)
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .where(eq(tables.id, tableId));
 
-  if (!table) redirect("/");
-
-  const area = Array.isArray(table.floor_areas)
-    ? table.floor_areas[0]
-    : table.floor_areas;
-  const bar = area?.bars
-    ? Array.isArray(area.bars)
-      ? area.bars[0]
-      : area.bars
-    : null;
+  if (!row) redirect("/");
 
   return (
     <main className="flex-1 flex items-center justify-center px-4 py-8">
       <Suspense>
         <OpenTableForm
           table={{
-            id: table.id,
-            label: table.label,
-            shape: table.shape,
-            capacity: table.capacity,
-            min_spend: table.min_spend ?? 0,
+            id: row.table_id,
+            label: row.label,
+            shape: row.shape,
+            capacity: row.capacity,
+            min_spend: row.min_spend ?? 0,
           }}
-          areaName={area?.name ?? ""}
-          barName={bar?.name ?? ""}
-          barSlug={bar?.slug ?? ""}
+          areaName={row.area_name}
+          barName={row.bar_name}
+          barSlug={row.bar_slug}
         />
       </Suspense>
     </main>

@@ -1,6 +1,16 @@
 import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { and, eq, desc, asc, ne } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import {
+  tableSessions,
+  sessionMembers,
+  sessionInvites,
+} from "@/lib/db/schema/sessions";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { profiles } from "@/lib/db/schema/profiles";
+import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { menuItems } from "@/lib/db/schema/menu";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getMenuByBar, getUserRatingsBatch } from "@/lib/queries";
 import { SessionView } from "./SessionView";
 import { UserMenu } from "@/components/UserMenu";
@@ -16,165 +26,203 @@ export default async function SessionPage({ params }: PageProps) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
   }
 
-  const supabase = await createClient();
+  // 1. Session + table + area + bar + host (single join)
+  const [sessionRow] = await db
+    .select({
+      id: tableSessions.id,
+      title: tableSessions.title,
+      status: tableSessions.status,
+      visibility: tableSessions.visibility,
+      vibe_tags: tableSessions.vibeTags,
+      started_at: tableSessions.startedAt,
+      host_id: tableSessions.hostId,
+      // table
+      table_label: tables.label,
+      table_capacity: tables.capacity,
+      table_shape: tables.shape,
+      // area
+      area_name: floorAreas.name,
+      // bar
+      bar_id: bars.id,
+      bar_name: bars.name,
+      bar_slug: bars.slug,
+      // host profile
+      host_display_name: profiles.displayName,
+      host_avatar_url: profiles.avatarUrl,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(eq(tableSessions.id, id));
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select(
-      `*,
-       tables!inner(id, label, capacity, shape, area_id,
-         floor_areas!inner(name, bar_id,
-           bars!inner(id, name, slug)
-         )
-       ),
-       host:profiles!table_sessions_host_id_fkey(id, display_name, avatar_url)`
-    )
-    .eq("id", id)
-    .maybeSingle();
+  if (!sessionRow) notFound();
 
-  if (!session) notFound();
+  // 2. Members + their profile info (join)
+  const membersRaw = await db
+    .select({
+      id: sessionMembers.id,
+      role: sessionMembers.role,
+      status: sessionMembers.status,
+      joined_at: sessionMembers.joinedAt,
+      profile_id: profiles.id,
+      profile_display_name: profiles.displayName,
+      profile_avatar_url: profiles.avatarUrl,
+      profile_hobbies: profiles.hobbies,
+    })
+    .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(eq(sessionMembers.sessionId, id))
+    .orderBy(asc(sessionMembers.joinedAt));
 
-  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
-  const area = Array.isArray(table.floor_areas) ? table.floor_areas[0] : table.floor_areas;
-  const bar = Array.isArray(area.bars) ? area.bars[0] : area.bars;
-  const host = Array.isArray(session.host) ? session.host[0] : session.host;
+  // 3. Open order (single per session)
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, id), ne(orders.status, "closed")));
 
-  // Get members
-  const { data: members } = await supabase
-    .from("session_members")
-    .select(
-      "id, role, status, joined_at, profile:profiles!inner(id, display_name, avatar_url, hobbies)"
-    )
-    .eq("session_id", id)
-    .order("joined_at");
-
-  // Get order
-  const { data: order } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("session_id", id)
-    .neq("status", "closed")
-    .maybeSingle();
-
-  // Get order items
-  const { data: orderItems } = order
-    ? await supabase
-        .from("order_items")
-        .select(
-          `*,
-           menu_item:menu_items!inner(id, name, image_url),
-           member:session_members!inner(id, profile:profiles!inner(id, display_name, avatar_url))`
+  // 4. Order items (kalau ada order) — with menu_item + member profile
+  const orderItemsRaw = order
+    ? await db
+        .select({
+          id: orderItems.id,
+          quantity: orderItems.quantity,
+          unit_price: orderItems.unitPrice,
+          notes: orderItems.notes,
+          status: orderItems.status,
+          created_at: orderItems.createdAt,
+          queue_number: orderItems.queueNumber,
+          // menu_item
+          menu_item_id: menuItems.id,
+          menu_item_name: menuItems.name,
+          menu_item_image_url: menuItems.imageUrl,
+          // member + member's profile
+          member_id: sessionMembers.id,
+          member_profile_id: profiles.id,
+          member_display_name: profiles.displayName,
+          member_avatar_url: profiles.avatarUrl,
+        })
+        .from(orderItems)
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .innerJoin(
+          sessionMembers,
+          eq(sessionMembers.id, orderItems.addedByMemberId)
         )
-        .eq("order_id", order.id)
-        .neq("status", "void")
-        .order("created_at")
-    : { data: [] };
-
-  // Get payments
-  const { data: payments } = order
-    ? await supabase
-        .from("payments")
-        .select(
-          "*, member:session_members!inner(profile:profiles!inner(display_name, avatar_url))"
+        .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+        .where(
+          and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void"))
         )
-        .eq("order_id", order.id)
-    : { data: [] };
+        .orderBy(asc(orderItems.createdAt))
+    : [];
 
-  // Get menu
-  const menu = await getMenuByBar(bar.id);
+  // 5. Payments (kalau ada order)
+  const paymentsRaw = order
+    ? await db
+        .select({
+          id: payments.id,
+          amount: payments.amount,
+          method: payments.method,
+          status: payments.status,
+          split_mode: payments.splitMode,
+          paid_at: payments.paidAt,
+          paid_by_display_name: profiles.displayName,
+          paid_by_avatar_url: profiles.avatarUrl,
+        })
+        .from(payments)
+        .innerJoin(
+          sessionMembers,
+          eq(sessionMembers.id, payments.paidByMemberId)
+        )
+        .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+        .where(eq(payments.orderId, order.id))
+    : [];
 
-  // Get latest invite code
-  const { data: invite } = await supabase
-    .from("session_invites")
-    .select("code, expires_at")
-    .eq("session_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // 6. Menu
+  const menu = await getMenuByBar(sessionRow.bar_id);
 
-  const isHost = session.host_id === profile.id;
-  const myMember = members?.find((m) => {
-    const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-    return p?.id === profile.id;
-  });
+  // 7. Latest invite
+  const [invite] = await db
+    .select({ code: sessionInvites.code, expires_at: sessionInvites.expiresAt })
+    .from(sessionInvites)
+    .where(eq(sessionInvites.sessionId, id))
+    .orderBy(desc(sessionInvites.createdAt))
+    .limit(1);
+
+  const isHost = sessionRow.host_id === profile.id;
+  const myMember = membersRaw.find((m) => m.profile_id === profile.id);
   const isMember = !!myMember && myMember.status === "joined";
 
-  // Fetch rating summary for all members (so we can show stars on profile cards)
-  const memberProfileIds = (members ?? []).map((m) => {
-    const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-    return p.id;
-  });
+  // Rating batch untuk semua members
+  const memberProfileIds = membersRaw.map((m) => m.profile_id);
   const ratingsBatch = await getUserRatingsBatch(memberProfileIds);
 
   return (
     <SessionView
       session={{
-        id: session.id,
-        title: session.title,
-        status: session.status,
-        visibility: session.visibility,
-        vibe_tags: session.vibe_tags ?? [],
-        started_at: session.started_at,
-        host_id: session.host_id,
+        id: sessionRow.id,
+        title: sessionRow.title,
+        status: sessionRow.status,
+        visibility: sessionRow.visibility,
+        vibe_tags: sessionRow.vibe_tags ?? [],
+        started_at: sessionRow.started_at.toISOString(),
+        host_id: sessionRow.host_id,
       }}
       table={{
-        label: table.label,
-        capacity: table.capacity,
-        shape: table.shape,
+        label: sessionRow.table_label,
+        capacity: sessionRow.table_capacity,
+        shape: sessionRow.table_shape,
       }}
-      areaName={area.name}
-      bar={{ name: bar.name, slug: bar.slug }}
+      areaName={sessionRow.area_name}
+      bar={{ name: sessionRow.bar_name, slug: sessionRow.bar_slug }}
       host={{
-        id: host.id,
-        display_name: host.display_name,
-        avatar_url: host.avatar_url,
+        id: sessionRow.host_id,
+        display_name: sessionRow.host_display_name,
+        avatar_url: sessionRow.host_avatar_url,
       }}
-      members={(members ?? []).map((m) => {
-        const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-        return {
-          id: m.id,
-          role: m.role,
-          status: m.status,
-          joined_at: m.joined_at,
-          profile: p,
-          rating: ratingsBatch[p.id] ?? null,
-        };
-      })}
-      orderItems={(orderItems ?? []).map((oi) => {
-        const mi = Array.isArray(oi.menu_item) ? oi.menu_item[0] : oi.menu_item;
-        const m = Array.isArray(oi.member) ? oi.member[0] : oi.member;
-        const mp = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-        return {
-          id: oi.id,
-          quantity: oi.quantity,
-          unit_price: oi.unit_price,
-          notes: oi.notes,
-          status: oi.status,
-          created_at: oi.created_at,
-          queue_number: oi.queue_number,
-          menu_item: { id: mi.id, name: mi.name, image_url: mi.image_url },
-          added_by: {
-            member_id: m.id,
-            profile_id: mp.id,
-            display_name: mp.display_name,
-            avatar_url: mp.avatar_url,
-          },
-        };
-      })}
-      payments={(payments ?? []).map((p) => {
-        const m = Array.isArray(p.member) ? p.member[0] : p.member;
-        const mp = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-        return {
-          id: p.id,
-          amount: p.amount,
-          method: p.method,
-          status: p.status,
-          split_mode: p.split_mode,
-          paid_at: p.paid_at,
-          paid_by: mp.display_name,
-          paid_by_avatar: mp.avatar_url,
-        };
-      })}
+      members={membersRaw.map((m) => ({
+        id: m.id,
+        role: m.role,
+        status: m.status,
+        joined_at: m.joined_at.toISOString(),
+        profile: {
+          id: m.profile_id,
+          display_name: m.profile_display_name,
+          avatar_url: m.profile_avatar_url,
+          hobbies: m.profile_hobbies,
+        },
+        rating: ratingsBatch[m.profile_id] ?? null,
+      }))}
+      orderItems={orderItemsRaw.map((oi) => ({
+        id: oi.id,
+        quantity: oi.quantity,
+        unit_price: oi.unit_price,
+        notes: oi.notes,
+        status: oi.status,
+        created_at: oi.created_at.toISOString(),
+        queue_number: oi.queue_number,
+        menu_item: {
+          id: oi.menu_item_id,
+          name: oi.menu_item_name,
+          image_url: oi.menu_item_image_url,
+        },
+        added_by: {
+          member_id: oi.member_id,
+          profile_id: oi.member_profile_id,
+          display_name: oi.member_display_name,
+          avatar_url: oi.member_avatar_url,
+        },
+      }))}
+      payments={paymentsRaw.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        status: p.status,
+        split_mode: p.split_mode,
+        paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+        paid_by: p.paid_by_display_name,
+        paid_by_avatar: p.paid_by_avatar_url,
+      }))}
       menu={menu}
       myProfileId={profile.id}
       myMemberId={myMember?.id ?? null}

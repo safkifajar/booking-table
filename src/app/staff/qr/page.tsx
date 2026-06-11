@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { floorAreas, tables } from "@/lib/db/schema/venue";
+import { requireStaff } from "@/lib/auth-v2/current";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,33 +12,40 @@ import { ArrowLeft } from "lucide-react";
 import { QrPageActions } from "./QrPageActions";
 
 export default async function StaffQrPage() {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/auth?next=/staff/qr");
+  // requireStaff redirect ke /auth kalau bukan staff
+  const ctx = await requireStaff("/staff/qr");
+  const bar = { name: ctx.barName, slug: ctx.barSlug };
+  const barId = ctx.barId;
 
-  const supabase = await createClient();
-  const { data: staff } = await supabase
-    .from("staff_roles")
-    .select("bar_id, bars!inner(name, slug)")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (!staff) redirect("/");
+  // Fetch areas + tables (area-by-area) untuk QR generator
+  const areasList = await db
+    .select({ id: floorAreas.id, name: floorAreas.name, slug: floorAreas.slug })
+    .from(floorAreas)
+    .where(eq(floorAreas.barId, barId))
+    .orderBy(asc(floorAreas.sortOrder));
 
-  const bar = Array.isArray(staff.bars) ? staff.bars[0] : staff.bars;
-
-  // Fetch all active tables grouped by area
-  const { data: areas } = await supabase
-    .from("floor_areas")
-    .select("id, name, slug")
-    .eq("bar_id", staff.bar_id)
-    .order("sort_order");
-
-  const { data: tables } = await supabase
-    .from("tables")
-    .select("id, label, capacity, shape, area_id")
-    .in("area_id", (areas ?? []).map((a) => a.id))
-    .eq("is_active", true)
-    .order("label");
+  const tablesList =
+    areasList.length > 0
+      ? await db
+          .select({
+            id: tables.id,
+            label: tables.label,
+            capacity: tables.capacity,
+            shape: tables.shape,
+            area_id: tables.areaId,
+          })
+          .from(tables)
+          .where(
+            and(
+              inArray(
+                tables.areaId,
+                areasList.map((a) => a.id)
+              ),
+              eq(tables.isActive, true)
+            )
+          )
+          .orderBy(asc(tables.label))
+      : [];
 
   // Base URL for QR — di production ambil dari env, di dev pakai window.location.
   // Untuk SSR sederhana, kita pakai header host.
@@ -48,7 +57,7 @@ export default async function StaffQrPage() {
 
   // Generate QR data URL (PNG base64) untuk tiap meja
   const tablesWithQr = await Promise.all(
-    (tables ?? []).map(async (t) => {
+    tablesList.map(async (t) => {
       const url = `${baseUrl}/qr/${t.id}`;
       const dataUrl = await QRCode.toDataURL(url, {
         margin: 1,
@@ -61,7 +70,7 @@ export default async function StaffQrPage() {
   );
 
   // Group by area
-  const grouped = (areas ?? []).map((area) => ({
+  const grouped = areasList.map((area) => ({
     area,
     tables: tablesWithQr.filter((t) => t.area_id === area.id),
   }));

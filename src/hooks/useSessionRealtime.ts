@@ -2,78 +2,26 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 /**
- * Subscribe to realtime changes for a session: members, orders, order_items, payments.
- * On any change, refresh server data via router.refresh().
+ * Refresh session data periodically.
  *
- * Note: For lower-latency optimistic UI, replace router.refresh() with local state updates.
- * For demo purposes, refresh() is simple and reliable.
+ * Phase 3c: Supabase realtime channel diganti dengan polling 4 detik.
+ * Phase 4 nanti ganti dengan SSE endpoint /api/session/[id]/stream untuk
+ * instant updates + lebih hemat bandwidth.
+ *
+ * Trade-off: 4 detik = jelas terasa "agak lag" di UI member-join /
+ * order-update, tapi cukup baik untuk demo + tidak butuh tambahan
+ * infrastructure.
  */
 export function useSessionRealtime(sessionId: string) {
   const router = useRouter();
 
   React.useEffect(() => {
     if (!sessionId) return;
-    const supabase = createClient();
-
-    const log = (...args: unknown[]) =>
-      console.log("[Realtime]", `session:${sessionId}`, ...args);
-
-    log("subscribing...");
-
-    const channel = supabase
-      .channel(`session:${sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "session_members",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          log("session_members change", payload.eventType);
-          router.refresh();
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "table_sessions",
-          filter: `id=eq.${sessionId}`,
-        },
-        (payload) => {
-          log("table_sessions change", payload.eventType);
-          router.refresh();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        (payload) => {
-          log("order_items change", payload.eventType);
-          router.refresh();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "payments" },
-        (payload) => {
-          log("payments change", payload.eventType);
-          router.refresh();
-        }
-      )
-      .subscribe((status, err) => {
-        log("status:", status, err ?? "");
-      });
-
-    return () => {
-      log("unsubscribing");
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 4000);
+    return () => clearInterval(interval);
   }, [sessionId, router]);
 }

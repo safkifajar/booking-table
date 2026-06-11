@@ -1,7 +1,16 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { and, asc, eq, ne } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import {
+  tableSessions,
+  sessionMembers,
+} from "@/lib/db/schema/sessions";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { profiles } from "@/lib/db/schema/profiles";
+import { orders, orderItems } from "@/lib/db/schema/orders";
+import { menuItems, menuCategories } from "@/lib/db/schema/menu";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getUserRatingsBatch } from "@/lib/queries";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,99 +38,150 @@ interface PageProps {
 export default async function SessionPreviewPage({ params }: PageProps) {
   const { id } = await params;
   const profile = await getCurrentProfile();
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select(
-      `*,
-       tables!inner(label, capacity, shape, min_spend, area_id,
-         floor_areas!inner(name, slug, bar_id,
-           bars!inner(id, name, slug)
-         )
-       ),
-       host:profiles!table_sessions_host_id_fkey(id, display_name, avatar_url)`
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // 1. Session + table + area + bar + host (single join)
+  const [sessionRow] = await db
+    .select({
+      id: tableSessions.id,
+      title: tableSessions.title,
+      status: tableSessions.status,
+      visibility: tableSessions.visibility,
+      vibe_tags: tableSessions.vibeTags,
+      started_at: tableSessions.startedAt,
+      host_id: tableSessions.hostId,
+      table_label: tables.label,
+      table_capacity: tables.capacity,
+      table_shape: tables.shape,
+      table_min_spend: tables.minSpend,
+      area_name: floorAreas.name,
+      area_slug: floorAreas.slug,
+      bar_id: bars.id,
+      bar_name: bars.name,
+      bar_slug: bars.slug,
+      host_display_name: profiles.displayName,
+      host_avatar_url: profiles.avatarUrl,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(eq(tableSessions.id, id));
 
-  if (!session) notFound();
+  if (!sessionRow) notFound();
 
-  // Kalau session sudah closed, tidak tampilkan preview — redirect ke landing
-  if (session.status === "closed" || session.status === "cancelled") {
+  // Closed/cancelled → redirect
+  if (sessionRow.status === "closed" || sessionRow.status === "cancelled") {
     redirect("/");
   }
 
-  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
-  const area = Array.isArray(table.floor_areas) ? table.floor_areas[0] : table.floor_areas;
-  const bar = Array.isArray(area.bars) ? area.bars[0] : area.bars;
-  const host = Array.isArray(session.host) ? session.host[0] : session.host;
+  // Convenience refs match shape original (UI binding)
+  const session = {
+    started_at: sessionRow.started_at.toISOString(),
+    visibility: sessionRow.visibility,
+    title: sessionRow.title,
+    vibe_tags: sessionRow.vibe_tags,
+  };
+  const table = {
+    label: sessionRow.table_label,
+    capacity: sessionRow.table_capacity,
+    shape: sessionRow.table_shape,
+    min_spend: sessionRow.table_min_spend ?? 0,
+  };
+  const area = { name: sessionRow.area_name, slug: sessionRow.area_slug };
+  const bar = { name: sessionRow.bar_name, slug: sessionRow.bar_slug };
+  const host = {
+    display_name: sessionRow.host_display_name,
+    avatar_url: sessionRow.host_avatar_url,
+  };
 
-  // Cek status user saat ini terhadap session
+  // 2. Cek status user saat ini
   let myMemberStatus: "joined" | "pending" | "left" | "kicked" | null = null;
   if (profile) {
-    const { data: member } = await supabase
-      .from("session_members")
-      .select("id, status")
-      .eq("session_id", id)
-      .eq("profile_id", profile.id)
-      .maybeSingle();
+    const [member] = await db
+      .select({ status: sessionMembers.status })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, id),
+          eq(sessionMembers.profileId, profile.id)
+        )
+      );
     if (member?.status === "joined") {
       redirect(`/session/${id}`);
     }
-    myMemberStatus = (member?.status as typeof myMemberStatus) ?? null;
+    myMemberStatus = member?.status ?? null;
   }
-  const isHost = profile?.id === session.host_id;
+  const isHost = profile?.id === sessionRow.host_id;
 
-  const { data: members } = await supabase
-    .from("session_members")
-    .select(
-      "id, role, joined_at, profile:profiles!inner(id, display_name, avatar_url, hobbies)"
+  // 3. Joined members + profile info
+  const membersRaw = await db
+    .select({
+      id: sessionMembers.id,
+      role: sessionMembers.role,
+      joined_at: sessionMembers.joinedAt,
+      profile_id: profiles.id,
+      profile_display_name: profiles.displayName,
+      profile_avatar_url: profiles.avatarUrl,
+      profile_hobbies: profiles.hobbies,
+    })
+    .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(eq(sessionMembers.sessionId, id), eq(sessionMembers.status, "joined"))
     )
-    .eq("session_id", id)
-    .eq("status", "joined")
-    .order("joined_at");
+    .orderBy(asc(sessionMembers.joinedAt));
 
-  const memberList = (members ?? []).map((m) => {
-    const p = Array.isArray(m.profile) ? m.profile[0] : m.profile;
-    return { id: m.id, role: m.role, joined_at: m.joined_at, profile: p };
-  });
+  const memberList = membersRaw.map((m) => ({
+    id: m.id,
+    role: m.role,
+    joined_at: m.joined_at.toISOString(),
+    profile: {
+      id: m.profile_id,
+      display_name: m.profile_display_name,
+      avatar_url: m.profile_avatar_url,
+      hobbies: m.profile_hobbies,
+    },
+  }));
 
   const ratings = await getUserRatingsBatch(memberList.map((m) => m.profile.id));
 
-  // Order summary — agregat per menu item (qty), grouped by category.
-  // RLS hanya allow lihat order_items kalau session.visibility = 'public'.
-  // Untuk friends/invite_only, ini akan empty array — UI menyembunyikan section.
-  const { data: orderItems } = await supabase
-    .from("order_items")
-    .select(
-      `quantity, menu_item:menu_items!inner(name, tags,
-         category:menu_categories!inner(name, slug)
-       ), order:orders!inner(session_id, status)`
-    )
-    .eq("order.session_id", id)
-    .neq("status", "void");
+  // 4. Order items aggregate — semua orders untuk session, items belum void
+  // (note: tidak ada RLS lagi; visibility filter di UI saja kalau perlu)
+  const orderItemsRaw = await db
+    .select({
+      quantity: orderItems.quantity,
+      menu_item_name: menuItems.name,
+      menu_item_tags: menuItems.tags,
+      category_name: menuCategories.name,
+      category_slug: menuCategories.slug,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .innerJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+    .where(and(eq(orders.sessionId, id), ne(orderItems.status, "void")));
 
-  // Agregate per category
   const categorySummary = new Map<
     string,
     { name: string; totalQty: number; items: { name: string; qty: number; tags: string[] }[] }
   >();
-
-  for (const oi of orderItems ?? []) {
-    const mi = Array.isArray(oi.menu_item) ? oi.menu_item[0] : oi.menu_item;
-    const cat = Array.isArray(mi.category) ? mi.category[0] : mi.category;
-    const key = cat.slug;
+  for (const oi of orderItemsRaw) {
+    const key = oi.category_slug;
     if (!categorySummary.has(key)) {
-      categorySummary.set(key, { name: cat.name, totalQty: 0, items: [] });
+      categorySummary.set(key, { name: oi.category_name, totalQty: 0, items: [] });
     }
     const g = categorySummary.get(key)!;
     g.totalQty += oi.quantity;
-    const existing = g.items.find((it) => it.name === mi.name);
+    const existing = g.items.find((it) => it.name === oi.menu_item_name);
     if (existing) {
       existing.qty += oi.quantity;
     } else {
-      g.items.push({ name: mi.name, qty: oi.quantity, tags: mi.tags ?? [] });
+      g.items.push({
+        name: oi.menu_item_name,
+        qty: oi.quantity,
+        tags: oi.menu_item_tags ?? [],
+      });
     }
   }
   const orderSummary = Array.from(categorySummary.values()).sort(

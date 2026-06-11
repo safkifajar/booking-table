@@ -1,6 +1,9 @@
 import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { tableSessions } from "@/lib/db/schema/sessions";
+import { tables } from "@/lib/db/schema/venue";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getRatableMembers } from "@/lib/queries";
 import { RateForm } from "./RateForm";
 
@@ -15,31 +18,32 @@ export default async function RatePage({ params }: PageProps) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}/rate`)}`);
   }
 
-  const supabase = await createClient();
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select(
-      "id, title, status, host_id, started_at, closed_at, tables!inner(label)"
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // Session + table info
+  const [row] = await db
+    .select({
+      id: tableSessions.id,
+      title: tableSessions.title,
+      status: tableSessions.status,
+      table_label: tables.label,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, id));
 
-  if (!session) notFound();
+  if (!row) notFound();
 
   // Hanya bisa rate kalau session sudah closed
-  if (session.status !== "closed") {
+  if (row.status !== "closed") {
     redirect(`/session/${id}`);
   }
 
   const members = await getRatableMembers(id, profile.id);
 
-  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
-
   return (
     <RateForm
-      sessionId={session.id}
-      sessionTitle={session.title}
-      tableLabel={table.label}
+      sessionId={row.id}
+      sessionTitle={row.title}
+      tableLabel={row.table_label}
       members={members}
     />
   );

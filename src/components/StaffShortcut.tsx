@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { getCurrentProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import { TrendingUp, ChefHat, ArrowRight } from "lucide-react";
 
 /**
@@ -12,15 +11,7 @@ export async function StaffShortcut() {
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
-  const supabase = await createClient();
-  const { data: staff } = await supabase
-    .from("staff_roles")
-    .select("role")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
+  const staff = await getStaffRole();
   if (!staff) return null;
 
   const isAdminOrManager = staff.role === "admin" || staff.role === "manager";
@@ -41,7 +32,7 @@ export async function StaffShortcut() {
               Akses staff · {staff.role}
             </div>
             <div className="text-sm font-medium truncate">
-              Selamat datang kembali, {profile.display_name}
+              Selamat datang kembali, {profile.displayName}
             </div>
           </div>
         </div>

@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { requireAdmin } from "@/lib/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin, getTransactionDetail } from "@/lib/admin";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Printer, MapPin, Clock, Users } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Users } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { InvoicePrintButton } from "./InvoicePrintButton";
 
@@ -16,83 +15,28 @@ interface PageProps {
 export default async function InvoiceDetailPage({ params }: PageProps) {
   const bar = await requireAdmin();
   const { id } = await params;
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select(
-      `id, status, title, visibility, vibe_tags, started_at, closed_at,
-       tables!inner(label, capacity, shape, area_id,
-         floor_areas!inner(name, bar_id)
-       ),
-       host:profiles!table_sessions_host_id_fkey(display_name, avatar_url)`
-    )
-    .eq("id", id)
-    .maybeSingle();
+  // Pakai admin.ts getTransactionDetail — sudah cek bar_id match
+  const detail = await getTransactionDetail(bar.id, id);
+  if (!detail) notFound();
 
-  if (!session) notFound();
+  // Convenience aliases match UI binding original
+  const session = {
+    title: detail.title,
+    started_at: detail.started_at,
+    closed_at: detail.closed_at,
+  };
+  const table = { label: detail.table_label, shape: detail.table_shape };
+  const area = { name: detail.area_name };
+  const host = { display_name: detail.host_name };
+  const items = detail.items;
+  const payments = detail.payments;
+  const memberCount = detail.member_count;
+  const subtotal = detail.subtotal;
+  const totalPaid = detail.total_paid;
 
-  const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
-  const area = Array.isArray(table.floor_areas) ? table.floor_areas[0] : table.floor_areas;
-  if (area.bar_id !== bar.id) notFound();
-
-  const host = Array.isArray(session.host) ? session.host[0] : session.host;
-
-  // Order items
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id, closed_at")
-    .eq("session_id", id)
-    .neq("status", "void")
-    .order("created_at")
-    .limit(1)
-    .maybeSingle();
-
-  const { data: items } = order
-    ? await supabase
-        .from("order_items")
-        .select(
-          `id, quantity, unit_price, notes, status, queue_number, created_at,
-           menu_item:menu_items!inner(name),
-           added_by:session_members!inner(
-             profile:profiles!inner(display_name)
-           )`
-        )
-        .eq("order_id", order.id)
-        .neq("status", "void")
-        .order("queue_number")
-    : { data: [] };
-
-  // Payments
-  const { data: payments } = order
-    ? await supabase
-        .from("payments")
-        .select(
-          `id, amount, method, status, split_mode, paid_at,
-           member:session_members!inner(
-             profile:profiles!inner(display_name)
-           )`
-        )
-        .eq("order_id", order.id)
-        .order("created_at")
-    : { data: [] };
-
-  // Members count
-  const { count: memberCount } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", id);
-
-  const subtotal = (items ?? []).reduce(
-    (sum, i) => sum + i.quantity * i.unit_price,
-    0
-  );
-  const totalPaid = (payments ?? [])
-    .filter((p) => p.status === "paid")
-    .reduce((sum, p) => sum + p.amount, 0);
-
-  const startedAt = new Date(session.started_at);
-  const closedAt = session.closed_at ? new Date(session.closed_at) : null;
+  const startedAt = new Date(detail.started_at);
+  const closedAt = detail.closed_at ? new Date(detail.closed_at) : null;
   const durationMin = closedAt
     ? Math.floor((closedAt.getTime() - startedAt.getTime()) / 60_000)
     : null;
@@ -188,38 +132,31 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {(items ?? []).map((i) => {
-                const mi = Array.isArray(i.menu_item) ? i.menu_item[0] : i.menu_item;
-                const addedBy = Array.isArray(i.added_by) ? i.added_by[0] : i.added_by;
-                const addedByProfile = Array.isArray(addedBy.profile)
-                  ? addedBy.profile[0]
-                  : addedBy.profile;
-                return (
-                  <tr
-                    key={i.id}
-                    className="border-b border-border/40 print:border-black/10 align-top"
-                  >
-                    <td className="py-2 text-xs text-muted-foreground print:text-black/60 tabular-nums">
-                      {i.queue_number !== null ? `#${String(i.queue_number).padStart(3, "0")}` : "—"}
-                    </td>
-                    <td className="py-2">
-                      <div className="font-medium">{mi.name}</div>
-                      <div className="text-[10px] text-muted-foreground print:text-black/60">
-                        by {addedByProfile.display_name}
-                        {i.notes && <> · note: {i.notes}</>}
-                      </div>
-                    </td>
-                    <td className="py-2 text-right">{i.quantity}</td>
-                    <td className="py-2 text-right text-muted-foreground print:text-black/60 tabular-nums">
-                      {formatIDR(i.unit_price)}
-                    </td>
-                    <td className="py-2 text-right font-semibold tabular-nums">
-                      {formatIDR(i.quantity * i.unit_price)}
-                    </td>
-                  </tr>
-                );
-              })}
-              {(items ?? []).length === 0 && (
+              {items.map((i) => (
+                <tr
+                  key={i.id}
+                  className="border-b border-border/40 print:border-black/10 align-top"
+                >
+                  <td className="py-2 text-xs text-muted-foreground print:text-black/60 tabular-nums">
+                    {i.queue_number !== null ? `#${String(i.queue_number).padStart(3, "0")}` : "—"}
+                  </td>
+                  <td className="py-2">
+                    <div className="font-medium">{i.menu_item_name}</div>
+                    <div className="text-[10px] text-muted-foreground print:text-black/60">
+                      by {i.added_by_name}
+                      {i.notes && <> · note: {i.notes}</>}
+                    </div>
+                  </td>
+                  <td className="py-2 text-right">{i.quantity}</td>
+                  <td className="py-2 text-right text-muted-foreground print:text-black/60 tabular-nums">
+                    {formatIDR(i.unit_price)}
+                  </td>
+                  <td className="py-2 text-right font-semibold tabular-nums">
+                    {formatIDR(i.quantity * i.unit_price)}
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-muted-foreground">
                     Tidak ada item.
@@ -259,37 +196,31 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         </div>
 
         {/* Payment details */}
-        {(payments ?? []).length > 0 && (
+        {payments.length > 0 && (
           <div className="pt-4 mt-4 border-t border-border print:border-black/20">
             <h3 className="text-[10px] uppercase tracking-widest text-muted-foreground print:text-black/60 mb-2">
               Pembayaran
             </h3>
             <div className="space-y-1.5 text-xs">
-              {(payments ?? []).map((p) => {
-                const member = Array.isArray(p.member) ? p.member[0] : p.member;
-                const profile = Array.isArray(member.profile)
-                  ? member.profile[0]
-                  : member.profile;
-                return (
-                  <div key={p.id} className="flex justify-between">
-                    <span>
-                      {profile.display_name}
-                      <span className="text-muted-foreground print:text-black/60">
-                        {" "}
-                        · {p.method.toUpperCase()} · {p.split_mode}
+              {payments.map((p) => (
+                <div key={p.id} className="flex justify-between">
+                  <span>
+                    {p.paid_by_name}
+                    <span className="text-muted-foreground print:text-black/60">
+                      {" "}
+                      · {p.method.toUpperCase()} · {p.split_mode}
+                    </span>
+                  </span>
+                  <span className="tabular-nums">
+                    {formatIDR(p.amount)}
+                    {p.status !== "paid" && (
+                      <span className="ml-1 text-[10px] text-amber-400">
+                        ({p.status})
                       </span>
-                    </span>
-                    <span className="tabular-nums">
-                      {formatIDR(p.amount)}
-                      {p.status !== "paid" && (
-                        <span className="ml-1 text-[10px] text-amber-400">
-                          ({p.status})
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

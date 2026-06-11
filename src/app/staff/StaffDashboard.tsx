@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { markOrderItemStatus } from "@/lib/actions";
-import { createClient } from "@/lib/supabase/client";
 import { initials, formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 
 interface QueueItem {
@@ -122,30 +121,14 @@ export function StaffDashboard({ initialQueue, initialTables }: Props) {
     });
   }, [initialQueue]);
 
-  // Realtime: refresh on any change in order_items, table_sessions, session_members
+  // Realtime: polling fallback sementara (5 detik) — Phase 4 ganti dengan SSE.
+  // Trade-off: bukan instant tapi simple, no dependencies. SSE nanti lebih hemat
+  // bandwidth + instant.
   React.useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel("staff:dashboard")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "order_items" },
-        () => router.refresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "table_sessions" },
-        () => router.refresh()
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "session_members" },
-        () => router.refresh()
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [router]);
 
   const sentCount = queue.filter((q) => q.status === "sent").length;

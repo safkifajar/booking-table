@@ -1,6 +1,14 @@
 import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { and, eq, sql } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import {
+  sessionInvites,
+  tableSessions,
+  sessionMembers,
+} from "@/lib/db/schema/sessions";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { profiles } from "@/lib/db/schema/profiles";
+import { getCurrentUser } from "@/lib/auth-v2/current";
 import { JoinForm } from "./JoinForm";
 
 interface PageProps {
@@ -14,36 +22,50 @@ export default async function JoinByCodePage({ params }: PageProps) {
     redirect(`/auth?next=${encodeURIComponent(`/join/${code}`)}`);
   }
 
-  const supabase = await createClient();
-  const { data: invite } = await supabase
-    .from("session_invites")
-    .select(
-      `code, expires_at, max_uses, use_count,
-       session:table_sessions!inner(
-         id, title, status, visibility, vibe_tags,
-         table:tables!inner(label, capacity, shape, area:floor_areas!inner(name)),
-         host:profiles!table_sessions_host_id_fkey(display_name, avatar_url)
-       )`
-    )
-    .eq("code", code)
-    .maybeSingle();
+  // 1. Lookup invite + session + table + area + host (single mega-join)
+  const [row] = await db
+    .select({
+      // invite
+      expires_at: sessionInvites.expiresAt,
+      max_uses: sessionInvites.maxUses,
+      use_count: sessionInvites.useCount,
+      // session
+      session_id: tableSessions.id,
+      session_title: tableSessions.title,
+      session_status: tableSessions.status,
+      session_vibe_tags: tableSessions.vibeTags,
+      // table
+      table_label: tables.label,
+      table_capacity: tables.capacity,
+      table_shape: tables.shape,
+      // area
+      area_name: floorAreas.name,
+      // host
+      host_name: profiles.displayName,
+      host_avatar: profiles.avatarUrl,
+    })
+    .from(sessionInvites)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionInvites.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(eq(sessionInvites.code, code));
 
-  if (!invite) notFound();
+  if (!row) notFound();
 
-  const isExpired = new Date(invite.expires_at) < new Date();
-  const isMaxedOut = invite.max_uses && invite.use_count >= invite.max_uses;
+  const isExpired = row.expires_at < new Date();
+  const isMaxedOut = row.max_uses !== null && row.use_count >= row.max_uses;
 
-  const session = Array.isArray(invite.session) ? invite.session[0] : invite.session;
-  const table = Array.isArray(session.table) ? session.table[0] : session.table;
-  const area = Array.isArray(table.area) ? table.area[0] : table.area;
-  const host = Array.isArray(session.host) ? session.host[0] : session.host;
-
-  // Member count
-  const { count } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", session.id)
-    .eq("status", "joined");
+  // 2. Member count (joined only)
+  const [memberCountRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, row.session_id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
 
   return (
     <main className="flex-1 flex items-center justify-center px-4 py-8">
@@ -54,22 +76,22 @@ export default async function JoinByCodePage({ params }: PageProps) {
           isMaxedOut: !!isMaxedOut,
         }}
         session={{
-          id: session.id,
-          title: session.title,
-          status: session.status,
-          vibe_tags: session.vibe_tags ?? [],
+          id: row.session_id,
+          title: row.session_title,
+          status: row.session_status,
+          vibe_tags: row.session_vibe_tags ?? [],
         }}
         table={{
-          label: table.label,
-          capacity: table.capacity,
-          shape: table.shape,
-          areaName: area.name,
+          label: row.table_label,
+          capacity: row.table_capacity,
+          shape: row.table_shape,
+          areaName: row.area_name,
         }}
         host={{
-          display_name: host.display_name,
-          avatar_url: host.avatar_url,
+          display_name: row.host_name,
+          avatar_url: row.host_avatar,
         }}
-        memberCount={count ?? 0}
+        memberCount={Number(memberCountRow?.count ?? 0)}
       />
     </main>
   );
