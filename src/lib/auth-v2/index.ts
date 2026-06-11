@@ -8,6 +8,18 @@
  * implementasi di balik export tetap sama signature-nya.
  */
 
+// Server helpers (current session, profile, role guards)
+export {
+  getCurrentUser,
+  getCurrentProfile,
+  requireUser,
+  requireProfile,
+  requireAdmin,
+  requireStaff,
+  getStaffRole,
+} from "./current";
+export type { AuthUser, Profile, StaffContext } from "./current";
+
 // Signup flow (custom, bukan dari Auth.js)
 export { signup, SignupError } from "./signup";
 export type { SignupInput, SignupResult } from "./signup";
