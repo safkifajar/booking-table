@@ -26,13 +26,15 @@ import {
   sessionMembers,
   sessionInvites,
 } from "@/lib/db/schema/sessions";
-import { tables } from "@/lib/db/schema/venue";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
+import { notify } from "@/lib/realtime/notify";
+import { channels } from "@/lib/realtime/channels";
 
 // ============================================================
 // SCHEMAS
@@ -60,6 +62,32 @@ const joinSchema = z.object({
 const joinByCodeSchema = z.object({
   code: z.string().min(4).max(12),
 });
+
+// ============================================================
+// REALTIME NOTIFY HELPER
+// ============================================================
+
+/**
+ * Notify both session channel + staff bar channel (best-effort, parallel).
+ * Dipanggil setelah commit perubahan apapun yang affect session view atau
+ * staff dashboard (members, orders, items, payments).
+ *
+ * Failure di-swallow di notify() — tidak block main flow.
+ */
+async function notifySessionAndStaff(sessionId: string): Promise<void> {
+  // Lookup bar_id (kalau session masih ada — closed sessions tetap valid)
+  const [row] = await db
+    .select({ bar_id: floorAreas.barId })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableSessions.id, sessionId));
+
+  await Promise.all([
+    notify(channels.session(sessionId)),
+    row ? notify(channels.staff(row.bar_id)) : Promise.resolve(),
+  ]);
+}
 
 // ============================================================
 // SESSION LIFECYCLE
@@ -126,6 +154,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     throw new Error(message || "Gagal membuka meja");
   }
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath("/bar/[slug]", "page");
   redirect(`/session/${sessionId}`);
 }
@@ -172,6 +201,7 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
       set: { status: "joined", leftAt: null },
     });
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
   return { ok: true, sessionId };
 }
@@ -244,6 +274,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
     });
   }
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
   revalidatePath(`/session/${sessionId}/preview`);
   return { status: "pending" as const };
@@ -288,6 +319,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
       )
     );
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
 
@@ -313,6 +345,7 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
       )
     );
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
 
@@ -361,6 +394,7 @@ export async function leaveSession(sessionId: string) {
       )
     );
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
 
@@ -389,6 +423,7 @@ export async function closeSession(sessionId: string) {
       .where(eq(orders.sessionId, sessionId)),
   ]);
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
   redirect(`/session/${sessionId}/rate`);
 }
@@ -445,6 +480,7 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
     status: "sent",
   });
 
+  await notifySessionAndStaff(data.sessionId);
   revalidatePath(`/session/${data.sessionId}`);
 }
 
@@ -482,6 +518,7 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     .set({ status: "void" })
     .where(eq(orderItems.id, itemId));
 
+  await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
 
@@ -556,6 +593,7 @@ export async function payShare(input: z.infer<typeof paySchema>) {
     paidAt: autoPaid ? new Date() : null,
   });
 
+  await notifySessionAndStaff(data.sessionId);
   revalidatePath(`/session/${data.sessionId}`);
 }
 
@@ -596,6 +634,14 @@ export async function markOrderItemStatus(
   }
 
   await db.update(orderItems).set(patch).where(eq(orderItems.id, itemId));
+
+  // Lookup sessionId via order → notify session + staff bar
+  const [link] = await db
+    .select({ session_id: orders.sessionId })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .where(eq(orderItems.id, itemId));
+  if (link) await notifySessionAndStaff(link.session_id);
 
   revalidatePath("/staff");
 }

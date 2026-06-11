@@ -58,7 +58,7 @@ interface Props {
 
 type Tab = "queue" | "tables";
 
-export function StaffDashboard({ initialQueue, initialTables }: Props) {
+export function StaffDashboard({ initialQueue, initialTables, barId }: Props) {
   const [tab, setTab] = React.useState<Tab>("queue");
   const router = useRouter();
 
@@ -121,15 +121,19 @@ export function StaffDashboard({ initialQueue, initialTables }: Props) {
     });
   }, [initialQueue]);
 
-  // Realtime: polling fallback sementara (5 detik) — Phase 4 ganti dengan SSE.
-  // Trade-off: bukan instant tapi simple, no dependencies. SSE nanti lebih hemat
-  // bandwidth + instant.
+  // Realtime via SSE → /api/realtime/staff/[barId]. Server Actions trigger
+  // Postgres NOTIFY → endpoint stream → router.refresh().
   React.useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [router]);
+    if (!barId) return;
+    const es = new EventSource(`/api/realtime/staff/${barId}`);
+    es.onmessage = () => router.refresh();
+    es.onerror = () => {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[realtime] staff:${barId} disconnected, retrying...`);
+      }
+    };
+    return () => es.close();
+  }, [barId, router]);
 
   const sentCount = queue.filter((q) => q.status === "sent").length;
   const preparingCount = queue.filter((q) => q.status === "preparing").length;
