@@ -22,8 +22,13 @@ import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Auth.js expects these standard columns (name, email, image)
+  // Tapi business display_name & avatar_url tetap kita simpan di profiles
+  // untuk decoupling Auth dari domain. name/image di sini opsional.
+  name: text("name"),
   email: text("email").notNull().unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
+  image: text("image"),
   // password_hash untuk credential provider (bcrypt). Kalau OAuth only, nullable.
   passwordHash: text("password_hash"),
   // Audit fields
