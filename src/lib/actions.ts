@@ -1,12 +1,38 @@
 "use server";
 
+/**
+ * Server Actions — semua mutations untuk session/order/rating/profile.
+ *
+ * Migrated dari Supabase client ke Drizzle ORM (Phase 4).
+ *
+ * Authentication: pakai `requireProfile` dari `@/lib/auth-v2/current`
+ * (Auth.js v5 + Drizzle profile lookup).
+ *
+ * Auth actions (signIn/signUp/signOut/magicLink) HILANG dari file ini —
+ * sudah pindah ke `@/lib/auth-v2/actions.ts`. UI components yang import
+ * dari sini harus diupdate ke auth-v2 path. Reset password & update
+ * password DI-DROP sementara (Phase 5 putuskan apakah perlu di-port).
+ *
+ * Anonymous sign-in DI-DROP (Phase 2 decision).
+ */
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth";
+import { db } from "@/lib/db/client";
+import {
+  tableSessions,
+  sessionMembers,
+  sessionInvites,
+} from "@/lib/db/schema/sessions";
+import { tables } from "@/lib/db/schema/venue";
+import { menuItems } from "@/lib/db/schema/menu";
+import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
+import { profiles } from "@/lib/db/schema/profiles";
+import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
-import type { SessionVisibility, MemberRole } from "@/types/db";
 
 // ============================================================
 // SCHEMAS
@@ -36,183 +62,186 @@ const joinByCodeSchema = z.object({
 });
 
 // ============================================================
-// OPEN TABLE
+// SESSION LIFECYCLE
 // ============================================================
 
 export async function openTable(input: z.infer<typeof openTableSchema>) {
   const profile = await requireProfile();
   const data = openTableSchema.parse(input);
-  const supabase = await createClient();
 
-  // Verify table exists & is active
-  const { data: table, error: tErr } = await supabase
-    .from("tables")
-    .select("id, capacity, is_active")
-    .eq("id", data.tableId)
-    .maybeSingle();
-  if (tErr || !table) throw new Error("Table not found");
+  // 1. Verify table aktif
+  const [table] = await db
+    .select({
+      id: tables.id,
+      capacity: tables.capacity,
+      is_active: tables.isActive,
+    })
+    .from(tables)
+    .where(eq(tables.id, data.tableId));
+  if (!table) throw new Error("Table not found");
   if (!table.is_active) throw new Error("Table is not active");
 
-  // Create session
-  const { data: session, error: sErr } = await supabase
-    .from("table_sessions")
-    .insert({
-      table_id: data.tableId,
-      host_id: profile.id,
-      status: "open",
-      visibility: data.visibility,
-      title: data.title ?? null,
-      vibe_tags: data.vibeTags ?? [],
-      max_guests: data.maxGuests ?? table.capacity,
-    })
-    .select()
-    .single();
-  if (sErr || !session) {
-    throw new Error(
-      sErr?.message?.includes("uniq_active_session_per_table")
-        ? "Meja ini sudah ada session aktif"
-        : sErr?.message ?? "Gagal membuka meja"
-    );
+  // 2-5: transaction — session + first member (host) + open order + invite code
+  let sessionId: string;
+  try {
+    sessionId = await db.transaction(async (tx) => {
+      const [newSession] = await tx
+        .insert(tableSessions)
+        .values({
+          tableId: data.tableId,
+          hostId: profile.id,
+          status: "open",
+          visibility: data.visibility,
+          title: data.title ?? null,
+          vibeTags: data.vibeTags ?? [],
+          maxGuests: data.maxGuests ?? table.capacity,
+        })
+        .returning({ id: tableSessions.id });
+
+      await tx.insert(sessionMembers).values({
+        sessionId: newSession.id,
+        profileId: profile.id,
+        role: "host",
+        status: "joined",
+      });
+
+      await tx.insert(orders).values({
+        sessionId: newSession.id,
+        status: "open",
+      });
+
+      await tx.insert(sessionInvites).values({
+        sessionId: newSession.id,
+        code: generateInviteCode(),
+        createdBy: profile.id,
+      });
+
+      return newSession.id;
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("uq_active_session_per_table")) {
+      throw new Error("Meja ini sudah ada session aktif");
+    }
+    throw new Error(message || "Gagal membuka meja");
   }
 
-  // Add host as first member
-  const { error: mErr } = await supabase.from("session_members").insert({
-    session_id: session.id,
-    profile_id: profile.id,
-    role: "host" as MemberRole,
-    status: "joined",
-  });
-  if (mErr) throw new Error(mErr.message);
-
-  // Open an order for this session
-  await supabase.from("orders").insert({
-    session_id: session.id,
-    status: "open",
-  });
-
-  // Generate first invite code
-  await supabase.from("session_invites").insert({
-    session_id: session.id,
-    code: generateInviteCode(),
-    created_by: profile.id,
-  });
-
   revalidatePath("/bar/[slug]", "page");
-  redirect(`/session/${session.id}`);
+  redirect(`/session/${sessionId}`);
 }
-
-// ============================================================
-// JOIN SESSION
-// ============================================================
 
 export async function joinSession(input: z.infer<typeof joinSchema>) {
   const profile = await requireProfile();
   const { sessionId } = joinSchema.parse(input);
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("id, status, visibility, host_id, table_id, tables(capacity)")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) throw new Error("Session not found");
-  if (session.status !== "open") throw new Error("Session sudah tidak terbuka");
+  // 1. Session + table capacity (single join)
+  const [row] = await db
+    .select({
+      id: tableSessions.id,
+      status: tableSessions.status,
+      capacity: tables.capacity,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!row) throw new Error("Session not found");
+  if (row.status !== "open") throw new Error("Session sudah tidak terbuka");
 
-  // Check current member count
-  const { count } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", sessionId)
-    .eq("status", "joined");
-
-  const cap = Array.isArray(session.tables)
-    ? session.tables[0]?.capacity
-    : (session.tables as { capacity: number } | null)?.capacity;
-  if (count !== null && cap && count >= cap) {
+  // 2. Capacity check
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(
+      and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
+    );
+  if (Number(count) >= row.capacity) {
     throw new Error("Meja sudah penuh");
   }
 
-  // Insert as member (idempotent via unique constraint)
-  const { error } = await supabase.from("session_members").upsert(
-    {
-      session_id: sessionId,
-      profile_id: profile.id,
-      role: "member" as MemberRole,
+  // 3. Upsert member (idempotent via unique constraint session_id+profile_id)
+  await db
+    .insert(sessionMembers)
+    .values({
+      sessionId,
+      profileId: profile.id,
+      role: "member",
       status: "joined",
-    },
-    { onConflict: "session_id,profile_id" }
-  );
-  if (error) throw new Error(error.message);
+    })
+    .onConflictDoUpdate({
+      target: [sessionMembers.sessionId, sessionMembers.profileId],
+      set: { status: "joined", leftAt: null },
+    });
 
   revalidatePath(`/session/${sessionId}`);
   return { ok: true, sessionId };
 }
 
-// Request join: insert member dengan status='pending'. Host harus approve dulu.
-// Bedanya dengan joinSession (yang langsung joined) — request join dipakai saat
-// user akses dari halaman preview tanpa invite code.
+/**
+ * Request join: insert member dengan status='pending'. Host harus approve dulu.
+ * Berbeda dari joinSession (langsung joined) — request join dipakai dari halaman
+ * preview tanpa invite code.
+ */
 export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
   const profile = await requireProfile();
   const { sessionId } = joinSchema.parse(input);
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("id, status, host_id, table_id, tables(capacity)")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) throw new Error("Session tidak ditemukan");
-  if (session.status !== "open") throw new Error("Session sudah tidak terbuka");
-  if (session.host_id === profile.id) {
+  // 1. Session check
+  const [row] = await db
+    .select({
+      id: tableSessions.id,
+      status: tableSessions.status,
+      host_id: tableSessions.hostId,
+      capacity: tables.capacity,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!row) throw new Error("Session tidak ditemukan");
+  if (row.status !== "open") throw new Error("Session sudah tidak terbuka");
+  if (row.host_id === profile.id) {
     throw new Error("Kamu adalah host, tidak perlu request");
   }
 
-  // Cek kapasitas (count yang joined saja)
-  const { count } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", sessionId)
-    .eq("status", "joined");
-
-  const cap = Array.isArray(session.tables)
-    ? session.tables[0]?.capacity
-    : (session.tables as { capacity: number } | null)?.capacity;
-  if (count !== null && cap && count >= cap) {
+  // 2. Capacity check (joined only)
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(
+      and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
+    );
+  if (Number(count) >= row.capacity) {
     throw new Error("Meja sudah penuh");
   }
 
-  // Cek apakah sudah ada request/membership sebelumnya
-  const { data: existing } = await supabase
-    .from("session_members")
-    .select("id, status")
-    .eq("session_id", sessionId)
-    .eq("profile_id", profile.id)
-    .maybeSingle();
+  // 3. Existing membership?
+  const [existing] = await db
+    .select({ id: sessionMembers.id, status: sessionMembers.status })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id)
+      )
+    );
 
   if (existing) {
-    if (existing.status === "joined") {
-      return { status: "joined" as const };
-    }
-    if (existing.status === "pending") {
-      return { status: "pending" as const };
-    }
+    if (existing.status === "joined") return { status: "joined" as const };
+    if (existing.status === "pending") return { status: "pending" as const };
     if (existing.status === "kicked") {
       throw new Error("Kamu pernah dikeluarkan dari meja ini oleh host");
     }
-    // status 'left' — boleh request lagi
-    const { error } = await supabase
-      .from("session_members")
-      .update({ status: "pending", left_at: null })
-      .eq("id", existing.id);
-    if (error) throw new Error(error.message);
+    // 'left' → revert ke pending
+    await db
+      .update(sessionMembers)
+      .set({ status: "pending", leftAt: null })
+      .where(eq(sessionMembers.id, existing.id));
   } else {
-    const { error } = await supabase.from("session_members").insert({
-      session_id: sessionId,
-      profile_id: profile.id,
-      role: "member" as MemberRole,
+    await db.insert(sessionMembers).values({
+      sessionId,
+      profileId: profile.id,
+      role: "member",
       status: "pending",
     });
-    if (error) throw new Error(error.message);
   }
 
   revalidatePath(`/session/${sessionId}`);
@@ -222,148 +251,149 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
 
 export async function approveJoinRequest(memberId: string, sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("host_id, tables(capacity)")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (!session) throw new Error("Session tidak ditemukan");
-  if (session.host_id !== profile.id) {
+  // Host check + capacity check (single join)
+  const [row] = await db
+    .select({
+      host_id: tableSessions.hostId,
+      capacity: tables.capacity,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!row) throw new Error("Session tidak ditemukan");
+  if (row.host_id !== profile.id) {
     throw new Error("Hanya host yang bisa approve");
   }
 
-  const { count } = await supabase
-    .from("session_members")
-    .select("*", { count: "exact", head: true })
-    .eq("session_id", sessionId)
-    .eq("status", "joined");
-
-  const cap = Array.isArray(session.tables)
-    ? session.tables[0]?.capacity
-    : (session.tables as { capacity: number } | null)?.capacity;
-  if (count !== null && cap && count >= cap) {
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(
+      and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
+    );
+  if (Number(count) >= row.capacity) {
     throw new Error("Meja sudah penuh, request tidak bisa di-approve");
   }
 
-  const { error } = await supabase
-    .from("session_members")
-    .update({ status: "joined", joined_at: new Date().toISOString() })
-    .eq("id", memberId)
-    .eq("session_id", sessionId)
-    .eq("status", "pending");
-  if (error) throw new Error(error.message);
+  // Set pending → joined
+  await db
+    .update(sessionMembers)
+    .set({ status: "joined", joinedAt: new Date() })
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending")
+      )
+    );
 
   revalidatePath(`/session/${sessionId}`);
 }
 
 export async function rejectJoinRequest(memberId: string, sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("host_id")
-    .eq("id", sessionId)
-    .maybeSingle();
+  const [session] = await db
+    .select({ host_id: tableSessions.hostId })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
   if (!session) throw new Error("Session tidak ditemukan");
   if (session.host_id !== profile.id) {
     throw new Error("Hanya host yang bisa reject");
   }
 
-  const { error } = await supabase
-    .from("session_members")
-    .delete()
-    .eq("id", memberId)
-    .eq("session_id", sessionId)
-    .eq("status", "pending");
-  if (error) throw new Error(error.message);
+  await db
+    .delete(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending")
+      )
+    );
 
   revalidatePath(`/session/${sessionId}`);
 }
 
 export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
-  const profile = await requireProfile();
+  await requireProfile();
   const { code } = joinByCodeSchema.parse(input);
-  const supabase = await createClient();
 
-  const { data: invite } = await supabase
-    .from("session_invites")
-    .select("session_id, expires_at, max_uses, use_count")
-    .eq("code", code)
-    .maybeSingle();
+  const [invite] = await db
+    .select({
+      session_id: sessionInvites.sessionId,
+      expires_at: sessionInvites.expiresAt,
+      max_uses: sessionInvites.maxUses,
+      use_count: sessionInvites.useCount,
+    })
+    .from(sessionInvites)
+    .where(eq(sessionInvites.code, code));
   if (!invite) throw new Error("Kode undangan tidak valid");
-  if (new Date(invite.expires_at) < new Date()) {
+  if (invite.expires_at < new Date()) {
     throw new Error("Kode undangan sudah kedaluwarsa");
   }
-  if (invite.max_uses && invite.use_count >= invite.max_uses) {
+  if (invite.max_uses !== null && invite.use_count >= invite.max_uses) {
     throw new Error("Kode undangan sudah mencapai batas penggunaan");
   }
 
   await joinSession({ sessionId: invite.session_id });
 
   // Increment use count (best-effort)
-  await supabase
-    .from("session_invites")
-    .update({ use_count: invite.use_count + 1 })
-    .eq("code", code);
+  await db
+    .update(sessionInvites)
+    .set({ useCount: invite.use_count + 1 })
+    .where(eq(sessionInvites.code, code));
 
   redirect(`/session/${invite.session_id}`);
 }
 
-// ============================================================
-// LEAVE SESSION
-// ============================================================
-
 export async function leaveSession(sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  await supabase
-    .from("session_members")
-    .update({ status: "left", left_at: new Date().toISOString() })
-    .eq("session_id", sessionId)
-    .eq("profile_id", profile.id);
+  await db
+    .update(sessionMembers)
+    .set({ status: "left", leftAt: new Date() })
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id)
+      )
+    );
 
   revalidatePath(`/session/${sessionId}`);
 }
 
-// ============================================================
-// CLOSE SESSION (host only)
-// ============================================================
-
 export async function closeSession(sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("host_id")
-    .eq("id", sessionId)
-    .maybeSingle();
+  const [session] = await db
+    .select({ host_id: tableSessions.hostId })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
   if (!session) throw new Error("Session not found");
-  if (session.host_id !== profile.id) throw new Error("Hanya host yang bisa menutup meja");
+  if (session.host_id !== profile.id) {
+    throw new Error("Hanya host yang bisa menutup meja");
+  }
 
-  await supabase
-    .from("table_sessions")
-    .update({ status: "closed", closed_at: new Date().toISOString() })
-    .eq("id", sessionId);
-
-  await supabase
-    .from("orders")
-    .update({ status: "closed", closed_at: new Date().toISOString() })
-    .eq("session_id", sessionId);
+  // Close session + orders (parallel)
+  const now = new Date();
+  await Promise.all([
+    db
+      .update(tableSessions)
+      .set({ status: "closed", closedAt: now })
+      .where(eq(tableSessions.id, sessionId)),
+    db
+      .update(orders)
+      .set({ status: "closed", closedAt: now })
+      .where(eq(orders.sessionId, sessionId)),
+  ]);
 
   revalidatePath(`/session/${sessionId}`);
-  // Host & member diarahkan ke halaman rate — kalau solo, page itu sendiri akan
-  // tampilkan empty state dan tombol ke home.
   redirect(`/session/${sessionId}/rate`);
 }
 
 export async function leaveSessionAndRate(sessionId: string) {
-  // Helper untuk member: leave + langsung ke halaman rate kalau session sudah closed.
-  // (Untuk sekarang behavior cukup leave; rate page hanya tersedia setelah host close.)
   await leaveSession(sessionId);
   redirect("/");
 }
@@ -375,106 +405,105 @@ export async function leaveSessionAndRate(sessionId: string) {
 export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
   const profile = await requireProfile();
   const data = addOrderItemSchema.parse(input);
-  const supabase = await createClient();
 
-  // Find session member record
-  const { data: member } = await supabase
-    .from("session_members")
-    .select("id")
-    .eq("session_id", data.sessionId)
-    .eq("profile_id", profile.id)
-    .eq("status", "joined")
-    .maybeSingle();
+  // 1. Find member
+  const [member] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, data.sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
   if (!member) throw new Error("Kamu bukan anggota meja ini");
 
-  // Find open order
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("session_id", data.sessionId)
-    .neq("status", "closed")
-    .maybeSingle();
+  // 2. Find open order
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
   if (!order) throw new Error("Order belum dibuka untuk session ini");
 
-  // Get menu item current price (snapshot)
-  const { data: item } = await supabase
-    .from("menu_items")
-    .select("price, is_available")
-    .eq("id", data.menuItemId)
-    .maybeSingle();
+  // 3. Menu item snapshot
+  const [item] = await db
+    .select({ price: menuItems.price, is_available: menuItems.isAvailable })
+    .from(menuItems)
+    .where(eq(menuItems.id, data.menuItemId));
   if (!item) throw new Error("Menu item tidak ditemukan");
   if (!item.is_available) throw new Error("Menu item sedang tidak tersedia");
 
-  const { error } = await supabase.from("order_items").insert({
-    order_id: order.id,
-    menu_item_id: data.menuItemId,
-    added_by_member_id: member.id,
+  // 4. Insert
+  await db.insert(orderItems).values({
+    orderId: order.id,
+    menuItemId: data.menuItemId,
+    addedByMemberId: member.id,
     quantity: data.quantity,
-    unit_price: item.price,
+    unitPrice: item.price,
     notes: data.notes ?? null,
     status: "sent",
   });
-  if (error) throw new Error(error.message);
 
   revalidatePath(`/session/${data.sessionId}`);
 }
 
 export async function removeOrderItem(itemId: string, sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  // Verify ownership (member that added it OR host)
-  const { data: item } = await supabase
-    .from("order_items")
-    .select("id, added_by_member_id, session_members!inner(profile_id)")
-    .eq("id", itemId)
-    .maybeSingle();
+  // Ownership: who added it (via member.profile_id)?
+  const [item] = await db
+    .select({
+      id: orderItems.id,
+      added_by_profile_id: sessionMembers.profileId,
+    })
+    .from(orderItems)
+    .innerJoin(
+      sessionMembers,
+      eq(sessionMembers.id, orderItems.addedByMemberId)
+    )
+    .where(eq(orderItems.id, itemId));
   if (!item) throw new Error("Item tidak ditemukan");
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("host_id")
-    .eq("id", sessionId)
-    .maybeSingle();
+  const [session] = await db
+    .select({ host_id: tableSessions.hostId })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
 
-  const addedBy = Array.isArray(item.session_members)
-    ? item.session_members[0]?.profile_id
-    : (item.session_members as { profile_id: string } | null)?.profile_id;
-
-  if (addedBy !== profile.id && session?.host_id !== profile.id) {
+  if (
+    item.added_by_profile_id !== profile.id &&
+    session?.host_id !== profile.id
+  ) {
     throw new Error("Hanya yang pesan atau host yang bisa hapus item");
   }
 
-  await supabase
-    .from("order_items")
-    .update({ status: "void" })
-    .eq("id", itemId);
+  await db
+    .update(orderItems)
+    .set({ status: "void" })
+    .where(eq(orderItems.id, itemId));
 
   revalidatePath(`/session/${sessionId}`);
 }
 
 // ============================================================
-// CREATE / REFRESH INVITE CODE
+// INVITES
 // ============================================================
 
 export async function createInvite(sessionId: string) {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
   const code = generateInviteCode();
-  const { data, error } = await supabase
-    .from("session_invites")
-    .insert({
-      session_id: sessionId,
+  const [newInvite] = await db
+    .insert(sessionInvites)
+    .values({
+      sessionId,
       code,
-      created_by: profile.id,
+      createdBy: profile.id,
     })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
+    .returning();
 
   revalidatePath(`/session/${sessionId}`);
-  return data;
+  return newInvite;
 }
 
 // ============================================================
@@ -492,211 +521,61 @@ const paySchema = z.object({
 export async function payShare(input: z.infer<typeof paySchema>) {
   const profile = await requireProfile();
   const data = paySchema.parse(input);
-  const supabase = await createClient();
 
-  const { data: member } = await supabase
-    .from("session_members")
-    .select("id")
-    .eq("session_id", data.sessionId)
-    .eq("profile_id", profile.id)
-    .maybeSingle();
+  // 1. Member lookup
+  const [member] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, data.sessionId),
+        eq(sessionMembers.profileId, profile.id)
+      )
+    );
   if (!member) throw new Error("Bukan member meja ini");
 
-  const { data: order } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("session_id", data.sessionId)
-    .neq("status", "closed")
-    .maybeSingle();
+  // 2. Open order
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
   if (!order) throw new Error("Order tidak terbuka");
 
-  // Demo mode: auto-mark as paid so client sees the end-to-end flow.
-  // For production, only 'mock' method auto-pays; real gateways stay pending.
+  // Demo mode: auto-mark paid kalau bukan production
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
   const autoPaid = demoMode || data.method === "mock";
 
-  const { error } = await supabase.from("payments").insert({
-    order_id: order.id,
-    paid_by_member_id: member.id,
+  await db.insert(payments).values({
+    orderId: order.id,
+    paidByMemberId: member.id,
     amount: data.amount,
     method: data.method,
     status: autoPaid ? "paid" : "pending",
-    split_mode: data.splitMode,
-    split_meta: data.splitMeta ?? {},
-    paid_at: autoPaid ? new Date().toISOString() : null,
+    splitMode: data.splitMode,
+    splitMeta: data.splitMeta ?? {},
+    paidAt: autoPaid ? new Date() : null,
   });
-  if (error) throw new Error(error.message);
 
   revalidatePath(`/session/${data.sessionId}`);
 }
 
 // ============================================================
-// AUTH
+// STAFF / WAITER
 // ============================================================
 
-export async function signInWithMagicLink(email: string, next?: string) {
-  const supabase = await createClient();
-  const headers = await import("next/headers").then((m) => m.headers());
-  const host = headers.get("host") ?? "localhost:3000";
-  const protocol = host.includes("localhost") ? "http" : "https";
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${protocol}://${host}/auth/callback?next=${encodeURIComponent(next ?? "/")}`,
-    },
-  });
-  if (error) throw new Error(error.message);
-}
-
-const signUpSchema = z.object({
-  email: z.string().email("Email tidak valid"),
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
-  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
-  next: z.string().optional(),
-});
-
-const signInSchema = z.object({
-  email: z.string().email("Email tidak valid"),
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
-  next: z.string().optional(),
-});
-
-export async function signUpWithPassword(input: z.infer<typeof signUpSchema>) {
-  const supabase = await createClient();
-  const data = parseOrThrow(signUpSchema, input);
-
-  const { data: result, error } = await supabase.auth.signUp({
-    email: data.email,
-    password: data.password,
-    options: {
-      data: { display_name: data.displayName },
-    },
-  });
-  if (error) throw new Error(translateAuthError(error.message));
-  if (!result.user) throw new Error("Signup gagal — tidak ada user dibuat");
-
-  // Update profile display_name (trigger sudah set, tapi pastikan)
-  await supabase
-    .from("profiles")
-    .update({ display_name: data.displayName })
-    .eq("id", result.user.id);
-
-  // Kalau confirm email OFF, session langsung aktif → redirect.
-  // Kalau ON, session null → return info ke caller.
-  if (result.session) {
-    redirect(data.next ?? "/");
-  }
-  return { needsEmailConfirm: true };
-}
-
-export async function signInWithPassword(input: z.infer<typeof signInSchema>) {
-  const supabase = await createClient();
-  const data = parseOrThrow(signInSchema, input);
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email: data.email,
-    password: data.password,
-  });
-  if (error) throw new Error(translateAuthError(error.message));
-
-  redirect(data.next ?? "/");
-}
-
-function parseOrThrow<T>(schema: z.ZodSchema<T>, input: unknown): T {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const first = result.error.issues[0];
-    throw new Error(first?.message ?? "Input tidak valid");
-  }
-  return result.data;
-}
-
-function translateAuthError(msg: string): string {
-  const m = msg.toLowerCase();
-  if (m.includes("invalid login credentials")) return "Email atau password salah";
-  if (m.includes("user already registered")) return "Email sudah terdaftar — coba sign in";
-  if (m.includes("email not confirmed")) return "Cek inbox kamu untuk konfirmasi email";
-  if (m.includes("password should be at least")) return "Password minimal 6 karakter";
-  if (m.includes("rate limit")) return "Terlalu banyak percobaan, coba lagi nanti";
-  // Zod validation errors come as JSON arrays — extract first message
-  if (msg.startsWith("[") && msg.includes("message")) {
-    try {
-      const parsed = JSON.parse(msg) as Array<{ message?: string }>;
-      const first = parsed[0]?.message;
-      if (first) return first;
-    } catch {
-      /* fallthrough */
-    }
-  }
-  return msg;
-}
-
-export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/");
-}
-
-const resetRequestSchema = z.object({
-  email: z.string().email("Email tidak valid"),
-});
-
-export async function requestPasswordReset(input: z.infer<typeof resetRequestSchema>) {
-  const data = parseOrThrow(resetRequestSchema, input);
-  const supabase = await createClient();
-  const headers = await import("next/headers").then((m) => m.headers());
-  const h = await headers;
-  const host = h.get("host") ?? "localhost:3000";
-  const protocol = host.includes("localhost") ? "http" : "https";
-
-  const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-    redirectTo: `${protocol}://${host}/auth/callback?next=${encodeURIComponent("/auth/reset")}`,
-  });
-  // Hindari "user enumeration": tetap return ok meski email tidak terdaftar.
-  // Tapi log internal error kalau bukan "user not found".
-  if (error && !error.message.toLowerCase().includes("not found")) {
-    throw new Error(translateAuthError(error.message));
-  }
-}
-
-const updatePasswordSchema = z.object({
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
-});
-
-export async function updatePassword(input: z.infer<typeof updatePasswordSchema>) {
-  const data = parseOrThrow(updatePasswordSchema, input);
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error("Sesi recovery sudah kedaluwarsa. Coba minta link baru.");
-  }
-
-  const { error } = await supabase.auth.updateUser({
-    password: data.password,
-  });
-  if (error) throw new Error(translateAuthError(error.message));
-
-  redirect("/");
-}
-
-// ============================================================
-// STAFF / WAITER ACTIONS
-// ============================================================
-
-async function requireStaff() {
+/**
+ * Guard untuk Server Actions yang butuh staff role.
+ * Throw (bukan redirect) supaya error muncul di toast UI, bukan
+ * navigate ke halaman lain.
+ */
+async function requireStaffAction() {
   const profile = await requireProfile();
-  const supabase = await createClient();
-  const { data: staff } = await supabase
-    .from("staff_roles")
-    .select("role, bar_id")
-    .eq("profile_id", profile.id)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
+  const [staff] = await db
+    .select({ role: staffRoles.role, bar_id: staffRoles.barId })
+    .from(staffRoles)
+    .where(
+      and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
+    );
   if (!staff) {
     throw new Error("Akses staff diperlukan");
   }
@@ -707,21 +586,16 @@ export async function markOrderItemStatus(
   itemId: string,
   newStatus: "preparing" | "served"
 ) {
-  await requireStaff();
-  const supabase = await createClient();
+  await requireStaffAction();
 
-  const patch: { status: "preparing" | "served"; served_at?: string } = {
+  const patch: { status: "preparing" | "served"; servedAt?: Date } = {
     status: newStatus,
   };
   if (newStatus === "served") {
-    patch.served_at = new Date().toISOString();
+    patch.servedAt = new Date();
   }
 
-  const { error } = await supabase
-    .from("order_items")
-    .update(patch)
-    .eq("id", itemId);
-  if (error) throw new Error(error.message);
+  await db.update(orderItems).set(patch).where(eq(orderItems.id, itemId));
 
   revalidatePath("/staff");
 }
@@ -745,19 +619,19 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
     throw new Error("Tidak bisa rate diri sendiri");
   }
 
-  const supabase = await createClient();
-
-  const { error } = await supabase.from("member_ratings").upsert(
-    {
-      session_id: data.sessionId,
-      rater_id: profile.id,
-      ratee_id: data.rateeId,
+  await db
+    .insert(memberRatings)
+    .values({
+      sessionId: data.sessionId,
+      raterId: profile.id,
+      rateeId: data.rateeId,
       stars: data.stars,
       tags: data.tags ?? [],
-    },
-    { onConflict: "session_id,rater_id,ratee_id" }
-  );
-  if (error) throw new Error(error.message);
+    })
+    .onConflictDoUpdate({
+      target: [memberRatings.sessionId, memberRatings.raterId, memberRatings.rateeId],
+      set: { stars: data.stars, tags: data.tags ?? [] },
+    });
 
   revalidatePath(`/session/${data.sessionId}/rate`);
 }
@@ -773,46 +647,22 @@ const updateProfileSchema = z.object({
 
 export async function updateProfile(input: z.infer<typeof updateProfileSchema>) {
   const profile = await requireProfile();
-  const data = parseOrThrow(updateProfileSchema, input);
-  const supabase = await createClient();
+  const data = updateProfileSchema.parse(input);
 
-  // Clean hobbies: trim, lowercase, dedup
+  // Clean hobbies: trim + dedup, preserve original-case
   const hobbies = (data.hobbies ?? [])
     .map((h) => h.trim())
     .filter((h) => h.length > 0)
     .filter((h, i, arr) => arr.indexOf(h) === i);
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      display_name: data.displayName,
+  await db
+    .update(profiles)
+    .set({
+      displayName: data.displayName,
       hobbies,
     })
-    .eq("id", profile.id);
-  if (error) throw new Error(error.message);
+    .where(eq(profiles.id, profile.id));
 
   revalidatePath("/profile");
   revalidatePath("/", "layout");
-}
-
-// Demo helper: sign in as anonymous user with a display name
-// Useful when client tidak punya email setup, atau untuk demo cepat.
-export async function signInAnonymous(displayName: string, next?: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInAnonymously({
-    options: {
-      data: { display_name: displayName },
-    },
-  });
-  if (error) throw new Error(error.message);
-
-  // Update profile display_name (trigger may have set it from metadata already)
-  if (data.user) {
-    await supabase
-      .from("profiles")
-      .update({ display_name: displayName })
-      .eq("id", data.user.id);
-  }
-
-  redirect(next ?? "/");
 }

@@ -1,10 +1,20 @@
 "use client";
 
+/**
+ * Lupa password? → Pakai magic link.
+ *
+ * Phase 4 decision: drop password reset flow.
+ * - Auth.js v5 tidak ship reset built-in (perlu custom token table + email)
+ * - Magic link sudah cover use case "saya lupa password" — kirim link langsung
+ *   sign-in, user bisa update password di /profile setelah login
+ * - Less attack surface, less code to maintain
+ */
+
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Mail, Check } from "lucide-react";
-import { requestPasswordReset } from "@/lib/actions";
+import { magicLinkAction } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,10 +38,14 @@ export function ForgotForm() {
     }
     setLoading(true);
     try {
-      await requestPasswordReset({ email });
-      setSent(true);
+      const result = await magicLinkAction({ email });
+      if (result.ok) {
+        setSent(true);
+      } else if (result.error) {
+        toast.error(result.error);
+      }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim email reset"));
+      toast.error(getActionErrorMessage(err, "Gagal kirim email"));
     } finally {
       setLoading(false);
     }
@@ -57,8 +71,8 @@ export function ForgotForm() {
         </CardTitle>
         <CardDescription>
           {sent
-            ? `Kami sudah kirim link reset password ke ${email}. Buka email-nya, klik link, lalu set password baru.`
-            : "Tidak apa-apa. Masukkan email akunmu, kami kirim link reset password."}
+            ? `Kami sudah kirim magic link ke ${email}. Klik link untuk langsung masuk — kamu bisa update password setelah login.`
+            : "Tidak apa-apa. Kami kirim magic link ke email kamu — klik, langsung masuk, set password baru kalau perlu di Profile."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -70,7 +84,7 @@ export function ForgotForm() {
                 <p className="font-medium mb-1">Link terkirim</p>
                 <p className="text-xs text-muted-foreground">
                   Kalau tidak masuk inbox dalam beberapa menit, cek folder Spam.
-                  Pastikan email yang dimasukkan benar dan sudah terdaftar.
+                  Link berlaku 10 menit.
                 </p>
               </div>
             </div>
@@ -109,7 +123,7 @@ export function ForgotForm() {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Mengirim..." : "Kirim Link Reset"}
+              {loading ? "Mengirim..." : "Kirim Magic Link"}
             </Button>
             <Link
               href="/auth"
