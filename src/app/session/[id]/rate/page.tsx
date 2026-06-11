@@ -31,7 +31,7 @@ export default async function RatePage({ params }: PageProps) {
     redirect(`/session/${id}`);
   }
 
-  const members = await getRatableMembers(id);
+  const members = await getRatableMembers(id, profile.id);
 
   const table = Array.isArray(session.tables) ? session.tables[0] : session.tables;
 
