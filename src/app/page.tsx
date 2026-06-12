@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserMenu } from "@/components/UserMenu";
 import { StaffShortcut } from "@/components/StaffShortcut";
+import { StoryBarSection } from "@/components/story/StoryBarSection";
 
 export default function HomePage() {
   return (
@@ -18,6 +19,9 @@ export default function HomePage() {
       <div className="pt-16">
         <StaffShortcut />
       </div>
+
+      {/* Story bar — renders only if user logged in */}
+      <StoryBarSection />
 
       {/* Hero */}
       <section className="relative overflow-hidden">

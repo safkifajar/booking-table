@@ -1,0 +1,420 @@
+"use client";
+
+import * as React from "react";
+import Image from "next/image";
+import { toast } from "sonner";
+import { X, ChevronLeft, ChevronRight, MapPin, Eye, Trash2 } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useConfirm } from "@/components/ConfirmDialog";
+import {
+  markStoryAsViewed,
+  deleteStory,
+  getStoriesForUser,
+  getStoryViewers,
+  type StoryDetail,
+  type StoryViewer as ViewerEntry,
+} from "@/lib/story-actions";
+import { getActionErrorMessage, cn, initials } from "@/lib/utils";
+
+interface Props {
+  barId: string;
+  /** UserId yang stories-nya pertama mau dilihat */
+  startUserId: string;
+  /** UserId yang lagi login (untuk owner check) */
+  viewerId: string;
+  /** Urutan user yang punya story aktif — untuk navigasi antar user */
+  orderedUserIds: string[];
+  onClose: () => void;
+}
+
+const SLIDE_DURATION_MS = 5000;
+
+type Phase = "loading" | "viewing" | "viewers";
+
+/**
+ * Full-screen story viewer.
+ *
+ * Navigasi:
+ * - Tap kanan / arrow right → next story (atau next user kalau di akhir)
+ * - Tap kiri / arrow left → prev story (atau prev user)
+ * - ESC / klik tombol X → close
+ * - Klik area atas → tampilkan list viewers (kalau owner)
+ *
+ * Auto-advance: 5 detik per story dengan progress bar di atas.
+ * Pause saat caption diketuk panjang (long-press untuk pause future).
+ */
+export function StoryViewer({
+  barId,
+  startUserId,
+  viewerId,
+  orderedUserIds,
+  onClose,
+}: Props) {
+  const confirm = useConfirm();
+
+  const [currentUserId, setCurrentUserId] = React.useState(startUserId);
+  const [currentIndex, setCurrentIndex] = React.useState(0);
+  const [stories, setStories] = React.useState<StoryDetail[]>([]);
+  const [phase, setPhase] = React.useState<Phase>("loading");
+  const [progress, setProgress] = React.useState(0);
+  const [paused, setPaused] = React.useState(false);
+  const [viewers, setViewers] = React.useState<ViewerEntry[] | null>(null);
+  const [showViewers, setShowViewers] = React.useState(false);
+
+  const currentStory = stories[currentIndex];
+  const isOwner = currentStory?.id && currentUserId === viewerId;
+  const userIndex = orderedUserIds.indexOf(currentUserId);
+  const hasNextUser = userIndex < orderedUserIds.length - 1;
+  const hasPrevUser = userIndex > 0;
+
+  // Load stories tiap kali ganti user
+  React.useEffect(() => {
+    let cancelled = false;
+    setPhase("loading");
+    setProgress(0);
+    setCurrentIndex(0);
+    getStoriesForUser(currentUserId, barId, viewerId).then((rows) => {
+      if (cancelled) return;
+      if (rows.length === 0) {
+        // No stories untuk user ini (race condition kalau expire)
+        if (hasNextUser) {
+          setCurrentUserId(orderedUserIds[userIndex + 1]);
+        } else {
+          onClose();
+        }
+        return;
+      }
+      setStories(rows);
+      setPhase("viewing");
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, barId, viewerId]);
+
+  // Mark current as viewed (after small delay supaya gak spam saat skip cepat)
+  React.useEffect(() => {
+    if (!currentStory || isOwner) return;
+    const t = setTimeout(() => {
+      markStoryAsViewed(currentStory.id).catch(() => {
+        // ignore — view tracking best-effort
+      });
+    }, 500);
+    return () => clearTimeout(t);
+  }, [currentStory, isOwner]);
+
+  // Auto-advance progress
+  React.useEffect(() => {
+    if (phase !== "viewing" || paused || showViewers) return;
+    const startTime = Date.now() - progress * SLIDE_DURATION_MS;
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / SLIDE_DURATION_MS;
+      if (elapsed >= 1) {
+        setProgress(0);
+        goNext();
+      } else {
+        setProgress(elapsed);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentIndex, paused, showViewers]);
+
+  // ESC to close
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showViewers) setShowViewers(false);
+        else onClose();
+      } else if (e.key === "ArrowRight") goNext();
+      else if (e.key === "ArrowLeft") goPrev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showViewers]);
+
+  function goNext() {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      setProgress(0);
+    } else if (hasNextUser) {
+      setCurrentUserId(orderedUserIds[userIndex + 1]);
+    } else {
+      onClose();
+    }
+  }
+
+  function goPrev() {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1);
+      setProgress(0);
+    } else if (hasPrevUser) {
+      setCurrentUserId(orderedUserIds[userIndex - 1]);
+    }
+  }
+
+  async function handleDelete() {
+    if (!currentStory) return;
+    const ok = await confirm({
+      title: "Hapus story ini?",
+      description: "Story akan hilang dari semua viewer dan tidak bisa di-restore.",
+      confirmText: "Hapus",
+      cancelText: "Batal",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    try {
+      await deleteStory(currentStory.id);
+      toast.success("Story dihapus");
+      // Remove dari list local
+      setStories((arr) => arr.filter((s) => s.id !== currentStory.id));
+      // Kalau habis, lompat ke user berikutnya / close
+      if (stories.length === 1) {
+        if (hasNextUser) setCurrentUserId(orderedUserIds[userIndex + 1]);
+        else onClose();
+      } else if (currentIndex >= stories.length - 1) {
+        setCurrentIndex((i) => Math.max(0, i - 1));
+      }
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal hapus story"));
+    }
+  }
+
+  async function handleShowViewers() {
+    if (!currentStory || !isOwner) return;
+    setShowViewers(true);
+    setPaused(true);
+    if (!viewers) {
+      try {
+        const rows = await getStoryViewers(currentStory.id);
+        setViewers(rows);
+      } catch {
+        toast.error("Gagal load viewer");
+      }
+    }
+  }
+
+  if (phase === "loading") {
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <div className="text-white/40 text-sm">Memuat...</div>
+      </div>
+    );
+  }
+
+  if (!currentStory) {
+    return null;
+  }
+
+  const elapsedMinutes = Math.floor(
+    (Date.now() - currentStory.createdAt.getTime()) / 60_000
+  );
+  const timeAgo =
+    elapsedMinutes < 1
+      ? "baru"
+      : elapsedMinutes < 60
+        ? `${elapsedMinutes}m`
+        : `${Math.floor(elapsedMinutes / 60)}j`;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+      <div className="relative w-full h-full max-w-md mx-auto bg-zinc-950 overflow-hidden">
+        {/* Image */}
+        <Image
+          src={currentStory.imageUrl}
+          alt="Story"
+          fill
+          className="object-contain"
+          unoptimized
+          priority
+        />
+
+        {/* Tap zones (kiri/kanan) */}
+        <button
+          type="button"
+          onClick={goPrev}
+          onMouseDown={() => setPaused(true)}
+          onMouseUp={() => setPaused(false)}
+          onTouchStart={() => setPaused(true)}
+          onTouchEnd={() => setPaused(false)}
+          className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2"
+          aria-label="Story sebelumnya"
+        >
+          <span className="opacity-0 group-hover:opacity-60 transition">
+            <ChevronLeft className="h-6 w-6 text-white" />
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={goNext}
+          onMouseDown={() => setPaused(true)}
+          onMouseUp={() => setPaused(false)}
+          onTouchStart={() => setPaused(true)}
+          onTouchEnd={() => setPaused(false)}
+          className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2"
+          aria-label="Story berikutnya"
+        >
+          <span className="opacity-0 group-hover:opacity-60 transition">
+            <ChevronRight className="h-6 w-6 text-white" />
+          </span>
+        </button>
+
+        {/* Progress bars */}
+        <div className="absolute top-0 inset-x-0 px-2 pt-2 flex gap-1 pointer-events-none">
+          {stories.map((_, idx) => (
+            <div
+              key={idx}
+              className="flex-1 h-1 rounded-full bg-white/30 overflow-hidden"
+            >
+              <div
+                className="h-full bg-white transition-all"
+                style={{
+                  width:
+                    idx < currentIndex
+                      ? "100%"
+                      : idx === currentIndex
+                        ? `${progress * 100}%`
+                        : "0%",
+                  transitionDuration: idx === currentIndex ? "50ms" : "0ms",
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Top bar (close + time) */}
+        <div className="absolute top-4 inset-x-0 px-4 flex items-center justify-between pointer-events-none">
+          <span className="text-xs text-white/80 font-medium pointer-events-auto">
+            {timeAgo}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/10 transition pointer-events-auto"
+            aria-label="Tutup story"
+          >
+            <X className="h-5 w-5 text-white" />
+          </button>
+        </div>
+
+        {/* Bottom area: caption + table tag + actions */}
+        <div className="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/80 to-transparent pointer-events-none">
+          <div className="space-y-2 max-w-sm pointer-events-auto">
+            {currentStory.table_label && (
+              <div className="inline-flex items-center gap-1 text-[11px] text-white/80 bg-white/10 px-2 py-0.5 rounded-full">
+                <MapPin className="h-3 w-3" />
+                {currentStory.table_label} · {currentStory.area_name}
+              </div>
+            )}
+            {currentStory.caption && (
+              <p className="text-sm text-white whitespace-pre-line">
+                {currentStory.caption}
+              </p>
+            )}
+            {isOwner && (
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleShowViewers}
+                  className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white transition"
+                >
+                  <Eye className="h-4 w-4" />
+                  Lihat viewers
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition ml-auto"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Hapus
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Viewers overlay */}
+        {showViewers && (
+          <ViewersPanel
+            viewers={viewers}
+            onClose={() => {
+              setShowViewers(false);
+              setPaused(false);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ViewersPanel({
+  viewers,
+  onClose,
+}: {
+  viewers: ViewerEntry[] | null;
+  onClose: () => void;
+}) {
+  return (
+    <div className="absolute inset-x-0 bottom-0 max-h-[60%] bg-zinc-900 border-t border-white/10 rounded-t-2xl flex flex-col">
+      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-white">
+          Viewers {viewers && `(${viewers.length})`}
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-white/10 transition"
+          aria-label="Tutup viewer list"
+        >
+          <X className="h-4 w-4 text-white" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-2">
+        {viewers === null ? (
+          <div className="text-white/40 text-sm text-center py-6">Memuat...</div>
+        ) : viewers.length === 0 ? (
+          <div className="text-white/40 text-sm text-center py-6">
+            Belum ada yang lihat
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {viewers.map((v) => (
+              <div key={v.profileId} className="flex items-center gap-3 py-2.5">
+                <Avatar className="h-8 w-8">
+                  {v.avatarUrl && (
+                    <AvatarImage src={v.avatarUrl} alt={v.displayName} />
+                  )}
+                  <AvatarFallback className="text-[10px]">
+                    {initials(v.displayName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-white truncate">
+                    {v.displayName}
+                  </div>
+                  <div className="text-[10px] text-white/40">
+                    {timeAgoShort(v.viewedAt)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function timeAgoShort(date: Date): string {
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  return `${Math.floor(hours / 24)} hari lalu`;
+}

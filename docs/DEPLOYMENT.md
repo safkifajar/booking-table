@@ -312,6 +312,57 @@ Steps:
 
 ---
 
+## 8b. Cron Jobs (Story expire)
+
+Story upload auto-expire 24 jam. Endpoint `/api/cron/expire-stories` hapus
+row + file dari storage. Trigger dengan systemd timer (atau PM2 cron module).
+
+### Setup systemd timer
+
+Bikin service file `/etc/systemd/system/booking-cron-stories.service`:
+```ini
+[Unit]
+Description=Expire booking-table stories
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/booking/booking-table/.env.local
+ExecStart=/usr/bin/curl -fsS -X POST \
+  -H "Authorization: Bearer ${CRON_SECRET}" \
+  https://booking.yourdomain.com/api/cron/expire-stories
+```
+
+Timer file `/etc/systemd/system/booking-cron-stories.timer`:
+```ini
+[Unit]
+Description=Run booking-table story expire every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable + start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now booking-cron-stories.timer
+sudo systemctl status booking-cron-stories.timer
+```
+
+Cek log eksekusi:
+```bash
+sudo journalctl -u booking-cron-stories.service -n 20
+```
+
+Untuk story service yang lebih agresif (expire dalam menit, bukan jam),
+ubah `OnUnitActiveSec=5min` di timer file.
+
+---
+
 ## 9. Backup Strategy
 
 Backup database harian via cron:

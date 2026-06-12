@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChevronRight, User, KeyRound, History, LogOut } from "lucide-react";
+import { ChevronRight, User, KeyRound, History, LogOut, Camera } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { signOutAction } from "@/lib/auth-v2/actions";
 import { getActionErrorMessage } from "@/lib/utils";
@@ -55,6 +55,12 @@ export function ProfileMenuList() {
           icon={<History className="h-4 w-4" />}
           label="Riwayat Session"
           description="Meja yang pernah kamu ikuti"
+        />
+        <MenuItem
+          href="/profile/stories"
+          icon={<Camera className="h-4 w-4" />}
+          label="Story Saya"
+          description="Story aktif yang kamu upload"
         />
       </MenuGroup>
 

@@ -8,4 +8,6 @@
 export const channels = {
   session: (sessionId: string) => `session:${sessionId}`,
   staff: (barId: string) => `staff:${barId}`,
+  /** Story updates broadcast ke semua viewer di bar */
+  bar: (barId: string) => `bar:${barId}`,
 };
