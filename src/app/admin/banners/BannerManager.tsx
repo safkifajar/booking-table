@@ -60,9 +60,13 @@ export function BannerManager({ barId, initialBanners }: Props) {
 
   return (
     <>
-      <div className="flex justify-end">
-        <Button variant="gold" size="lg" onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4" />
+      {/* Toolbar: count kiri + tombol kanan */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs text-muted-foreground">
+          {banners.length} banner total
+        </div>
+        <Button variant="gold" size="sm" onClick={() => setCreating(true)}>
+          <Plus className="h-3.5 w-3.5" />
           Banner Baru
         </Button>
       </div>
@@ -80,16 +84,32 @@ export function BannerManager({ barId, initialBanners }: Props) {
           </Button>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {banners.map((b) => (
-            <BannerRow
-              key={b.id}
-              banner={b}
-              onEdit={() => setEditing(b)}
-              onDelete={() => handleDelete(b)}
-            />
-          ))}
-        </div>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-medium w-16">Foto</th>
+                  <th className="px-4 py-3 font-medium">Judul & Deskripsi</th>
+                  <th className="px-4 py-3 font-medium w-24">Status</th>
+                  <th className="px-4 py-3 font-medium w-20 text-center">Urutan</th>
+                  <th className="px-4 py-3 font-medium w-44">Periode</th>
+                  <th className="px-4 py-3 font-medium w-40 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {banners.map((b) => (
+                  <BannerRow
+                    key={b.id}
+                    banner={b}
+                    onEdit={() => setEditing(b)}
+                    onDelete={() => handleDelete(b)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {creating && (
@@ -149,49 +169,67 @@ function BannerRow({
   const showing = banner.isActive && inWindow;
 
   return (
-    <Card className="overflow-hidden flex flex-col sm:flex-row">
-      <div className="relative w-full sm:w-48 aspect-[16/9] sm:aspect-[16/9] shrink-0 bg-zinc-900">
-        <Image
-          src={banner.imageUrl}
-          alt={banner.title ?? "Banner"}
-          fill
-          className="object-cover"
-          sizes="(max-width: 640px) 100vw, 192px"
-        />
-      </div>
+    <tr className="hover:bg-muted/30 transition">
+      {/* Foto */}
+      <td className="px-4 py-2.5 align-middle">
+        <div className="relative h-10 w-16 rounded bg-zinc-900 overflow-hidden shrink-0">
+          <Image
+            src={banner.imageUrl}
+            alt={banner.title ?? "Banner"}
+            fill
+            className="object-cover"
+            sizes="64px"
+          />
+        </div>
+      </td>
 
-      <div className="flex-1 p-4 min-w-0 flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={showing ? "default" : "secondary"} className="text-[10px]">
-              {showing ? "Tampil" : !banner.isActive ? "Mati" : "Belum/Sudah"}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">
-              Urutan #{banner.sortOrder}
+      {/* Judul + deskripsi */}
+      <td className="px-4 py-2.5 align-middle min-w-0">
+        <div className="font-medium text-sm truncate">
+          {banner.title ?? <span className="text-muted-foreground italic">(tanpa judul)</span>}
+        </div>
+        {banner.subtitle && (
+          <div className="text-xs text-muted-foreground truncate mt-0.5 max-w-md">
+            {banner.subtitle}
+          </div>
+        )}
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-2.5 align-middle">
+        <Badge
+          variant={showing ? "default" : "secondary"}
+          className="text-[10px] px-1.5 py-0.5"
+        >
+          {showing ? "Tampil" : !banner.isActive ? "Mati" : "Diluar Periode"}
+        </Badge>
+      </td>
+
+      {/* Urutan */}
+      <td className="px-4 py-2.5 align-middle text-center text-xs text-muted-foreground tabular-nums">
+        {banner.sortOrder}
+      </td>
+
+      {/* Periode */}
+      <td className="px-4 py-2.5 align-middle text-xs text-muted-foreground">
+        {banner.startsAt || banner.endsAt ? (
+          <div className="flex items-center gap-1 whitespace-nowrap">
+            <Calendar className="h-3 w-3 shrink-0" />
+            <span className="tabular-nums">
+              {banner.startsAt ? banner.startsAt.toISOString().slice(0, 10) : "—"}
+              {" → "}
+              {banner.endsAt ? banner.endsAt.toISOString().slice(0, 10) : "—"}
             </span>
           </div>
-          <div className="font-medium truncate">
-            {banner.title ?? "(tanpa judul)"}
-          </div>
-          {banner.subtitle && (
-            <div className="text-xs text-muted-foreground line-clamp-2">
-              {banner.subtitle}
-            </div>
-          )}
-          {(banner.startsAt || banner.endsAt) && (
-            <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {banner.startsAt
-                ? banner.startsAt.toISOString().slice(0, 10)
-                : "..."}
-              {" → "}
-              {banner.endsAt ? banner.endsAt.toISOString().slice(0, 10) : "..."}
-            </div>
-          )}
-        </div>
+        ) : (
+          <span className="text-muted-foreground/60">Selalu tampil</span>
+        )}
+      </td>
 
-        <div className="flex sm:flex-col gap-2 justify-end">
-          <Button variant="outline" size="sm" onClick={onEdit}>
+      {/* Aksi */}
+      <td className="px-4 py-2.5 align-middle text-right">
+        <div className="flex items-center gap-1 justify-end">
+          <Button variant="ghost" size="sm" onClick={onEdit}>
             <Edit2 className="h-3.5 w-3.5" />
             Edit
           </Button>
@@ -202,11 +240,10 @@ function BannerRow({
             className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            Hapus
           </Button>
         </div>
-      </div>
-    </Card>
+      </td>
+    </tr>
   );
 }
 

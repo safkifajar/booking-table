@@ -70,22 +70,26 @@ export const authConfig = {
      * Authorization check untuk middleware.
      * Return true = allow request, false = redirect ke signIn.
      *
-     * Implementasi: gate /admin & /staff routes, sisanya allow.
-     * Logic per-role akan di-cek di Server Component (requireAdmin / requireStaff).
+     * Middleware utama (src/middleware.ts) sekarang handle subdomain
+     * routing + admin redirect. Callback ini cuma gate /staff & /profile
+     * untuk user app (non-admin subdomain). Admin gate sudah di middleware.
      */
     authorized({ auth, request }) {
       const path = request.nextUrl.pathname;
+      const host = request.headers.get("host") ?? "";
+      const isAdminSubdomain = host.startsWith("admin.");
       const isLoggedIn = !!auth?.user?.id;
 
-      // Routes yang butuh login
-      const protectedPrefixes = ["/admin", "/staff", "/profile"];
+      // Admin subdomain: middleware.ts yang handle gate, callback skip
+      if (isAdminSubdomain) return true;
+
+      // User app: gate /staff & /profile (need login)
+      const protectedPrefixes = ["/staff", "/profile"];
       const isProtected = protectedPrefixes.some((p) => path.startsWith(p));
 
       if (isProtected) {
-        return isLoggedIn; // false → Auth.js auto-redirect ke signIn page
+        return isLoggedIn;
       }
-
-      // Public routes — allow
       return true;
     },
   },

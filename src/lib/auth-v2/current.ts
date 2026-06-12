@@ -55,7 +55,7 @@ export interface Profile {
  */
 export interface StaffContext {
   profile: Profile;
-  role: "admin" | "manager" | "waiter";
+  role: "admin" | "manager" | "cashier" | "waiter";
   barId: string;
   barSlug: string;
   barName: string;
@@ -212,8 +212,10 @@ export async function requireStaff(nextPath = "/staff"): Promise<StaffContext> {
  *
  * Return null kalau bukan staff.
  */
+export type StaffRoleName = "admin" | "manager" | "cashier" | "waiter";
+
 export async function getStaffRole(): Promise<{
-  role: "admin" | "manager" | "waiter";
+  role: StaffRoleName;
   barId: string;
 } | null> {
   const profile = await getCurrentProfile();

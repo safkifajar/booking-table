@@ -10,9 +10,10 @@ export default async function AdminBannersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Banner Promo</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Banner carousel yang tampil di halaman utama. Tampil sesuai jadwal kalau
-          di-set tanggal aktif, kalau tidak selalu tampil selama is_active = on.
+        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+          Banner carousel yang tampil di halaman utama. Tampil sesuai jadwal
+          kalau di-set tanggal aktif, kalau tidak selalu tampil selama status
+          aktif.
         </p>
       </div>
 

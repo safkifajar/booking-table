@@ -137,3 +137,150 @@ Email ini dikirim ke ${email}. Kalau bukan kamu yang request, abaikan saja.
 
   return { html, text };
 }
+
+// ============================================================
+// STAFF INVITE EMAIL
+// ============================================================
+
+interface StaffInviteInput {
+  setupUrl: string;
+  email: string;
+  displayName: string;
+  /** "Waiter" / "Kasir" / "Manager" / "Admin" — human readable */
+  roleLabel: string;
+  /** Nama venue/bar */
+  barName: string;
+  /** Berapa lama link valid, default "7 hari" */
+  expiresIn?: string;
+}
+
+/**
+ * Staff invitation email — admin invite karyawan baru.
+ *
+ * Karyawan klik link → set password → otomatis login → akses dashboard.
+ */
+export function staffInviteEmail(
+  input: StaffInviteInput
+): { html: string; text: string } {
+  const {
+    setupUrl,
+    email,
+    displayName,
+    roleLabel,
+    barName,
+    expiresIn = "7 hari",
+  } = input;
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kamu di-invite jadi ${roleLabel} di ${barName}</title>
+</head>
+<body style="margin:0;padding:0;background:${COLORS.bg};color:${COLORS.text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${COLORS.bg};padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:16px;overflow:hidden;">
+
+          <!-- Header dengan gold accent -->
+          <tr>
+            <td style="padding:32px 32px 8px 32px;">
+              <div style="display:inline-block;width:48px;height:1px;background:${COLORS.primary};vertical-align:middle;"></div>
+              <span style="margin-left:12px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${COLORS.primary};font-weight:600;vertical-align:middle;">
+                ${barName}
+              </span>
+            </td>
+          </tr>
+
+          <!-- Heading -->
+          <tr>
+            <td style="padding:8px 32px 8px 32px;">
+              <h1 style="margin:0;font-size:26px;line-height:1.25;font-weight:700;color:${COLORS.text};">
+                Halo ${displayName},
+              </h1>
+              <p style="margin:8px 0 0 0;font-size:18px;line-height:1.4;color:${COLORS.primary};">
+                Kamu di-invite jadi <strong>${roleLabel}</strong>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Body text -->
+          <tr>
+            <td style="padding:16px 32px 24px 32px;">
+              <p style="margin:0 0 12px 0;font-size:15px;line-height:1.55;color:${COLORS.muted};">
+                Selamat bergabung di tim ${barName}! Untuk mulai akses panel staff, klik tombol di bawah untuk set password kamu.
+              </p>
+              <p style="margin:0;font-size:14px;line-height:1.55;color:${COLORS.muted};">
+                Link ini valid selama <strong style="color:${COLORS.text};">${expiresIn}</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- CTA Button -->
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <a href="${setupUrl}" target="_blank" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,${COLORS.primaryLight} 0%,${COLORS.primary} 50%,${COLORS.primaryDark} 100%);color:${COLORS.bg};text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;">
+                Set Password & Login →
+              </a>
+            </td>
+          </tr>
+
+          <!-- Fallback URL -->
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <p style="margin:0 0 8px 0;font-size:12px;color:${COLORS.muted};">
+                Atau copy paste URL berikut ke browser:
+              </p>
+              <p style="margin:0;font-size:12px;color:${COLORS.primary};word-break:break-all;">
+                <a href="${setupUrl}" style="color:${COLORS.primary};text-decoration:underline;">${setupUrl}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 32px;">
+              <div style="height:1px;background:${COLORS.border};"></div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 32px 28px 32px;">
+              <p style="margin:0 0 8px 0;font-size:12px;color:${COLORS.muted};">
+                Invitation ini dikirim ke <strong style="color:${COLORS.text};">${email}</strong>.
+              </p>
+              <p style="margin:0;font-size:12px;color:${COLORS.muted};">
+                Kalau kamu merasa tidak diundang, abaikan email ini.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+        <!-- Outside footer -->
+        <p style="margin:24px 0 0 0;font-size:11px;color:${COLORS.muted};letter-spacing:1px;">
+          © ${new Date().getFullYear()} ${barName}
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Halo ${displayName},
+
+Kamu di-invite jadi ${roleLabel} di ${barName}.
+
+Klik link di bawah untuk set password & login (valid ${expiresIn}):
+
+${setupUrl}
+
+Email ini dikirim ke ${email}. Kalau bukan kamu, abaikan saja.
+
+© ${new Date().getFullYear()} ${barName}`;
+
+  return { html, text };
+}

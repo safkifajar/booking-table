@@ -33,7 +33,12 @@ export interface AdminBar {
   id: string;
   slug: string;
   name: string;
-  role: "admin" | "manager" | "waiter";
+  /**
+   * Role hasil requireAdminAuth(). Sebenarnya cuma admin/manager bisa lolos
+   * (lihat auth-v2/current.ts requireAdmin inArray check), tapi tipe-nya
+   * inherit dari StaffContext yang punya semua role.
+   */
+  role: "admin" | "manager" | "cashier" | "waiter";
 }
 
 /**

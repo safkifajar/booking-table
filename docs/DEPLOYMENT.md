@@ -220,6 +220,7 @@ sudo apt install -y nginx
 
 Buat `/etc/nginx/sites-available/booking-table`:
 ```nginx
+# User app (default)
 server {
     listen 80;
     server_name booking.yourdomain.com;
@@ -269,6 +270,26 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
+
+# Admin panel (subdomain admin.*)
+# Codebase sama, middleware Next.js detect host header & rewrite path
+# ke /admin internally. Lihat src/middleware.ts.
+server {
+    listen 80;
+    server_name admin.booking.yourdomain.com;
+
+    client_max_body_size 10M;
+
+    # Tetap proxy ke same Next.js port — middleware yang routing internal
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
 Enable:
@@ -278,13 +299,27 @@ sudo nginx -t  # test config
 sudo systemctl reload nginx
 ```
 
+### DNS records
+
+Tambah 2 A record di DNS provider:
+```
+booking.yourdomain.com         A    <VPS_IP>
+admin.booking.yourdomain.com   A    <VPS_IP>
+```
+
+Atau pakai CNAME wildcard kalau ingin support lebih banyak subdomain:
+```
+*.booking.yourdomain.com       A    <VPS_IP>
+```
+
 ---
 
 ## 7. SSL via Let's Encrypt
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d booking.yourdomain.com
+# Sekaligus issue cert untuk user + admin subdomain
+sudo certbot --nginx -d booking.yourdomain.com -d admin.booking.yourdomain.com
 ```
 
 Auto-renew sudah di-setup via systemd timer. Verify:

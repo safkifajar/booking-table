@@ -10,25 +10,19 @@ import {
   History,
   LogOut,
   Camera,
-  TrendingUp,
-  ChefHat,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { signOutAction } from "@/lib/auth-v2/actions";
 import { getActionErrorMessage } from "@/lib/utils";
 
-interface Props {
-  /** Role user di staff_roles — null kalau bukan staff */
-  staffRole?: "admin" | "manager" | "waiter" | null;
-}
-
 /**
  * iOS Settings-style list: icon + label + chevron, dengan card grouping.
  *
- * Kalau user punya staff role, tampilkan grup "Akses Staff" di atas
- * (Admin Dashboard + Staff Dashboard).
+ * Admin akses TIDAK ada di sini — admin/staff buka panel di subdomain
+ * terpisah (admin.bookingsoho.com). Pisahin entry point supaya user app
+ * tidak punya clue admin panel ada (security best practice).
  */
-export function ProfileMenuList({ staffRole }: Props = {}) {
+export function ProfileMenuList() {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
 
@@ -51,37 +45,8 @@ export function ProfileMenuList({ staffRole }: Props = {}) {
     }
   }
 
-  const isAdminOrManager = staffRole === "admin" || staffRole === "manager";
-
   return (
     <div className="space-y-4">
-      {/* Group: Akses Staff — kondisional, paling atas (priority) */}
-      {staffRole && (
-        <div>
-          <h2 className="text-[10px] uppercase tracking-widest text-primary/70 font-semibold mb-2 px-1">
-            Akses Staff · {staffRole}
-          </h2>
-          <MenuGroup>
-            {isAdminOrManager && (
-              <MenuItem
-                href="/admin"
-                icon={<TrendingUp className="h-4 w-4" />}
-                label="Admin Dashboard"
-                description="Laporan penjualan, transaksi, banner promo"
-                variant="gold"
-              />
-            )}
-            <MenuItem
-              href="/staff"
-              icon={<ChefHat className="h-4 w-4" />}
-              label="Staff Dashboard"
-              description="Queue order, active tables, QR code"
-              variant="gold"
-            />
-          </MenuGroup>
-        </div>
-      )}
-
       {/* Group: Account */}
       <MenuGroup>
         <MenuItem
@@ -145,51 +110,29 @@ function MenuItem({
   icon,
   label,
   description,
-  variant,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   description?: string;
-  /** "gold" untuk highlight item (mis. staff access) */
-  variant?: "gold";
 }) {
-  const isGold = variant === "gold";
   return (
     <Link
       href={href}
-      className={
-        isGold
-          ? "flex items-center gap-3 px-4 py-3.5 bg-gradient-to-r from-primary/10 to-transparent hover:from-primary/20 active:from-primary/30 transition group"
-          : "flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
-      }
+      className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
     >
       <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
         {icon}
       </span>
       <span className="flex-1 min-w-0">
-        <span
-          className={
-            isGold
-              ? "block text-sm font-semibold text-primary"
-              : "block text-sm font-medium"
-          }
-        >
-          {label}
-        </span>
+        <span className="block text-sm font-medium">{label}</span>
         {description && (
           <span className="block text-xs text-muted-foreground truncate">
             {description}
           </span>
         )}
       </span>
-      <ChevronRight
-        className={
-          isGold
-            ? "h-4 w-4 text-primary group-hover:translate-x-0.5 transition shrink-0"
-            : "h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0"
-        }
-      />
+      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
     </Link>
   );
 }

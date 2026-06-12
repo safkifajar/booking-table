@@ -72,5 +72,10 @@ export const splitModeEnum = pgEnum("split_mode", [
   "custom",
 ]);
 
-export const staffRoleEnum = pgEnum("staff_role", ["waiter", "manager", "admin"]);
+export const staffRoleEnum = pgEnum("staff_role", [
+  "waiter",
+  "cashier",
+  "manager",
+  "admin",
+]);
 

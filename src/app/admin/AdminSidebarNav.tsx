@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Settings,
   Image as ImageIcon,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +67,19 @@ const NAV: NavItem[] = [
         href: "/admin/banners",
         label: "Banner Promo",
         icon: <ImageIcon className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    type: "group",
+    label: "Pengaturan",
+    icon: <Settings className="h-4 w-4" />,
+    children: [
+      {
+        type: "leaf",
+        href: "/admin/staff",
+        label: "Manage Staff",
+        icon: <Users className="h-4 w-4" />,
       },
     ],
   },
