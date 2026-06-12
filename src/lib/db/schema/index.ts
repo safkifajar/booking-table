@@ -17,4 +17,5 @@ export * from "./sessions";
 export * from "./orders";
 export * from "./extras";
 export * from "./stories";
+export * from "./banners";
 

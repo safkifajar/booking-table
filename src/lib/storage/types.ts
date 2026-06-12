@@ -16,10 +16,10 @@ export interface UploadInput {
   buffer: Buffer;
 
   /**
-   * Folder logical: "avatars", "stories", dst.
+   * Folder logical: "avatars", "stories", "banners", dst.
    * Adapter map ke filesystem path (local) atau S3 key prefix (R2).
    */
-  folder: "avatars" | "stories";
+  folder: "avatars" | "stories" | "banners";
 
   /**
    * Unique key untuk file. Untuk avatar: userId. Untuk story: random uuid.

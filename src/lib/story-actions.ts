@@ -394,6 +394,53 @@ export interface StoryViewer {
   viewedAt: Date;
 }
 
+/**
+ * Latest stories untuk grid feed di landing — flat list, latest first.
+ * Tidak group by user (beda dengan getActiveStoriesByBar yg untuk story bar).
+ *
+ * Limit untuk feed (default 12). Public — no auth check, semua aktif story
+ * di bar boleh dilihat (sudah dibatasi via expires_at).
+ */
+export interface FeedStoryItem {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  imageUrl: string;
+  caption: string | null;
+  createdAt: Date;
+  table_label: string | null;
+  area_name: string | null;
+}
+
+export async function getLatestStoriesByBar(
+  barId: string,
+  limit = 12
+): Promise<FeedStoryItem[]> {
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: stories.id,
+      userId: stories.userId,
+      displayName: profiles.displayName,
+      avatarUrl: profiles.avatarUrl,
+      imageUrl: stories.imageUrl,
+      caption: stories.caption,
+      createdAt: stories.createdAt,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+    })
+    .from(stories)
+    .innerJoin(profiles, eq(profiles.id, stories.userId))
+    .leftJoin(tableSessions, eq(tableSessions.id, stories.tableSessionId))
+    .leftJoin(tables, eq(tables.id, tableSessions.tableId))
+    .leftJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(and(eq(stories.barId, barId), gte(stories.expiresAt, now)))
+    .orderBy(desc(stories.createdAt))
+    .limit(limit);
+  return rows;
+}
+
 export async function getStoryViewers(storyId: string): Promise<StoryViewer[]> {
   const profile = await requireProfile();
 

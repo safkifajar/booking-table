@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import {
+  getCurrentUser,
+  getCurrentProfile,
+  getStaffRole,
+} from "@/lib/auth-v2/current";
 import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
@@ -21,7 +25,10 @@ export default async function ProfilePage() {
     redirect("/auth?next=/profile");
   }
 
-  const user = await getCurrentUser();
+  const [user, staff] = await Promise.all([
+    getCurrentUser(),
+    getStaffRole(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -84,7 +91,7 @@ export default async function ProfilePage() {
         </section>
 
         {/* Menu list */}
-        <ProfileMenuList />
+        <ProfileMenuList staffRole={staff?.role ?? null} />
       </div>
     </main>
   );

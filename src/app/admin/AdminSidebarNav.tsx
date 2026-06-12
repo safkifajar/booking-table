@@ -9,6 +9,8 @@ import {
   Utensils,
   ChartBar,
   ChevronDown,
+  Settings,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +53,19 @@ const NAV: NavItem[] = [
         href: "/admin/items",
         label: "Item Performance",
         icon: <Utensils className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    type: "group",
+    label: "Konten",
+    icon: <Settings className="h-4 w-4" />,
+    children: [
+      {
+        type: "leaf",
+        href: "/admin/banners",
+        label: "Banner Promo",
+        icon: <ImageIcon className="h-4 w-4" />,
       },
     ],
   },

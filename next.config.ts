@@ -2,10 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
-   * sharp adalah native binary — externalize supaya tidak di-bundle.
-   * Runtime di-require langsung dari node_modules (PM2 di VPS).
+   * Native binaries / Node-only modules — externalize supaya tidak di-bundle
+   * oleh webpack. Runtime di-require langsung dari node_modules.
+   *
+   * - sharp: native binary (image processing)
+   * - heic-convert: heavy + dynamic require chain
    */
-  serverExternalPackages: ["sharp"],
+  serverExternalPackages: ["sharp", "heic-convert"],
 };
 
 export default nextConfig;
