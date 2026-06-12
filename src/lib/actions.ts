@@ -688,6 +688,18 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  phone: z
+    .string()
+    .max(20)
+    .regex(/^[\d\s+\-()]*$/, "Format nomor HP tidak valid")
+    .optional()
+    .or(z.literal("")),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .optional()
+    .or(z.literal("")),
+  bio: z.string().max(280, "Bio maksimal 280 karakter").optional().or(z.literal("")),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
 });
 
@@ -705,8 +717,224 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
     .update(profiles)
     .set({
       displayName: data.displayName,
+      phone: data.phone?.trim() || null,
+      birthDate: data.birthDate || null,
+      bio: data.bio?.trim() || null,
       hobbies,
     })
+    .where(eq(profiles.id, profile.id));
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout");
+}
+
+// ============================================================
+// PASSWORD CHANGE
+// ============================================================
+
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().optional(), // optional untuk magic-link users
+    newPassword: z.string().min(6, "Password minimal 6 karakter").max(100),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Konfirmasi password tidak cocok",
+    path: ["confirmPassword"],
+  });
+
+/**
+ * Ubah / set password.
+ *
+ * - Kalau user sudah punya password (passwordHash != null): WAJIB pass
+ *   currentPassword yang harus match.
+ * - Kalau user belum punya password (signup via magic link): currentPassword
+ *   tidak dipakai, langsung set newPassword.
+ *
+ * Server-side enforce supaya tidak bisa di-bypass dari client.
+ */
+export async function changePassword(input: z.infer<typeof changePasswordSchema>) {
+  const profile = await requireProfile();
+  const data = changePasswordSchema.parse(input);
+
+  const { users } = await import("@/lib/db/schema/auth");
+  const { hashPassword, verifyPassword } = await import("@/lib/auth-v2/password");
+
+  // Ambil current hash
+  const [user] = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, profile.id));
+  if (!user) throw new Error("User tidak ditemukan");
+
+  // Kalau sudah punya password → wajib verify current
+  if (user.passwordHash) {
+    if (!data.currentPassword) {
+      throw new Error("Password sekarang wajib diisi");
+    }
+    const ok = await verifyPassword(data.currentPassword, user.passwordHash);
+    if (!ok) throw new Error("Password sekarang salah");
+  }
+
+  // Hash + save
+  const newHash = await hashPassword(data.newPassword);
+  await db
+    .update(users)
+    .set({ passwordHash: newHash, updatedAt: new Date() })
+    .where(eq(users.id, profile.id));
+
+  revalidatePath("/profile");
+  return { ok: true };
+}
+
+/**
+ * Cek apakah user sudah punya password (untuk UI decide section "Set password"
+ * vs "Ubah password").
+ */
+export async function userHasPassword(): Promise<boolean> {
+  const profile = await requireProfile();
+  const { users } = await import("@/lib/db/schema/auth");
+
+  const [user] = await db
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, profile.id));
+  return !!user?.passwordHash;
+}
+
+// ============================================================
+// AVATAR UPLOAD
+// ============================================================
+
+const ACCEPTED_AVATAR_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  // iPhone modern default — convert ke JPEG server-side dulu sebelum sharp
+  "image/heic",
+  "image/heif",
+] as const;
+const MAX_AVATAR_BYTES = 10 * 1024 * 1024; // 10MB pre-process (HEIC bisa besar)
+
+/**
+ * Beberapa browser/OS kirim MIME type kosong atau "application/octet-stream"
+ * untuk HEIC dari iPhone. Fallback detect via extension nama file.
+ */
+function isHeicFile(file: File): boolean {
+  if (file.type === "image/heic" || file.type === "image/heif") return true;
+  const name = file.name.toLowerCase();
+  return name.endsWith(".heic") || name.endsWith(".heif");
+}
+
+/**
+ * Upload avatar foto.
+ *
+ * Flow:
+ * 1. Validate file (type, size)
+ * 2. Resize ke 256×256 cover crop + convert ke WebP via sharp
+ * 3. Hapus avatar lama (kalau ada) supaya tidak menumpuk
+ * 4. Upload ke storage adapter (local disk MVP)
+ * 5. Update profiles.avatar_url
+ *
+ * Pakai FormData supaya bisa terima File langsung dari Client Component.
+ */
+export async function uploadAvatar(formData: FormData): Promise<{ avatarUrl: string }> {
+  const profile = await requireProfile();
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) {
+    throw new Error("File tidak valid");
+  }
+  if (file.size === 0) {
+    throw new Error("File kosong");
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    throw new Error(
+      `File terlalu besar (max ${Math.floor(MAX_AVATAR_BYTES / 1024 / 1024)}MB)`
+    );
+  }
+  const heic = isHeicFile(file);
+  const validMime = ACCEPTED_AVATAR_TYPES.includes(
+    file.type as (typeof ACCEPTED_AVATAR_TYPES)[number]
+  );
+  if (!validMime && !heic) {
+    throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+  }
+
+  const { default: sharp } = await import("sharp");
+  const { storage } = await import("@/lib/storage");
+
+  // Read file → kalau HEIC, convert ke JPEG dulu (sharp tidak support HEIC
+  // dari npm install — perlu libheif system-wide, tidak portable).
+  let inputBuffer = Buffer.from(await file.arrayBuffer());
+  if (heic) {
+    const { default: heicConvert } = await import("heic-convert");
+    inputBuffer = Buffer.from(
+      await heicConvert({
+        buffer: new Uint8Array(inputBuffer),
+        format: "JPEG",
+        quality: 0.9,
+      })
+    );
+  }
+
+  // Process: resize 256×256 cover → webp quality 80
+  const outputBuffer = await sharp(inputBuffer)
+    .rotate() // auto-rotate berdasarkan EXIF (foto dari HP sering miring)
+    .resize(256, 256, { fit: "cover", position: "center" })
+    .webp({ quality: 80 })
+    .toBuffer();
+
+  // Hapus avatar lama kalau ada
+  const [oldRow] = await db
+    .select({ avatarUrl: profiles.avatarUrl })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+  if (oldRow?.avatarUrl) {
+    await storage.delete(oldRow.avatarUrl);
+  }
+
+  // Upload baru
+  const { publicUrl } = await storage.upload({
+    buffer: outputBuffer,
+    folder: "avatars",
+    key: profile.id,
+    contentType: "image/webp",
+  });
+
+  // Cache-bust: append timestamp supaya browser refresh image kalau user upload ulang
+  const versionedUrl = `${publicUrl}?v=${Date.now()}`;
+
+  await db
+    .update(profiles)
+    .set({ avatarUrl: versionedUrl })
+    .where(eq(profiles.id, profile.id));
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout");
+
+  return { avatarUrl: versionedUrl };
+}
+
+/**
+ * Hapus avatar (kembali ke initials fallback).
+ */
+export async function deleteAvatar(): Promise<void> {
+  const profile = await requireProfile();
+  const { storage } = await import("@/lib/storage");
+
+  const [row] = await db
+    .select({ avatarUrl: profiles.avatarUrl })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+
+  if (row?.avatarUrl) {
+    await storage.delete(row.avatarUrl);
+  }
+
+  await db
+    .update(profiles)
+    .set({ avatarUrl: null })
     .where(eq(profiles.id, profile.id));
 
   revalidatePath("/profile");

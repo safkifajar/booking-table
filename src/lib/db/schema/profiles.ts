@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  date,
   timestamp,
   index,
 } from "drizzle-orm/pg-core";
@@ -23,6 +24,8 @@ export const profiles = pgTable(
     displayName: text("display_name").notNull(),
     avatarUrl: text("avatar_url"),
     phone: text("phone"),
+    birthDate: date("birth_date"),
+    bio: text("bio"),
     hobbies: text("hobbies").array().notNull().default([]),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },

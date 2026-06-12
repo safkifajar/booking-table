@@ -160,6 +160,25 @@ sudo -u postgres psql -d booking_table -f supabase/migrations/0012_admin_reports
 npm run build
 ```
 
+### Setup uploads directory (untuk avatar/story)
+
+Production: simpan uploads di **luar project folder** supaya tidak ke-bundle
+saat `next build` dan persistent saat update deployment.
+
+```bash
+sudo mkdir -p /var/lib/booking-table/uploads/avatars
+sudo mkdir -p /var/lib/booking-table/uploads/stories
+sudo chown -R booking:booking /var/lib/booking-table
+```
+
+Tambah ke `.env.local`:
+```
+UPLOADS_DIR=/var/lib/booking-table/uploads
+```
+
+nginx akan serve folder ini langsung (bypass Next.js) — lihat section nginx
+di bawah.
+
 ---
 
 ## 5. Run dengan PM2
@@ -205,6 +224,9 @@ server {
     listen 80;
     server_name booking.yourdomain.com;
 
+    # Upload size limit (default nginx 1MB terlalu kecil untuk foto)
+    client_max_body_size 10M;
+
     # SSE perlu special config — buffer off + long timeout
     location /api/realtime/ {
         proxy_pass http://localhost:3000;
@@ -220,6 +242,19 @@ server {
         chunked_transfer_encoding on;
         proxy_read_timeout 24h;
         proxy_send_timeout 24h;
+    }
+
+    # User uploads (avatar, story) — serve langsung dari disk, bypass Next.js
+    # Lebih cepat + hemat memory. Cache 1 hari di browser.
+    location /uploads/ {
+        alias /var/lib/booking-table/uploads/;
+        expires 1d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+
+        # Anti hotlink (optional — uncomment kalau perlu)
+        # valid_referers none blocked booking.yourdomain.com;
+        # if ($invalid_referer) { return 403; }
     }
 
     location / {

@@ -111,17 +111,21 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
       role="button"
       aria-label={`Table ${table.label}, capacity ${table.capacity}`}
     >
-      {/* Glow halo for open sessions */}
+      {/* Glow halo for open sessions — di-render via <g> wrapper supaya
+          transform-origin akurat ke (cx, cy), bukan bounding box ellipse. */}
       {isOpen && (
-        <ellipse
-          cx={cx}
-          cy={cy}
-          rx={table.width * 0.9}
-          ry={table.height * 0.9}
-          fill="url(#open-glow)"
-          className="table-breathe-glow"
+        <g
           style={{ transformOrigin: `${cx}px ${cy}px` }}
-        />
+          className="table-breathe-glow"
+        >
+          <ellipse
+            cx={cx}
+            cy={cy}
+            rx={table.width / 2 + 16}
+            ry={table.height / 2 + 16}
+            fill="url(#open-glow)"
+          />
+        </g>
       )}
 
       {/* Main shape */}

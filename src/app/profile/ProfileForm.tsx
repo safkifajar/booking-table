@@ -4,12 +4,10 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { X, Plus, Sparkles } from "lucide-react";
+import { X, Plus, Sparkles, Mail, Phone, Cake, FileText } from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 
-// Hobi populer untuk preset chip — sesuai vibe SOHO Social House
 const HOBBY_SUGGESTIONS = [
   "coffee",
   "live music",
@@ -35,12 +33,26 @@ const HOBBY_SUGGESTIONS = [
 ];
 
 interface Props {
+  email: string;
   initialDisplayName: string;
+  initialPhone: string;
+  initialBirthDate: string;
+  initialBio: string;
   initialHobbies: string[];
 }
 
-export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
+export function ProfileForm({
+  email,
+  initialDisplayName,
+  initialPhone,
+  initialBirthDate,
+  initialBio,
+  initialHobbies,
+}: Props) {
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
+  const [phone, setPhone] = React.useState(initialPhone);
+  const [birthDate, setBirthDate] = React.useState(initialBirthDate);
+  const [bio, setBio] = React.useState(initialBio);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
   const [customInput, setCustomInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -80,7 +92,13 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
     }
     setLoading(true);
     try {
-      await updateProfile({ displayName: name, hobbies });
+      await updateProfile({
+        displayName: name,
+        phone: phone.trim(),
+        birthDate: birthDate,
+        bio: bio.trim(),
+        hobbies,
+      });
       toast.success("Profil tersimpan");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal simpan"));
@@ -90,32 +108,106 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
   }
 
   const unsuggested = HOBBY_SUGGESTIONS.filter((h) => !hobbies.includes(h));
+  const bioLength = bio.length;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* IDENTITAS */}
       <Card>
         <CardHeader>
           <CardTitle>Identitas</CardTitle>
           <CardDescription>
-            Nama yang ditampilkan ke anggota meja lain dan host.
+            Info dasar akunmu. Email tidak bisa diubah dari sini.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-            Nama tampilan
-          </label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            minLength={2}
-            maxLength={40}
-            className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-          />
+        <CardContent className="space-y-4">
+          {/* Email (read-only) */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Mail className="h-3 w-3" /> Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              readOnly
+              disabled
+              className="w-full h-11 px-3 rounded-md bg-muted/40 border border-border text-muted-foreground cursor-not-allowed"
+            />
+          </div>
+
+          {/* Display name */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Nama tampilan *
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              minLength={2}
+              maxLength={40}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Phone className="h-3 w-3" /> Nomor HP
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="cth: 081234567890"
+              maxLength={20}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
+          </div>
+
+          {/* Birth date */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Cake className="h-3 w-3" /> Tanggal lahir
+            </label>
+            <input
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
+          </div>
+
+          {/* Bio */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <FileText className="h-3 w-3" /> Bio singkat
+              </label>
+              <span
+                className={cn(
+                  "text-[10px] tabular-nums",
+                  bioLength > 250 ? "text-amber-400" : "text-muted-foreground"
+                )}
+              >
+                {bioLength}/280
+              </span>
+            </div>
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="Cerita singkat tentang kamu, max 280 karakter"
+              maxLength={280}
+              rows={3}
+              className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition resize-none text-sm"
+            />
+          </div>
         </CardContent>
       </Card>
 
+      {/* HOBI */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -128,7 +220,6 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Hobi terpilih */}
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
               Hobi kamu ({hobbies.length})
@@ -154,7 +245,6 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
             )}
           </div>
 
-          {/* Tambah custom */}
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
               Tambah hobi sendiri
@@ -187,7 +277,6 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
             </div>
           </div>
 
-          {/* Saran hobi */}
           {unsuggested.length > 0 && (
             <div>
               <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
@@ -216,7 +305,7 @@ export function ProfileForm({ initialDisplayName, initialHobbies }: Props) {
       </Card>
 
       {/* Submit */}
-      <div className="flex justify-end gap-2 sticky bottom-0 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 sm:mx-0 sm:px-0 sm:bg-transparent sm:backdrop-blur-none border-t border-border sm:border-0">
+      <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" variant="gold" size="lg" disabled={loading}>
           {loading ? "Menyimpan..." : "Simpan Profil"}
         </Button>

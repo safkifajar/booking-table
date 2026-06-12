@@ -103,46 +103,53 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
             {activeArea.tables
               .filter((t) => t.active_session)
               .map((t) => (
-                <Card key={t.id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-10 w-10">
-                      {t.active_session?.host_avatar && (
-                        <AvatarImage src={t.active_session.host_avatar} />
-                      )}
-                      <AvatarFallback>
-                        {initials(t.active_session?.host_name ?? "?")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="default" className="text-[10px] px-1.5">
-                          {t.label}
-                        </Badge>
-                        {t.active_session?.status === "locked" && (
-                          <Lock className="h-3 w-3 text-red-400" />
+                <Link
+                  key={t.id}
+                  href={`/session/${t.active_session!.id}/preview`}
+                  className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-xl"
+                  aria-label={`Lihat meja ${t.label} — ${t.active_session?.title ?? "Open Table"}`}
+                >
+                  <Card className="p-4 transition hover:border-primary/40 hover:bg-primary/[0.03] group-active:scale-[0.99] cursor-pointer">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="h-10 w-10">
+                        {t.active_session?.host_avatar && (
+                          <AvatarImage src={t.active_session.host_avatar} />
                         )}
-                      </div>
-                      <p className="text-sm font-medium truncate">
-                        {t.active_session?.title ?? "Open Table"}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        Host: {t.active_session?.host_name}
-                      </p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {t.active_session?.member_count}/{t.capacity}
-                        </span>
-                        {t.active_session?.vibe_tags?.[0] && (
+                        <AvatarFallback>
+                          {initials(t.active_session?.host_name ?? "?")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="default" className="text-[10px] px-1.5">
+                            {t.label}
+                          </Badge>
+                          {t.active_session?.status === "locked" && (
+                            <Lock className="h-3 w-3 text-red-400" />
+                          )}
+                        </div>
+                        <p className="text-sm font-medium truncate group-hover:text-primary transition">
+                          {t.active_session?.title ?? "Open Table"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          Host: {t.active_session?.host_name}
+                        </p>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-primary/60" />
-                            {t.active_session.vibe_tags[0]}
+                            <Users className="h-3 w-3" />
+                            {t.active_session?.member_count}/{t.capacity}
                           </span>
-                        )}
+                          {t.active_session?.vibe_tags?.[0] && (
+                            <span className="flex items-center gap-1">
+                              <Sparkles className="h-3 w-3 text-primary/60" />
+                              {t.active_session.vibe_tags[0]}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                </Link>
               ))}
             {activeArea.tables.filter((t) => t.active_session).length === 0 && (
               <Card className="p-6 col-span-full text-center text-sm text-muted-foreground border-dashed">

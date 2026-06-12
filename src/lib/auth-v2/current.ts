@@ -44,6 +44,8 @@ export interface Profile {
   displayName: string;
   avatarUrl: string | null;
   phone: string | null;
+  birthDate: string | null; // ISO date "YYYY-MM-DD"
+  bio: string | null;
   hobbies: string[];
   createdAt: Date;
 }
@@ -94,6 +96,8 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     displayName: row.displayName,
     avatarUrl: row.avatarUrl,
     phone: row.phone,
+    birthDate: row.birthDate,
+    bio: row.bio,
     hobbies: row.hobbies,
     createdAt: row.createdAt,
   };

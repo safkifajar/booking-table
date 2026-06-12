@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# user uploads (avatar, story, etc) — runtime data, jangan masuk repo
+/public/uploads/**
+!/public/uploads/.gitkeep
