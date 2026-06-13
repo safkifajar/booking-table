@@ -83,6 +83,12 @@ const NAV: NavItem[] = [
     children: [
       {
         type: "leaf",
+        href: "/admin/settings",
+        label: "Settings",
+        icon: <Settings className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
         href: "/admin/staff",
         label: "Manage Staff",
         icon: <Users className="h-4 w-4" />,
