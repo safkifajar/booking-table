@@ -13,6 +13,8 @@ interface Props {
   displayName: string;
   email: string;
   avatarUrl: string | null;
+  /** Custom profile link, default ke /admin/profile */
+  profileHref?: string;
 }
 
 /**
@@ -21,7 +23,12 @@ interface Props {
  * Pakai <details> native untuk dropdown (tidak perlu lib + auto close
  * on click outside built-in browser).
  */
-export function AdminHeaderProfile({ displayName, email, avatarUrl }: Props) {
+export function AdminHeaderProfile({
+  displayName,
+  email,
+  avatarUrl,
+  profileHref = "/admin/profile",
+}: Props) {
   const confirm = useConfirm();
   const [loading, setLoading] = React.useState(false);
 
@@ -73,7 +80,7 @@ export function AdminHeaderProfile({ displayName, email, avatarUrl }: Props) {
 
         {/* Menu */}
         <Link
-          href="/admin/profile"
+          href={profileHref}
           className="flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-muted/60 transition border-b border-border"
         >
           <UserCircle className="h-4 w-4" />

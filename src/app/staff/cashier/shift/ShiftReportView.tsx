@@ -1,0 +1,287 @@
+"use client";
+
+import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Wallet,
+  Receipt,
+  Banknote,
+  CreditCard,
+  Calendar,
+  TrendingUp,
+} from "lucide-react";
+import { formatIDR, cn } from "@/lib/utils";
+import type { ShiftSummary, ShiftTransaction } from "@/lib/cashier-actions";
+
+interface Props {
+  summary: ShiftSummary;
+  transactions: ShiftTransaction[];
+  defaultFromDate: string;
+  defaultToDate: string;
+}
+
+export function ShiftReportView({
+  summary,
+  transactions,
+  defaultFromDate,
+  defaultToDate,
+}: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [from, setFrom] = React.useState(defaultFromDate);
+  const [to, setTo] = React.useState(defaultToDate);
+
+  function applyFilter() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("from", from);
+    params.set("to", to);
+    router.push(`/staff/cashier/shift?${params.toString()}`);
+  }
+
+  function setQuickRange(preset: "today" | "yesterday" | "week") {
+    const now = new Date();
+    const TZ = 7;
+    const nowJkt = new Date(now.getTime() + TZ * 3600 * 1000);
+    const todayJkt = new Date(
+      Date.UTC(
+        nowJkt.getUTCFullYear(),
+        nowJkt.getUTCMonth(),
+        nowJkt.getUTCDate()
+      )
+    );
+    const toDate = (d: Date) => d.toISOString().slice(0, 10);
+
+    if (preset === "today") {
+      const t = toDate(todayJkt);
+      setFrom(t);
+      setTo(t);
+    } else if (preset === "yesterday") {
+      const y = new Date(todayJkt);
+      y.setUTCDate(y.getUTCDate() - 1);
+      const t = toDate(y);
+      setFrom(t);
+      setTo(t);
+    } else {
+      const start = new Date(todayJkt);
+      start.setUTCDate(start.getUTCDate() - 6);
+      setFrom(toDate(start));
+      setTo(toDate(todayJkt));
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Date filter */}
+      <Card className="p-4">
+        <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-3">
+          <Calendar className="h-3.5 w-3.5" />
+          Filter Periode
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">
+              Dari
+            </label>
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="w-full h-10 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] text-muted-foreground mb-1">
+              Sampai
+            </label>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full h-10 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+            />
+          </div>
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setQuickRange("today")}
+            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
+          >
+            Hari ini
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickRange("yesterday")}
+            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
+          >
+            Kemarin
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuickRange("week")}
+            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
+          >
+            7 hari terakhir
+          </button>
+          <div className="flex-1" />
+          <Button size="sm" variant="gold" onClick={applyFilter}>
+            Terapkan
+          </Button>
+        </div>
+      </Card>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <SummaryCard
+          icon={<Receipt className="h-3.5 w-3.5" />}
+          label="Transaksi"
+          value={summary.transaction_count.toString()}
+        />
+        <SummaryCard
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+          label="Total Revenue"
+          value={formatIDR(summary.total_revenue)}
+          tone="primary"
+        />
+        <SummaryCard
+          icon={<Banknote className="h-3.5 w-3.5" />}
+          label="Cash"
+          value={formatIDR(summary.cash_revenue)}
+        />
+        <SummaryCard
+          icon={<CreditCard className="h-3.5 w-3.5" />}
+          label="Non-Cash"
+          value={formatIDR(summary.noncash_revenue)}
+        />
+      </div>
+
+      {/* Transactions table */}
+      {transactions.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium mb-1">Tidak ada transaksi</p>
+          <p className="text-xs text-muted-foreground">
+            Tidak ada meja yang ditutup di periode ini.
+          </p>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Waktu</th>
+                  <th className="px-4 py-3 font-medium">Meja</th>
+                  <th className="px-4 py-3 font-medium">Host</th>
+                  <th className="px-4 py-3 font-medium text-right">Subtotal</th>
+                  <th className="px-4 py-3 font-medium text-right">Terbayar</th>
+                  <th className="px-4 py-3 font-medium">Method</th>
+                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {transactions.map((t) => {
+                  const time = new Date(t.closed_at).toLocaleTimeString(
+                    "id-ID",
+                    { hour: "2-digit", minute: "2-digit" }
+                  );
+                  const date = new Date(t.closed_at).toLocaleDateString(
+                    "id-ID",
+                    { day: "2-digit", month: "short" }
+                  );
+                  return (
+                    <tr key={t.session_id} className="hover:bg-muted/30 transition">
+                      <td className="px-4 py-2.5">
+                        <div className="text-sm font-medium">{time}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {date}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-sm font-medium">{t.table_label}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {t.area_name}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs">{t.host_name}</td>
+                      <td className="px-4 py-2.5 text-right text-sm tabular-nums">
+                        {formatIDR(t.subtotal)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-emerald-400">
+                        {formatIDR(t.paid_total)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex gap-1 flex-wrap">
+                          {t.payment_methods.map((m) => (
+                            <span
+                              key={m}
+                              className={cn(
+                                "text-[10px] px-1.5 py-0.5 rounded-full",
+                                m === "cash"
+                                  ? "bg-emerald-500/10 text-emerald-400"
+                                  : "bg-primary/10 text-primary"
+                              )}
+                            >
+                              {m.toUpperCase()}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          <Link
+                            href={`/staff/cashier/${t.session_id}/receipt`}
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                            Struk
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "primary";
+}) {
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div
+        className={cn(
+          "text-lg font-bold tabular-nums truncate",
+          tone === "primary" && "text-primary"
+        )}
+      >
+        {value}
+      </div>
+    </Card>
+  );
+}

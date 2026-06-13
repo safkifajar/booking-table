@@ -71,8 +71,17 @@ export default authMiddleware(async (req) => {
       return NextResponse.next();
     }
 
-    // Default: rewrite path ke /admin prefix
-    if (!path.startsWith("/admin") && !path.startsWith("/api/")) {
+    // Path yang tidak butuh rewrite (sudah punya file langsung):
+    // - /admin/* — admin panel
+    // - /staff/* — dashboard role (cashier, waiter)
+    // - /api/* — API routes
+    const skipRewrite =
+      path.startsWith("/admin") ||
+      path.startsWith("/staff") ||
+      path.startsWith("/api/");
+
+    // Default: rewrite path ke /admin prefix untuk root + path lain
+    if (!skipRewrite) {
       const url = req.nextUrl.clone();
       url.pathname = `/admin${path === "/" ? "" : path}`;
       return NextResponse.rewrite(url);
@@ -82,10 +91,12 @@ export default authMiddleware(async (req) => {
   // ==================================================
   // USER SUBDOMAIN (default)
   // ==================================================
-  // Kalau user (non-admin subdomain) akses admin-specific path → 404
+  // Kalau user (non-admin subdomain) akses admin/staff path → 404
+  // Admin panel + dashboard kasir/waiter cuma boleh diakses dari subdomain admin
   if (
     !isAdmin &&
     (path.startsWith("/admin") ||
+      path.startsWith("/staff") ||
       path === "/admin-login" ||
       path === "/setup-password")
   ) {

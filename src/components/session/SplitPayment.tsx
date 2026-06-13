@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { QrCode, Wallet, CreditCard, Banknote, Check, Sparkles } from "lucide-react";
+import { QrCode, Wallet, CreditCard, Banknote, Check, Sparkles, CheckCircle2 } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
@@ -72,7 +72,8 @@ export function SplitPayment(props: Props) {
   // Treat all: bayarin penuh sisa tagihan
   const treatAmount = props.remaining;
 
-  const myAmount =
+  // Cap ke remaining supaya tidak over-payment
+  const rawAmount =
     mode === "equal"
       ? equalShare
       : mode === "itemized"
@@ -80,14 +81,13 @@ export function SplitPayment(props: Props) {
         : mode === "custom"
           ? treatAmount
           : 0;
+  const myAmount = Math.min(rawAmount, props.remaining);
 
-  // What I already paid
-  const myPaymentsTotal = props.payments
-    .filter((p) => p.status === "paid")
-    .reduce((acc) => acc, 0);
+  // Session sudah lunas kalau remaining 0 (atau di-overpaid jadi negative)
+  const isFullyPaid = props.remaining <= 0 && props.subtotal > 0;
 
   async function handlePay() {
-    if (myAmount <= 0) return;
+    if (myAmount <= 0 || isFullyPaid) return;
     setLoading(true);
     try {
       await props.onPay({
@@ -115,16 +115,46 @@ export function SplitPayment(props: Props) {
           </div>
           <div className="text-right">
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-              Belum bayar
+              {props.remaining <= 0 && props.subtotal > 0 ? "Status" : "Belum bayar"}
             </div>
-            <div className="text-lg font-semibold text-primary">
-              {formatIDR(props.remaining)}
+            <div
+              className={cn(
+                "text-lg font-semibold",
+                props.remaining <= 0 && props.subtotal > 0
+                  ? "text-emerald-400"
+                  : "text-primary"
+              )}
+            >
+              {props.remaining <= 0 && props.subtotal > 0
+                ? "Lunas"
+                : formatIDR(props.remaining)}
             </div>
           </div>
         </div>
       </Card>
 
-      {/* Mode selector */}
+      {/* Sudah lunas banner */}
+      {isFullyPaid && (
+        <Card className="p-4 bg-emerald-500/10 border-emerald-500/30">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-emerald-400">
+                Tagihan sudah lunas
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Total {formatIDR(props.subtotal)} sudah dibayar penuh. Tunggu
+                kasir menutup meja, atau kalau ada lagi mau pesan tinggal lanjut.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Mode selector — hide kalau sudah lunas */}
+      {!isFullyPaid && (
       <div>
         <h3 className="text-sm font-semibold mb-2">Cara bayar</h3>
         <div className="grid grid-cols-3 gap-2">
@@ -148,9 +178,10 @@ export function SplitPayment(props: Props) {
           />
         </div>
       </div>
+      )}
 
       {/* Per-member share preview */}
-      {mode === "equal" && (
+      {!isFullyPaid && mode === "equal" && (
         <Card className="p-4">
           <h3 className="text-sm font-semibold mb-3">Pembagian merata</h3>
           <div className="space-y-2">
@@ -172,7 +203,7 @@ export function SplitPayment(props: Props) {
         </Card>
       )}
 
-      {mode === "itemized" && (
+      {!isFullyPaid && mode === "itemized" && (
         <Card className="p-4">
           <h3 className="text-sm font-semibold mb-3">Bayar yang kamu pesan</h3>
           {myItemsTotal > 0 ? (
@@ -198,7 +229,7 @@ export function SplitPayment(props: Props) {
         </Card>
       )}
 
-      {mode === "custom" && (
+      {!isFullyPaid && mode === "custom" && (
         <Card className="p-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -220,7 +251,8 @@ export function SplitPayment(props: Props) {
         </Card>
       )}
 
-      {/* Payment method */}
+      {/* Payment method — hide kalau sudah lunas */}
+      {!isFullyPaid && (
       <div>
         <h3 className="text-sm font-semibold mb-2">Metode pembayaran</h3>
         <div className="grid grid-cols-4 gap-2">
@@ -253,23 +285,26 @@ export function SplitPayment(props: Props) {
           * Demo: semua metode di-mock. Integrasi Midtrans/Xendit di milestone berikutnya.
         </p>
       </div>
+      )}
 
       {/* Pay button */}
-      <Button
-        variant="gold"
-        size="lg"
-        className="w-full"
-        disabled={loading || myAmount <= 0}
-        onClick={handlePay}
-      >
-        {loading
-          ? "Memproses..."
-          : myAmount > 0
-            ? mode === "custom"
-              ? `Traktir ${formatIDR(myAmount)}`
-              : `Bayar ${formatIDR(myAmount)}`
-            : "Tidak ada yang dibayar"}
-      </Button>
+      {!isFullyPaid && (
+        <Button
+          variant="gold"
+          size="lg"
+          className="w-full"
+          disabled={loading || myAmount <= 0}
+          onClick={handlePay}
+        >
+          {loading
+            ? "Memproses..."
+            : myAmount > 0
+              ? mode === "custom"
+                ? `Traktir ${formatIDR(myAmount)}`
+                : `Bayar ${formatIDR(myAmount)}`
+              : "Tidak ada yang dibayar"}
+        </Button>
+      )}
 
       {/* Payment history */}
       {props.payments.length > 0 && (

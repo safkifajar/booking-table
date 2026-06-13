@@ -1,0 +1,273 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  Users,
+  CheckCircle2,
+  Clock,
+  ChevronRight,
+  Crown,
+  Wallet,
+} from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { RelativeTime } from "@/components/ui/relative-time";
+import { formatIDR, initials, cn } from "@/lib/utils";
+import type { CashierSessionItem } from "@/lib/cashier-actions";
+
+interface Props {
+  sessions: CashierSessionItem[];
+  barId: string;
+}
+
+/**
+ * Cashier session list — card layout (mobile-friendly).
+ *
+ * Kalau nanti butuh dense view di desktop, bisa di-extend pakai
+ * `hidden md:block` pattern dengan table sebagai variant. Untuk MVP,
+ * card layout cocok di semua screen size karena mobile-first.
+ */
+export function CashierSessionList({ sessions, barId }: Props) {
+  const router = useRouter();
+  const [query, setQuery] = React.useState("");
+
+  // Realtime: subscribe SSE staff channel
+  React.useEffect(() => {
+    if (!barId) return;
+    const es = new EventSource(`/api/realtime/staff/${barId}`);
+    es.onmessage = () => router.refresh();
+    es.onerror = () => {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[realtime] staff:${barId} disconnected`);
+      }
+    };
+    return () => es.close();
+  }, [barId, router]);
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter(
+      (s) =>
+        s.table_label.toLowerCase().includes(q) ||
+        s.host_name.toLowerCase().includes(q) ||
+        (s.title ?? "").toLowerCase().includes(q) ||
+        s.area_name.toLowerCase().includes(q)
+    );
+  }, [sessions, query]);
+
+  // Quick stats hari ini (active sessions saja — bukan transaksi closed)
+  const totalOpen = sessions.length;
+  const totalUnpaid = sessions.reduce((s, x) => s + x.outstanding, 0);
+  const totalPaidPartial = sessions.reduce((s, x) => s + x.paid_total, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Quick stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard
+          icon={<Users className="h-3.5 w-3.5" />}
+          label="Meja aktif"
+          value={totalOpen.toString()}
+        />
+        <StatCard
+          icon={<Wallet className="h-3.5 w-3.5" />}
+          label="Sudah bayar"
+          value={formatIDR(totalPaidPartial)}
+          tone="success"
+        />
+        <StatCard
+          icon={<Clock className="h-3.5 w-3.5" />}
+          label="Outstanding"
+          value={formatIDR(totalUnpaid)}
+          tone={totalUnpaid > 0 ? "warning" : "muted"}
+        />
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari nomor meja, host, atau title..."
+          className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+        />
+      </div>
+
+      {/* Session list */}
+      {filtered.length === 0 ? (
+        <Card className="p-12 text-center border-dashed">
+          <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          {sessions.length === 0 ? (
+            <>
+              <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
+              <p className="text-xs text-muted-foreground">
+                Meja akan muncul di sini setelah customer buka session.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium mb-1">Tidak ada hasil</p>
+              <p className="text-xs text-muted-foreground">
+                Coba kata kunci lain.
+              </p>
+            </>
+          )}
+        </Card>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {filtered.map((s) => (
+            <SessionCard key={s.session_id} session={s} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  tone = "muted",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "success" | "warning" | "muted";
+}) {
+  const toneColor =
+    tone === "success"
+      ? "text-emerald-400"
+      : tone === "warning"
+        ? "text-amber-400"
+        : "text-foreground";
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className={cn("text-lg font-bold tabular-nums truncate", toneColor)}>
+        {value}
+      </div>
+    </Card>
+  );
+}
+
+function SessionCard({ session }: { session: CashierSessionItem }) {
+  const paidPercentage =
+    session.subtotal > 0
+      ? Math.min(100, Math.round((session.paid_total / session.subtotal) * 100))
+      : 0;
+
+  return (
+    <Link
+      href={`/staff/cashier/${session.session_id}`}
+      className="block group"
+    >
+      <Card
+        className={cn(
+          "p-4 hover:border-primary/40 transition cursor-pointer",
+          session.is_paid && "border-emerald-500/30 bg-emerald-500/[0.02]"
+        )}
+      >
+        {/* Header row */}
+        <div className="flex items-start gap-2 mb-3">
+          <Avatar className="h-9 w-9 shrink-0">
+            {session.host_avatar && (
+              <AvatarImage src={session.host_avatar} alt={session.host_name} />
+            )}
+            <AvatarFallback className="text-[10px]">
+              {initials(session.host_name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Badge variant="default" className="text-[10px] px-1.5">
+                {session.table_label}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground truncate">
+                {session.area_name}
+              </span>
+            </div>
+            <div className="text-sm font-medium truncate group-hover:text-primary transition">
+              {session.title ?? "Open Table"}
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+              <span className="inline-flex items-center gap-0.5">
+                <Crown className="h-2.5 w-2.5" />
+                {session.host_name}
+              </span>
+              <span>·</span>
+              <RelativeTime
+                date={session.started_at}
+                className="text-[11px] whitespace-nowrap"
+              />
+            </div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0 mt-2" />
+        </div>
+
+        {/* Bill summary */}
+        <div className="space-y-2 pt-3 border-t border-border">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Total bill</span>
+            <span className="font-semibold tabular-nums">
+              {formatIDR(session.subtotal)}
+            </span>
+          </div>
+
+          {session.subtotal > 0 && (
+            <>
+              {/* Progress bar */}
+              <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full transition-all",
+                    session.is_paid ? "bg-emerald-500" : "bg-primary"
+                  )}
+                  style={{ width: `${paidPercentage}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                {session.is_paid ? (
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Lunas
+                  </span>
+                ) : session.paid_total > 0 ? (
+                  <>
+                    <span className="text-emerald-400 tabular-nums">
+                      {formatIDR(session.paid_total)} terbayar
+                    </span>
+                    <span className="text-amber-400 tabular-nums font-medium">
+                      {formatIDR(session.outstanding)} kurang
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-amber-400 font-medium tabular-nums">
+                    Belum dibayar
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+
+          {session.subtotal === 0 && (
+            <div className="text-xs text-muted-foreground italic">
+              Belum ada order
+            </div>
+          )}
+        </div>
+      </Card>
+    </Link>
+  );
+}
