@@ -21,6 +21,7 @@ import {
   LogOut,
   Star,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +40,7 @@ import {
   approveJoinRequest,
   rejectJoinRequest,
 } from "@/lib/actions";
+import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { SplitPayment } from "@/components/session/SplitPayment";
@@ -227,7 +229,7 @@ export function SessionView(props: SessionViewProps) {
 
       {/* Tab content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
-        {tab === "vibe" && <VibeTab {...props} />}
+        {tab === "vibe" && <VibeTab {...props} isStaff={isStaff} />}
         {tab === "menu" && (
           <MenuTab
             menu={props.menu}
@@ -397,9 +399,16 @@ function TabButton({
 }
 
 // VIBE / MEMBERS TAB
-function VibeTab(props: SessionViewProps) {
+function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
   const joined = props.members.filter((m) => m.status === "joined");
   const pending = props.members.filter((m) => m.status === "pending");
+  const slotsAvailable = props.table.capacity - joined.length;
+  const [addGuestModal, setAddGuestModal] = React.useState(false);
+  // Tombol "Tambah Tamu" cuma muncul untuk staff di session walk-in
+  // (yang dibuka oleh staff lewat opened_by_staff_id). Untuk session customer
+  // reguler, tamu tambah lewat invite link.
+  const canStaffAddGuest =
+    props.isStaff && !!props.openedByStaff && slotsAvailable > 0;
 
   return (
     <div className="space-y-4">
@@ -488,21 +497,153 @@ function VibeTab(props: SessionViewProps) {
               </div>
             </div>
           ))}
-          {joined.length < props.table.capacity && (
-            <div className="flex items-center gap-3 opacity-50">
-              <div className="h-10 w-10 rounded-full border-2 border-dashed border-border flex items-center justify-center">
-                <UserPlus className="h-4 w-4 text-muted-foreground" />
+          {slotsAvailable > 0 &&
+            (canStaffAddGuest ? (
+              <button
+                type="button"
+                onClick={() => setAddGuestModal(true)}
+                className="w-full flex items-center gap-3 p-2 -m-2 rounded-md hover:bg-primary/5 transition group"
+              >
+                <div className="h-10 w-10 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition">
+                  <UserPlus className="h-4 w-4 text-primary" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-primary">
+                    Tambah Tamu
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {slotsAvailable} kursi kosong
+                  </p>
+                </div>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 opacity-50">
+                <div className="h-10 w-10 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+                  <UserPlus className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm">{slotsAvailable} kursi kosong</p>
+                  <p className="text-xs text-muted-foreground">
+                    Bagikan link invite
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm">
-                  {props.table.capacity - joined.length} kursi kosong
-                </p>
-                <p className="text-xs text-muted-foreground">Bagikan link invite</p>
-              </div>
-            </div>
-          )}
+            ))}
         </div>
       </Card>
+
+      {addGuestModal && (
+        <AddGuestModal
+          sessionId={props.session.id}
+          remainingSlots={slotsAvailable}
+          onClose={() => setAddGuestModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Modal: staff tambah tamu ke meja walk-in existing
+function AddGuestModal({
+  sessionId,
+  remainingSlots,
+  onClose,
+}: {
+  sessionId: string;
+  remainingSlots: number;
+  onClose: () => void;
+}) {
+  const [name, setName] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const clean = name.trim();
+    if (!clean || submitting) return;
+
+    setSubmitting(true);
+    try {
+      await staffAddGuestToTable(sessionId, clean);
+      toast.success(`Tamu "${clean}" ditambahkan`);
+      onClose();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal tambah tamu"));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-sm bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+              <UserPlus className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">Tambah Tamu ke Meja</h2>
+              <p className="text-[11px] text-muted-foreground">
+                {remainingSlots} kursi kosong
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+            aria-label="Tutup"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label
+              htmlFor="guestName"
+              className="text-xs font-medium text-muted-foreground block mb-1.5"
+            >
+              Nama tamu
+            </label>
+            <input
+              id="guestName"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="cth: Bu Sari"
+              maxLength={80}
+              autoFocus
+              className="w-full px-3 py-2 bg-muted/50 border border-border rounded-md text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            disabled={!name.trim() || submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Menambahkan...
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-4 w-4" />
+                Tambah Tamu
+              </>
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -38,8 +38,7 @@ import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
-import { notify } from "@/lib/realtime/notify";
-import { channels } from "@/lib/realtime/channels";
+import { notifyAll } from "@/lib/realtime/notify";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
 // ============================================================
@@ -478,9 +477,8 @@ export async function cashierCreatePayment(
     })
     .where(eq(payments.id, newPayment.id));
 
-  // 8. Notify realtime
-  await notify(channels.session(data.sessionId), { type: "payment.created" });
-  await notify(channels.staff(ctx.barId), { type: "payment.created" });
+  // 8. Notify realtime (session + staff + bar)
+  await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
 
   revalidatePath(`/staff/cashier/${data.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -525,8 +523,7 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     .set({ status: "paid", paidAt: new Date() })
     .where(eq(payments.id, paymentId));
 
-  await notify(channels.session(payment.sessionId), { type: "payment.paid" });
-  await notify(channels.staff(ctx.barId), { type: "payment.paid" });
+  await notifyAll(payment.sessionId, ctx.barId, { type: "payment.paid" });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -560,8 +557,7 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
     .set({ status: "failed", paidAt: null })
     .where(eq(payments.id, paymentId));
 
-  await notify(channels.session(payment.sessionId), { type: "payment.cancelled" });
-  await notify(channels.staff(ctx.barId), { type: "payment.cancelled" });
+  await notifyAll(payment.sessionId, ctx.barId, { type: "payment.cancelled" });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -605,8 +601,7 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
       .where(eq(orders.sessionId, sessionId)),
   ]);
 
-  await notify(channels.session(sessionId), { type: "session.closed" });
-  await notify(channels.staff(ctx.barId), { type: "session.closed" });
+  await notifyAll(sessionId, ctx.barId, { type: "session.closed" });
 
   revalidatePath(`/staff/cashier/${sessionId}`);
   revalidatePath("/staff/cashier");

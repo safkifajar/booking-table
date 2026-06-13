@@ -95,6 +95,9 @@ async function notifySessionAndStaff(sessionId: string): Promise<void> {
   await Promise.all([
     notify(channels.session(sessionId)),
     row ? notify(channels.staff(row.bar_id)) : Promise.resolve(),
+    // Bar channel juga di-notify supaya floor map (/bar/[slug]) auto-update
+    // saat session/member/order/payment berubah.
+    row ? notify(channels.bar(row.bar_id)) : Promise.resolve(),
   ]);
 }
 
@@ -751,11 +754,6 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     .where(eq(payments.id, newPayment.id));
 
   await notifySessionAndStaff(data.sessionId);
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      `[payShare] notified session+staff for sessionId=${data.sessionId} amount=${data.amount} status=${chargeResult.status}`
-    );
-  }
   revalidatePath(`/session/${data.sessionId}`);
   // Invalidate staff dashboards juga supaya cashier list & detail auto-update
   // saat customer self-pay

@@ -280,6 +280,7 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
 
   await notify(channels.session(item.session_id), { type: "order.served" });
   await notify(channels.staff(ctx.barId), { type: "order.served" });
+  await notify(channels.bar(ctx.barId), { type: "order.served" });
 
   revalidatePath("/staff/waiter");
 }
@@ -342,6 +343,7 @@ export async function waiterJoinSession(sessionId: string): Promise<void> {
       .where(eq(sessionMembers.id, existing.id));
     await notify(channels.session(sessionId), { type: "member.left" });
     await notify(channels.staff(ctx.barId), { type: "member.left" });
+    await notify(channels.bar(ctx.barId), { type: "member.left" });
   }
 
   revalidatePath("/staff/waiter");
@@ -569,6 +571,7 @@ export async function staffOpenTableForCustomer(
 
   await notify(channels.session(sessionId), { type: "session.opened" });
   await notify(channels.staff(ctx.barId), { type: "session.opened" });
+  await notify(channels.bar(ctx.barId), { type: "session.opened" });
 
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
@@ -682,6 +685,7 @@ export async function staffAddGuestToTable(
 
   await notify(channels.session(sessionId), { type: "member.joined" });
   await notify(channels.staff(ctx.barId), { type: "member.joined" });
+  await notify(channels.bar(ctx.barId), { type: "member.joined" });
 
   revalidatePath(`/session/${sessionId}`);
   revalidatePath("/staff/waiter");

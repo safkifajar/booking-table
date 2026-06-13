@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,12 +19,49 @@ interface Props {
 }
 
 export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
+  const router = useRouter();
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     areasWithTables[0]?.area.slug ?? ""
   );
-  const [selectedTable, setSelectedTable] = React.useState<FloorMapTable | null>(null);
+  // Simpan cuma table_id supaya saat router.refresh() bawa data baru,
+  // bottom sheet auto re-derive dari areasWithTables yang fresh
+  const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
+    null
+  );
 
   const activeArea = areasWithTables.find((a) => a.area.slug === activeAreaSlug);
+
+  // Re-derive selectedTable dari props setiap render — jadi auto-update saat
+  // floor data berubah (member nambah, payment, session closed, dll)
+  const selectedTable = React.useMemo<FloorMapTable | null>(() => {
+    if (!selectedTableId) return null;
+    for (const { tables } of areasWithTables) {
+      const found = tables.find((t) => t.id === selectedTableId);
+      if (found) return found;
+    }
+    return null;
+  }, [selectedTableId, areasWithTables]);
+
+  const setSelectedTable = React.useCallback(
+    (table: FloorMapTable | null) => {
+      setSelectedTableId(table?.id ?? null);
+    },
+    []
+  );
+
+  // Subscribe SSE channel `bar:<barId>` supaya floor view auto-update saat
+  // ada session baru / member berubah / order/payment di mana saja di bar.
+  React.useEffect(() => {
+    if (!bar.id) return;
+    const es = new EventSource(`/api/realtime/bar/${bar.id}`);
+    es.onmessage = () => router.refresh();
+    es.onerror = () => {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[realtime] bar:${bar.id} disconnected, retrying...`);
+      }
+    };
+    return () => es.close();
+  }, [bar.id, router]);
 
   return (
     <main className="flex-1 pb-32">
@@ -161,9 +199,19 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
         )}
       </div>
 
-      {/* Bottom sheet: selected table */}
+      {/* Bottom sheet: selected table — backdrop click closes */}
       {selectedTable && (
-        <TableSheet table={selectedTable} onClose={() => setSelectedTable(null)} />
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm animate-in fade-in"
+            onClick={() => setSelectedTable(null)}
+            aria-hidden="true"
+          />
+          <TableSheet
+            table={selectedTable}
+            onClose={() => setSelectedTable(null)}
+          />
+        </>
       )}
     </main>
   );
@@ -203,7 +251,7 @@ function TableSheet({
   const isOpen = session?.status === "open";
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card shadow-2xl">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card shadow-2xl">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div>
@@ -257,9 +305,6 @@ function TableSheet({
               <Lock className="h-4 w-4" /> Locked
             </Button>
           )}
-          <Button variant="ghost" size="lg" onClick={onClose}>
-            Tutup
-          </Button>
         </div>
         {isOpen && (
           <p className="text-xs text-muted-foreground mt-2 text-center">

@@ -9,11 +9,13 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
+import { channels } from "./channels";
 
 /**
  * Channel naming convention:
  *   "session:<sessionId>" — perubahan apapun di session
  *   "staff:<barId>"       — perubahan untuk staff dashboard
+ *   "bar:<barId>"         — perubahan floor map (semua session/member/order)
  *
  * Payload kecil saja — receiver tinggal trigger refetch / router.refresh().
  * Notify is best-effort: kalau koneksi DB drop antara commit dan notify,
@@ -32,4 +34,20 @@ export async function notify(
   } catch (err) {
     console.error(`[notify] failed for channel ${channel}:`, err);
   }
+}
+
+/**
+ * Notify trio: session + staff + bar. Dipakai server actions yang affect
+ * floor view + staff dashboard + customer session view. Parallel execution.
+ */
+export async function notifyAll(
+  sessionId: string,
+  barId: string,
+  payload: Record<string, unknown> = {}
+): Promise<void> {
+  await Promise.all([
+    notify(channels.session(sessionId), payload),
+    notify(channels.staff(barId), payload),
+    notify(channels.bar(barId), payload),
+  ]);
 }
