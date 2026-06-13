@@ -322,13 +322,13 @@ function ReservationSection({
 
         <ConfigField
           label="Minimum DP"
-          hint="DP yang wajib dibayar saat reservasi. 0 = tidak perlu DP."
-          value={config.minDownPaymentAmount}
-          unit="Rp"
+          hint="Persentase dari total order initial. 0 = tidak perlu DP, 50 = wajib bayar setengah, 100 = full prepayment."
+          value={config.minDownPaymentPercent}
+          unit="%"
           min={0}
-          max={10_000_000}
-          step={10_000}
-          onChange={(v) => patch({ minDownPaymentAmount: v })}
+          max={100}
+          step={5}
+          onChange={(v) => patch({ minDownPaymentPercent: v })}
         />
       </div>
 

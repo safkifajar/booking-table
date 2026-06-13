@@ -156,7 +156,7 @@ const reservationConfigSchema = z.object({
     z.literal(60),
     z.literal(120),
   ]),
-  minDownPaymentAmount: z.number().int().min(0).max(10_000_000),
+  minDownPaymentPercent: z.number().int().min(0).max(100),
 });
 
 export async function updateReservationConfig(

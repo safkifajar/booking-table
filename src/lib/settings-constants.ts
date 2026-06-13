@@ -41,10 +41,12 @@ export interface ReservationConfig {
   minLeadTimeMinutes: number; // 0-1440
   slotIntervalMinutes: 15 | 30 | 60 | 120;
   /**
-   * Minimum DP (Rp) yang harus dibayar saat reservasi.
-   * 0 = no DP required, customer cuma commit order tanpa bayar.
+   * Minimum DP sebagai persentase dari total order initial (0-100).
+   * 0 = no DP required (customer cuma commit order tanpa bayar).
+   * 50 = customer wajib bayar 50% dari total order saat reservasi.
+   * 100 = full prepayment.
    */
-  minDownPaymentAmount: number;
+  minDownPaymentPercent: number;
 }
 
 export interface BarSettings {
@@ -67,5 +69,5 @@ export const DEFAULT_RESERVATION_CONFIG: ReservationConfig = {
   bookingWindowDays: 7,
   minLeadTimeMinutes: 60,
   slotIntervalMinutes: 60,
-  minDownPaymentAmount: 0,
+  minDownPaymentPercent: 0,
 };
