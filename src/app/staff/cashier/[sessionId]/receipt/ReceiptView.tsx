@@ -65,11 +65,32 @@ export function ReceiptView({ detail }: Props) {
         <div className="space-y-0.5 text-[10px] mb-3 pb-3 border-b border-dashed border-zinc-300">
           <Row label="No. Meja" value={detail.table_label} />
           <Row label="Area" value={detail.area_name} />
-          <Row label="Host" value={detail.host_name} />
-          {detail.title && <Row label="Sesi" value={detail.title} />}
+          <Row
+            label={detail.is_walk_in ? "Tamu" : "Host"}
+            value={detail.host_name}
+          />
+          {detail.is_walk_in && detail.guest_names.length > 1 && (
+            <Row
+              label="Tamu lain"
+              value={detail.guest_names.slice(1).join(", ")}
+            />
+          )}
+          {!detail.is_walk_in && detail.title && (
+            <Row label="Sesi" value={detail.title} />
+          )}
+          {detail.is_walk_in && detail.opened_by_staff_name && (
+            <Row label="Dibuka oleh" value={detail.opened_by_staff_name} />
+          )}
           <Row label="Tanggal" value={date.toLocaleString("id-ID")} />
           <Row label="No. Trx" value={`#${detail.session_id.slice(0, 8).toUpperCase()}`} />
         </div>
+
+        {/* Walk-in badge */}
+        {detail.is_walk_in && (
+          <div className="text-center text-[9px] uppercase tracking-wider font-bold border border-dashed border-zinc-400 rounded py-1 mb-3 bg-zinc-50">
+            * Walk-in *
+          </div>
+        )}
 
         {/* Items */}
         <div className="space-y-1 text-[10px] mb-3 pb-3 border-b border-dashed border-zinc-300">

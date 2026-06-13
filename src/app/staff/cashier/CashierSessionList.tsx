@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Crown,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -189,18 +190,27 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-0.5">
+            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
               <Badge variant="default" className="text-[10px] px-1.5">
                 {session.table_label}
               </Badge>
               <span className="text-[10px] text-muted-foreground truncate">
                 {session.area_name}
               </span>
+              {session.is_walk_in && (
+                <Badge
+                  variant="default"
+                  className="bg-primary/15 text-primary border-primary/30 text-[10px] px-1.5 gap-1"
+                >
+                  <Sparkles className="h-2.5 w-2.5" />
+                  Walk-in
+                </Badge>
+              )}
             </div>
             <div className="text-sm font-medium truncate group-hover:text-primary transition">
               {session.title ?? "Open Table"}
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
               <span className="inline-flex items-center gap-0.5">
                 <Crown className="h-2.5 w-2.5" />
                 {session.host_name}
@@ -211,6 +221,17 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
                 className="text-[11px] whitespace-nowrap"
               />
             </div>
+            {session.is_walk_in && session.opened_by_staff_name && (
+              <div className="text-[10px] text-primary/70 mt-0.5 truncate">
+                Dibuka oleh {session.opened_by_staff_name}
+                {session.guest_names.length > 1 && (
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {session.guest_names.length} tamu
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0 mt-2" />
         </div>

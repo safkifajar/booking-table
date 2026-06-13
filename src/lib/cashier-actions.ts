@@ -59,6 +59,12 @@ export interface CashierSessionItem {
   /** Sisa yang belum dibayar (subtotal - paid) */
   outstanding: number;
   is_paid: boolean;
+  /** True kalau session dibuka oleh staff (walk-in customer tanpa HP) */
+  is_walk_in: boolean;
+  /** Nama staff yang buka meja (kalau walk-in). Null untuk session customer regular */
+  opened_by_staff_name: string | null;
+  /** Nama-nama tamu di meja (kalau walk-in). Empty array untuk session customer regular */
+  guest_names: string[];
 }
 
 export async function getActiveSessionsForCashier(): Promise<
@@ -66,7 +72,7 @@ export async function getActiveSessionsForCashier(): Promise<
 > {
   const ctx = await requirePermission("receive_payment", "/staff/cashier");
 
-  // Active sessions di bar (open/locked)
+  // Active sessions di bar (open/locked) — include walk-in metadata
   const sessionRows = await db
     .select({
       id: tableSessions.id,
@@ -77,6 +83,8 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      opened_by_staff_id: tableSessions.openedByStaffId,
+      guest_names: tableSessions.guestNames,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -144,6 +152,25 @@ export async function getActiveSessionsForCashier(): Promise<
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
   );
 
+  // Batch lookup nama staff yang buka session walk-in (unique IDs)
+  const staffIds = Array.from(
+    new Set(
+      sessionRows
+        .map((s) => s.opened_by_staff_id)
+        .filter((id): id is string => !!id)
+    )
+  );
+  const staffNameMap = new Map<string, string>();
+  if (staffIds.length > 0) {
+    const staffRows = await db
+      .select({ id: profiles.id, name: profiles.displayName })
+      .from(profiles)
+      .where(inArray(profiles.id, staffIds));
+    for (const row of staffRows) {
+      staffNameMap.set(row.id, row.name);
+    }
+  }
+
   return sessionRows.map((s) => {
     const subtotal = billMap.get(s.id) ?? 0;
     const paid = paidMap.get(s.id) ?? 0;
@@ -160,6 +187,11 @@ export async function getActiveSessionsForCashier(): Promise<
       paid_total: paid,
       outstanding: Math.max(0, subtotal - paid),
       is_paid: subtotal > 0 && paid >= subtotal,
+      is_walk_in: !!s.opened_by_staff_id,
+      opened_by_staff_name: s.opened_by_staff_id
+        ? staffNameMap.get(s.opened_by_staff_id) ?? null
+        : null,
+      guest_names: s.guest_names ?? [],
     };
   });
 }
@@ -212,6 +244,12 @@ export interface CashierSessionDetail {
   subtotal: number;
   paid_total: number;
   outstanding: number;
+  /** True kalau session dibuka oleh staff (walk-in customer) */
+  is_walk_in: boolean;
+  /** Nama staff yang buka meja (kalau walk-in) */
+  opened_by_staff_name: string | null;
+  /** Daftar nama tamu di meja (kalau walk-in) */
+  guest_names: string[];
 }
 
 export async function getSessionDetailForCashier(
@@ -235,6 +273,8 @@ export async function getSessionDetailForCashier(
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      opened_by_staff_id: tableSessions.openedByStaffId,
+      guest_names: tableSessions.guestNames,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -244,6 +284,16 @@ export async function getSessionDetailForCashier(
 
   if (!row) return null;
   if (row.bar_id !== ctx.barId) return null;
+
+  // Lookup nama staff yang buka meja (kalau walk-in)
+  let openedByStaffName: string | null = null;
+  if (row.opened_by_staff_id) {
+    const [staffRow] = await db
+      .select({ name: profiles.displayName })
+      .from(profiles)
+      .where(eq(profiles.id, row.opened_by_staff_id));
+    if (staffRow) openedByStaffName = staffRow.name;
+  }
 
   // Order
   const [order] = await db
@@ -361,6 +411,9 @@ export async function getSessionDetailForCashier(
     subtotal,
     paid_total,
     outstanding: Math.max(0, subtotal - paid_total),
+    is_walk_in: !!row.opened_by_staff_id,
+    opened_by_staff_name: openedByStaffName,
+    guest_names: row.guest_names ?? [],
   };
 }
 

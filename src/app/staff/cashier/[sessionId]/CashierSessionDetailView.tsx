@@ -186,7 +186,15 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/70 mb-0.5">
               <Crown className="h-3 w-3" />
-              Host
+              {detail.is_walk_in ? "Tamu" : "Host"}
+              {detail.is_walk_in && (
+                <Badge
+                  variant="default"
+                  className="bg-primary/15 text-primary border-primary/30 text-[9px] px-1 gap-0.5 ml-1"
+                >
+                  Walk-in
+                </Badge>
+              )}
             </div>
             <div className="text-base font-semibold truncate">
               {detail.host_name}
@@ -194,6 +202,11 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             <div className="text-xs text-muted-foreground truncate">
               {detail.title ?? "Open Table"}
             </div>
+            {detail.is_walk_in && detail.opened_by_staff_name && (
+              <div className="text-[10px] text-primary/70 truncate mt-0.5">
+                Dibuka oleh {detail.opened_by_staff_name}
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
               <span className="inline-flex items-center gap-0.5">
                 <Users className="h-2.5 w-2.5" />
