@@ -13,7 +13,7 @@ import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
 interface SessionRow {
   id: string;
   title: string | null;
-  status: "open" | "locked" | "closed" | "cancelled";
+  status: "reserved" | "open" | "locked" | "closed" | "cancelled";
   started_at: Date;
   closed_at: Date | null;
   table_label: string;

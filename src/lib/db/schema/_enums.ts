@@ -6,6 +6,7 @@ import { pgEnum } from "drizzle-orm/pg-core";
  */
 
 export const sessionStatusEnum = pgEnum("session_status", [
+  "reserved",
   "open",
   "locked",
   "closed",

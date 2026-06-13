@@ -2,7 +2,12 @@
 // Mirror dari src/lib/db/schema/* (Drizzle camelCase fields) — translation
 // layer di queries.ts & admin.ts maps Drizzle → snake_case match these types.
 
-export type SessionStatus = "open" | "locked" | "closed" | "cancelled";
+export type SessionStatus =
+  | "reserved"
+  | "open"
+  | "locked"
+  | "closed"
+  | "cancelled";
 export type SessionVisibility = "public" | "friends" | "invite_only";
 export type MemberRole = "host" | "member" | "guest";
 export type MemberStatus = "pending" | "joined" | "left" | "kicked";

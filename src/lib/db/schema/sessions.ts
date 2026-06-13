@@ -53,15 +53,28 @@ export const tableSessions = pgTable(
      * Free-text array. Max length sesuai table.capacity (enforce di app).
      */
     guestNames: text("guest_names").array().notNull().default([]),
+    /**
+     * Reservation: kapan booking dimulai. NULL = walk-in immediate.
+     * Set + status='reserved' = future booking. Set + status='open' = aktif.
+     */
+    reservationAt: timestamp("reservation_at", { mode: "date" }),
+    /**
+     * Timestamp DP terverify. NULL = no DP required atau belum bayar.
+     */
+    dpPaidAt: timestamp("dp_paid_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
-    // Hanya 1 session aktif per table
+    // Hanya 1 session aktif/reserved per table — cegah double booking
     uniqueIndex("uq_active_session_per_table")
       .on(t.tableId)
-      .where(sql`status in ('open', 'locked')`),
+      .where(sql`status in ('reserved', 'open', 'locked')`),
     index("idx_sessions_visibility").on(t.visibility, t.status),
     index("idx_sessions_host").on(t.hostId),
+    // Filter upcoming reservations efficient
+    index("idx_sessions_reservation_at")
+      .on(t.reservationAt)
+      .where(sql`reservation_at is not null`),
   ]
 );
 
