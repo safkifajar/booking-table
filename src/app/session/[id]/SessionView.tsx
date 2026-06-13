@@ -20,6 +20,7 @@ import {
   X,
   LogOut,
   Star,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -109,6 +110,22 @@ interface SessionViewProps {
   isHost: boolean;
   isMember: boolean;
   inviteCode: string | null;
+  /**
+   * URL untuk back button. Default `/bar/${slug}` (customer landing).
+   * Untuk staff: arah ke dashboard role-nya (`/staff/waiter`, `/staff/cashier`, dst).
+   */
+  backHref: string;
+  /**
+   * Kalau current user adalah staff (waiter/cashier/manager/admin) DAN bukan
+   * member meja, set ke role-nya. Staff bisa input order atas nama member,
+   * kelola payment, dll meskipun bukan member.
+   */
+  staffRole: "admin" | "manager" | "cashier" | "waiter" | null;
+  /**
+   * Info "siapa staff yang buka meja ini" — null untuk session customer regular.
+   * Display sebagai badge "Dibuka oleh Waiter X" di header.
+   */
+  openedByStaff: { id: string; display_name: string } | null;
   userMenu?: React.ReactNode;
 }
 
@@ -117,13 +134,42 @@ export function SessionView(props: SessionViewProps) {
   const router = useRouter();
   useSessionRealtime(props.session.id);
 
+  // Staff (waiter/cashier/manager/admin) yang bukan member meja tetap bisa
+  // interact dengan UI cart/payment. Order item akan attributed ke member
+  // tujuan (default = host) dengan input_by_staff_id audit trail.
+  const isStaff = !!props.staffRole;
+  const canInteract = props.isMember || isStaff;
+  // Default target member untuk staff input order = host meja
+  const joinedMembers = React.useMemo(
+    () => props.members.filter((m) => m.status === "joined"),
+    [props.members]
+  );
+  const hostMember = React.useMemo(
+    () => joinedMembers.find((m) => m.role === "host") ?? joinedMembers[0],
+    [joinedMembers]
+  );
+  const [staffTargetMemberId, setStaffTargetMemberId] = React.useState<
+    string | null
+  >(hostMember?.id ?? null);
+  // Sync target kalau member list berubah (mis. host pindah)
+  React.useEffect(() => {
+    if (
+      isStaff &&
+      hostMember &&
+      !joinedMembers.find((m) => m.id === staffTargetMemberId)
+    ) {
+      setStaffTargetMemberId(hostMember.id);
+    }
+  }, [isStaff, hostMember, joinedMembers, staffTargetMemberId]);
+
   // Auto-redirect member ke halaman rate saat host menutup session.
   // Host sendiri sudah di-redirect via Server Action closeSession().
+  // Staff TIDAK di-redirect (mereka tidak ikut rate).
   React.useEffect(() => {
-    if (props.session.status === "closed") {
+    if (props.session.status === "closed" && props.isMember) {
       router.replace(`/session/${props.session.id}/rate`);
     }
-  }, [props.session.status, props.session.id, router]);
+  }, [props.session.status, props.session.id, router, props.isMember]);
 
   const subtotal = props.orderItems.reduce(
     (acc, item) => acc + item.quantity * item.unit_price,
@@ -186,7 +232,11 @@ export function SessionView(props: SessionViewProps) {
           <MenuTab
             menu={props.menu}
             sessionId={props.session.id}
-            isMember={props.isMember}
+            canInteract={canInteract}
+            isStaff={isStaff}
+            joinedMembers={joinedMembers}
+            staffTargetMemberId={staffTargetMemberId}
+            setStaffTargetMemberId={setStaffTargetMemberId}
           />
         )}
         {tab === "bill" && (
@@ -216,7 +266,8 @@ export function SessionView(props: SessionViewProps) {
         subtotal={subtotal}
         remaining={remaining}
         isHost={props.isHost}
-        isMember={props.isMember}
+        isMember={canInteract}
+        isStaff={isStaff}
         sessionId={props.session.id}
       />
     </main>
@@ -253,7 +304,7 @@ function SessionHeader(props: SessionViewProps) {
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
         <Button asChild variant="ghost" size="icon">
-          <Link href={`/bar/${props.bar.slug}`} aria-label="Back">
+          <Link href={props.backHref} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
@@ -270,6 +321,14 @@ function SessionHeader(props: SessionViewProps) {
           <h1 className="text-base sm:text-lg font-semibold truncate">
             {props.session.title ?? "Open Table"}
           </h1>
+          {props.openedByStaff && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Sparkles className="h-3 w-3 text-primary/70" />
+              <span className="text-[10px] text-primary/70">
+                Walk-in · Dibuka oleh {props.openedByStaff.display_name}
+              </span>
+            </div>
+          )}
         </div>
         {props.isMember && inviteUrl && (
           <Button variant="outline" size="sm" onClick={copy}>
@@ -452,13 +511,21 @@ function VibeTab(props: SessionViewProps) {
 function MenuTab({
   menu,
   sessionId,
-  isMember,
+  canInteract,
+  isStaff,
+  joinedMembers,
+  staffTargetMemberId,
+  setStaffTargetMemberId,
 }: {
   menu: MenuPickerCategory[];
   sessionId: string;
-  isMember: boolean;
+  canInteract: boolean;
+  isStaff: boolean;
+  joinedMembers: SessionViewProps["members"];
+  staffTargetMemberId: string | null;
+  setStaffTargetMemberId: (id: string) => void;
 }) {
-  if (!isMember) {
+  if (!canInteract) {
     return (
       <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
         Join meja dulu untuk pesan.
@@ -466,17 +533,94 @@ function MenuTab({
     );
   }
   return (
-    <MenuPicker
-      menu={menu}
-      onAdd={async (menuItemId, quantity, notes) => {
-        try {
-          await addOrderItem({ sessionId, menuItemId, quantity, notes });
-          toast.success("Pesanan ditambahkan");
-        } catch (err) {
-          toast.error(getActionErrorMessage(err, "Gagal menambah"));
-        }
-      }}
-    />
+    <div className="space-y-3">
+      {isStaff && (
+        <StaffOrderTargetPicker
+          joinedMembers={joinedMembers}
+          targetMemberId={staffTargetMemberId}
+          onChange={setStaffTargetMemberId}
+        />
+      )}
+      <MenuPicker
+        menu={menu}
+        onAdd={async (menuItemId, quantity, notes) => {
+          if (isStaff && !staffTargetMemberId) {
+            toast.error("Pilih tamu tujuan order dulu");
+            return;
+          }
+          try {
+            await addOrderItem({
+              sessionId,
+              menuItemId,
+              quantity,
+              notes,
+              onBehalfOfMemberId: isStaff
+                ? staffTargetMemberId ?? undefined
+                : undefined,
+            });
+            toast.success("Pesanan ditambahkan");
+          } catch (err) {
+            toast.error(getActionErrorMessage(err, "Gagal menambah"));
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Picker untuk staff: pilih member meja yang jadi target order.
+ * Default = host. Display avatar + nama.
+ */
+function StaffOrderTargetPicker({
+  joinedMembers,
+  targetMemberId,
+  onChange,
+}: {
+  joinedMembers: SessionViewProps["members"];
+  targetMemberId: string | null;
+  onChange: (id: string) => void;
+}) {
+  if (joinedMembers.length === 0) {
+    return (
+      <Card className="p-3 text-center text-xs text-muted-foreground border-dashed">
+        Belum ada tamu di meja. Tambah tamu dulu.
+      </Card>
+    );
+  }
+  return (
+    <Card className="p-3 border-primary/30 bg-primary/5">
+      <div className="text-[10px] uppercase tracking-wide text-primary mb-2">
+        Pesan untuk
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {joinedMembers.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => onChange(m.id)}
+            className={cn(
+              "shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-md border transition min-w-[64px]",
+              targetMemberId === m.id
+                ? "border-primary bg-primary/15"
+                : "border-border bg-muted/30 hover:border-primary/50"
+            )}
+          >
+            <Avatar className="h-7 w-7">
+              {m.profile.avatar_url && (
+                <AvatarImage src={m.profile.avatar_url} />
+              )}
+              <AvatarFallback className="text-[10px]">
+                {initials(m.profile.display_name)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="text-[10px] font-medium truncate max-w-[60px]">
+              {m.profile.display_name}
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -631,8 +775,28 @@ function SplitTab({
       remaining={remaining}
       onPay={async (input) => {
         try {
-          await payShare({ sessionId, ...input });
-          toast.success("Pembayaran tercatat");
+          const result = await payShare({ sessionId, ...input });
+
+          // Gateway return redirect URL (Snap/Checkout-based) → arahkan ke sana
+          if (result.redirectUrl) {
+            window.location.href = result.redirectUrl;
+            return;
+          }
+
+          // QRIS: show QR di dialog. Untuk mock gateway, qrString bukan EMV valid
+          // — saat real gateway (Xendit/Midtrans), itu jadi valid scannable QR.
+          if (result.qrString && result.status === "pending") {
+            // TODO: tampilkan QR dialog dengan poll status via /api/payments/[id]/status
+            toast.info("Scan QR untuk bayar (fitur QR display coming soon)");
+            return;
+          }
+
+          // Mock atau cash → status langsung paid
+          if (result.status === "paid") {
+            toast.success("Pembayaran berhasil");
+          } else {
+            toast.info("Pembayaran sedang diproses");
+          }
         } catch (err) {
           toast.error(getActionErrorMessage(err, "Gagal membayar"));
         }
@@ -762,16 +926,19 @@ function SessionFooter({
   remaining,
   isHost,
   isMember,
+  isStaff,
   sessionId,
 }: {
   subtotal: number;
   remaining: number;
   isHost: boolean;
   isMember: boolean;
+  isStaff: boolean;
   sessionId: string;
 }) {
   const [showActions, setShowActions] = React.useState(false);
   const confirm = useConfirm();
+  const isLunas = subtotal > 0 && remaining === 0;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur-md">
@@ -802,7 +969,42 @@ function SessionFooter({
           )}
           {showActions && (
             <div className="absolute bottom-full right-0 mb-2 w-56 rounded-md border border-border bg-card shadow-xl overflow-hidden">
-              {isHost ? (
+              {isStaff ? (
+                <button
+                  className={cn(
+                    "w-full text-left px-3 py-2 text-sm flex items-center gap-2",
+                    isLunas
+                      ? "hover:bg-muted"
+                      : "text-muted-foreground cursor-not-allowed"
+                  )}
+                  disabled={!isLunas}
+                  title={
+                    isLunas
+                      ? "Tutup meja"
+                      : "Meja belum lunas — arahkan tamu ke kasir"
+                  }
+                  onClick={async () => {
+                    setShowActions(false);
+                    const ok = await confirm({
+                      title: "Tutup meja ini?",
+                      description:
+                        "Pesanan akan dikunci. Tamu tidak bisa tambah order lagi.",
+                      confirmText: "Tutup meja",
+                      cancelText: "Belum dulu",
+                      variant: "danger",
+                    });
+                    if (!ok) return;
+                    try {
+                      await closeSession(sessionId);
+                    } catch (err) {
+                      toast.error(getActionErrorMessage(err, "Gagal"));
+                    }
+                  }}
+                >
+                  <Lock className="h-4 w-4" />
+                  Tutup meja {!isLunas && "(belum lunas)"}
+                </button>
+              ) : isHost ? (
                 <button
                   className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
                   onClick={async () => {

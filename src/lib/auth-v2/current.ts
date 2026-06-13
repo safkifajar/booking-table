@@ -144,16 +144,13 @@ export async function requireProfile(nextPath = "/"): Promise<Profile> {
 export async function requireAdmin(nextPath = "/admin"): Promise<StaffContext> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    redirect(`/auth?next=${encodeURIComponent(nextPath)}`);
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
-  const row = await db.query.staffRoles.findFirst({
-    where: (sr, { and, eq, inArray }) =>
-      and(
-        eq(sr.profileId, profile.id),
-        eq(sr.isActive, true),
-        inArray(sr.role, ["admin", "manager"])
-      ),
+  // Cek apakah user punya role staff (apapun role-nya)
+  const anyRole = await db.query.staffRoles.findFirst({
+    where: (sr, { and, eq }) =>
+      and(eq(sr.profileId, profile.id), eq(sr.isActive, true)),
     with: {
       bar: {
         columns: { id: true, slug: true, name: true },
@@ -161,16 +158,25 @@ export async function requireAdmin(nextPath = "/admin"): Promise<StaffContext> {
     },
   });
 
-  if (!row) {
-    redirect("/");
+  if (!anyRole) {
+    // Bukan staff sama sekali — redirect ke login
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
+
+  // Punya role tapi bukan admin/manager → redirect ke dashboard role-nya
+  // (cashier → /staff/cashier, waiter → /staff/waiter)
+  if (anyRole.role !== "admin" && anyRole.role !== "manager") {
+    const dashboard =
+      anyRole.role === "cashier" ? "/staff/cashier" : "/staff/waiter";
+    redirect(dashboard);
   }
 
   return {
     profile,
-    role: row.role as "admin" | "manager",
-    barId: row.bar.id,
-    barSlug: row.bar.slug,
-    barName: row.bar.name,
+    role: anyRole.role as "admin" | "manager",
+    barId: anyRole.bar.id,
+    barSlug: anyRole.bar.slug,
+    barName: anyRole.bar.name,
   };
 }
 

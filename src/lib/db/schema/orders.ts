@@ -12,6 +12,7 @@ import {
 import { relations, sql } from "drizzle-orm";
 import { tableSessions, sessionMembers } from "./sessions";
 import { menuItems } from "./menu";
+import { profiles } from "./profiles";
 import {
   orderStatusEnum,
   orderItemStatusEnum,
@@ -58,6 +59,14 @@ export const orderItems = pgTable(
     addedByMemberId: uuid("added_by_member_id")
       .notNull()
       .references(() => sessionMembers.id, { onDelete: "restrict" }),
+    /**
+     * Staff yang input order ini atas nama customer (untuk walk-in).
+     * NULL = customer add sendiri.
+     * Set = staff add atas nama member (added_by_member_id = guest, input_by = waiter).
+     */
+    inputByStaffId: uuid("input_by_staff_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
     quantity: integer("quantity").notNull().default(1),
     unitPrice: integer("unit_price").notNull(),
     notes: text("notes"),

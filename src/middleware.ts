@@ -74,10 +74,14 @@ export default authMiddleware(async (req) => {
     // Path yang tidak butuh rewrite (sudah punya file langsung):
     // - /admin/* — admin panel
     // - /staff/* — dashboard role (cashier, waiter)
+    // - /session/* — customer session UI (staff pakai untuk "Bantu Pesan" + "Buka Meja")
+    // - /bar/* — venue page (staff balik dari session bisa landing di sini)
     // - /api/* — API routes
     const skipRewrite =
       path.startsWith("/admin") ||
       path.startsWith("/staff") ||
+      path.startsWith("/session") ||
+      path.startsWith("/bar") ||
       path.startsWith("/api/");
 
     // Default: rewrite path ke /admin prefix untuk root + path lain

@@ -35,6 +35,8 @@ import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { getPaymentGateway } from "@/lib/payments/gateway";
+import type { PaymentStatus } from "@/types/db";
 
 // ============================================================
 // SCHEMAS
@@ -53,6 +55,13 @@ const addOrderItemSchema = z.object({
   menuItemId: z.string().uuid(),
   quantity: z.number().int().positive().max(20),
   notes: z.string().max(200).optional(),
+  /**
+   * Optional: untuk staff input order atas nama member meja.
+   * Kalau set, staff harus punya permission assist_order DAN tidak boleh
+   * jadi member meja sendiri. Order item akan attributed ke member ini,
+   * dengan input_by_staff_id = staff yang call.
+   */
+  onBehalfOfMemberId: z.string().uuid().optional(),
 });
 
 const joinSchema = z.object({
@@ -398,6 +407,16 @@ export async function leaveSession(sessionId: string) {
   revalidatePath(`/session/${sessionId}`);
 }
 
+/**
+ * Tutup meja. Boleh dipanggil oleh:
+ * - Host meja (customer yang buka meja sendiri)
+ * - Staff dengan permission `close_session` (waiter/cashier/manager/admin)
+ *
+ * Guardrail untuk WAITER: harus lunas. Tujuan: cegah waiter close meja yang
+ * belum bayar (resiko kerugian). Cashier/manager/admin tetap bisa close kapan
+ * saja (untuk edge case refund / void). Customer host tetap bisa close kapan
+ * saja (mereka punya bill sendiri).
+ */
 export async function closeSession(sessionId: string) {
   const profile = await requireProfile();
 
@@ -406,8 +425,56 @@ export async function closeSession(sessionId: string) {
     .from(tableSessions)
     .where(eq(tableSessions.id, sessionId));
   if (!session) throw new Error("Session not found");
-  if (session.host_id !== profile.id) {
-    throw new Error("Hanya host yang bisa menutup meja");
+
+  const isHost = session.host_id === profile.id;
+
+  // Kalau bukan host, cek apakah dia staff dengan permission close_session
+  let staffRoleName: string | null = null;
+  if (!isHost) {
+    const [staff] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(
+        and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
+      );
+    if (!staff) {
+      throw new Error("Hanya host atau staff yang bisa menutup meja");
+    }
+    staffRoleName = staff.role;
+  }
+
+  // Guardrail waiter: hanya boleh close kalau meja lunas
+  if (staffRoleName === "waiter") {
+    const [billRow] = await db
+      .select({
+        subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+      })
+      .from(orders)
+      .leftJoin(
+        orderItems,
+        and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
+      )
+      .where(eq(orders.sessionId, sessionId));
+
+    const [paidRow] = await db
+      .select({
+        paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+      })
+      .from(payments)
+      .innerJoin(orders, eq(orders.id, payments.orderId))
+      .where(
+        and(eq(orders.sessionId, sessionId), eq(payments.status, "paid"))
+      );
+
+    const subtotal = Number(billRow?.subtotal ?? 0);
+    const paid = Number(paidRow?.paid ?? 0);
+    const outstanding = Math.max(0, subtotal - paid);
+
+    if (outstanding > 0) {
+      throw new Error(
+        `Belum lunas — sisa Rp ${outstanding.toLocaleString("id-ID")}. Arahkan tamu ke kasir.`
+      );
+    }
   }
 
   // Close session + orders (parallel)
@@ -425,7 +492,17 @@ export async function closeSession(sessionId: string) {
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
-  redirect(`/session/${sessionId}/rate`);
+  revalidatePath("/staff/waiter");
+  revalidatePath("/staff/cashier");
+
+  // Customer host → redirect ke rate page. Staff → redirect ke dashboard
+  // role-nya supaya bisa lanjut handle meja lain.
+  if (isHost) {
+    redirect(`/session/${sessionId}/rate`);
+  }
+  if (staffRoleName === "waiter") redirect("/staff/waiter?tab=sessions");
+  if (staffRoleName === "cashier") redirect("/staff/cashier");
+  redirect("/admin");
 }
 
 export async function leaveSessionAndRate(sessionId: string) {
@@ -441,18 +518,56 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
   const profile = await requireProfile();
   const data = addOrderItemSchema.parse(input);
 
-  // 1. Find member
-  const [member] = await db
-    .select({ id: sessionMembers.id })
-    .from(sessionMembers)
-    .where(
-      and(
-        eq(sessionMembers.sessionId, data.sessionId),
-        eq(sessionMembers.profileId, profile.id),
-        eq(sessionMembers.status, "joined")
-      )
-    );
-  if (!member) throw new Error("Kamu bukan anggota meja ini");
+  // Tentukan member yang nge-attribute order:
+  // - Default: current user = member meja (customer flow)
+  // - Kalau onBehalfOfMemberId di-set: staff input atas nama member tsb
+  let memberId: string;
+  let inputByStaffId: string | null = null;
+
+  if (data.onBehalfOfMemberId) {
+    // Staff flow: butuh permission assist_order
+    const [staff] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(
+        and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
+      );
+    if (!staff) {
+      throw new Error("Hanya staff yang bisa input atas nama tamu");
+    }
+
+    // Verify target member ada di session ini
+    const [targetMember] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.id, data.onBehalfOfMemberId),
+          eq(sessionMembers.sessionId, data.sessionId),
+          eq(sessionMembers.status, "joined")
+        )
+      );
+    if (!targetMember) {
+      throw new Error("Member tujuan tidak ditemukan di meja ini");
+    }
+
+    memberId = targetMember.id;
+    inputByStaffId = profile.id;
+  } else {
+    // Customer flow: current user harus member meja
+    const [member] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, data.sessionId),
+          eq(sessionMembers.profileId, profile.id),
+          eq(sessionMembers.status, "joined")
+        )
+      );
+    if (!member) throw new Error("Kamu bukan anggota meja ini");
+    memberId = member.id;
+  }
 
   // 2. Find open order
   const [order] = await db
@@ -473,7 +588,8 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
   await db.insert(orderItems).values({
     orderId: order.id,
     menuItemId: data.menuItemId,
-    addedByMemberId: member.id,
+    addedByMemberId: memberId,
+    inputByStaffId: inputByStaffId,
     quantity: data.quantity,
     unitPrice: item.price,
     notes: data.notes ?? null,
@@ -555,14 +671,35 @@ const paySchema = z.object({
   splitMeta: z.record(z.string(), z.unknown()).optional(),
 });
 
-export async function payShare(input: z.infer<typeof paySchema>) {
+/**
+ * Customer self-pay flow (customer bayar sendiri dari HP setelah pesan).
+ *
+ * Flow:
+ * 1. Verify member ada di session
+ * 2. Insert payment dengan status='pending'
+ * 3. Call gateway abstraction (getPaymentGateway().createCharge)
+ * 4. Update payment dengan external_ref + status dari gateway
+ * 5. Return result termasuk qrString (untuk QRIS) atau redirectUrl
+ *
+ * Sekarang implementasi gateway masih mock (auto-paid). Saat production swap
+ * ke Xendit/Midtrans, tidak perlu sentuh function ini — cuma implement adapter
+ * baru di lib/payments/gateway.ts.
+ */
+export async function payShare(input: z.infer<typeof paySchema>): Promise<{
+  paymentId: string;
+  status: PaymentStatus;
+  externalRef: string;
+  qrString: string | null;
+  redirectUrl: string | null;
+}> {
   const profile = await requireProfile();
   const data = paySchema.parse(input);
 
-  // 1. Member lookup
+  // 1. Member + profile lookup (butuh display_name untuk receipt gateway)
   const [member] = await db
-    .select({ id: sessionMembers.id })
+    .select({ id: sessionMembers.id, displayName: profiles.displayName })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         eq(sessionMembers.sessionId, data.sessionId),
@@ -578,23 +715,60 @@ export async function payShare(input: z.infer<typeof paySchema>) {
     .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
   if (!order) throw new Error("Order tidak terbuka");
 
-  // Demo mode: auto-mark paid kalau bukan production
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
-  const autoPaid = demoMode || data.method === "mock";
+  // 3. Insert payment dengan status='pending'
+  const [newPayment] = await db
+    .insert(payments)
+    .values({
+      orderId: order.id,
+      paidByMemberId: member.id,
+      amount: data.amount,
+      method: data.method,
+      status: "pending",
+      splitMode: data.splitMode,
+      splitMeta: data.splitMeta ?? {},
+      paidAt: null,
+    })
+    .returning({ id: payments.id });
 
-  await db.insert(payments).values({
-    orderId: order.id,
-    paidByMemberId: member.id,
+  // 4. Call gateway abstraction. Mock → auto-paid. Real gateway → pending + qrString.
+  const gateway = getPaymentGateway();
+  const chargeResult = await gateway.createCharge({
+    paymentId: newPayment.id,
     amount: data.amount,
     method: data.method,
-    status: autoPaid ? "paid" : "pending",
-    splitMode: data.splitMode,
-    splitMeta: data.splitMeta ?? {},
-    paidAt: autoPaid ? new Date() : null,
+    payerName: member.displayName,
+    description: `Self-pay meja - ${data.sessionId.slice(0, 8)}`,
   });
 
+  // 5. Update payment dengan hasil gateway
+  await db
+    .update(payments)
+    .set({
+      externalRef: chargeResult.externalRef,
+      status: chargeResult.status,
+      paidAt: chargeResult.status === "paid" ? new Date() : null,
+    })
+    .where(eq(payments.id, newPayment.id));
+
   await notifySessionAndStaff(data.sessionId);
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `[payShare] notified session+staff for sessionId=${data.sessionId} amount=${data.amount} status=${chargeResult.status}`
+    );
+  }
   revalidatePath(`/session/${data.sessionId}`);
+  // Invalidate staff dashboards juga supaya cashier list & detail auto-update
+  // saat customer self-pay
+  revalidatePath("/staff/cashier");
+  revalidatePath(`/staff/cashier/${data.sessionId}`);
+
+  return {
+    paymentId: newPayment.id,
+    status: chargeResult.status,
+    externalRef: chargeResult.externalRef,
+    qrString: chargeResult.qrString ?? null,
+    redirectUrl: chargeResult.redirectUrl ?? null,
+  };
 }
 
 // ============================================================

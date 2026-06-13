@@ -40,6 +40,19 @@ export const tableSessions = pgTable(
     startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { mode: "date" }),
     notes: text("notes"),
+    /**
+     * Staff yang buka meja ini (untuk walk-in customer tanpa HP).
+     * NULL = customer self-service (buka via scan QR).
+     * Set = waiter/cashier/manager yang buka atas nama tamu.
+     */
+    openedByStaffId: uuid("opened_by_staff_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * List nama tamu yang duduk di meja (untuk walk-in).
+     * Free-text array. Max length sesuai table.capacity (enforce di app).
+     */
+    guestNames: text("guest_names").array().notNull().default([]),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

@@ -3,6 +3,7 @@ import {
   uuid,
   text,
   date,
+  boolean,
   timestamp,
   index,
 } from "drizzle-orm/pg-core";
@@ -14,6 +15,10 @@ import { users } from "./auth";
  * One-to-one dengan users.
  *
  * id = same as users.id (FK + PK)
+ *
+ * Guest profile: profile placeholder untuk walk-in customer (waiter buka meja
+ * atas nama tamu). is_guest=true. users row tetap ada (fake email), tapi
+ * tidak bisa login (passwordHash NULL).
  */
 export const profiles = pgTable(
   "profiles",
@@ -27,6 +32,7 @@ export const profiles = pgTable(
     birthDate: date("birth_date"),
     bio: text("bio"),
     hobbies: text("hobbies").array().notNull().default([]),
+    isGuest: boolean("is_guest").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("idx_profiles_hobbies").using("gin", t.hobbies)]

@@ -33,6 +33,7 @@ export type Permission =
   | "view_queue" // staff dashboard queue view
   | "update_order_status" // mark sent → preparing → served
   | "assist_order" // join session as virtual member to add items
+  | "open_table_for_customer" // buka meja baru atas nama tamu (walk-in tanpa HP)
   | "receive_payment" // payShare action (terima bayar)
   | "close_session" // close meja (cashier action)
   | "view_shift_report" // lihat transaksi yang dia close hari ini
@@ -50,6 +51,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     view_queue: true,
     update_order_status: true,
     assist_order: true,
+    open_table_for_customer: true,
     receive_payment: true,
     close_session: true,
     view_shift_report: true,
@@ -63,6 +65,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     view_queue: true,
     update_order_status: true,
     assist_order: true,
+    open_table_for_customer: true,
     receive_payment: true,
     close_session: true,
     view_shift_report: true,
@@ -76,6 +79,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     view_queue: false,
     update_order_status: false,
     assist_order: false,
+    open_table_for_customer: true,
     receive_payment: true,
     close_session: true,
     view_shift_report: true,
@@ -89,8 +93,11 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     view_queue: true,
     update_order_status: true,
     assist_order: true,
+    open_table_for_customer: true,
     receive_payment: false,
-    close_session: false,
+    // Waiter bisa close meja TAPI cuma kalau sudah lunas. Server action
+    // closeSession enforce guardrail ini berdasarkan role (lihat actions.ts).
+    close_session: true,
     view_shift_report: false,
     view_all_reports: false,
   },
@@ -144,7 +151,7 @@ export async function requireAnyRole(
 }> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    redirect(`/auth?next=${encodeURIComponent(nextPath)}`);
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
   const [row] = await db
@@ -154,13 +161,20 @@ export async function requireAnyRole(
       and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
     );
 
-  if (!row || !allowedRoles.includes(row.role as StaffRoleName)) {
-    redirect("/");
+  if (!row) {
+    // Bukan staff sama sekali — kembali ke login (admin subdomain)
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
+  }
+
+  const userRole = row.role as StaffRoleName;
+  if (!allowedRoles.includes(userRole)) {
+    // Punya role tapi tidak punya akses — redirect ke dashboard role-nya sendiri
+    redirect(defaultDashboardFor(userRole));
   }
 
   return {
     profileId: profile.id,
-    role: row.role as StaffRoleName,
+    role: userRole,
     barId: row.barId,
   };
 }
@@ -178,7 +192,8 @@ export async function requirePermission(
 }> {
   const ctx = await requireStaffContext(nextPath);
   if (!can(ctx.role, permission)) {
-    redirect("/");
+    // Tidak punya permission — redirect ke dashboard role-nya
+    redirect(defaultDashboardFor(ctx.role));
   }
   return ctx;
 }
@@ -190,7 +205,7 @@ async function requireStaffContext(nextPath: string): Promise<{
 }> {
   const profile = await getCurrentProfile();
   if (!profile) {
-    redirect(`/auth?next=${encodeURIComponent(nextPath)}`);
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
   const [row] = await db
     .select({ role: staffRoles.role, barId: staffRoles.barId })
@@ -199,7 +214,7 @@ async function requireStaffContext(nextPath: string): Promise<{
       and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
     );
   if (!row) {
-    redirect("/");
+    redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
   return {
     profileId: profile.id,

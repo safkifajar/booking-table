@@ -10,8 +10,13 @@ import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getMenuByBar, getUserRatingsBatch } from "@/lib/queries";
+import {
+  defaultDashboardFor,
+  type StaffRoleName,
+} from "@/lib/auth-v2/permissions";
 import { SessionView } from "./SessionView";
 import { UserMenu } from "@/components/UserMenu";
 
@@ -36,6 +41,7 @@ export default async function SessionPage({ params }: PageProps) {
       vibe_tags: tableSessions.vibeTags,
       started_at: tableSessions.startedAt,
       host_id: tableSessions.hostId,
+      opened_by_staff_id: tableSessions.openedByStaffId,
       // table
       table_label: tables.label,
       table_capacity: tables.capacity,
@@ -58,6 +64,18 @@ export default async function SessionPage({ params }: PageProps) {
     .where(eq(tableSessions.id, id));
 
   if (!sessionRow) notFound();
+
+  // Lookup nama staff yang buka meja (untuk display "Dibuka oleh Waiter X")
+  let openedByStaff: { id: string; display_name: string } | null = null;
+  if (sessionRow.opened_by_staff_id) {
+    const [staffProfile] = await db
+      .select({ id: profiles.id, display_name: profiles.displayName })
+      .from(profiles)
+      .where(eq(profiles.id, sessionRow.opened_by_staff_id));
+    if (staffProfile) {
+      openedByStaff = staffProfile;
+    }
+  }
 
   // 2. Members + their profile info (join)
   const membersRaw = await db
@@ -153,6 +171,22 @@ export default async function SessionPage({ params }: PageProps) {
   const myMember = membersRaw.find((m) => m.profile_id === profile.id);
   const isMember = !!myMember && myMember.status === "joined";
 
+  // Cek apakah current user adalah staff — kalau iya, back button arah ke
+  // dashboard role-nya (bukan ke /bar/[slug] customer landing)
+  const [staffRow] = await db
+    .select({ role: staffRoles.role })
+    .from(staffRoles)
+    .where(
+      and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
+    );
+  const staffRole = staffRow ? (staffRow.role as StaffRoleName) : null;
+  // Untuk waiter, default ke tab "Meja Aktif" (lebih relevan setelah dari session)
+  const backHref = staffRole
+    ? staffRole === "waiter"
+      ? "/staff/waiter?tab=sessions"
+      : defaultDashboardFor(staffRole)
+    : `/bar/${sessionRow.bar_slug}`;
+
   // Rating batch untuk semua members
   const memberProfileIds = membersRaw.map((m) => m.profile_id);
   const ratingsBatch = await getUserRatingsBatch(memberProfileIds);
@@ -229,6 +263,9 @@ export default async function SessionPage({ params }: PageProps) {
       isHost={isHost}
       isMember={isMember}
       inviteCode={invite?.code ?? null}
+      backHref={backHref}
+      staffRole={!isMember ? staffRole : null}
+      openedByStaff={openedByStaff}
       userMenu={<UserMenu />}
     />
   );
