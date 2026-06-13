@@ -64,6 +64,12 @@ const NAV: NavItem[] = [
     children: [
       {
         type: "leaf",
+        href: "/admin/menu",
+        label: "Menu",
+        icon: <Utensils className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
         href: "/admin/banners",
         label: "Banner Promo",
         icon: <ImageIcon className="h-4 w-4" />,

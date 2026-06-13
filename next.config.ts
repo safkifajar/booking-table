@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
    * - sharp: native binary (image processing)
    * - heic-convert: heavy + dynamic require chain
    */
-  serverExternalPackages: ["sharp", "heic-convert"],
+  serverExternalPackages: ["sharp", "heic-convert", "xlsx", "jszip"],
 };
 
 export default nextConfig;
