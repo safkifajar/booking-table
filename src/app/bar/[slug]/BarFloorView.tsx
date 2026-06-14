@@ -590,9 +590,20 @@ function TableSheet({
     const startMs = new Date(selStart).getTime();
     const endMs = selEnd ? new Date(selEnd).getTime() : startMs + slotMs;
     if (ms >= startMs && ms < endMs) {
-      // klik di dalam rentang → batal
-      setSelStart("");
-      setSelEnd("");
+      // Klik di dalam rentang → uncheck dari slot itu (bukan batal semua).
+      if (ms === startMs) {
+        // Klik jam mulai → geser mulai maju 1 slot; kalau jadi kosong → batal.
+        const newStart = startMs + slotMs;
+        if (newStart >= endMs) {
+          setSelStart("");
+          setSelEnd("");
+        } else {
+          setSelStart(new Date(newStart).toISOString());
+        }
+        return;
+      }
+      // Klik di tengah/akhir → potong: selesai = slot yg diklik.
+      setSelEnd(iso);
       return;
     }
     if (ms < startMs) {
