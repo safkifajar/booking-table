@@ -7,9 +7,8 @@ import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, MapPin, Users, Lock, Sparkles, Clock } from "lucide-react";
-import { formatIDR, initials, cn } from "@/lib/utils";
+import { ArrowLeft, MapPin, Lock, Clock } from "lucide-react";
+import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
 
@@ -20,25 +19,6 @@ const BULAN_ID = [
 ];
 
 /** Format ISO reservation_at → "Hari ini · 20:00" / "Sabtu 14 Jun · 20:00". Client-safe. */
-function formatReservationLabel(iso: string): string {
-  const date = new Date(iso);
-  const now = new Date();
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const time = `${hh}:${mm}`;
-
-  const sameDay = (a: Date, b: Date) =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate();
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  if (sameDay(date, now)) return `Hari ini · ${time}`;
-  if (sameDay(date, tomorrow)) return `Besok · ${time}`;
-  return `${HARI_ID[date.getDay()]} ${date.getDate()} ${BULAN_ID[date.getMonth()]} · ${time}`;
-}
 
 /** "HH:MM" dari ISO. */
 function formatTime(iso: string): string {
@@ -83,6 +63,14 @@ function compareGroupKey(a: string, b: string): number {
 function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
   const d = groupKeyToDate(gk);
   return { dayLabel: HARI_SHORT[d.getDay()], dateNum: d.getDate() };
+}
+
+/** Heading tanggal: "Hari Ini" / "Besok" / "Sabtu, 14 Jun". */
+function formatGroupLabel(gk: string): string {
+  if (gk === "today") return "Hari Ini";
+  if (gk === "tomorrow") return "Besok";
+  const d = groupKeyToDate(gk);
+  return `${HARI_ID[d.getDay()]}, ${d.getDate()} ${BULAN_ID[d.getMonth()]}`;
 }
 
 const DAY_KEYS_FLOOR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
@@ -171,13 +159,6 @@ function buildHourRows(
     });
   }
   return rows;
-}
-
-/** Range label: "Hari ini · 14:00–17:00". Kalau end null, cuma jam mulai. */
-function formatReservationRange(startIso: string, endIso: string | null): string {
-  const start = formatReservationLabel(startIso);
-  if (!endIso) return start;
-  return `${start}–${formatTime(endIso)}`;
 }
 
 interface Props {
@@ -317,112 +298,8 @@ export function BarFloorView({
           />
         )}
 
-        {/* Active tables list (for accessibility & on small screens) */}
-        {activeArea && (
-          <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeArea.tables
-              .filter((t) => t.active_session)
-              .map((t) => {
-                const isReserved = t.active_session?.status === "reserved";
-                const cardInner = (
-                  <Card
-                    className={
-                      isReserved
-                        ? "p-4"
-                        : "p-4 transition hover:border-primary/40 hover:bg-primary/[0.03] group-active:scale-[0.99] cursor-pointer"
-                    }
-                  >
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10">
-                        {t.active_session?.host_avatar && (
-                          <AvatarImage src={t.active_session.host_avatar} />
-                        )}
-                        <AvatarFallback>
-                          {initials(t.active_session?.host_name ?? "?")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="default" className="text-[10px] px-1.5">
-                            {t.label}
-                          </Badge>
-                          {t.active_session?.status === "reserved" && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] px-1.5 border-blue-500/50 text-blue-400"
-                            >
-                              Reserved
-                            </Badge>
-                          )}
-                          {t.active_session?.status === "locked" && (
-                            <Lock className="h-3 w-3 text-red-400" />
-                          )}
-                        </div>
-                        <p className="text-sm font-medium truncate group-hover:text-primary transition">
-                          {t.active_session?.title ?? "Open Table"}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {t.active_session?.status === "reserved" ? "Atas nama" : "Host"}:{" "}
-                          {t.active_session?.host_name}
-                        </p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                          {t.active_session?.status === "reserved" &&
-                          t.active_session.reservation_at ? (
-                            <span className="flex items-center gap-1 text-blue-400">
-                              <Clock className="h-3 w-3" />
-                              {formatReservationRange(
-                                t.active_session.reservation_at,
-                                t.active_session.reservation_end_at
-                              )}
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {t.active_session?.member_count}/{t.capacity}
-                            </span>
-                          )}
-                          {t.active_session?.vibe_tags?.[0] && (
-                            <span className="flex items-center gap-1">
-                              <Sparkles className="h-3 w-3 text-primary/60" />
-                              {t.active_session.vibe_tags[0]}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-
-                // Reserved table belum punya live session untuk di-join/preview —
-                // card-nya informasional saja (non-link).
-                if (isReserved) {
-                  return (
-                    <div key={t.id} className="block rounded-xl">
-                      {cardInner}
-                    </div>
-                  );
-                }
-                return (
-                  <Link
-                    key={t.id}
-                    href={`/session/${t.active_session!.id}/preview`}
-                    className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-xl"
-                    aria-label={`Lihat meja ${t.label} — ${
-                      t.active_session?.title ?? "Open Table"
-                    }`}
-                  >
-                    {cardInner}
-                  </Link>
-                );
-              })}
-            {activeArea.tables.filter((t) => t.active_session).length === 0 && (
-              <Card className="p-6 col-span-full text-center text-sm text-muted-foreground border-dashed">
-                Tidak ada meja yang aktif di area ini. Tap meja kosong di denah untuk mulai
-                buka meja sendiri.
-              </Card>
-            )}
-          </div>
-        )}
+        {/* Jadwal booking — list per tanggal (semua meja) */}
+        <BookingSchedule reservationsByTable={reservationsByTable} />
       </div>
 
       {/* Bottom sheet: selected table — backdrop click closes */}
@@ -465,6 +342,109 @@ function LegendDot({
         style={{ background: color, borderColor: border, borderWidth: 1, borderStyle: "solid" }}
       />
       <span>{label}</span>
+    </div>
+  );
+}
+
+// ============================================================
+// BOOKING SCHEDULE — list booking per tanggal (semua meja)
+// ============================================================
+
+function BookingSchedule({
+  reservationsByTable,
+}: {
+  reservationsByTable: Record<string, ActiveSessionView[]>;
+}) {
+  const [nowMs] = React.useState(() => Date.now());
+
+  // Kumpulkan semua booking lintas meja, kelompokkan per tanggal (groupKey).
+  const byDate = React.useMemo(() => {
+    const all = Object.values(reservationsByTable).flat();
+    const map = new Map<string, ActiveSessionView[]>();
+    for (const r of all) {
+      if (!r.reservation_at) continue;
+      const gk = dateGroupKey(new Date(r.reservation_at));
+      (map.get(gk) ?? map.set(gk, []).get(gk)!).push(r);
+    }
+    // Urut tiap tanggal by jam mulai.
+    for (const list of map.values()) {
+      list.sort((a, b) =>
+        (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
+      );
+    }
+    return map;
+  }, [reservationsByTable]);
+
+  const dateKeys = React.useMemo(
+    () => Array.from(byDate.keys()).sort(compareGroupKey),
+    [byDate]
+  );
+
+  if (dateKeys.length === 0) {
+    return (
+      <div className="mt-6">
+        <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
+          Jadwal Booking
+        </h2>
+        <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
+          Belum ada booking. Tap meja di denah untuk mulai reservasi.
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-5">
+      <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80">
+        Jadwal Booking
+      </h2>
+      {dateKeys.map((gk) => (
+        <div key={gk}>
+          <div className="text-sm font-semibold text-primary mb-2">
+            {formatGroupLabel(gk)}
+          </div>
+          <Card className="divide-y divide-border">
+            {byDate.get(gk)!.map((r) => {
+              const ended =
+                !!r.reservation_end_at &&
+                new Date(r.reservation_end_at).getTime() <= nowMs;
+              const inUse = r.status === "open" || r.status === "locked";
+              const statusLabel = ended
+                ? "Selesai"
+                : inUse
+                  ? "Sedang dipakai"
+                  : "Dibooking";
+              const statusColor = ended
+                ? "text-muted-foreground/60"
+                : inUse
+                  ? "text-emerald-400"
+                  : "text-blue-400";
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-3 px-3 py-2.5"
+                >
+                  <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+                    {r.table_label}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{r.host_name}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {r.reservation_at ? formatTime(r.reservation_at) : "?"}
+                      {r.reservation_end_at
+                        ? `–${formatTime(r.reservation_end_at)}`
+                        : ""}
+                    </p>
+                  </div>
+                  <span className={cn("text-[11px] shrink-0", statusColor)}>
+                    {statusLabel}
+                  </span>
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      ))}
     </div>
   );
 }

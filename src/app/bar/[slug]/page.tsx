@@ -75,6 +75,7 @@ export default async function BarPage({ params }: PageProps) {
     .select({
       id: tableSessions.id,
       table_id: tableSessions.tableId,
+      table_label: tables.label,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
       host_name: profiles.displayName,
@@ -97,7 +98,7 @@ export default async function BarPage({ params }: PageProps) {
     (historyByTable[h.table_id] ??= []).push({
       id: h.id,
       table_id: h.table_id,
-      table_label: "",
+      table_label: h.table_label,
       area_id: "",
       area_name: "",
       status: "closed" as never,
