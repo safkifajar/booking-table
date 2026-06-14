@@ -170,6 +170,59 @@ export async function getActiveSessionsForArea(
   return all.filter((s) => s.area_id === areaId).map(({ bar_id: _b, ...rest }) => rest);
 }
 
+/**
+ * Promote reservasi yang waktunya SUDAH TIBA (reservation_at <= now dan
+ * reservation_end_at > now) dari status 'reserved' → 'open'. Dipanggil lazy
+ * saat floor view di-load (tanpa cron). Meja yang sudah punya session
+ * open/locked lain tidak dipromote (cegah konflik unique index).
+ *
+ * Return jumlah session yang dipromote.
+ */
+export async function promoteDueReservations(barId: string): Promise<number> {
+  const now = new Date();
+  // Cari reservasi due milik bar ini, yang mejanya belum punya session
+  // open/locked aktif.
+  const due = await db
+    .select({ id: tableSessions.id, tableId: tableSessions.tableId })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        eq(tableSessions.status, "reserved"),
+        sql`${tableSessions.reservationAt} <= ${now}`,
+        sql`${tableSessions.reservationEndAt} > ${now}`
+      )
+    );
+  if (due.length === 0) return 0;
+
+  let promoted = 0;
+  for (const r of due) {
+    // Skip kalau meja sudah punya session open/locked lain.
+    const [busy] = await db
+      .select({ id: tableSessions.id })
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, r.tableId),
+          inArray(tableSessions.status, ["open", "locked"])
+        )
+      );
+    if (busy) continue;
+    try {
+      await db
+        .update(tableSessions)
+        .set({ status: "open", startedAt: now })
+        .where(eq(tableSessions.id, r.id));
+      promoted++;
+    } catch {
+      // Konflik unique index (race) — abaikan, biar tetap reserved.
+    }
+  }
+  return promoted;
+}
+
 // ============================================================
 // MENU
 // ============================================================
