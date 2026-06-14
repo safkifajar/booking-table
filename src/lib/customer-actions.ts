@@ -176,6 +176,8 @@ const updateSchema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email().max(120),
   phone: z.string().max(20).optional(),
+  /** Password baru (opsional) — kalau diisi, reset password customer. */
+  password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
 });
 
 export async function updateCustomer(input: z.infer<typeof updateSchema>) {
@@ -197,10 +199,19 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
     .where(and(eq(users.email, email), sql`${users.id} <> ${data.id}`));
   if (clash) throw new Error("Email sudah dipakai user lain");
 
+  // Reset password kalau diisi.
+  const passwordHash = data.password
+    ? await hashPassword(data.password)
+    : null;
+
   await db.transaction(async (tx) => {
     await tx
       .update(users)
-      .set({ email, name: data.name })
+      .set({
+        email,
+        name: data.name,
+        ...(passwordHash ? { passwordHash } : {}),
+      })
       .where(eq(users.id, data.id));
     await tx
       .update(profiles)

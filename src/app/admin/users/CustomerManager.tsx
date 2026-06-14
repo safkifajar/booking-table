@@ -252,10 +252,22 @@ function CustomerFormDialog({
   const [email, setEmail] = React.useState(row?.email ?? "");
   const [phone, setPhone] = React.useState(row?.phone ?? "");
   const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Validasi password (edit: opsional; kalau diisi harus cocok & min 6).
+    if (isEdit && (password || confirmPassword)) {
+      if (password.length < 6) {
+        toast.error("Password baru minimal 6 karakter");
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast.error("Konfirmasi password tidak cocok");
+        return;
+      }
+    }
     setSaving(true);
     try {
       if (isEdit) {
@@ -264,8 +276,11 @@ function CustomerFormDialog({
           name: name.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
+          password: password || undefined,
         });
-        toast.success("Customer diperbarui");
+        toast.success(
+          password ? "Customer & password diperbarui" : "Customer diperbarui"
+        );
       } else {
         await createCustomer({
           name: name.trim(),
@@ -318,7 +333,7 @@ function CustomerFormDialog({
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
-          {!isEdit && (
+          {!isEdit ? (
             <Field label="Password">
               <input
                 type="text"
@@ -331,6 +346,34 @@ function CustomerFormDialog({
                 className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
               />
             </Field>
+          ) : (
+            <div className="rounded-md border border-border p-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Reset password (opsional) — isi kalau customer lupa password.
+                Kosongkan kalau tidak diubah.
+              </p>
+              <Field label="Password baru">
+                <input
+                  type="text"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={6}
+                  maxLength={100}
+                  placeholder="Minimal 6 karakter"
+                  className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                />
+              </Field>
+              <Field label="Konfirmasi password baru">
+                <input
+                  type="text"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  maxLength={100}
+                  placeholder="Ulangi password baru"
+                  className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                />
+              </Field>
+            </div>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
