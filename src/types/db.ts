@@ -179,6 +179,8 @@ export interface ActiveSessionView {
   host_name: string;
   host_avatar: string | null;
   started_at: string;
+  /** Waktu reservasi (ISO). Hanya terisi saat status 'reserved'. */
+  reservation_at: string | null;
   member_count: number;
   table_capacity: number;
 }

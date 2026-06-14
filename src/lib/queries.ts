@@ -133,6 +133,7 @@ async function activeSessionsBase(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
       member_count: sql<number>`COALESCE(${memberCountSq.count}, 0)::int`,
       table_capacity: tables.capacity,
       bar_id: floorAreas.barId,
@@ -142,11 +143,12 @@ async function activeSessionsBase(): Promise<
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
     .leftJoin(memberCountSq, eq(memberCountSq.sessionId, tableSessions.id))
-    .where(inArray(tableSessions.status, ["open", "locked"]));
+    .where(inArray(tableSessions.status, ["reserved", "open", "locked"]));
 
   return rows.map((r) => ({
     ...r,
     started_at: r.started_at.toISOString(),
+    reservation_at: r.reservation_at ? r.reservation_at.toISOString() : null,
   }));
 }
 

@@ -82,13 +82,16 @@ interface TableShapeProps {
 function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) {
   const isOpen = !!table.active_session && table.active_session.status === "open";
   const isLocked = !!table.active_session && table.active_session.status === "locked";
+  const isReserved = !!table.active_session && table.active_session.status === "reserved";
   const isAvailable = !table.active_session;
 
   const fill = isOpen
     ? "rgba(201, 169, 97, 0.25)"
     : isLocked
       ? "rgba(220, 38, 38, 0.15)"
-      : "rgba(28, 28, 28, 0.9)";
+      : isReserved
+        ? "rgba(59, 130, 246, 0.15)"
+        : "rgba(28, 28, 28, 0.9)";
 
   const stroke = selected
     ? "#e6c478"
@@ -96,7 +99,9 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
       ? "#c9a961"
       : isLocked
         ? "#dc2626"
-        : "rgba(255,255,255,0.15)";
+        : isReserved
+          ? "#3b82f6"
+          : "rgba(255,255,255,0.15)";
 
   const strokeWidth = selected || highlighted ? 3 : 2;
 
@@ -163,7 +168,15 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
         textAnchor="middle"
         fontSize="13"
         fontWeight="600"
-        fill={isOpen ? "#e6c478" : isAvailable ? "#a3a3a3" : "#f87171"}
+        fill={
+          isOpen
+            ? "#e6c478"
+            : isReserved
+              ? "#60a5fa"
+              : isAvailable
+                ? "#a3a3a3"
+                : "#f87171"
+        }
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
         {table.label}
@@ -179,8 +192,8 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
         {table.capacity} seats
       </text>
 
-      {/* Member count badge for open sessions */}
-      {table.active_session && (
+      {/* Member count badge for active (open/locked) sessions */}
+      {table.active_session && !isReserved && (
         <g style={{ pointerEvents: "none" }}>
           <circle
             cx={table.pos_x + table.width - 6}
@@ -197,6 +210,28 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
             fill="#0a0a0a"
           >
             {table.active_session.member_count}
+          </text>
+        </g>
+      )}
+
+      {/* Reserved badge — clock icon, no member count yet */}
+      {isReserved && (
+        <g style={{ pointerEvents: "none" }}>
+          <circle
+            cx={table.pos_x + table.width - 6}
+            cy={table.pos_y + 6}
+            r="10"
+            fill="#3b82f6"
+          />
+          <text
+            x={table.pos_x + table.width - 6}
+            y={table.pos_y + 10}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+            fill="#0a0a0a"
+          >
+            R
           </text>
         </g>
       )}

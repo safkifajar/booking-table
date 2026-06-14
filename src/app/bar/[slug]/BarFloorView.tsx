@@ -8,9 +8,36 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, MapPin, Users, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, MapPin, Users, Lock, Sparkles, Clock } from "lucide-react";
 import { formatIDR, initials } from "@/lib/utils";
 import type { Bar, FloorArea } from "@/types/db";
+
+const HARI_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const BULAN_ID = [
+  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+];
+
+/** Format ISO reservation_at → "Hari ini · 20:00" / "Sabtu 14 Jun · 20:00". Client-safe. */
+function formatReservationLabel(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const time = `${hh}:${mm}`;
+
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (sameDay(date, now)) return `Hari ini · ${time}`;
+  if (sameDay(date, tomorrow)) return `Besok · ${time}`;
+  return `${HARI_ID[date.getDay()]} ${date.getDate()} ${BULAN_ID[date.getMonth()]} · ${time}`;
+}
 
 interface Props {
   bar: Bar;
@@ -121,6 +148,7 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
           <LegendDot color="rgba(201,169,97,0.4)" border="#c9a961" label="Open table" pulse />
+          <LegendDot color="rgba(59,130,246,0.2)" border="#3b82f6" label="Reserved" />
           <LegendDot color="rgba(220,38,38,0.15)" border="#dc2626" label="Locked / full" />
         </div>
 
@@ -140,14 +168,16 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
           <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {activeArea.tables
               .filter((t) => t.active_session)
-              .map((t) => (
-                <Link
-                  key={t.id}
-                  href={`/session/${t.active_session!.id}/preview`}
-                  className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-xl"
-                  aria-label={`Lihat meja ${t.label} — ${t.active_session?.title ?? "Open Table"}`}
-                >
-                  <Card className="p-4 transition hover:border-primary/40 hover:bg-primary/[0.03] group-active:scale-[0.99] cursor-pointer">
+              .map((t) => {
+                const isReserved = t.active_session?.status === "reserved";
+                const cardInner = (
+                  <Card
+                    className={
+                      isReserved
+                        ? "p-4"
+                        : "p-4 transition hover:border-primary/40 hover:bg-primary/[0.03] group-active:scale-[0.99] cursor-pointer"
+                    }
+                  >
                     <div className="flex items-start gap-3">
                       <Avatar className="h-10 w-10">
                         {t.active_session?.host_avatar && (
@@ -162,6 +192,14 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
                           <Badge variant="default" className="text-[10px] px-1.5">
                             {t.label}
                           </Badge>
+                          {t.active_session?.status === "reserved" && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 border-blue-500/50 text-blue-400"
+                            >
+                              Reserved
+                            </Badge>
+                          )}
                           {t.active_session?.status === "locked" && (
                             <Lock className="h-3 w-3 text-red-400" />
                           )}
@@ -170,13 +208,22 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
                           {t.active_session?.title ?? "Open Table"}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          Host: {t.active_session?.host_name}
+                          {t.active_session?.status === "reserved" ? "Atas nama" : "Host"}:{" "}
+                          {t.active_session?.host_name}
                         </p>
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {t.active_session?.member_count}/{t.capacity}
-                          </span>
+                          {t.active_session?.status === "reserved" &&
+                          t.active_session.reservation_at ? (
+                            <span className="flex items-center gap-1 text-blue-400">
+                              <Clock className="h-3 w-3" />
+                              {formatReservationLabel(t.active_session.reservation_at)}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {t.active_session?.member_count}/{t.capacity}
+                            </span>
+                          )}
                           {t.active_session?.vibe_tags?.[0] && (
                             <span className="flex items-center gap-1">
                               <Sparkles className="h-3 w-3 text-primary/60" />
@@ -187,8 +234,30 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
                       </div>
                     </div>
                   </Card>
-                </Link>
-              ))}
+                );
+
+                // Reserved table belum punya live session untuk di-join/preview —
+                // card-nya informasional saja (non-link).
+                if (isReserved) {
+                  return (
+                    <div key={t.id} className="block rounded-xl">
+                      {cardInner}
+                    </div>
+                  );
+                }
+                return (
+                  <Link
+                    key={t.id}
+                    href={`/session/${t.active_session!.id}/preview`}
+                    className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-xl"
+                    aria-label={`Lihat meja ${t.label} — ${
+                      t.active_session?.title ?? "Open Table"
+                    }`}
+                  >
+                    {cardInner}
+                  </Link>
+                );
+              })}
             {activeArea.tables.filter((t) => t.active_session).length === 0 && (
               <Card className="p-6 col-span-full text-center text-sm text-muted-foreground border-dashed">
                 Tidak ada meja yang aktif di area ini. Tap meja kosong di denah untuk mulai
@@ -249,6 +318,7 @@ function TableSheet({
   const session = table.active_session;
   const isAvailable = !session;
   const isOpen = session?.status === "open";
+  const isReserved = session?.status === "reserved";
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card shadow-2xl">
@@ -259,6 +329,14 @@ function TableSheet({
               <Badge variant="default" className="text-xs">
                 {table.label}
               </Badge>
+              {isReserved && (
+                <Badge
+                  variant="outline"
+                  className="text-xs border-blue-500/50 text-blue-400"
+                >
+                  Reserved
+                </Badge>
+              )}
               <span className="text-xs text-muted-foreground capitalize">
                 {table.shape} · {table.capacity} seats
               </span>
@@ -268,7 +346,18 @@ function TableSheet({
                 ? "Available — be the host"
                 : session?.title ?? "Open Table"}
             </h2>
-            {session && (
+            {session && isReserved && (
+              <p className="text-sm mt-0.5">
+                <span className="text-blue-400 inline-flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {session.reservation_at
+                    ? formatReservationLabel(session.reservation_at)
+                    : "Terjadwal"}
+                </span>
+                <span className="text-muted-foreground"> · a/n {session.host_name}</span>
+              </p>
+            )}
+            {session && !isReserved && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 Host: {session.host_name} ·{" "}
                 <Users className="inline h-3 w-3 -mt-0.5" /> {session.member_count}/{table.capacity}
@@ -298,6 +387,11 @@ function TableSheet({
           {isOpen && (
             <Button variant="outline" size="lg" className="flex-1 min-w-[140px]" asChild>
               <Link href={`/session/${session.id}/preview`}>Lihat Meja</Link>
+            </Button>
+          )}
+          {isReserved && (
+            <Button variant="outline" size="lg" className="flex-1" disabled>
+              <Clock className="h-4 w-4" /> Sudah direservasi
             </Button>
           )}
           {session?.status === "locked" && (
