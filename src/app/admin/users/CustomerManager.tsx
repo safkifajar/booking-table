@@ -311,6 +311,7 @@ function CustomerFormDialog({
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={80}
+              placeholder="mis. Budi Santoso"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
@@ -321,6 +322,7 @@ function CustomerFormDialog({
               onChange={(e) => setEmail(e.target.value)}
               required
               maxLength={120}
+              placeholder="mis. budi@email.com"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
@@ -330,6 +332,7 @@ function CustomerFormDialog({
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={20}
+              placeholder="mis. 081234567890"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
