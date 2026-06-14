@@ -130,36 +130,44 @@ export function OpenTableForm({
     [slots, selectedDate]
   );
 
-  const startSlot = React.useMemo(
-    () => slots.find((s) => s.iso === selectedSlot) ?? null,
-    [slots, selectedSlot]
-  );
+  // Klik jam: pola "klik mulai → klik selesai".
+  // - Belum ada mulai, atau sudah lengkap (mulai+selesai) → set mulai baru.
+  // - Sudah ada mulai, klik jam SETELAHnya → set selesai (= akhir slot diklik).
+  // - Klik jam <= mulai → jadikan mulai baru.
+  function handleSlotClick(iso: string) {
+    const clickedMs = new Date(iso).getTime();
+    const startMs = selectedSlot ? new Date(selectedSlot).getTime() : null;
 
-  // Opsi jam selesai: SEMUA slot setelah jam mulai di hari yang sama (sampai
-  // jam tutup). TIDAK berhenti di slot booked — deteksi bentrok ditangani
-  // terpisah (conflictInfo) supaya bisa kasih alert + saran, bukan diam-diam
-  // memotong pilihan.
-  const endOptions = React.useMemo<AvailableSlot[]>(() => {
-    if (!startSlot) return [];
-    const startDate = new Date(startSlot.iso);
-    const startMs = startDate.getTime();
-    const sameDay = (d: Date) =>
-      d.getFullYear() === startDate.getFullYear() &&
-      d.getMonth() === startDate.getMonth() &&
-      d.getDate() === startDate.getDate();
-
-    const opts: AvailableSlot[] = [];
-    for (let i = 1; i <= 48; i++) {
-      const endMs = startMs + i * slotMs;
-      const endDate = new Date(endMs);
-      if (!sameDay(endDate)) break; // tidak lintas hari
-      const label = `${String(endDate.getHours()).padStart(2, "0")}:${String(
-        endDate.getMinutes()
-      ).padStart(2, "0")}`;
-      opts.push({ iso: endDate.toISOString(), label, groupKey: "" });
+    if (startMs === null || selectedEnd) {
+      // Mulai baru (slot 1 jam → selesai = mulai + 1 slot otomatis)
+      setSelectedSlot(iso);
+      setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
+      return;
     }
-    return opts;
-  }, [startSlot, slotMs]);
+    if (clickedMs <= startMs) {
+      // Klik sebelum/sama dgn mulai → reset mulai
+      setSelectedSlot(iso);
+      setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
+      return;
+    }
+    // Klik setelah mulai → selesai = akhir slot yang diklik
+    setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
+  }
+
+  // Set ISO slot yang termasuk rentang terpilih [mulai, selesai) untuk highlight.
+  const selectedRangeIsos = React.useMemo(() => {
+    const set = new Set<string>();
+    if (!selectedSlot || !selectedEnd) {
+      if (selectedSlot) set.add(selectedSlot);
+      return set;
+    }
+    const startMs = new Date(selectedSlot).getTime();
+    const endMs = new Date(selectedEnd).getTime();
+    for (let t = startMs; t < endMs; t += slotMs) {
+      set.add(new Date(t).toISOString());
+    }
+    return set;
+  }, [selectedSlot, selectedEnd, slotMs]);
 
   // Deteksi bentrok: kalau rentang [mulai, selesai) menabrak slot booked,
   // hitung slot booked pertama yang nabrak → untuk pesan saran.
@@ -333,44 +341,36 @@ export function OpenTableForm({
                 </div>
               </div>
 
-              {/* Step 2: list jam mulai dengan status booked */}
+              {/* Step 2: list jam — klik mulai lalu klik selesai */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Jam mulai
+                  Pilih jam{" "}
+                  <span className="text-muted-foreground font-normal">
+                    (klik jam mulai, lalu klik jam selesai)
+                  </span>
                 </label>
-                <TimeList
+                <TimeRangeList
                   slots={startSlotsForDate}
-                  value={selectedSlot}
+                  rangeIsos={selectedRangeIsos}
                   bookedSet={bookedSet}
-                  onChange={(iso) => {
-                    setSelectedSlot(iso);
-                    setSelectedEnd("");
-                  }}
+                  onClick={handleSlotClick}
+                  slotMs={slotMs}
                 />
               </div>
 
-              {/* Step 3: jam selesai (dropdown) */}
-              {selectedSlot && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Jam selesai
-                  </label>
-                  <TimeSelect
-                    options={endOptions}
-                    value={selectedEnd}
-                    placeholder="Pilih jam selesai"
-                    onChange={setSelectedEnd}
-                  />
+              {/* Ringkasan rentang + alert bentrok */}
+              {selectedSlot && selectedEnd && !conflict && (
+                <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
+                  Reservasi <strong>{rangeLabel(selectedSlot, selectedEnd)}</strong>{" "}
+                  · {durationHours(selectedSlot, selectedEnd, slotMs)}
                 </div>
               )}
-
-              {/* Alert bentrok: rentang menabrak slot booked */}
               {conflict && (
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
-                  Jam <strong>{conflict.bookedFromLabel}</strong> sudah dibooking
-                  orang lain. Pilih jam selesai sebelum{" "}
-                  {conflict.bookedFromLabel}, atau mulai dari{" "}
-                  {conflict.bookedFromLabel} ke atas.
+                  Rentang ini melewati jam{" "}
+                  <strong>{conflict.bookedFromLabel}</strong> yang sudah
+                  dibooking. Pilih sampai sebelum {conflict.bookedFromLabel},
+                  atau mulai dari {conflict.bookedFromLabel} ke atas.
                 </div>
               )}
             </div>
@@ -674,64 +674,42 @@ function findConflict(
   return null;
 }
 
-function TimeSelect({
-  options,
-  value,
-  onChange,
-  disabledIsos,
-  placeholder,
-  disabled,
-}: {
-  options: AvailableSlot[];
-  value: string;
-  onChange: (iso: string) => void;
-  /** Slot yang sudah ke-booking reservasi lain — tetap tampil, ditandai. */
-  disabledIsos?: Set<string>;
-  placeholder: string;
-  disabled?: boolean;
-}) {
-  return (
-    <select
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
-        "w-full h-11 px-3 rounded-md bg-input border border-border text-sm tabular-nums transition appearance-none",
-        "focus:outline-none focus:border-primary/60",
-        "disabled:opacity-50 disabled:cursor-not-allowed",
-        value ? "text-foreground" : "text-muted-foreground"
-      )}
-    >
-      <option value="" disabled>
-        {placeholder}
-      </option>
-      {options.map((s) => {
-        const isBooked = disabledIsos?.has(s.iso) ?? false;
-        return (
-          <option key={s.iso} value={s.iso} disabled={isBooked}>
-            {slotTime(s.label)}
-            {isBooked ? " — sudah dibooking" : ""}
-          </option>
-        );
-      })}
-    </select>
+/** Label rentang "19:00–22:00" dari ISO mulai+selesai. */
+function rangeLabel(startIso: string, endIso: string): string {
+  const t = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  return `${t(startIso)}–${t(endIso)}`;
+}
+
+/** "3 jam" dari rentang. */
+function durationHours(startIso: string, endIso: string, slotMs: number): string {
+  const n = Math.round(
+    (new Date(endIso).getTime() - new Date(startIso).getTime()) / slotMs
   );
+  const totalMin = (n * slotMs) / 60000;
+  if (totalMin % 60 === 0) return `${totalMin / 60} jam`;
+  return `${totalMin} menit`;
 }
 
 // ============================================================
-// TIME LIST — list jam dengan status (Tersedia / Dibooking)
+// TIME RANGE LIST — list jam multi-select (klik mulai → klik selesai)
 // ============================================================
 
-function TimeList({
+function TimeRangeList({
   slots,
-  value,
+  rangeIsos,
   bookedSet,
-  onChange,
+  onClick,
+  slotMs,
 }: {
   slots: AvailableSlot[];
-  value: string;
+  /** ISO slot yang termasuk rentang terpilih [mulai, selesai) — di-highlight. */
+  rangeIsos: Set<string>;
   bookedSet: Set<string>;
-  onChange: (iso: string) => void;
+  onClick: (iso: string) => void;
+  slotMs: number;
 }) {
   if (slots.length === 0) {
     return (
@@ -742,21 +720,26 @@ function TimeList({
   }
 
   return (
-    <div className="max-h-56 overflow-y-auto rounded-md border border-border divide-y divide-border">
+    <div className="max-h-64 overflow-y-auto rounded-md border border-border divide-y divide-border">
       {slots.map((s) => {
         const isBooked = bookedSet.has(s.iso);
-        const active = value === s.iso;
+        const inRange = rangeIsos.has(s.iso);
+        // Label baris = rentang slot ini, mis. "19:00–20:00".
+        const endLabel = (() => {
+          const d = new Date(new Date(s.iso).getTime() + slotMs);
+          return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        })();
         return (
           <button
             key={s.iso}
             type="button"
             disabled={isBooked}
-            onClick={() => onChange(s.iso)}
+            onClick={() => onClick(s.iso)}
             className={cn(
               "w-full flex items-center justify-between px-3 py-2.5 text-sm transition text-left",
               isBooked
                 ? "cursor-not-allowed bg-muted/30"
-                : active
+                : inRange
                   ? "bg-primary/15"
                   : "hover:bg-muted/40"
             )}
@@ -766,12 +749,12 @@ function TimeList({
                 "font-medium tabular-nums",
                 isBooked
                   ? "text-muted-foreground/50 line-through"
-                  : active
+                  : inRange
                     ? "text-primary"
                     : "text-foreground"
               )}
             >
-              {slotTime(s.label)}
+              {slotTime(s.label)}–{endLabel}
             </span>
             {isBooked ? (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
@@ -781,10 +764,10 @@ function TimeList({
               <span
                 className={cn(
                   "text-[11px]",
-                  active ? "text-primary" : "text-muted-foreground"
+                  inRange ? "text-primary" : "text-muted-foreground"
                 )}
               >
-                {active ? "Dipilih ✓" : "Tersedia"}
+                {inRange ? "Dipilih ✓" : "Tersedia"}
               </span>
             )}
           </button>
