@@ -50,30 +50,20 @@ export function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-/**
- * Format label slot. Jam diambil dari `date` (waktu slot asli). Penamaan hari
- * (Hari ini/Besok/tanggal) dari `labelDate` kalau diberikan — untuk slot dini
- * hari yang dikelompokkan ke hari sebelumnya.
- */
-export function formatSlotLabel(
-  date: Date,
-  now: Date,
-  labelDate?: Date
-): string {
+export function formatSlotLabel(date: Date, now: Date): string {
   const hh = String(date.getHours()).padStart(2, "0");
   const mm = String(date.getMinutes()).padStart(2, "0");
   const time = `${hh}:${mm}`;
 
-  const ref = labelDate ?? date;
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  if (isSameDay(ref, now)) return `Hari ini · ${time}`;
-  if (isSameDay(ref, tomorrow)) return `Besok · ${time}`;
+  if (isSameDay(date, now)) return `Hari ini · ${time}`;
+  if (isSameDay(date, tomorrow)) return `Besok · ${time}`;
 
-  const hari = HARI_ID[ref.getDay()];
-  const tgl = ref.getDate();
-  const bulan = BULAN_ID[ref.getMonth()];
+  const hari = HARI_ID[date.getDay()];
+  const tgl = date.getDate();
+  const bulan = BULAN_ID[date.getMonth()];
   return `${hari} ${tgl} ${bulan} · ${time}`;
 }
 

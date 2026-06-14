@@ -281,36 +281,16 @@ export function generateAvailableSlots(
     const candidate = new Date(t);
     const op = isWithinOperatingHours(candidate, hours);
     if (!op.ok) continue;
-    // Slot dini hari yang merupakan kelanjutan sesi malam sebelumnya
-    // (jam < jam buka hari itu) → kelompokkan ke hari SEBELUMNYA, supaya
-    // satu sesi malam (mis. 13:00 s/d 03:00) tampil utuh dalam 1 tanggal.
-    const groupDate = isEarlyMorningContinuation(candidate, hours)
-      ? new Date(candidate.getTime() - 24 * 60 * 60 * 1000)
-      : candidate;
+    // Grouping by tanggal kalender asli (slot dini hari masuk tanggalnya
+    // sendiri, mis. 01:00 Senin → grup Senin).
     slots.push({
       iso: candidate.toISOString(),
-      label: formatSlotLabel(candidate, now, groupDate),
-      groupKey: formatGroupKey(groupDate, now),
+      label: formatSlotLabel(candidate, now),
+      groupKey: formatGroupKey(candidate, now),
     });
     count++;
   }
   return slots;
-}
-
-/**
- * Cek apakah `date` adalah dini hari kelanjutan sesi malam sebelumnya:
- * hari KEMARIN punya jam wrap (tutup < buka) dan jam slot ini < jam tutup itu.
- */
-function isEarlyMorningContinuation(date: Date, hours: OperatingHours): boolean {
-  const prev = new Date(date.getTime() - 24 * 60 * 60 * 1000);
-  const prevHours = hours[getDayKey(prev)];
-  if (!prevHours || prevHours.closed) return false;
-  const openMin = timeToMinutes(prevHours.open);
-  const closeMin =
-    prevHours.close === "00:00" ? 24 * 60 : timeToMinutes(prevHours.close);
-  if (closeMin > openMin) return false; // tidak wrap
-  const minuteOfDay = date.getHours() * 60 + date.getMinutes();
-  return minuteOfDay < closeMin; // dini hari sebelum jam tutup
 }
 
 // ============================================================
