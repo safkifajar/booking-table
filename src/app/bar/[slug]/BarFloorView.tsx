@@ -126,8 +126,10 @@ function buildHourRows(
     return h * 60 + m;
   };
   const openMin = toMin(dh.open);
-  const closeMin = dh.close === "00:00" ? 24 * 60 : toMin(dh.close);
-  if (closeMin <= openMin) return []; // wrap/aneh — skip untuk MVP
+  let closeMin = dh.close === "00:00" ? 24 * 60 : toMin(dh.close);
+  // Tutup setelah tengah malam (mis. buka 13:00, tutup 03:00) → close < open.
+  // Perlakukan close sebagai hari berikutnya: tambah 24 jam.
+  if (closeMin <= openMin) closeMin += 24 * 60;
 
   // Rentang booked (ms epoch) untuk tanggal ini.
   const ranges = dayReservations
