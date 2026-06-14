@@ -136,23 +136,30 @@ export function OpenTableForm({
   // - Klik jam <= mulai → jadikan mulai baru.
   function handleSlotClick(iso: string) {
     const clickedMs = new Date(iso).getTime();
-    const startMs = selectedSlot ? new Date(selectedSlot).getTime() : null;
-
-    // Klik tepat di jam mulai yang sedang terpilih → batalkan (uncheck).
-    if (startMs !== null && clickedMs === startMs && !selectedEnd) {
-      setSelectedSlot("");
-      setSelectedEnd("");
-      return;
-    }
-    // Belum ada mulai, atau klik <= mulai → set mulai baru (rentang 1 slot).
-    if (startMs === null || clickedMs <= startMs) {
+    if (!selectedSlot) {
+      // Belum ada pilihan → mulai (1 slot).
       setSelectedSlot(iso);
       setSelectedEnd("");
       return;
     }
-    // Klik setelah mulai → perpanjang/perpendek: selesai = jam diklik + 1 slot.
-    // Tiap klik di atas mulai selalu update selesai (tidak reset), jadi bisa
-    // bebas memperpanjang ke jam mana pun setelah mulai.
+    const startMs = new Date(selectedSlot).getTime();
+    const endMs = selectedEnd
+      ? new Date(selectedEnd).getTime()
+      : startMs + slotMs;
+
+    // Klik slot yang SEDANG di dalam rentang [start, end) → batal semua.
+    if (clickedMs >= startMs && clickedMs < endMs) {
+      setSelectedSlot("");
+      setSelectedEnd("");
+      return;
+    }
+    // Klik sebelum mulai → set mulai baru (1 slot).
+    if (clickedMs < startMs) {
+      setSelectedSlot(iso);
+      setSelectedEnd("");
+      return;
+    }
+    // Klik setelah rentang → perpanjang: selesai = jam diklik + 1 slot.
     setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
   }
 
