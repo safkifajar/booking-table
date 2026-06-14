@@ -1,5 +1,14 @@
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea } from "@/lib/queries";
+import { db } from "@/lib/db/client";
+import { bars } from "@/lib/db/schema/venue";
+import {
+  DEFAULT_OPERATING_HOURS,
+  DEFAULT_RESERVATION_CONFIG,
+  type OperatingHours,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
 import { BarFloorView } from "./BarFloorView";
 import { UserMenu } from "@/components/UserMenu";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
@@ -15,6 +24,24 @@ export default async function BarPage({ params }: PageProps) {
   if (!bar) notFound();
 
   const areas = await getFloorAreas(bar.id);
+
+  // Settings bar (jam operasi + slot interval) untuk generate list jam di
+  // bottom sheet floor view.
+  const [barSettings] = await db
+    .select({
+      opening_hours: bars.openingHours,
+      reservation_config: bars.reservationConfig,
+    })
+    .from(bars)
+    .where(eq(bars.id, bar.id));
+  const operatingHours: OperatingHours = {
+    ...DEFAULT_OPERATING_HOURS,
+    ...((barSettings?.opening_hours as OperatingHours) ?? {}),
+  };
+  const reservationConfig: ReservationConfig = {
+    ...DEFAULT_RESERVATION_CONFIG,
+    ...((barSettings?.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
 
   // Map tableId → semua reservasi 'reserved' (urut by jam mulai). Satu meja
   // bisa punya banyak reservasi di slot berbeda — bottom sheet tampilkan semua.
@@ -53,6 +80,8 @@ export default async function BarPage({ params }: PageProps) {
       bar={bar}
       areasWithTables={areasWithTables}
       reservationsByTable={reservationsByTable}
+      operatingHours={operatingHours}
+      slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
       userMenu={<UserMenu />}
     />
   );

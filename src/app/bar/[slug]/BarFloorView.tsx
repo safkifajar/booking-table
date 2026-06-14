@@ -11,6 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowLeft, MapPin, Users, Lock, Sparkles, Clock } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
+import type { OperatingHours } from "@/lib/settings-constants";
 
 const HARI_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const BULAN_ID = [
@@ -44,9 +45,6 @@ function formatTime(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
-
-/** Alias pendek untuk formatTime (dipakai di list jam). */
-const rTime = formatTime;
 
 const HARI_SHORT = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
 
@@ -87,6 +85,76 @@ function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
   return { dayLabel: HARI_SHORT[d.getDay()], dateNum: d.getDate() };
 }
 
+const DAY_KEYS_FLOOR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+
+interface HourRow {
+  /** "20:00–21:00" */
+  label: string;
+  booked: boolean;
+  host?: string;
+}
+
+/**
+ * Bangun list SEMUA jam operasi di tanggal `gk`, ditandai booked/available.
+ * Tiap baris = 1 slot interval (mis. 60 mnt): "10:00–11:00".
+ * Booked kalau slot itu jatuh di dalam rentang reservasi mana pun.
+ */
+function buildHourRows(
+  gk: string,
+  dayReservations: ActiveSessionView[],
+  hours: OperatingHours | undefined,
+  slotMinutes: number
+): HourRow[] {
+  if (!hours) {
+    // Tanpa jam operasi: fallback ke list reservasi yang ada saja.
+    return dayReservations
+      .filter((r) => r.reservation_at)
+      .map((r) => ({
+        label: `${formatTime(r.reservation_at!)}–${r.reservation_end_at ? formatTime(r.reservation_end_at) : "?"}`,
+        booked: true,
+        host: r.host_name,
+      }));
+  }
+
+  const date = groupKeyToDate(gk);
+  const dayKey = DAY_KEYS_FLOOR[date.getDay()];
+  const dh = hours[dayKey];
+  if (!dh || dh.closed) return [];
+
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const openMin = toMin(dh.open);
+  const closeMin = dh.close === "00:00" ? 24 * 60 : toMin(dh.close);
+  if (closeMin <= openMin) return []; // wrap/aneh — skip untuk MVP
+
+  // Rentang booked (ms epoch) untuk tanggal ini.
+  const ranges = dayReservations
+    .filter((r) => r.reservation_at && r.reservation_end_at)
+    .map((r) => ({
+      start: new Date(r.reservation_at!).getTime(),
+      end: new Date(r.reservation_end_at!).getTime(),
+      host: r.host_name,
+    }));
+
+  const rows: HourRow[] = [];
+  const step = slotMinutes;
+  for (let m = openMin; m + step <= closeMin; m += step) {
+    const slotStart = new Date(date);
+    slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    const slotEnd = new Date(slotStart.getTime() + step * 60 * 1000);
+    const sMs = slotStart.getTime();
+    const hit = ranges.find((r) => sMs >= r.start && sMs < r.end);
+    rows.push({
+      label: `${formatTime(slotStart.toISOString())}–${formatTime(slotEnd.toISOString())}`,
+      booked: !!hit,
+      host: hit?.host,
+    });
+  }
+  return rows;
+}
+
 /** Range label: "Hari ini · 14:00–17:00". Kalau end null, cuma jam mulai. */
 function formatReservationRange(startIso: string, endIso: string | null): string {
   const start = formatReservationLabel(startIso);
@@ -99,6 +167,10 @@ interface Props {
   areasWithTables: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   /** tableId → semua reservasi 'reserved' (urut by jam mulai). */
   reservationsByTable?: Record<string, ActiveSessionView[]>;
+  /** Jam operasi bar — untuk generate semua jam di bottom sheet. */
+  operatingHours?: OperatingHours;
+  /** Interval slot (menit) untuk generate jam. */
+  slotIntervalMinutes?: number;
   userMenu?: React.ReactNode;
 }
 
@@ -106,6 +178,8 @@ export function BarFloorView({
   bar,
   areasWithTables,
   reservationsByTable = {},
+  operatingHours,
+  slotIntervalMinutes = 60,
   userMenu,
 }: Props) {
   const router = useRouter();
@@ -344,6 +418,8 @@ export function BarFloorView({
           <TableSheet
             table={selectedTable}
             reservations={reservationsByTable[selectedTable.id] ?? []}
+            operatingHours={operatingHours}
+            slotIntervalMinutes={slotIntervalMinutes}
             onClose={() => setSelectedTable(null)}
           />
         </>
@@ -377,10 +453,14 @@ function LegendDot({
 function TableSheet({
   table,
   reservations,
+  operatingHours,
+  slotIntervalMinutes,
   onClose,
 }: {
   table: FloorMapTable;
   reservations: ActiveSessionView[];
+  operatingHours?: OperatingHours;
+  slotIntervalMinutes?: number;
   onClose: () => void;
 }) {
   const session = table.active_session;
@@ -388,7 +468,7 @@ function TableSheet({
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
 
-  // Kelompokkan reservasi per tanggal (groupKey) untuk strip tanggal + list.
+  // Kelompokkan reservasi per tanggal (groupKey).
   const byDate = React.useMemo(() => {
     const map = new Map<string, ActiveSessionView[]>();
     for (const r of reservations) {
@@ -411,12 +491,24 @@ function TableSheet({
   const [activeDate, setActiveDate] = React.useState<string>(
     () => dateChips[0] ?? "today"
   );
-  const dayReservations = byDate.get(activeDate) ?? [];
+
+  // List SEMUA jam operasi di tanggal terpilih, ditandai booked/available.
+  const hourRows = React.useMemo(
+    () =>
+      buildHourRows(
+        activeDate,
+        byDate.get(activeDate) ?? [],
+        operatingHours,
+        slotIntervalMinutes ?? 60
+      ),
+    [activeDate, byDate, operatingHours, slotIntervalMinutes]
+  );
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card shadow-2xl">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-        <div className="flex items-start justify-between gap-4 mb-3">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4">
+      <div className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] flex flex-col bg-card border border-border sm:rounded-2xl shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 p-4 sm:p-5 border-b border-border shrink-0">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="default" className="text-xs">
@@ -462,72 +554,94 @@ function TableSheet({
           </button>
         </div>
 
-        {/* Jadwal booking meja: strip tanggal + list jam per tanggal */}
-        {isReserved && (
-          <div className="mb-3">
-            {/* Strip tanggal */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {dateChips.map((gk) => {
-                const active = activeDate === gk;
-                const count = byDate.get(gk)?.length ?? 0;
-                const { dayLabel, dateNum } = groupKeyToParts(gk);
-                return (
-                  <button
-                    key={gk}
-                    type="button"
-                    onClick={() => setActiveDate(gk)}
-                    className={cn(
-                      "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
-                      active
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-                    )}
-                  >
-                    <span className="text-[10px] font-medium tracking-wide">
-                      {dayLabel}
-                    </span>
-                    <span className="text-lg font-semibold leading-none tabular-nums">
-                      {dateNum}
-                    </span>
-                    {count > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
-                        {count}
+        {/* Body: strip tanggal + list jam (scrollable) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {isReserved ? (
+            <>
+              {/* Strip tanggal */}
+              <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+                {dateChips.map((gk) => {
+                  const active = activeDate === gk;
+                  const count = byDate.get(gk)?.length ?? 0;
+                  const { dayLabel, dateNum } = groupKeyToParts(gk);
+                  return (
+                    <button
+                      key={gk}
+                      type="button"
+                      onClick={() => setActiveDate(gk)}
+                      className={cn(
+                        "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
+                        active
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                      )}
+                    >
+                      <span className="text-[10px] font-medium tracking-wide">
+                        {dayLabel}
                       </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* List jam booking di tanggal terpilih */}
-            {dayReservations.length > 0 ? (
-              <div className="rounded-lg border border-border divide-y divide-border max-h-44 overflow-y-auto">
-                {dayReservations.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5"
-                  >
-                    <span className="inline-flex items-center gap-1.5 text-sm text-blue-400 tabular-nums">
-                      <Clock className="h-3.5 w-3.5 shrink-0" />
-                      {r.reservation_at
-                        ? `${rTime(r.reservation_at)}–${r.reservation_end_at ? rTime(r.reservation_end_at) : "?"}`
-                        : "Terjadwal"}
-                    </span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      a/n {r.host_name}
-                    </span>
-                  </div>
-                ))}
+                      <span className="text-lg font-semibold leading-none tabular-nums">
+                        {dateNum}
+                      </span>
+                      {count > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                Belum ada booking di tanggal ini.
-              </div>
-            )}
-          </div>
-        )}
 
-        <div className="flex flex-wrap gap-2">
+              {/* List SEMUA jam operasi (booked / tersedia) */}
+              {hourRows.length > 0 ? (
+                <div className="rounded-lg border border-border divide-y divide-border">
+                  {hourRows.map((h) => (
+                    <div
+                      key={h.label}
+                      className={cn(
+                        "flex items-center justify-between gap-3 px-3 py-2.5",
+                        h.booked && "bg-muted/30"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                          h.booked ? "text-blue-400" : "text-foreground"
+                        )}
+                      >
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        {h.label}
+                      </span>
+                      {h.booked ? (
+                        <span className="text-xs text-muted-foreground truncate">
+                          Dibooking{h.host ? ` · a/n ${h.host}` : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-emerald-500/80">
+                          Tersedia
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                  Belum ada booking di tanggal ini.
+                </div>
+              )}
+            </>
+          ) : (
+            isOpen && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Meja ini sedang dipakai. Hanya bisa di-join lewat link invite
+                dari host.
+              </p>
+            )
+          )}
+        </div>
+
+        {/* Footer: tombol aksi (sticky) */}
+        <div className="border-t border-border p-4 sm:p-5 shrink-0 flex flex-wrap gap-2">
           {isAvailable && (
             <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
               <Link href={`/open-table?tableId=${table.id}`}>Open This Table</Link>
@@ -549,11 +663,6 @@ function TableSheet({
             </Button>
           )}
         </div>
-        {isOpen && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Meja ini hanya bisa di-join lewat link invite dari host
-          </p>
-        )}
       </div>
     </div>
   );
