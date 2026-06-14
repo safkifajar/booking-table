@@ -451,6 +451,7 @@ function BookingSchedule({
                     {r.reservation_end_at
                       ? `–${formatTime(r.reservation_end_at)}`
                       : ""}
+                    {r.area_name ? ` · ${r.area_name}` : ""}
                   </p>
                 </div>
                 <span className={cn("text-[11px] shrink-0", statusColor)}>
