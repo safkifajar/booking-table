@@ -124,15 +124,15 @@ export function OpenTableForm({
     [slots, selectedDate]
   );
 
-  // Opsi jam selesai: slot SETELAH jam mulai, di hari yang sama, kontigu
-  // (tiap step = slotInterval), berhenti tepat di slot booked pertama
-  // (boleh selesai DI awal slot booked, tapi tidak menembusnya). Plus satu
-  // opsi "selesai di slot booked" sebagai batas akhir (end exclusive).
   const startSlot = React.useMemo(
     () => slots.find((s) => s.iso === selectedSlot) ?? null,
     [slots, selectedSlot]
   );
 
+  // Opsi jam selesai: SEMUA slot setelah jam mulai di hari yang sama (sampai
+  // jam tutup). TIDAK berhenti di slot booked — deteksi bentrok ditangani
+  // terpisah (conflictInfo) supaya bisa kasih alert + saran, bukan diam-diam
+  // memotong pilihan.
   const endOptions = React.useMemo<AvailableSlot[]>(() => {
     if (!startSlot) return [];
     const startDate = new Date(startSlot.iso);
@@ -143,25 +143,21 @@ export function OpenTableForm({
       d.getDate() === startDate.getDate();
 
     const opts: AvailableSlot[] = [];
-    // End option ke-i = start + i*slot. Slot yang "dipakai" reservasi adalah
-    // [start, end). Jadi end valid kalau slot tepat sebelumnya (end - slot)
-    // tidak booked. Begitu menyentuh slot booked, end di awal slot itu jadi
-    // batas terakhir lalu stop (tidak boleh menembus reservasi lain).
     for (let i = 1; i <= 48; i++) {
       const endMs = startMs + i * slotMs;
       const endDate = new Date(endMs);
       if (!sameDay(endDate)) break; // tidak lintas hari
-      const usedSlotIso = new Date(endMs - slotMs).toISOString();
-      if (usedSlotIso !== startSlot.iso && bookedSet.has(usedSlotIso)) break;
       const label = `${String(endDate.getHours()).padStart(2, "0")}:${String(
         endDate.getMinutes()
       ).padStart(2, "0")}`;
       opts.push({ iso: endDate.toISOString(), label, groupKey: "" });
-      // Kalau slot yang baru saja dipakai sebenarnya booked (kasus tak terjadi
-      // karena di-guard di atas) — defensive stop.
     }
     return opts;
-  }, [startSlot, slotMs, bookedSet]);
+  }, [startSlot, slotMs]);
+
+  // Deteksi bentrok: kalau rentang [mulai, selesai) menabrak slot booked,
+  // hitung slot booked pertama yang nabrak → untuk pesan saran.
+  const conflict = findConflict(selectedSlot, selectedEnd, slotMs, bookedSet);
 
   // Flat menu item lookup
   const itemLookup = React.useMemo(() => {
@@ -220,6 +216,7 @@ export function OpenTableForm({
     if (loading) return false;
     if (!selectedSlot) return false;
     if (!selectedEnd) return false;
+    if (conflict) return false; // rentang nabrak slot booked
     if (orderRequired && cartItemCount === 0) return false;
     if (hasMinSpend && cartTotal < table.min_spend) return false;
     return true;
@@ -227,6 +224,7 @@ export function OpenTableForm({
     loading,
     selectedSlot,
     selectedEnd,
+    conflict,
     orderRequired,
     cartItemCount,
     hasMinSpend,
@@ -318,41 +316,45 @@ export function OpenTableForm({
                 </div>
               </div>
 
-              {/* Step 2: jam mulai (hanya tanggal terpilih) */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Jam mulai
-                </label>
-                <TimeGrid
-                  slots={startSlotsForDate}
-                  value={selectedSlot}
-                  disabledIsos={bookedSet}
-                  onChange={(iso) => {
-                    setSelectedSlot(iso);
-                    setSelectedEnd(""); // reset jam selesai saat mulai berubah
-                  }}
-                  emptyText="Tidak ada slot tersedia di tanggal ini."
-                />
-              </div>
-
-              {/* Step 3: jam selesai */}
-              {selectedSlot && (
+              {/* Step 2: rentang waktu (mulai + selesai) dalam satu baris */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Jam mulai
+                  </label>
+                  <TimeSelect
+                    options={startSlotsForDate}
+                    value={selectedSlot}
+                    disabledIsos={bookedSet}
+                    placeholder="Pilih jam"
+                    onChange={(iso) => {
+                      setSelectedSlot(iso);
+                      setSelectedEnd(""); // reset selesai saat mulai berubah
+                    }}
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Jam selesai
                   </label>
-                  {endOptions.length > 0 ? (
-                    <TimeGrid
-                      slots={endOptions}
-                      value={selectedEnd}
-                      onChange={setSelectedEnd}
-                      emptyText=""
-                    />
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Tidak ada slot selesai tersedia setelah jam mulai ini.
-                    </p>
-                  )}
+                  <TimeSelect
+                    options={endOptions}
+                    value={selectedEnd}
+                    placeholder={selectedSlot ? "Pilih jam" : "—"}
+                    disabled={!selectedSlot}
+                    onChange={setSelectedEnd}
+                  />
+                </div>
+              </div>
+
+              {/* Alert bentrok: rentang menabrak slot booked */}
+              {conflict && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+                  Jam <strong>{conflict.bookedFromLabel}</strong> sudah dibooking
+                  orang lain. Kamu bisa pilih rentang sebelum{" "}
+                  {conflict.bookedFromLabel} (mis. selesai di{" "}
+                  {conflict.bookedFromLabel}), atau mulai dari{" "}
+                  {conflict.bookedFromLabel} ke atas.
                 </div>
               )}
             </div>
@@ -584,7 +586,7 @@ export function OpenTableForm({
 }
 
 // ============================================================
-// TIME GRID — grid jam flat (slot sudah difilter per tanggal)
+// TIME SELECT — dropdown jam (native select, styled)
 // ============================================================
 
 /** Ambil "HH:MM" dari label slot ("Hari ini · 14:00" → "14:00", "14:00" → "14:00"). */
@@ -592,53 +594,72 @@ function slotTime(label: string): string {
   return label.split("·")[1]?.trim() ?? label;
 }
 
-function TimeGrid({
-  slots,
+/**
+ * Cek apakah rentang [startIso, endIso) menabrak slot yang sudah dibooking.
+ * Return slot booked pertama yang nabrak (untuk pesan), atau null kalau bebas.
+ */
+function findConflict(
+  startIso: string,
+  endIso: string,
+  slotMs: number,
+  bookedSet: Set<string>
+): { bookedFromIso: string; bookedFromLabel: string } | null {
+  if (!startIso || !endIso) return null;
+  const startMs = new Date(startIso).getTime();
+  const endMs = new Date(endIso).getTime();
+  for (let t = startMs; t < endMs; t += slotMs) {
+    const d = new Date(t);
+    const iso = d.toISOString();
+    if (bookedSet.has(iso)) {
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return { bookedFromIso: iso, bookedFromLabel: `${hh}:${mm}` };
+    }
+  }
+  return null;
+}
+
+function TimeSelect({
+  options,
   value,
   onChange,
   disabledIsos,
-  emptyText,
+  placeholder,
+  disabled,
 }: {
-  slots: AvailableSlot[];
+  options: AvailableSlot[];
   value: string;
   onChange: (iso: string) => void;
-  /** Slot yang sudah ke-booking reservasi lain — tampil tapi disabled. */
+  /** Slot yang sudah ke-booking reservasi lain — tetap tampil, ditandai. */
   disabledIsos?: Set<string>;
-  emptyText: string;
+  placeholder: string;
+  disabled?: boolean;
 }) {
-  if (slots.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-        {emptyText || "Tidak ada slot tersedia."}
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-52 overflow-y-auto rounded-md border border-border p-3">
-      {slots.map((s) => {
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        "w-full h-11 px-3 rounded-md bg-input border border-border text-sm tabular-nums transition appearance-none",
+        "focus:outline-none focus:border-primary/60",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+        value ? "text-foreground" : "text-muted-foreground"
+      )}
+    >
+      <option value="" disabled>
+        {placeholder}
+      </option>
+      {options.map((s) => {
         const isBooked = disabledIsos?.has(s.iso) ?? false;
         return (
-          <button
-            key={s.iso}
-            type="button"
-            disabled={isBooked}
-            title={isBooked ? "Sudah dibooking" : undefined}
-            onClick={() => onChange(s.iso)}
-            className={cn(
-              "px-2 py-2 rounded-md border text-sm font-medium tabular-nums transition",
-              isBooked
-                ? "border-border/50 bg-muted/40 text-muted-foreground/50 line-through cursor-not-allowed"
-                : value === s.iso
-                  ? "border-primary bg-primary/15 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-            )}
-          >
+          <option key={s.iso} value={s.iso} disabled={isBooked}>
             {slotTime(s.label)}
-          </button>
+            {isBooked ? " — sudah dibooking" : ""}
+          </option>
         );
       })}
-    </div>
+    </select>
   );
 }
 
