@@ -391,6 +391,7 @@ export function OpenTableForm({
                   bookedSet={bookedSet}
                   onClick={handleSlotClick}
                   slotMs={slotMs}
+                  scrollToIso={initialStart}
                 />
               </div>
 
@@ -737,6 +738,7 @@ function TimeRangeList({
   bookedSet,
   onClick,
   slotMs,
+  scrollToIso,
 }: {
   slots: AvailableSlot[];
   /** ISO slot yang termasuk rentang terpilih [mulai, selesai) — di-highlight. */
@@ -744,7 +746,20 @@ function TimeRangeList({
   bookedSet: Set<string>;
   onClick: (iso: string) => void;
   slotMs: number;
+  /** ISO slot mulai terpilih (prefill) — auto-scroll ke sini saat load. */
+  scrollToIso?: string;
 }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const targetRef = React.useRef<HTMLButtonElement>(null);
+
+  // Auto-scroll ke slot terpilih (prefill dari jadwal) saat pertama tampil.
+  React.useEffect(() => {
+    if (scrollToIso && targetRef.current && containerRef.current) {
+      containerRef.current.scrollTop =
+        targetRef.current.offsetTop - containerRef.current.offsetTop;
+    }
+  }, [scrollToIso]);
+
   if (slots.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
@@ -754,10 +769,14 @@ function TimeRangeList({
   }
 
   return (
-    <div className="max-h-64 overflow-y-auto rounded-md border border-border divide-y divide-border">
+    <div
+      ref={containerRef}
+      className="max-h-64 overflow-y-auto rounded-md border border-border divide-y divide-border"
+    >
       {slots.map((s) => {
         const isBooked = bookedSet.has(s.iso);
         const inRange = rangeIsos.has(s.iso);
+        const isTarget = s.iso === scrollToIso;
         // Label baris = rentang slot ini, mis. "19:00–20:00".
         const endLabel = (() => {
           const d = new Date(new Date(s.iso).getTime() + slotMs);
@@ -766,6 +785,7 @@ function TimeRangeList({
         return (
           <button
             key={s.iso}
+            ref={isTarget ? targetRef : undefined}
             type="button"
             disabled={isBooked}
             onClick={() => onClick(s.iso)}
