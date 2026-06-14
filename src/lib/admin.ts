@@ -385,6 +385,14 @@ export interface TransactionDetailPayment {
   paid_by_name: string;
 }
 
+export interface TransactionDetailMember {
+  name: string;
+  avatar: string | null;
+  role: string;
+  status: string;
+  is_guest: boolean;
+}
+
 export interface TransactionDetail {
   session_id: string;
   status: string;
@@ -400,6 +408,7 @@ export interface TransactionDetail {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  members: TransactionDetailMember[];
   items: TransactionDetailItem[];
   payments: TransactionDetailPayment[];
   subtotal: number;
@@ -487,11 +496,35 @@ export async function getTransactionDetail(
         .orderBy(payments.createdAt)
     : [];
 
-  // 4. Member count
-  const [memberCountRow] = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
+  // 4. Members — daftar lengkap (host dulu, lalu member; yang joined dulu)
+  const membersRaw = await db
+    .select({
+      name: profiles.displayName,
+      avatar: profiles.avatarUrl,
+      role: sessionMembers.role,
+      status: sessionMembers.status,
+      is_guest: profiles.isGuest,
+    })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(eq(sessionMembers.sessionId, sessionId));
+
+  const members: TransactionDetailMember[] = membersRaw
+    .map((m) => ({
+      name: m.name,
+      avatar: m.avatar,
+      role: m.role,
+      status: m.status,
+      is_guest: m.is_guest,
+    }))
+    .sort((a, b) => {
+      // Host paling atas, lalu joined sebelum left/kicked.
+      if (a.role === "host" && b.role !== "host") return -1;
+      if (b.role === "host" && a.role !== "host") return 1;
+      if (a.status === "joined" && b.status !== "joined") return -1;
+      if (b.status === "joined" && a.status !== "joined") return 1;
+      return 0;
+    });
 
   const items: TransactionDetailItem[] = itemsRaw.map((i) => ({
     id: i.id,
@@ -533,7 +566,8 @@ export async function getTransactionDetail(
     area_name: sessionRow.area_name,
     host_name: sessionRow.host_name,
     host_avatar: sessionRow.host_avatar,
-    member_count: Number(memberCountRow?.count ?? 0),
+    member_count: members.length,
+    members,
     items,
     payments: paymentsList,
     subtotal,

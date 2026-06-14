@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Printer, MapPin, Clock, Users, Loader2 } from "lucide-react";
-import { formatIDR } from "@/lib/utils";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Printer, MapPin, Clock, Users, Loader2, Crown } from "lucide-react";
+import { formatIDR, initials } from "@/lib/utils";
 import { fetchTransactionDetail } from "../actions";
 import type { TransactionDetail } from "@/lib/admin";
 
@@ -182,6 +183,43 @@ function DrawerContentDetail({ data }: { data: TransactionDetail }) {
             </Badge>
           ))}
         </div>
+      )}
+
+      {/* Anggota meja */}
+      {data.members.length > 0 && (
+        <section className="border-t border-border pt-4">
+          <h3 className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+            Anggota ({data.members.length} orang)
+          </h3>
+          <div className="space-y-1.5">
+            {data.members.map((m, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <Avatar className="h-7 w-7">
+                  {m.avatar && <AvatarImage src={m.avatar} />}
+                  <AvatarFallback className="text-[10px]">
+                    {initials(m.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm truncate flex-1 min-w-0">{m.name}</span>
+                {m.role === "host" && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-primary">
+                    <Crown className="h-3 w-3" /> Host
+                  </span>
+                )}
+                {m.is_guest && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    Tamu
+                  </Badge>
+                )}
+                {m.status !== "joined" && (
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    {m.status === "left" ? "Keluar" : m.status === "kicked" ? "Dikeluarkan" : m.status}
+                  </Badge>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Items table */}
