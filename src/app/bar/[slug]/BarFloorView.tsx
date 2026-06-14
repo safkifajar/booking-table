@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowLeft, MapPin, Users, Lock, Sparkles, Clock } from "lucide-react";
-import { formatIDR, initials } from "@/lib/utils";
+import { formatIDR, initials, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 
 const HARI_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -43,6 +43,48 @@ function formatReservationLabel(iso: string): string {
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Alias pendek untuk formatTime (dipakai di list jam). */
+const rTime = formatTime;
+
+const HARI_SHORT = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
+
+/** groupKey tanggal selaras dgn slot: "today" | "tomorrow" | "YYYY-MM-DD". */
+function dateGroupKey(date: Date): string {
+  const now = new Date();
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (sameDay(date, now)) return "today";
+  if (sameDay(date, tomorrow)) return "tomorrow";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Date objek dari groupKey (untuk sort + label). */
+function groupKeyToDate(gk: string): Date {
+  const now = new Date();
+  if (gk === "today") return now;
+  if (gk === "tomorrow") {
+    const t = new Date(now);
+    t.setDate(now.getDate() + 1);
+    return t;
+  }
+  const [y, m, d] = gk.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function compareGroupKey(a: string, b: string): number {
+  return groupKeyToDate(a).getTime() - groupKeyToDate(b).getTime();
+}
+
+/** Label hari + tanggal angka dari groupKey untuk strip. */
+function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
+  const d = groupKeyToDate(gk);
+  return { dayLabel: HARI_SHORT[d.getDay()], dateNum: d.getDate() };
 }
 
 /** Range label: "Hari ini · 14:00–17:00". Kalau end null, cuma jam mulai. */
@@ -346,6 +388,31 @@ function TableSheet({
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
 
+  // Kelompokkan reservasi per tanggal (groupKey) untuk strip tanggal + list.
+  const byDate = React.useMemo(() => {
+    const map = new Map<string, ActiveSessionView[]>();
+    for (const r of reservations) {
+      if (!r.reservation_at) continue;
+      const gk = dateGroupKey(new Date(r.reservation_at));
+      const list = map.get(gk) ?? [];
+      list.push(r);
+      map.set(gk, list);
+    }
+    return map;
+  }, [reservations]);
+
+  // Strip tanggal: hari ini + besok + semua tanggal yang punya reservasi.
+  const dateChips = React.useMemo(() => {
+    const keys = new Set<string>(["today", "tomorrow"]);
+    for (const gk of byDate.keys()) keys.add(gk);
+    return Array.from(keys).sort(compareGroupKey);
+  }, [byDate]);
+
+  const [activeDate, setActiveDate] = React.useState<string>(
+    () => dateChips[0] ?? "today"
+  );
+  const dayReservations = byDate.get(activeDate) ?? [];
+
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card shadow-2xl">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
@@ -370,16 +437,11 @@ function TableSheet({
             <h2 className="text-lg sm:text-xl font-semibold">
               {isAvailable
                 ? "Available — be the host"
-                : session?.title ?? "Open Table"}
+                : isOpen
+                  ? session?.title ?? "Open Table"
+                  : "Jadwal reservasi"}
             </h2>
-            {session && isReserved && (
-              <p className="text-sm text-blue-400 mt-0.5">
-                {reservations.length > 1
-                  ? `${reservations.length} reservasi terjadwal`
-                  : "Sudah direservasi"}
-              </p>
-            )}
-            {session && !isReserved && (
+            {session && !isReserved && !isAvailable && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 Host: {session.host_name} ·{" "}
                 <Users className="inline h-3 w-3 -mt-0.5" /> {session.member_count}/{table.capacity}
@@ -400,28 +462,68 @@ function TableSheet({
           </button>
         </div>
 
-        {/* Daftar semua reservasi meja ini (kalau reserved) */}
-        {isReserved && reservations.length > 0 && (
-          <div className="mb-3 rounded-lg border border-border divide-y divide-border max-h-44 overflow-y-auto">
-            {reservations.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between gap-3 px-3 py-2"
-              >
-                <span className="inline-flex items-center gap-1.5 text-sm text-blue-400 tabular-nums">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                  {r.reservation_at
-                    ? formatReservationRange(
-                        r.reservation_at,
-                        r.reservation_end_at
-                      )
-                    : "Terjadwal"}
-                </span>
-                <span className="text-xs text-muted-foreground truncate">
-                  a/n {r.host_name}
-                </span>
+        {/* Jadwal booking meja: strip tanggal + list jam per tanggal */}
+        {isReserved && (
+          <div className="mb-3">
+            {/* Strip tanggal */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {dateChips.map((gk) => {
+                const active = activeDate === gk;
+                const count = byDate.get(gk)?.length ?? 0;
+                const { dayLabel, dateNum } = groupKeyToParts(gk);
+                return (
+                  <button
+                    key={gk}
+                    type="button"
+                    onClick={() => setActiveDate(gk)}
+                    className={cn(
+                      "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
+                      active
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                    )}
+                  >
+                    <span className="text-[10px] font-medium tracking-wide">
+                      {dayLabel}
+                    </span>
+                    <span className="text-lg font-semibold leading-none tabular-nums">
+                      {dateNum}
+                    </span>
+                    {count > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* List jam booking di tanggal terpilih */}
+            {dayReservations.length > 0 ? (
+              <div className="rounded-lg border border-border divide-y divide-border max-h-44 overflow-y-auto">
+                {dayReservations.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2.5"
+                  >
+                    <span className="inline-flex items-center gap-1.5 text-sm text-blue-400 tabular-nums">
+                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                      {r.reservation_at
+                        ? `${rTime(r.reservation_at)}–${r.reservation_end_at ? rTime(r.reservation_end_at) : "?"}`
+                        : "Terjadwal"}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      a/n {r.host_name}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                Belum ada booking di tanggal ini.
+              </div>
+            )}
           </div>
         )}
 
@@ -437,8 +539,8 @@ function TableSheet({
             </Button>
           )}
           {isReserved && (
-            <Button variant="outline" size="lg" className="flex-1" disabled>
-              <Clock className="h-4 w-4" /> Sudah direservasi
+            <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
+              <Link href={`/open-table?tableId=${table.id}`}>Booking jam lain</Link>
             </Button>
           )}
           {session?.status === "locked" && (
