@@ -4,6 +4,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { getCurrentUser } from "@/lib/auth-v2/current";
+import { getMenuByBar } from "@/lib/queries";
+import {
+  DEFAULT_OPERATING_HOURS,
+  DEFAULT_RESERVATION_CONFIG,
+  type OperatingHours,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
+import { generateAvailableSlots } from "@/lib/reservation-helpers";
 import { OpenTableForm } from "./OpenTableForm";
 
 interface PageProps {
@@ -19,7 +27,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
     redirect(`/auth?next=${encodeURIComponent(`/open-table?tableId=${tableId}`)}`);
   }
 
-  // Single join: table → area → bar
+  // Single join: table → area → bar (+ settings)
   const [row] = await db
     .select({
       table_id: tables.id,
@@ -28,8 +36,11 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
       capacity: tables.capacity,
       min_spend: tables.minSpend,
       area_name: floorAreas.name,
+      bar_id: bars.id,
       bar_name: bars.name,
       bar_slug: bars.slug,
+      opening_hours: bars.openingHours,
+      reservation_config: bars.reservationConfig,
     })
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -37,6 +48,25 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
     .where(eq(tables.id, tableId));
 
   if (!row) redirect("/");
+
+  // Merge settings dengan defaults
+  const opHours: OperatingHours = {
+    ...DEFAULT_OPERATING_HOURS,
+    ...((row.opening_hours as OperatingHours) ?? {}),
+  };
+  const resConfig: ReservationConfig = {
+    ...DEFAULT_RESERVATION_CONFIG,
+    ...((row.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
+
+  // Generate available slots untuk reservasi (kalau enabled)
+  const slots = resConfig.enabled
+    ? generateAvailableSlots(new Date(), resConfig, opHours)
+    : [];
+
+  // Menu untuk picker (kalau perlu order awal — min spend / reservation)
+  const needsMenu = (row.min_spend ?? 0) > 0 || resConfig.enabled;
+  const menu = needsMenu ? await getMenuByBar(row.bar_id) : [];
 
   return (
     <main className="flex-1 flex items-center justify-center px-4 py-8">
@@ -52,6 +82,21 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
           areaName={row.area_name}
           barName={row.bar_name}
           barSlug={row.bar_slug}
+          reservationConfig={resConfig}
+          slots={slots}
+          menu={menu.map((c) => ({
+            id: c.id,
+            name: c.name,
+            items: c.items
+              .filter((i) => i.is_available)
+              .map((i) => ({
+                id: i.id,
+                name: i.name,
+                description: i.description,
+                price: i.price,
+                image_url: i.image_url,
+              })),
+          }))}
         />
       </Suspense>
     </main>
