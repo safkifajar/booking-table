@@ -14,11 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
-  Users,
   Lock,
   Globe,
   UserPlus,
-  Clock,
   UtensilsCrossed,
   Plus,
   Minus,
@@ -87,8 +85,9 @@ export function OpenTableForm({
   const [vibes, setVibes] = React.useState<string[]>([]);
   const [loading, setLoading] = React.useState(false);
 
-  // Waktu: "now" (walk-in) atau "reservation" (pilih slot)
-  const [waktuMode, setWaktuMode] = React.useState<WaktuMode>("now");
+  // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
+  // Walk-in immediate ada di flow staff/waiter terpisah.
+  const waktuMode: WaktuMode = "reservation";
   const [selectedSlot, setSelectedSlot] = React.useState<string>("");
 
   // Cart order awal: Map<menuItemId, quantity>
@@ -221,49 +220,21 @@ export function OpenTableForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Waktu: Sekarang vs Reservasi */}
-          {reservationEnabled && (
+          {/* Pilih waktu reservasi */}
+          {reservationEnabled ? (
             <div>
-              <label className="block text-sm font-medium mb-2">Kapan?</label>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWaktuMode("now");
-                    setSelectedSlot("");
-                  }}
-                  className={cn(
-                    "flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition",
-                    waktuMode === "now"
-                      ? "bg-primary/15 border-primary/40 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Users className="h-4 w-4" />
-                  Sekarang
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWaktuMode("reservation")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition",
-                    waktuMode === "reservation"
-                      ? "bg-primary/15 border-primary/40 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Clock className="h-4 w-4" />
-                  Reservasi
-                </button>
-              </div>
-
-              {waktuMode === "reservation" && (
-                <SlotPicker
-                  slots={slots}
-                  value={selectedSlot}
-                  onChange={setSelectedSlot}
-                />
-              )}
+              <label className="block text-sm font-medium mb-2">
+                Pilih waktu reservasi
+              </label>
+              <SlotPicker
+                slots={slots}
+                value={selectedSlot}
+                onChange={setSelectedSlot}
+              />
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              Reservasi belum tersedia saat ini. Coba lagi nanti atau hubungi bar.
             </div>
           )}
 
@@ -453,14 +424,10 @@ export function OpenTableForm({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Memproses...
               </>
-            ) : waktuMode === "reservation" ? (
-              dpRequired ? (
-                `Bayar DP ${formatIDR(dpAmount)} & Reservasi`
-              ) : (
-                "Buat Reservasi"
-              )
+            ) : dpRequired ? (
+              `Bayar DP ${formatIDR(dpAmount)} & Reservasi`
             ) : (
-              "Buka Meja Sekarang"
+              "Buat Reservasi"
             )}
           </Button>
 
@@ -609,11 +576,11 @@ function MenuPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col"
+        className="w-full h-full sm:h-auto sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl sm:max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
