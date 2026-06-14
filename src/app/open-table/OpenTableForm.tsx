@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { openTable } from "@/lib/actions";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
-import { formatGroupLabel } from "@/lib/reservation-format";
 import type { TableShape, SessionVisibility } from "@/types/db";
 import type { ReservationConfig } from "@/lib/settings-constants";
 import type { AvailableSlot } from "@/lib/reservation-format";
@@ -111,12 +110,19 @@ export function OpenTableForm({
     [bookedSlotIsos]
   );
 
-  // Daftar tanggal unik (groupKey) dari slots — untuk chip pilih hari.
-  const dateOptions = React.useMemo(() => {
+  // groupKey mana yang punya slot tersedia (untuk enable/disable di strip).
+  const datesWithSlots = React.useMemo(() => {
     const seen = new Set<string>();
     for (const s of slots) seen.add(s.groupKey);
-    return Array.from(seen);
+    return seen;
   }, [slots]);
+
+  // Strip tanggal: semua hari dari hari ini sampai booking window.
+  // Hari tanpa slot (bar tutup) tetap muncul tapi disabled.
+  const windowDates = React.useMemo<DateChip[]>(
+    () => buildWindowDates(reservationConfig.bookingWindowDays, datesWithSlots),
+    [reservationConfig.bookingWindowDays, datesWithSlots]
+  );
 
   // Slot jam mulai hanya untuk tanggal terpilih.
   const startSlotsForDate = React.useMemo(
@@ -288,51 +294,63 @@ export function OpenTableForm({
           {/* Pilih waktu reservasi: tanggal → jam mulai → jam selesai */}
           {reservationEnabled ? (
             <div className="space-y-4">
-              {/* Step 1: tanggal */}
+              {/* Step 1: strip tanggal (kotak hari + tanggal) */}
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Tanggal
                 </label>
                 <div className="flex gap-2 overflow-x-auto pb-1">
-                  {dateOptions.map((gk) => (
-                    <button
-                      key={gk}
-                      type="button"
-                      onClick={() => {
-                        setSelectedDate(gk);
-                        setSelectedSlot("");
-                        setSelectedEnd("");
-                      }}
-                      className={cn(
-                        "shrink-0 px-3.5 py-2 rounded-full border text-sm font-medium transition whitespace-nowrap",
-                        selectedDate === gk
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-                      )}
-                    >
-                      {formatGroupLabel(gk)}
-                    </button>
-                  ))}
+                  {windowDates.map((d) => {
+                    const active = selectedDate === d.groupKey;
+                    return (
+                      <button
+                        key={d.groupKey}
+                        type="button"
+                        disabled={!d.hasSlots}
+                        onClick={() => {
+                          setSelectedDate(d.groupKey);
+                          setSelectedSlot("");
+                          setSelectedEnd("");
+                        }}
+                        className={cn(
+                          "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition",
+                          !d.hasSlots
+                            ? "border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                            : active
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                        )}
+                      >
+                        <span className="text-[10px] font-medium tracking-wide">
+                          {d.dayLabel}
+                        </span>
+                        <span className="text-lg font-semibold leading-none tabular-nums">
+                          {d.dateNum}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Step 2: rentang waktu (mulai + selesai) dalam satu baris */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Jam mulai
-                  </label>
-                  <TimeSelect
-                    options={startSlotsForDate}
-                    value={selectedSlot}
-                    disabledIsos={bookedSet}
-                    placeholder="Pilih jam"
-                    onChange={(iso) => {
-                      setSelectedSlot(iso);
-                      setSelectedEnd(""); // reset selesai saat mulai berubah
-                    }}
-                  />
-                </div>
+              {/* Step 2: list jam mulai dengan status booked */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Jam mulai
+                </label>
+                <TimeList
+                  slots={startSlotsForDate}
+                  value={selectedSlot}
+                  bookedSet={bookedSet}
+                  onChange={(iso) => {
+                    setSelectedSlot(iso);
+                    setSelectedEnd("");
+                  }}
+                />
+              </div>
+
+              {/* Step 3: jam selesai (dropdown) */}
+              {selectedSlot && (
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Jam selesai
@@ -340,20 +358,18 @@ export function OpenTableForm({
                   <TimeSelect
                     options={endOptions}
                     value={selectedEnd}
-                    placeholder={selectedSlot ? "Pilih jam" : "—"}
-                    disabled={!selectedSlot}
+                    placeholder="Pilih jam selesai"
                     onChange={setSelectedEnd}
                   />
                 </div>
-              </div>
+              )}
 
               {/* Alert bentrok: rentang menabrak slot booked */}
               {conflict && (
                 <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
                   Jam <strong>{conflict.bookedFromLabel}</strong> sudah dibooking
-                  orang lain. Kamu bisa pilih rentang sebelum{" "}
-                  {conflict.bookedFromLabel} (mis. selesai di{" "}
-                  {conflict.bookedFromLabel}), atau mulai dari{" "}
+                  orang lain. Pilih jam selesai sebelum{" "}
+                  {conflict.bookedFromLabel}, atau mulai dari{" "}
                   {conflict.bookedFromLabel} ke atas.
                 </div>
               )}
@@ -594,6 +610,45 @@ function slotTime(label: string): string {
   return label.split("·")[1]?.trim() ?? label;
 }
 
+const HARI_SHORT = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
+
+interface DateChip {
+  /** groupKey selaras dengan slot: "today" | "tomorrow" | "YYYY-MM-DD". */
+  groupKey: string;
+  /** "MIN", "SEN", ... */
+  dayLabel: string;
+  /** Tanggal angka, mis. 14. */
+  dateNum: number;
+  /** Ada slot tersedia di hari ini? (kalau tidak → disabled). */
+  hasSlots: boolean;
+}
+
+/** Bangun strip tanggal dari hari ini sampai N hari (booking window). */
+function buildWindowDates(
+  windowDays: number,
+  datesWithSlots: Set<string>
+): DateChip[] {
+  const out: DateChip[] = [];
+  const now = new Date();
+  const total = Math.max(1, windowDays);
+  for (let i = 0; i <= total; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    let groupKey: string;
+    if (i === 0) groupKey = "today";
+    else if (i === 1) groupKey = "tomorrow";
+    else
+      groupKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    out.push({
+      groupKey,
+      dayLabel: HARI_SHORT[d.getDay()],
+      dateNum: d.getDate(),
+      hasSlots: datesWithSlots.has(groupKey),
+    });
+  }
+  return out;
+}
+
 /**
  * Cek apakah rentang [startIso, endIso) menabrak slot yang sudah dibooking.
  * Return slot booked pertama yang nabrak (untuk pesan), atau null kalau bebas.
@@ -660,6 +715,82 @@ function TimeSelect({
         );
       })}
     </select>
+  );
+}
+
+// ============================================================
+// TIME LIST — list jam dengan status (Tersedia / Dibooking)
+// ============================================================
+
+function TimeList({
+  slots,
+  value,
+  bookedSet,
+  onChange,
+}: {
+  slots: AvailableSlot[];
+  value: string;
+  bookedSet: Set<string>;
+  onChange: (iso: string) => void;
+}) {
+  if (slots.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+        Tidak ada slot di tanggal ini.
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-56 overflow-y-auto rounded-md border border-border divide-y divide-border">
+      {slots.map((s) => {
+        const isBooked = bookedSet.has(s.iso);
+        const active = value === s.iso;
+        return (
+          <button
+            key={s.iso}
+            type="button"
+            disabled={isBooked}
+            onClick={() => onChange(s.iso)}
+            className={cn(
+              "w-full flex items-center justify-between px-3 py-2.5 text-sm transition text-left",
+              isBooked
+                ? "cursor-not-allowed bg-muted/30"
+                : active
+                  ? "bg-primary/15"
+                  : "hover:bg-muted/40"
+            )}
+          >
+            <span
+              className={cn(
+                "font-medium tabular-nums",
+                isBooked
+                  ? "text-muted-foreground/50 line-through"
+                  : active
+                    ? "text-primary"
+                    : "text-foreground"
+              )}
+            >
+              {slotTime(s.label)}
+            </span>
+            {isBooked ? (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                Dibooking
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "text-[11px]",
+                  active ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                {active ? "Dipilih ✓" : "Tersedia"}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
