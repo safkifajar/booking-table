@@ -529,11 +529,9 @@ function TableSheet({
               </span>
             </div>
             <h2 className="text-lg sm:text-xl font-semibold">
-              {isAvailable
-                ? "Available — be the host"
-                : isOpen
-                  ? session?.title ?? "Open Table"
-                  : "Jadwal reservasi"}
+              {isOpen
+                ? session?.title ?? "Open Table"
+                : "Jadwal meja"}
             </h2>
             {session && !isReserved && !isAvailable && (
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -556,9 +554,11 @@ function TableSheet({
           </button>
         </div>
 
-        {/* Body: strip tanggal + list jam (scrollable) */}
+        {/* Body: strip tanggal + list jam (scrollable). Tampil untuk semua
+            meja yg bisa dibooking (available / reserved). Meja open/locked
+            sedang dipakai → cuma info. */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-          {isReserved ? (
+          {!isOpen && session?.status !== "locked" ? (
             <>
               {/* Strip tanggal */}
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
@@ -633,30 +633,25 @@ function TableSheet({
               )}
             </>
           ) : (
-            isOpen && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Meja ini sedang dipakai. Hanya bisa di-join lewat link invite
-                dari host.
-              </p>
-            )
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Meja ini sedang dipakai. Hanya bisa di-join lewat link invite
+              dari host.
+            </p>
           )}
         </div>
 
         {/* Footer: tombol aksi (sticky) */}
         <div className="border-t border-border p-4 sm:p-5 shrink-0 flex flex-wrap gap-2">
-          {isAvailable && (
+          {(isAvailable || isReserved) && (
             <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
-              <Link href={`/open-table?tableId=${table.id}`}>Open This Table</Link>
+              <Link href={`/open-table?tableId=${table.id}`}>
+                {isReserved ? "Booking jam lain" : "Booking meja ini"}
+              </Link>
             </Button>
           )}
           {isOpen && (
             <Button variant="outline" size="lg" className="flex-1 min-w-[140px]" asChild>
               <Link href={`/session/${session.id}/preview`}>Lihat Meja</Link>
-            </Button>
-          )}
-          {isReserved && (
-            <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
-              <Link href={`/open-table?tableId=${table.id}`}>Booking jam lain</Link>
             </Button>
           )}
           {session?.status === "locked" && (
