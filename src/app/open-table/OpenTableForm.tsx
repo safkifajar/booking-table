@@ -28,10 +28,10 @@ import {
 } from "lucide-react";
 import { openTable } from "@/lib/actions";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
-import { formatGroupLabel } from "@/lib/reservation-helpers";
+import { formatGroupLabel } from "@/lib/reservation-format";
 import type { TableShape, SessionVisibility } from "@/types/db";
 import type { ReservationConfig } from "@/lib/settings-constants";
-import type { AvailableSlot } from "@/lib/reservation-helpers";
+import type { AvailableSlot } from "@/lib/reservation-format";
 
 interface MenuItemLite {
   id: string;
