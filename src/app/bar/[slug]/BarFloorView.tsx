@@ -131,10 +131,13 @@ function buildHourRows(
     return h * 60 + m;
   };
   const openMin = toMin(dh.open);
-  let closeMin = dh.close === "00:00" ? 24 * 60 : toMin(dh.close);
-  // Tutup setelah tengah malam (mis. buka 13:00, tutup 03:00) → close < open.
-  // Perlakukan close sebagai hari berikutnya: tambah 24 jam.
-  if (closeMin <= openMin) closeMin += 24 * 60;
+  const closeRaw = dh.close === "00:00" ? 24 * 60 : toMin(dh.close);
+  const wraps = closeRaw <= openMin; // tutup setelah tengah malam
+  // Cek apakah menit-dalam-hari (0..1439) termasuk jam operasi.
+  // Wrap (mis. 13:00–03:00): operasi = [00:00..close] ∪ [open..24:00].
+  // Normal: [open..close].
+  const inOperating = (min: number) =>
+    wraps ? min < closeRaw || min >= openMin : min >= openMin && min < closeRaw;
 
   // Rentang booked (ms epoch) untuk tanggal ini. inUse = session sudah aktif
   // (open/locked) hasil promote reservasi, bukan cuma reserved.
@@ -147,9 +150,13 @@ function buildHourRows(
       inUse: r.status === "open" || r.status === "locked",
     }));
 
+  // Iterasi per slot dalam HARI KALENDER yg sama (00:00 s/d <24:00). Slot dini
+  // hari (mis. 00:00–03:00) = dini hari tanggal itu sendiri, jadi tampil di
+  // atas & dihitung 'lewat' kalau sudah berlalu — bukan digulung ke besok.
   const rows: HourRow[] = [];
   const step = slotMinutes;
-  for (let m = openMin; m + step <= closeMin; m += step) {
+  for (let m = 0; m + step <= 24 * 60; m += step) {
+    if (!inOperating(m)) continue;
     const slotStart = new Date(date);
     slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
     const slotEnd = new Date(slotStart.getTime() + step * 60 * 1000);
