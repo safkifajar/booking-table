@@ -12,6 +12,7 @@ import {
   Settings,
   Image as ImageIcon,
   Users,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +93,12 @@ const NAV: NavItem[] = [
         href: "/admin/staff",
         label: "Manage Staff",
         icon: <Users className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/users",
+        label: "Manage Customer",
+        icon: <UserCircle className="h-4 w-4" />,
       },
     ],
   },
