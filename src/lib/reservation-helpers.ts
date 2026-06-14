@@ -149,15 +149,16 @@ export function isWithinOperatingHours(
   const closeMin = dayHours.close === "00:00" ? 24 * 60 : timeToMinutes(dayHours.close);
 
   if (closeMin <= openMin) {
-    // Wrap: close < open (mis. 18:00 - 02:00). Untuk simplicity: tetap allow
-    // hanya kalau minuteOfDay >= openMin (selalu hari ini, gak ke besok).
-    if (minuteOfDay < openMin) {
-      return {
-        ok: false,
-        reason: `Bar buka mulai ${dayHours.open}`,
-      };
+    // Wrap: tutup setelah tengah malam (mis. buka 13:00, tutup 03:00).
+    // Buka kalau: minuteOfDay >= open (sore-malam) ATAU minuteOfDay < close
+    // (dini hari, masih sesi hari sebelumnya).
+    if (minuteOfDay >= openMin || minuteOfDay < closeMin) {
+      return { ok: true };
     }
-    return { ok: true };
+    return {
+      ok: false,
+      reason: `Bar buka mulai ${dayHours.open}`,
+    };
   }
 
   if (minuteOfDay < openMin) {
@@ -280,14 +281,36 @@ export function generateAvailableSlots(
     const candidate = new Date(t);
     const op = isWithinOperatingHours(candidate, hours);
     if (!op.ok) continue;
+    // Slot dini hari yang merupakan kelanjutan sesi malam sebelumnya
+    // (jam < jam buka hari itu) → kelompokkan ke hari SEBELUMNYA, supaya
+    // satu sesi malam (mis. 13:00 s/d 03:00) tampil utuh dalam 1 tanggal.
+    const groupDate = isEarlyMorningContinuation(candidate, hours)
+      ? new Date(candidate.getTime() - 24 * 60 * 60 * 1000)
+      : candidate;
     slots.push({
       iso: candidate.toISOString(),
-      label: formatSlotLabel(candidate, now),
-      groupKey: formatGroupKey(candidate, now),
+      label: formatSlotLabel(candidate, now, groupDate),
+      groupKey: formatGroupKey(groupDate, now),
     });
     count++;
   }
   return slots;
+}
+
+/**
+ * Cek apakah `date` adalah dini hari kelanjutan sesi malam sebelumnya:
+ * hari KEMARIN punya jam wrap (tutup < buka) dan jam slot ini < jam tutup itu.
+ */
+function isEarlyMorningContinuation(date: Date, hours: OperatingHours): boolean {
+  const prev = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+  const prevHours = hours[getDayKey(prev)];
+  if (!prevHours || prevHours.closed) return false;
+  const openMin = timeToMinutes(prevHours.open);
+  const closeMin =
+    prevHours.close === "00:00" ? 24 * 60 : timeToMinutes(prevHours.close);
+  if (closeMin > openMin) return false; // tidak wrap
+  const minuteOfDay = date.getHours() * 60 + date.getMinutes();
+  return minuteOfDay < closeMin; // dini hari sebelum jam tutup
 }
 
 // ============================================================
