@@ -64,14 +64,32 @@ export function isAlignedWithSlot(date: Date, slotMinutes: number): boolean {
 }
 
 /**
- * Slot terdekat dari sekarang yang valid (memenuhi min lead time).
- * Default: ceil to next slot + add lead time.
+ * Round time ke slot terdekat ke belakang (floor) — pakai jam/menit LOKAL.
+ * Example: slot 60 mnt, 14:46 → 14:00. Dipakai untuk slot "sedang berjalan".
+ */
+export function roundDownToSlot(date: Date, slotMinutes: number): Date {
+  const d = new Date(date);
+  const minuteOfDay = d.getHours() * 60 + d.getMinutes();
+  const floored = Math.floor(minuteOfDay / slotMinutes) * slotMinutes;
+  d.setHours(Math.floor(floored / 60), floored % 60, 0, 0);
+  return d;
+}
+
+/**
+ * Slot mulai paling awal yang ditampilkan.
+ * - minLeadTime > 0: ceil(now + lead) — booking minimal sekian menit ke depan.
+ * - minLeadTime = 0: floor(now) ke slot — slot yang SEDANG berjalan masih
+ *   boleh dipilih (mis. jam 14:46 → slot 14:00 tetap tampil). Slot yang sudah
+ *   benar-benar lewat (mis. 13:00) tidak tampil.
  */
 export function getNextValidSlot(
   now: Date,
   slotMinutes: number,
   minLeadTimeMinutes: number
 ): Date {
+  if (minLeadTimeMinutes <= 0) {
+    return roundDownToSlot(now, slotMinutes);
+  }
   const earliest = new Date(now.getTime() + minLeadTimeMinutes * 60 * 1000);
   return roundUpToSlot(earliest, slotMinutes);
 }
@@ -180,21 +198,28 @@ export function validateReservationTime(
     return { ok: false, reason: "Waktu reservasi tidak valid" };
   }
 
-  // 1. Tidak past
-  if (reservationAt.getTime() < now.getTime()) {
+  // 1. Tidak past. Kalau lead time 0, slot yang SEDANG berjalan masih boleh
+  //    (floor now ke slot), jadi jam 14:46 boleh pilih slot 14:00.
+  const earliestAllowed =
+    config.minLeadTimeMinutes <= 0
+      ? roundDownToSlot(now, config.slotIntervalMinutes).getTime()
+      : now.getTime();
+  if (reservationAt.getTime() < earliestAllowed) {
     return { ok: false, reason: "Waktu reservasi sudah lewat" };
   }
 
-  // 2. Min lead time
-  const minLeadMs = config.minLeadTimeMinutes * 60 * 1000;
-  if (reservationAt.getTime() < now.getTime() + minLeadMs) {
-    const mins = config.minLeadTimeMinutes;
-    const hint =
-      mins >= 60 ? `${Math.round(mins / 60)} jam` : `${mins} menit`;
-    return {
-      ok: false,
-      reason: `Reservasi minimal ${hint} sebelum waktu booking`,
-    };
+  // 2. Min lead time (hanya kalau > 0)
+  if (config.minLeadTimeMinutes > 0) {
+    const minLeadMs = config.minLeadTimeMinutes * 60 * 1000;
+    if (reservationAt.getTime() < now.getTime() + minLeadMs) {
+      const mins = config.minLeadTimeMinutes;
+      const hint =
+        mins >= 60 ? `${Math.round(mins / 60)} jam` : `${mins} menit`;
+      return {
+        ok: false,
+        reason: `Reservasi minimal ${hint} sebelum waktu booking`,
+      };
+    }
   }
 
   // 3. Booking window
