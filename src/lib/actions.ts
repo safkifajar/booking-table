@@ -199,9 +199,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     data.reservationAt ? new Date(data.reservationAt) : null;
   const reservationEndAt =
     data.reservationEndAt ? new Date(data.reservationEndAt) : null;
-  // Treshold: kalau set tapi <60s dari now, anggap walk-in immediate
-  const isWalkIn =
-    !reservationAt || reservationAt.getTime() < now.getTime() + 60_000;
+  // Walk-in HANYA kalau tidak ada reservationAt sama sekali. Kalau ada
+  // reservationAt (dari form reservasi), SELALU reservasi — termasuk slot
+  // yang sedang berjalan (mis. pilih 15:00 saat jam 15:42). Tidak ada lagi
+  // threshold yang diam-diam mengubah reservasi jadi walk-in.
+  const isWalkIn = !reservationAt;
 
   // 3. Validate reservation range (mulai + selesai) + cek bentrok
   if (!isWalkIn && reservationAt) {
