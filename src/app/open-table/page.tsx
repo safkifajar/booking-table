@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { tableSessions } from "@/lib/db/schema/sessions";
 import { getCurrentUser } from "@/lib/auth-v2/current";
 import { getMenuByBar } from "@/lib/queries";
 import {
@@ -11,7 +12,11 @@ import {
   type OperatingHours,
   type ReservationConfig,
 } from "@/lib/settings-constants";
-import { generateAvailableSlots } from "@/lib/reservation-helpers";
+import {
+  generateAvailableSlots,
+  getBookedSlotIsos,
+  type BookedRange,
+} from "@/lib/reservation-helpers";
 import { OpenTableForm } from "./OpenTableForm";
 
 interface PageProps {
@@ -60,9 +65,34 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
   };
 
   // Generate available slots untuk reservasi (kalau enabled)
+  const now = new Date();
   const slots = resConfig.enabled
-    ? generateAvailableSlots(new Date(), resConfig, opHours)
+    ? generateAvailableSlots(now, resConfig, opHours)
     : [];
+
+  // Reservasi existing di meja ini → tandai slot yang sudah ke-booking
+  let bookedSlotIsos: string[] = [];
+  if (resConfig.enabled && slots.length > 0) {
+    const existingRows = await db
+      .select({
+        startAt: tableSessions.reservationAt,
+        endAt: tableSessions.reservationEndAt,
+      })
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, row.table_id),
+          eq(tableSessions.status, "reserved")
+        )
+      );
+    const existing: BookedRange[] = existingRows
+      .filter((r) => r.startAt && r.endAt && r.endAt.getTime() > now.getTime())
+      .map((r) => ({
+        startMs: r.startAt!.getTime(),
+        endMs: r.endAt!.getTime(),
+      }));
+    bookedSlotIsos = Array.from(getBookedSlotIsos(slots, existing));
+  }
 
   // Menu untuk picker (kalau perlu order awal — min spend / reservation)
   const needsMenu = (row.min_spend ?? 0) > 0 || resConfig.enabled;
@@ -84,6 +114,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
           barSlug={row.bar_slug}
           reservationConfig={resConfig}
           slots={slots}
+          bookedSlotIsos={bookedSlotIsos}
           menu={menu.map((c) => ({
             id: c.id,
             name: c.name,

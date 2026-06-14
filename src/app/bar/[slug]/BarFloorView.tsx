@@ -39,6 +39,19 @@ function formatReservationLabel(iso: string): string {
   return `${HARI_ID[date.getDay()]} ${date.getDate()} ${BULAN_ID[date.getMonth()]} · ${time}`;
 }
 
+/** "HH:MM" dari ISO. */
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Range label: "Hari ini · 14:00–17:00". Kalau end null, cuma jam mulai. */
+function formatReservationRange(startIso: string, endIso: string | null): string {
+  const start = formatReservationLabel(startIso);
+  if (!endIso) return start;
+  return `${start}–${formatTime(endIso)}`;
+}
+
 interface Props {
   bar: Bar;
   areasWithTables: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
@@ -216,7 +229,10 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
                           t.active_session.reservation_at ? (
                             <span className="flex items-center gap-1 text-blue-400">
                               <Clock className="h-3 w-3" />
-                              {formatReservationLabel(t.active_session.reservation_at)}
+                              {formatReservationRange(
+                                t.active_session.reservation_at,
+                                t.active_session.reservation_end_at
+                              )}
                             </span>
                           ) : (
                             <span className="flex items-center gap-1">
@@ -351,7 +367,10 @@ function TableSheet({
                 <span className="text-blue-400 inline-flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
                   {session.reservation_at
-                    ? formatReservationLabel(session.reservation_at)
+                    ? formatReservationRange(
+                        session.reservation_at,
+                        session.reservation_end_at
+                      )
                     : "Terjadwal"}
                 </span>
                 <span className="text-muted-foreground"> · a/n {session.host_name}</span>

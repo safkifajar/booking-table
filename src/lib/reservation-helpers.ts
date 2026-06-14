@@ -266,6 +266,117 @@ export function generateAvailableSlots(
 }
 
 // ============================================================
+// TIME RANGE + OVERLAP
+// ============================================================
+
+/** Rentang reservasi yang sudah ada di sebuah meja (ms epoch). */
+export interface BookedRange {
+  startMs: number;
+  endMs: number;
+}
+
+/**
+ * Cek apakah dua rentang [aStart, aEnd) dan [bStart, bEnd) tumpang tindih.
+ * Half-open: reservasi yang selesai tepat saat yang lain mulai TIDAK overlap
+ * (17:00 selesai → 17:00 boleh mulai).
+ */
+export function rangesOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number
+): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
+ * Validasi rentang reservasi (mulai + selesai) terhadap config, jam operasi,
+ * dan daftar reservasi existing di meja (cek bentrok).
+ *
+ * Cek mulai pakai validateReservationTime (past/lead/window/slot/jam buka),
+ * lalu tambahan:
+ * - selesai harus setelah mulai (minimal 1 slot)
+ * - selesai align dengan slot
+ * - selesai masih dalam jam operasi
+ * - tidak overlap dengan reservasi existing di meja yang sama
+ */
+export function validateReservationRange(
+  startAt: Date,
+  endAt: Date,
+  now: Date,
+  config: ReservationConfig,
+  hours: OperatingHours,
+  existing: BookedRange[] = []
+): ValidateReservationResult {
+  // 1. Validasi titik mulai (reuse logic existing)
+  const startCheck = validateReservationTime(startAt, now, config, hours);
+  if (!startCheck.ok) return startCheck;
+
+  // 2. Selesai valid + setelah mulai
+  if (Number.isNaN(endAt.getTime())) {
+    return { ok: false, reason: "Waktu selesai tidak valid" };
+  }
+  if (endAt.getTime() <= startAt.getTime()) {
+    return { ok: false, reason: "Waktu selesai harus setelah waktu mulai" };
+  }
+
+  // 3. Selesai align dengan slot
+  if (!isAlignedWithSlot(endAt, config.slotIntervalMinutes)) {
+    return {
+      ok: false,
+      reason: `Waktu selesai harus per ${config.slotIntervalMinutes} menit`,
+    };
+  }
+
+  // 4. Selesai masih dalam jam operasi (jam tutup di-treat inklusif:
+  //    boleh selesai TEPAT di jam tutup). Kita cek 1 menit sebelum supaya
+  //    isWithinOperatingHours (yang exclusive di close) tetap lolos.
+  const justBeforeEnd = new Date(endAt.getTime() - 60 * 1000);
+  const opEnd = isWithinOperatingHours(justBeforeEnd, hours);
+  if (!opEnd.ok) {
+    return { ok: false, reason: "Waktu selesai di luar jam operasi" };
+  }
+
+  // 5. Cek bentrok dengan reservasi existing
+  const startMs = startAt.getTime();
+  const endMs = endAt.getTime();
+  for (const r of existing) {
+    if (rangesOverlap(startMs, endMs, r.startMs, r.endMs)) {
+      return {
+        ok: false,
+        reason: "Slot waktu ini bentrok dengan reservasi lain",
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Dari daftar reservasi existing, tandai slot mana saja yang sudah ke-booking.
+ * Sebuah slot dianggap "booked" kalau jatuh di dalam rentang reservasi mana pun
+ * (start <= slot < end). Dipakai UI untuk disable slot.
+ *
+ * Return: Set of ISO string slot yang booked.
+ */
+export function getBookedSlotIsos(
+  slots: AvailableSlot[],
+  existing: BookedRange[]
+): Set<string> {
+  const booked = new Set<string>();
+  for (const slot of slots) {
+    const slotMs = new Date(slot.iso).getTime();
+    for (const r of existing) {
+      if (slotMs >= r.startMs && slotMs < r.endMs) {
+        booked.add(slot.iso);
+        break;
+      }
+    }
+  }
+  return booked;
+}
+
+// ============================================================
 // DP CALCULATION
 // ============================================================
 

@@ -134,6 +134,7 @@ async function activeSessionsBase(): Promise<
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
       reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       member_count: sql<number>`COALESCE(${memberCountSq.count}, 0)::int`,
       table_capacity: tables.capacity,
       bar_id: floorAreas.barId,
@@ -149,6 +150,9 @@ async function activeSessionsBase(): Promise<
     ...r,
     started_at: r.started_at.toISOString(),
     reservation_at: r.reservation_at ? r.reservation_at.toISOString() : null,
+    reservation_end_at: r.reservation_end_at
+      ? r.reservation_end_at.toISOString()
+      : null,
   }));
 }
 

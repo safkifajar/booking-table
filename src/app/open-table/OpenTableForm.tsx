@@ -57,6 +57,8 @@ interface Props {
   barSlug: string;
   reservationConfig: ReservationConfig;
   slots: AvailableSlot[];
+  /** ISO slot yang sudah ke-booking reservasi lain (di-disable di picker). */
+  bookedSlotIsos?: string[];
   menu: MenuCategoryLite[];
 }
 
@@ -77,6 +79,7 @@ export function OpenTableForm({
   barSlug,
   reservationConfig,
   slots,
+  bookedSlotIsos = [],
   menu,
 }: Props) {
   const [title, setTitle] = React.useState("");
@@ -88,7 +91,8 @@ export function OpenTableForm({
   // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
   // Walk-in immediate ada di flow staff/waiter terpisah.
   const waktuMode: WaktuMode = "reservation";
-  const [selectedSlot, setSelectedSlot] = React.useState<string>("");
+  const [selectedSlot, setSelectedSlot] = React.useState<string>(""); // jam mulai
+  const [selectedEnd, setSelectedEnd] = React.useState<string>(""); // jam selesai
 
   // Cart order awal: Map<menuItemId, quantity>
   const [cart, setCart] = React.useState<Map<string, number>>(new Map());
@@ -96,6 +100,54 @@ export function OpenTableForm({
 
   const reservationEnabled = reservationConfig.enabled && slots.length > 0;
   const hasMinSpend = table.min_spend > 0;
+
+  const slotMs = reservationConfig.slotIntervalMinutes * 60 * 1000;
+  const bookedSet = React.useMemo(
+    () => new Set(bookedSlotIsos),
+    [bookedSlotIsos]
+  );
+
+  // Slot mulai yang bisa dipilih = semua slot kecuali yang sudah booked.
+  // (Slot booked tetap ditampilkan tapi disabled — handled di SlotPicker.)
+
+  // Opsi jam selesai: slot SETELAH jam mulai, di hari yang sama, kontigu
+  // (tiap step = slotInterval), berhenti tepat di slot booked pertama
+  // (boleh selesai DI awal slot booked, tapi tidak menembusnya). Plus satu
+  // opsi "selesai di slot booked" sebagai batas akhir (end exclusive).
+  const startSlot = React.useMemo(
+    () => slots.find((s) => s.iso === selectedSlot) ?? null,
+    [slots, selectedSlot]
+  );
+
+  const endOptions = React.useMemo<AvailableSlot[]>(() => {
+    if (!startSlot) return [];
+    const startDate = new Date(startSlot.iso);
+    const startMs = startDate.getTime();
+    const sameDay = (d: Date) =>
+      d.getFullYear() === startDate.getFullYear() &&
+      d.getMonth() === startDate.getMonth() &&
+      d.getDate() === startDate.getDate();
+
+    const opts: AvailableSlot[] = [];
+    // End option ke-i = start + i*slot. Slot yang "dipakai" reservasi adalah
+    // [start, end). Jadi end valid kalau slot tepat sebelumnya (end - slot)
+    // tidak booked. Begitu menyentuh slot booked, end di awal slot itu jadi
+    // batas terakhir lalu stop (tidak boleh menembus reservasi lain).
+    for (let i = 1; i <= 48; i++) {
+      const endMs = startMs + i * slotMs;
+      const endDate = new Date(endMs);
+      if (!sameDay(endDate)) break; // tidak lintas hari
+      const usedSlotIso = new Date(endMs - slotMs).toISOString();
+      if (usedSlotIso !== startSlot.iso && bookedSet.has(usedSlotIso)) break;
+      const label = `${String(endDate.getHours()).padStart(2, "0")}:${String(
+        endDate.getMinutes()
+      ).padStart(2, "0")}`;
+      opts.push({ iso: endDate.toISOString(), label, groupKey: "" });
+      // Kalau slot yang baru saja dipakai sebenarnya booked (kasus tak terjadi
+      // karena di-guard di atas) — defensive stop.
+    }
+    return opts;
+  }, [startSlot, slotMs, bookedSet]);
 
   // Flat menu item lookup
   const itemLookup = React.useMemo(() => {
@@ -152,14 +204,15 @@ export function OpenTableForm({
   // Validasi submit
   const canSubmit = React.useMemo(() => {
     if (loading) return false;
-    if (waktuMode === "reservation" && !selectedSlot) return false;
+    if (!selectedSlot) return false;
+    if (!selectedEnd) return false;
     if (orderRequired && cartItemCount === 0) return false;
     if (hasMinSpend && cartTotal < table.min_spend) return false;
     return true;
   }, [
     loading,
-    waktuMode,
     selectedSlot,
+    selectedEnd,
     orderRequired,
     cartItemCount,
     hasMinSpend,
@@ -181,8 +234,8 @@ export function OpenTableForm({
         title: title.trim() || undefined,
         visibility,
         vibeTags: vibes,
-        reservationAt:
-          waktuMode === "reservation" && selectedSlot ? selectedSlot : null,
+        reservationAt: selectedSlot || null,
+        reservationEndAt: selectedEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
         dpMethod: dpRequired ? "mock" : undefined,
       });
@@ -220,17 +273,41 @@ export function OpenTableForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Pilih waktu reservasi */}
+          {/* Pilih waktu reservasi: jam mulai + jam selesai */}
           {reservationEnabled ? (
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Pilih waktu reservasi
-              </label>
-              <SlotPicker
-                slots={slots}
-                value={selectedSlot}
-                onChange={setSelectedSlot}
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Jam mulai
+                </label>
+                <SlotPicker
+                  slots={slots}
+                  value={selectedSlot}
+                  disabledIsos={bookedSet}
+                  onChange={(iso) => {
+                    setSelectedSlot(iso);
+                    setSelectedEnd(""); // reset jam selesai saat mulai berubah
+                  }}
+                />
+              </div>
+              {selectedSlot && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Jam selesai
+                  </label>
+                  {endOptions.length > 0 ? (
+                    <EndSlotPicker
+                      options={endOptions}
+                      value={selectedEnd}
+                      onChange={setSelectedEnd}
+                    />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Tidak ada slot selesai tersedia setelah jam mulai ini.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -433,13 +510,15 @@ export function OpenTableForm({
 
           {!canSubmit && !loading && (
             <p className="text-xs text-center text-muted-foreground -mt-2">
-              {waktuMode === "reservation" && !selectedSlot
-                ? "Pilih waktu reservasi dulu"
-                : orderRequired && cartItemCount === 0
-                  ? "Order awal wajib diisi"
-                  : hasMinSpend && cartTotal < table.min_spend
-                    ? `Belum capai minimum spend ${formatIDR(table.min_spend)}`
-                    : ""}
+              {!selectedSlot
+                ? "Pilih jam mulai dulu"
+                : !selectedEnd
+                  ? "Pilih jam selesai dulu"
+                  : orderRequired && cartItemCount === 0
+                    ? "Order awal wajib diisi"
+                    : hasMinSpend && cartTotal < table.min_spend
+                      ? `Belum capai minimum spend ${formatIDR(table.min_spend)}`
+                      : ""}
             </p>
           )}
         </form>
@@ -465,10 +544,13 @@ function SlotPicker({
   slots,
   value,
   onChange,
+  disabledIsos,
 }: {
   slots: AvailableSlot[];
   value: string;
   onChange: (iso: string) => void;
+  /** Slot yang sudah ke-booking reservasi lain — tampil tapi disabled. */
+  disabledIsos?: Set<string>;
 }) {
   const groups = React.useMemo(() => {
     const map = new Map<string, AvailableSlot[]>();
@@ -498,16 +580,21 @@ function SlotPicker({
           <div className="grid grid-cols-3 gap-1.5">
             {groupSlots.map((s) => {
               const time = s.label.split("·")[1]?.trim() ?? s.label;
+              const isBooked = disabledIsos?.has(s.iso) ?? false;
               return (
                 <button
                   key={s.iso}
                   type="button"
+                  disabled={isBooked}
+                  title={isBooked ? "Sudah dibooking" : undefined}
                   onClick={() => onChange(s.iso)}
                   className={cn(
                     "px-2 py-1.5 rounded-md border text-xs font-medium tabular-nums transition",
-                    value === s.iso
-                      ? "border-primary bg-primary/15 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                    isBooked
+                      ? "border-border/50 bg-muted/40 text-muted-foreground/50 line-through cursor-not-allowed"
+                      : value === s.iso
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
                   )}
                 >
                   {time}
@@ -516,6 +603,37 @@ function SlotPicker({
             })}
           </div>
         </div>
+      ))}
+    </div>
+  );
+}
+
+// Picker sederhana untuk jam selesai (flat list, no grouping).
+function EndSlotPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options: AvailableSlot[];
+  value: string;
+  onChange: (iso: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 gap-1.5 max-h-40 overflow-y-auto rounded-md border border-border p-3">
+      {options.map((s) => (
+        <button
+          key={s.iso}
+          type="button"
+          onClick={() => onChange(s.iso)}
+          className={cn(
+            "px-2 py-1.5 rounded-md border text-xs font-medium tabular-nums transition",
+            value === s.iso
+              ? "border-primary bg-primary/15 text-primary"
+              : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+          )}
+        >
+          {s.label}
+        </button>
       ))}
     </div>
   );

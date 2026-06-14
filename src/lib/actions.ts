@@ -45,7 +45,8 @@ import {
 } from "@/lib/settings-constants";
 import {
   calculateDP,
-  validateReservationTime,
+  validateReservationRange,
+  type BookedRange,
 } from "@/lib/reservation-helpers";
 
 // ============================================================
@@ -65,6 +66,11 @@ const openTableSchema = z.object({
    * - Set + waktu di masa depan = reservation (status='reserved')
    */
   reservationAt: z.string().datetime().nullable().optional(),
+  /**
+   * Waktu selesai reservasi (ISO string). Wajib kalau reservationAt di masa
+   * depan (booking range). Null/omit untuk walk-in.
+   */
+  reservationEndAt: z.string().datetime().nullable().optional(),
   /**
    * Order initial. Wajib kalau ada min_spend di meja atau reservation_at di
    * masa depan + minDownPaymentPercent > 0. Minimal 1 item.
@@ -191,11 +197,13 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   const now = new Date();
   const reservationAt =
     data.reservationAt ? new Date(data.reservationAt) : null;
+  const reservationEndAt =
+    data.reservationEndAt ? new Date(data.reservationEndAt) : null;
   // Treshold: kalau set tapi <60s dari now, anggap walk-in immediate
   const isWalkIn =
     !reservationAt || reservationAt.getTime() < now.getTime() + 60_000;
 
-  // 3. Validate reservation time
+  // 3. Validate reservation range (mulai + selesai) + cek bentrok
   if (!isWalkIn && reservationAt) {
     // Merge dengan defaults dulu (handle existing bar yang belum set field)
     const opHours = {
@@ -210,11 +218,38 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     if (!resConfig.enabled) {
       throw new Error("Reservasi tidak aktif untuk bar ini");
     }
-    const validation = validateReservationTime(
+    if (!reservationEndAt) {
+      throw new Error("Waktu selesai reservasi wajib dipilih");
+    }
+
+    // Ambil reservasi 'reserved' existing di meja ini untuk cek overlap.
+    // Hanya yang belum lewat (end > now) yang relevan.
+    const existingRows = await db
+      .select({
+        startAt: tableSessions.reservationAt,
+        endAt: tableSessions.reservationEndAt,
+      })
+      .from(tableSessions)
+      .where(
+        and(
+          eq(tableSessions.tableId, data.tableId),
+          eq(tableSessions.status, "reserved")
+        )
+      );
+    const existing: BookedRange[] = existingRows
+      .filter((r) => r.startAt && r.endAt && r.endAt.getTime() > now.getTime())
+      .map((r) => ({
+        startMs: r.startAt!.getTime(),
+        endMs: r.endAt!.getTime(),
+      }));
+
+    const validation = validateReservationRange(
       reservationAt,
+      reservationEndAt,
       now,
       resConfig,
-      opHours
+      opHours,
+      existing
     );
     if (!validation.ok) {
       throw new Error(validation.reason ?? "Waktu reservasi tidak valid");
@@ -310,6 +345,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           vibeTags: data.vibeTags ?? [],
           maxGuests: data.maxGuests ?? tableRow.capacity,
           reservationAt: isWalkIn ? null : reservationAt,
+          reservationEndAt: isWalkIn ? null : reservationEndAt,
         })
         .returning({ id: tableSessions.id });
 

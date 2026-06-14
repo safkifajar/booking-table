@@ -59,22 +59,32 @@ export const tableSessions = pgTable(
      */
     reservationAt: timestamp("reservation_at", { mode: "date" }),
     /**
+     * Reservation: kapan booking berakhir. NULL = walk-in. Set bersama
+     * reservationAt untuk rentang waktu (mis. 14:00–17:00).
+     */
+    reservationEndAt: timestamp("reservation_end_at", { mode: "date" }),
+    /**
      * Timestamp DP terverify. NULL = no DP required atau belum bayar.
      */
     dpPaidAt: timestamp("dp_paid_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
-    // Hanya 1 session aktif/reserved per table — cegah double booking
+    // Hanya 1 session AKTIF (open/locked) per table. Reservasi (reserved)
+    // boleh banyak di slot berbeda — overlap dicegah di aplikasi (openTable).
     uniqueIndex("uq_active_session_per_table")
       .on(t.tableId)
-      .where(sql`status in ('reserved', 'open', 'locked')`),
+      .where(sql`status in ('open', 'locked')`),
     index("idx_sessions_visibility").on(t.visibility, t.status),
     index("idx_sessions_host").on(t.hostId),
     // Filter upcoming reservations efficient
     index("idx_sessions_reservation_at")
       .on(t.reservationAt)
       .where(sql`reservation_at is not null`),
+    // Overlap query: reservasi 'reserved' per meja by rentang waktu
+    index("idx_sessions_reserved_range")
+      .on(t.tableId, t.reservationAt, t.reservationEndAt)
+      .where(sql`status = 'reserved'`),
   ]
 );
 
