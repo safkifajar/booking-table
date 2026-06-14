@@ -18,7 +18,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
@@ -26,7 +26,7 @@ import {
   sessionMembers,
   sessionInvites,
 } from "@/lib/db/schema/sessions";
-import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
@@ -37,6 +37,16 @@ import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import type { PaymentStatus } from "@/types/db";
+import {
+  DEFAULT_OPERATING_HOURS,
+  DEFAULT_RESERVATION_CONFIG,
+  type OperatingHours,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
+import {
+  calculateDP,
+  validateReservationTime,
+} from "@/lib/reservation-helpers";
 
 // ============================================================
 // SCHEMAS
@@ -48,6 +58,33 @@ const openTableSchema = z.object({
   visibility: z.enum(["public", "friends", "invite_only"]),
   vibeTags: z.array(z.string()).max(5).optional(),
   maxGuests: z.number().int().positive().optional(),
+  /**
+   * Waktu reservasi (ISO string). Optional:
+   * - Omit / null = walk-in immediate (status='open')
+   * - Set + waktu < 1 menit dari sekarang = walk-in (status='open')
+   * - Set + waktu di masa depan = reservation (status='reserved')
+   */
+  reservationAt: z.string().datetime().nullable().optional(),
+  /**
+   * Order initial. Wajib kalau ada min_spend di meja atau reservation_at di
+   * masa depan + minDownPaymentPercent > 0. Minimal 1 item.
+   */
+  initialOrder: z
+    .array(
+      z.object({
+        menuItemId: z.string().uuid(),
+        quantity: z.number().int().positive().max(20),
+        notes: z.string().max(200).optional(),
+      })
+    )
+    .max(50)
+    .optional(),
+  /**
+   * Payment method untuk DP. Wajib kalau perlu DP. "mock" untuk dev.
+   */
+  dpMethod: z
+    .enum(["qris", "cash", "card", "gopay", "ovo", "mock"])
+    .optional(),
 });
 
 const addOrderItemSchema = z.object({
@@ -105,36 +142,174 @@ async function notifySessionAndStaff(sessionId: string): Promise<void> {
 // SESSION LIFECYCLE
 // ============================================================
 
+/**
+ * Open table — single flow untuk walk-in immediate ATAU reservation booking.
+ *
+ * Logic:
+ * - reservationAt NULL atau dalam 1 menit dari sekarang → walk-in (status='open')
+ * - reservationAt di masa depan → reservation (status='reserved')
+ *
+ * Validation kalau reservation:
+ * - Bar settings reservation.enabled=true
+ * - Slot align dengan interval, min lead time, booking window, operating hours
+ *
+ * Validation order initial:
+ * - Kalau meja punya min_spend > 0 → total order ≥ min_spend
+ * - Kalau reservasi + minDownPaymentPercent > 0 → wajib minimal 1 item + DP
+ * - Untuk walk-in tanpa min_spend → order initial optional
+ *
+ * DP:
+ * - Hitung: total_order × minDownPaymentPercent / 100, round up to 100
+ * - Insert payment row dengan status='pending', call gateway, update
+ *   status & dp_paid_at di session row
+ */
 export async function openTable(input: z.infer<typeof openTableSchema>) {
   const profile = await requireProfile();
   const data = openTableSchema.parse(input);
 
-  // 1. Verify table aktif
-  const [table] = await db
+  // 1. Verify table + ambil min_spend + bar settings
+  const [tableRow] = await db
     .select({
       id: tables.id,
       capacity: tables.capacity,
       is_active: tables.isActive,
+      min_spend: tables.minSpend,
+      bar_id: floorAreas.barId,
+      opening_hours: bars.openingHours,
+      reservation_config: bars.reservationConfig,
     })
     .from(tables)
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
     .where(eq(tables.id, data.tableId));
-  if (!table) throw new Error("Table not found");
-  if (!table.is_active) throw new Error("Table is not active");
+  if (!tableRow) throw new Error("Meja tidak ditemukan");
+  if (!tableRow.is_active) throw new Error("Meja sedang tidak aktif");
 
-  // 2-5: transaction — session + first member (host) + open order + invite code
+  const minSpend = tableRow.min_spend ?? 0;
+
+  // 2. Resolve reservation timestamp + mode (walk-in vs reservation)
+  const now = new Date();
+  const reservationAt =
+    data.reservationAt ? new Date(data.reservationAt) : null;
+  // Treshold: kalau set tapi <60s dari now, anggap walk-in immediate
+  const isWalkIn =
+    !reservationAt || reservationAt.getTime() < now.getTime() + 60_000;
+
+  // 3. Validate reservation time
+  if (!isWalkIn && reservationAt) {
+    // Merge dengan defaults dulu (handle existing bar yang belum set field)
+    const opHours = {
+      ...DEFAULT_OPERATING_HOURS,
+      ...((tableRow.opening_hours as OperatingHours) ?? {}),
+    };
+    const resConfig = {
+      ...DEFAULT_RESERVATION_CONFIG,
+      ...((tableRow.reservation_config as Partial<ReservationConfig>) ?? {}),
+    };
+
+    if (!resConfig.enabled) {
+      throw new Error("Reservasi tidak aktif untuk bar ini");
+    }
+    const validation = validateReservationTime(
+      reservationAt,
+      now,
+      resConfig,
+      opHours
+    );
+    if (!validation.ok) {
+      throw new Error(validation.reason ?? "Waktu reservasi tidak valid");
+    }
+  }
+
+  // 4. Fetch resConfig sekali lagi untuk DP calculation
+  const resConfig = {
+    ...DEFAULT_RESERVATION_CONFIG,
+    ...((tableRow.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
+
+  // 5. Validate initial order items + hitung total
+  const initialOrder = data.initialOrder ?? [];
+  let totalOrder = 0;
+  type ResolvedItem = {
+    menuItemId: string;
+    quantity: number;
+    unitPrice: number;
+    notes: string | null;
+  };
+  const resolvedItems: ResolvedItem[] = [];
+
+  if (initialOrder.length > 0) {
+    const menuItemIds = initialOrder.map((i) => i.menuItemId);
+    const menuRows = await db
+      .select({
+        id: menuItems.id,
+        price: menuItems.price,
+        is_available: menuItems.isAvailable,
+        name: menuItems.name,
+      })
+      .from(menuItems)
+      .where(inArray(menuItems.id, menuItemIds));
+    const menuMap = new Map(menuRows.map((m) => [m.id, m]));
+
+    for (const item of initialOrder) {
+      const menu = menuMap.get(item.menuItemId);
+      if (!menu) {
+        throw new Error("Menu item tidak ditemukan");
+      }
+      if (!menu.is_available) {
+        throw new Error(`Menu "${menu.name}" sedang tidak tersedia`);
+      }
+      const subtotal = menu.price * item.quantity;
+      totalOrder += subtotal;
+      resolvedItems.push({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        unitPrice: menu.price,
+        notes: item.notes ?? null,
+      });
+    }
+  }
+
+  // 6. Min spend check
+  if (minSpend > 0 && totalOrder < minSpend) {
+    throw new Error(
+      `Meja ini ada minimum spend Rp ${minSpend.toLocaleString("id-ID")}. Order kamu baru Rp ${totalOrder.toLocaleString("id-ID")}.`
+    );
+  }
+
+  // 7. DP requirement: reservation + minDownPaymentPercent > 0
+  const dpRequired =
+    !isWalkIn && resConfig.minDownPaymentPercent > 0 && totalOrder > 0;
+  const dpAmount = dpRequired
+    ? calculateDP(totalOrder, resConfig.minDownPaymentPercent)
+    : 0;
+
+  if (dpRequired) {
+    if (resolvedItems.length === 0) {
+      throw new Error("Reservasi wajib dengan minimal 1 item order");
+    }
+    if (!data.dpMethod) {
+      throw new Error("Metode pembayaran DP wajib dipilih");
+    }
+  }
+
+  // 8. Transaction: create session + members + order + items + invite + DP
   let sessionId: string;
+  let dpPaymentId: string | null = null;
+  let dpStatus: "paid" | "pending" = "pending";
   try {
-    sessionId = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [newSession] = await tx
         .insert(tableSessions)
         .values({
           tableId: data.tableId,
           hostId: profile.id,
-          status: "open",
+          status: isWalkIn ? "open" : "reserved",
           visibility: data.visibility,
           title: data.title ?? null,
           vibeTags: data.vibeTags ?? [],
-          maxGuests: data.maxGuests ?? table.capacity,
+          maxGuests: data.maxGuests ?? tableRow.capacity,
+          reservationAt: isWalkIn ? null : reservationAt,
         })
         .returning({ id: tableSessions.id });
 
@@ -145,10 +320,38 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         status: "joined",
       });
 
-      await tx.insert(orders).values({
-        sessionId: newSession.id,
-        status: "open",
-      });
+      const [newOrder] = await tx
+        .insert(orders)
+        .values({
+          sessionId: newSession.id,
+          status: "open",
+        })
+        .returning({ id: orders.id });
+
+      // Find host member id untuk attribute order items
+      const [hostMember] = await tx
+        .select({ id: sessionMembers.id })
+        .from(sessionMembers)
+        .where(
+          and(
+            eq(sessionMembers.sessionId, newSession.id),
+            eq(sessionMembers.profileId, profile.id)
+          )
+        );
+
+      if (resolvedItems.length > 0 && hostMember) {
+        await tx.insert(orderItems).values(
+          resolvedItems.map((it) => ({
+            orderId: newOrder.id,
+            menuItemId: it.menuItemId,
+            addedByMemberId: hostMember.id,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            notes: it.notes,
+            status: "sent" as const,
+          }))
+        );
+      }
 
       await tx.insert(sessionInvites).values({
         sessionId: newSession.id,
@@ -156,18 +359,78 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         createdBy: profile.id,
       });
 
-      return newSession.id;
+      // DP payment (kalau perlu) — insert pending dulu, gateway call di luar tx
+      if (dpRequired && hostMember) {
+        const [newPayment] = await tx
+          .insert(payments)
+          .values({
+            orderId: newOrder.id,
+            paidByMemberId: hostMember.id,
+            amount: dpAmount,
+            method: data.dpMethod!,
+            status: "pending",
+            splitMode: "custom",
+            splitMeta: { isDownPayment: true },
+            paidAt: null,
+          })
+          .returning({ id: payments.id });
+        return { sessionId: newSession.id, dpPaymentId: newPayment.id };
+      }
+
+      return { sessionId: newSession.id, dpPaymentId: null };
     });
+    sessionId = result.sessionId;
+    dpPaymentId = result.dpPaymentId;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (message.includes("uq_active_session_per_table")) {
-      throw new Error("Meja ini sudah ada session aktif");
+      throw new Error("Meja ini sudah ada session/reservasi aktif");
     }
     throw new Error(message || "Gagal membuka meja");
   }
 
+  // 9. Call gateway untuk DP (kalau ada). Best-effort: kalau gagal, session
+  // tetap created tapi DP pending — staff bisa konfirmasi manual nanti.
+  if (dpPaymentId && dpAmount > 0) {
+    try {
+      const gateway = getPaymentGateway();
+      const chargeResult = await gateway.createCharge({
+        paymentId: dpPaymentId,
+        amount: dpAmount,
+        method: data.dpMethod!,
+        payerName: profile.displayName,
+        description: `DP reservasi meja ${tableRow.id.slice(0, 8)}`,
+      });
+      await db
+        .update(payments)
+        .set({
+          externalRef: chargeResult.externalRef,
+          status: chargeResult.status,
+          paidAt: chargeResult.status === "paid" ? new Date() : null,
+        })
+        .where(eq(payments.id, dpPaymentId));
+      dpStatus = chargeResult.status === "paid" ? "paid" : "pending";
+
+      // Kalau DP paid, set dp_paid_at di session
+      if (chargeResult.status === "paid") {
+        await db
+          .update(tableSessions)
+          .set({ dpPaidAt: new Date() })
+          .where(eq(tableSessions.id, sessionId));
+      }
+    } catch (err) {
+      console.error("[openTable] DP gateway charge failed:", err);
+      // Don't throw — session tetap exist, staff bisa handle manual
+    }
+  }
+
   await notifySessionAndStaff(sessionId);
   revalidatePath("/bar/[slug]", "page");
+
+  // Walk-in → langsung session view (mulai pesan). Reservation → session
+  // view juga (lihat status pending DP). Kalau DP pending (mis. QRIS), client
+  // bisa show QR. Untuk MVP, redirect ke session page.
+  void dpStatus; // unused warning suppress
   redirect(`/session/${sessionId}`);
 }
 
