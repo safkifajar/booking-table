@@ -147,10 +147,23 @@ export function OpenTableForm({
       ? new Date(selectedEnd).getTime()
       : startMs + slotMs;
 
-    // Klik slot yang SEDANG di dalam rentang [start, end) → batal semua.
+    // Klik slot di dalam rentang [start, end):
     if (clickedMs >= startMs && clickedMs < endMs) {
-      setSelectedSlot("");
-      setSelectedEnd("");
+      // Klik tepat di jam mulai → uncheck slot itu, rentang geser maju 1 slot.
+      // Kalau setelah digeser jadi kosong (mulai == selesai) → batal total.
+      if (clickedMs === startMs) {
+        const newStart = startMs + slotMs;
+        if (newStart >= endMs) {
+          setSelectedSlot("");
+          setSelectedEnd("");
+        } else {
+          setSelectedSlot(new Date(newStart).toISOString());
+        }
+        return;
+      }
+      // Klik di tengah/akhir rentang → potong: selesai = slot yang diklik
+      // (jadi slot itu & sesudahnya ter-uncheck).
+      setSelectedEnd(iso);
       return;
     }
     // Klik sebelum mulai → set mulai baru (1 slot).
