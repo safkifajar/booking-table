@@ -173,6 +173,8 @@ interface Props {
   operatingHours?: OperatingHours;
   /** Interval slot (menit) untuk generate jam. */
   slotIntervalMinutes?: number;
+  /** Booking window (hari) untuk panjang strip tanggal. */
+  bookingWindowDays?: number;
   userMenu?: React.ReactNode;
 }
 
@@ -182,6 +184,7 @@ export function BarFloorView({
   reservationsByTable = {},
   operatingHours,
   slotIntervalMinutes = 60,
+  bookingWindowDays = 7,
   userMenu,
 }: Props) {
   const router = useRouter();
@@ -422,6 +425,7 @@ export function BarFloorView({
             reservations={reservationsByTable[selectedTable.id] ?? []}
             operatingHours={operatingHours}
             slotIntervalMinutes={slotIntervalMinutes}
+            bookingWindowDays={bookingWindowDays}
             onClose={() => setSelectedTable(null)}
           />
         </>
@@ -457,12 +461,14 @@ function TableSheet({
   reservations,
   operatingHours,
   slotIntervalMinutes,
+  bookingWindowDays = 7,
   onClose,
 }: {
   table: FloorMapTable;
   reservations: ActiveSessionView[];
   operatingHours?: OperatingHours;
   slotIntervalMinutes?: number;
+  bookingWindowDays?: number;
   onClose: () => void;
 }) {
   const session = table.active_session;
@@ -483,12 +489,19 @@ function TableSheet({
     return map;
   }, [reservations]);
 
-  // Strip tanggal: hari ini + besok + semua tanggal yang punya reservasi.
+  // Strip tanggal: hari ini sampai booking window (mis. 7 hari), plus tanggal
+  // yang punya reservasi (defensive, kalau ada di luar window).
   const dateChips = React.useMemo(() => {
-    const keys = new Set<string>(["today", "tomorrow"]);
+    const keys = new Set<string>();
+    const now = new Date();
+    for (let i = 0; i <= Math.max(1, bookingWindowDays); i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      keys.add(dateGroupKey(d));
+    }
     for (const gk of byDate.keys()) keys.add(gk);
     return Array.from(keys).sort(compareGroupKey);
-  }, [byDate]);
+  }, [byDate, bookingWindowDays]);
 
   const [activeDate, setActiveDate] = React.useState<string>(
     () => dateChips[0] ?? "today"

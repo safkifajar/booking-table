@@ -82,6 +82,7 @@ export default async function BarPage({ params }: PageProps) {
       reservationsByTable={reservationsByTable}
       operatingHours={operatingHours}
       slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
+      bookingWindowDays={reservationConfig.bookingWindowDays}
       userMenu={<UserMenu />}
     />
   );
