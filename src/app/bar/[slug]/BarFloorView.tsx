@@ -12,11 +12,6 @@ import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
 
-const HARI_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-const BULAN_ID = [
-  "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
-  "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
-];
 
 /** Format ISO reservation_at → "Hari ini · 20:00" / "Sabtu 14 Jun · 20:00". Client-safe. */
 
@@ -65,13 +60,6 @@ function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
   return { dayLabel: HARI_SHORT[d.getDay()], dateNum: d.getDate() };
 }
 
-/** Heading tanggal: "Hari Ini" / "Besok" / "Sabtu, 14 Jun". */
-function formatGroupLabel(gk: string): string {
-  if (gk === "today") return "Hari Ini";
-  if (gk === "tomorrow") return "Besok";
-  const d = groupKeyToDate(gk);
-  return `${HARI_ID[d.getDay()]}, ${d.getDate()} ${BULAN_ID[d.getMonth()]}`;
-}
 
 const DAY_KEYS_FLOOR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
@@ -299,7 +287,10 @@ export function BarFloorView({
         )}
 
         {/* Jadwal booking — list per tanggal (semua meja) */}
-        <BookingSchedule reservationsByTable={reservationsByTable} />
+        <BookingSchedule
+          reservationsByTable={reservationsByTable}
+          bookingWindowDays={bookingWindowDays}
+        />
       </div>
 
       {/* Bottom sheet: selected table — backdrop click closes */}
@@ -352,8 +343,10 @@ function LegendDot({
 
 function BookingSchedule({
   reservationsByTable,
+  bookingWindowDays = 7,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
+  bookingWindowDays?: number;
 }) {
   const [nowMs] = React.useState(() => Date.now());
 
@@ -366,7 +359,6 @@ function BookingSchedule({
       const gk = dateGroupKey(new Date(r.reservation_at));
       (map.get(gk) ?? map.set(gk, []).get(gk)!).push(r);
     }
-    // Urut tiap tanggal by jam mulai.
     for (const list of map.values()) {
       list.sort((a, b) =>
         (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
@@ -375,78 +367,113 @@ function BookingSchedule({
     return map;
   }, [reservationsByTable]);
 
-  const dateKeys = React.useMemo(
-    () => Array.from(byDate.keys()).sort(compareGroupKey),
-    [byDate]
-  );
+  // Strip tanggal: hari ini s/d booking window (mis. 7 hari) + tanggal lain
+  // yg punya booking (history kemarin dst).
+  const dateChips = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (let i = 0; i <= Math.max(1, bookingWindowDays); i++) {
+      keys.add(dateGroupKey(addDays(nowMs, i)));
+    }
+    for (const gk of byDate.keys()) keys.add(gk);
+    return Array.from(keys).sort(compareGroupKey);
+  }, [byDate, bookingWindowDays, nowMs]);
 
-  if (dateKeys.length === 0) {
-    return (
-      <div className="mt-6">
-        <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
-          Jadwal Booking
-        </h2>
-        <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
-          Belum ada booking. Tap meja di denah untuk mulai reservasi.
-        </Card>
-      </div>
-    );
-  }
+  const [activeDate, setActiveDate] = React.useState<string>("today");
+  const dayBookings = byDate.get(activeDate) ?? [];
 
   return (
-    <div className="mt-6 space-y-5">
+    <div className="mt-6 space-y-3">
       <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80">
         Jadwal Booking
       </h2>
-      {dateKeys.map((gk) => (
-        <div key={gk}>
-          <div className="text-sm font-semibold text-primary mb-2">
-            {formatGroupLabel(gk)}
-          </div>
-          <Card className="divide-y divide-border">
-            {byDate.get(gk)!.map((r) => {
-              const ended =
-                !!r.reservation_end_at &&
-                new Date(r.reservation_end_at).getTime() <= nowMs;
-              const inUse = r.status === "open" || r.status === "locked";
-              const statusLabel = ended
-                ? "Selesai"
-                : inUse
-                  ? "Sedang dipakai"
-                  : "Dibooking";
-              const statusColor = ended
-                ? "text-muted-foreground/60"
-                : inUse
-                  ? "text-emerald-400"
-                  : "text-blue-400";
-              return (
-                <div
-                  key={r.id}
-                  className="flex items-center gap-3 px-3 py-2.5"
-                >
-                  <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-                    {r.table_label}
-                  </Badge>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{r.host_name}</p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {r.reservation_at ? formatTime(r.reservation_at) : "?"}
-                      {r.reservation_end_at
-                        ? `–${formatTime(r.reservation_end_at)}`
-                        : ""}
-                    </p>
-                  </div>
-                  <span className={cn("text-[11px] shrink-0", statusColor)}>
-                    {statusLabel}
-                  </span>
+
+      {/* Strip tanggal */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {dateChips.map((gk) => {
+          const active = activeDate === gk;
+          const count = byDate.get(gk)?.length ?? 0;
+          const { dayLabel, dateNum } = groupKeyToParts(gk);
+          return (
+            <button
+              key={gk}
+              type="button"
+              onClick={() => setActiveDate(gk)}
+              className={cn(
+                "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
+                active
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+              )}
+            >
+              <span className="text-[10px] font-medium tracking-wide">
+                {dayLabel}
+              </span>
+              <span className="text-lg font-semibold leading-none tabular-nums">
+                {dateNum}
+              </span>
+              {count > 0 && (
+                <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* List booking tanggal terpilih */}
+      {dayBookings.length > 0 ? (
+        <Card className="divide-y divide-border">
+          {dayBookings.map((r) => {
+            const ended =
+              !!r.reservation_end_at &&
+              new Date(r.reservation_end_at).getTime() <= nowMs;
+            const inUse = r.status === "open" || r.status === "locked";
+            const statusLabel = ended
+              ? "Selesai"
+              : inUse
+                ? "Sedang dipakai"
+                : "Dibooking";
+            const statusColor = ended
+              ? "text-muted-foreground/60"
+              : inUse
+                ? "text-emerald-400"
+                : "text-blue-400";
+            return (
+              <div key={r.id} className="flex items-center gap-3 px-3 py-2.5">
+                <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+                  {r.table_label}
+                </Badge>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{r.host_name}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {r.reservation_at ? formatTime(r.reservation_at) : "?"}
+                    {r.reservation_end_at
+                      ? `–${formatTime(r.reservation_end_at)}`
+                      : ""}
+                  </p>
                 </div>
-              );
-            })}
-          </Card>
-        </div>
-      ))}
+                <span className={cn("text-[11px] shrink-0", statusColor)}>
+                  {statusLabel}
+                </span>
+              </div>
+            );
+          })}
+        </Card>
+      ) : (
+        <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
+          Belum ada booking di tanggal ini.
+        </Card>
+      )}
     </div>
   );
+}
+
+/** Tanggal baru = nowMs + n hari (helper non-komponen, aman dari purity). */
+function addDays(baseMs: number, days: number): Date {
+  const d = new Date(baseMs);
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
 function TableSheet({
