@@ -131,47 +131,52 @@ export function OpenTableForm({
   );
 
   // Klik jam: pola "klik mulai → klik selesai".
-  // - Belum ada mulai, atau sudah lengkap (mulai+selesai) → set mulai baru.
-  // - Sudah ada mulai, klik jam SETELAHnya → set selesai (= akhir slot diklik).
+  // - Belum ada mulai, atau sudah lengkap (mulai+selesai) → set mulai (end kosong).
+  // - Sudah ada mulai (end kosong), klik jam SETELAHnya → set selesai.
   // - Klik jam <= mulai → jadikan mulai baru.
   function handleSlotClick(iso: string) {
     const clickedMs = new Date(iso).getTime();
     const startMs = selectedSlot ? new Date(selectedSlot).getTime() : null;
 
+    // Mulai baru: belum ada mulai, atau rentang sudah lengkap → reset.
     if (startMs === null || selectedEnd) {
-      // Mulai baru (slot 1 jam → selesai = mulai + 1 slot otomatis)
       setSelectedSlot(iso);
-      setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
+      setSelectedEnd("");
       return;
     }
+    // Klik sebelum/sama dgn mulai → pindahkan mulai ke sini.
     if (clickedMs <= startMs) {
-      // Klik sebelum/sama dgn mulai → reset mulai
       setSelectedSlot(iso);
-      setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
+      setSelectedEnd("");
       return;
     }
-    // Klik setelah mulai → selesai = akhir slot yang diklik
+    // Klik setelah mulai → selesai = akhir slot yang diklik.
     setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
   }
+
+  // Selesai efektif: kalau user baru klik 1 jam (end kosong), anggap 1 slot.
+  const effectiveEnd = React.useMemo(() => {
+    if (selectedEnd) return selectedEnd;
+    if (selectedSlot)
+      return new Date(new Date(selectedSlot).getTime() + slotMs).toISOString();
+    return "";
+  }, [selectedSlot, selectedEnd, slotMs]);
 
   // Set ISO slot yang termasuk rentang terpilih [mulai, selesai) untuk highlight.
   const selectedRangeIsos = React.useMemo(() => {
     const set = new Set<string>();
-    if (!selectedSlot || !selectedEnd) {
-      if (selectedSlot) set.add(selectedSlot);
-      return set;
-    }
+    if (!selectedSlot) return set;
     const startMs = new Date(selectedSlot).getTime();
-    const endMs = new Date(selectedEnd).getTime();
+    const endMs = new Date(effectiveEnd).getTime();
     for (let t = startMs; t < endMs; t += slotMs) {
       set.add(new Date(t).toISOString());
     }
     return set;
-  }, [selectedSlot, selectedEnd, slotMs]);
+  }, [selectedSlot, effectiveEnd, slotMs]);
 
   // Deteksi bentrok: kalau rentang [mulai, selesai) menabrak slot booked,
   // hitung slot booked pertama yang nabrak → untuk pesan saran.
-  const conflict = findConflict(selectedSlot, selectedEnd, slotMs, bookedSet);
+  const conflict = findConflict(selectedSlot, effectiveEnd, slotMs, bookedSet);
 
   // Flat menu item lookup
   const itemLookup = React.useMemo(() => {
@@ -228,8 +233,7 @@ export function OpenTableForm({
   // Validasi submit
   const canSubmit = React.useMemo(() => {
     if (loading) return false;
-    if (!selectedSlot) return false;
-    if (!selectedEnd) return false;
+    if (!selectedSlot) return false; // minimal 1 jam dipilih
     if (conflict) return false; // rentang nabrak slot booked
     if (orderRequired && cartItemCount === 0) return false;
     if (hasMinSpend && cartTotal < table.min_spend) return false;
@@ -237,7 +241,6 @@ export function OpenTableForm({
   }, [
     loading,
     selectedSlot,
-    selectedEnd,
     conflict,
     orderRequired,
     cartItemCount,
@@ -261,7 +264,7 @@ export function OpenTableForm({
         visibility,
         vibeTags: vibes,
         reservationAt: selectedSlot || null,
-        reservationEndAt: selectedEnd || null,
+        reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
         dpMethod: dpRequired ? "mock" : undefined,
       });
@@ -341,13 +344,10 @@ export function OpenTableForm({
                 </div>
               </div>
 
-              {/* Step 2: list jam — klik mulai lalu klik selesai */}
+              {/* Step 2: list jam multi-select */}
               <div>
                 <label className="block text-sm font-medium mb-2">
-                  Pilih jam{" "}
-                  <span className="text-muted-foreground font-normal">
-                    (klik jam mulai, lalu klik jam selesai)
-                  </span>
+                  Pilih jam
                 </label>
                 <TimeRangeList
                   slots={startSlotsForDate}
@@ -359,10 +359,10 @@ export function OpenTableForm({
               </div>
 
               {/* Ringkasan rentang + alert bentrok */}
-              {selectedSlot && selectedEnd && !conflict && (
+              {selectedSlot && !conflict && (
                 <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-                  Reservasi <strong>{rangeLabel(selectedSlot, selectedEnd)}</strong>{" "}
-                  · {durationHours(selectedSlot, selectedEnd, slotMs)}
+                  Reservasi <strong>{rangeLabel(selectedSlot, effectiveEnd)}</strong>{" "}
+                  · {durationHours(selectedSlot, effectiveEnd, slotMs)}
                 </div>
               )}
               {conflict && (
@@ -576,14 +576,12 @@ export function OpenTableForm({
           {!canSubmit && !loading && (
             <p className="text-xs text-center text-muted-foreground -mt-2">
               {!selectedSlot
-                ? "Pilih jam mulai dulu"
-                : !selectedEnd
-                  ? "Pilih jam selesai dulu"
-                  : orderRequired && cartItemCount === 0
-                    ? "Order awal wajib diisi"
-                    : hasMinSpend && cartTotal < table.min_spend
-                      ? `Belum capai minimum spend ${formatIDR(table.min_spend)}`
-                      : ""}
+                ? "Pilih jam dulu"
+                : orderRequired && cartItemCount === 0
+                  ? "Order awal wajib diisi"
+                  : hasMinSpend && cartTotal < table.min_spend
+                    ? `Belum capai minimum spend ${formatIDR(table.min_spend)}`
+                    : ""}
             </p>
           )}
         </form>
