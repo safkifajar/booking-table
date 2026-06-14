@@ -138,19 +138,15 @@ export function OpenTableForm({
     const clickedMs = new Date(iso).getTime();
     const startMs = selectedSlot ? new Date(selectedSlot).getTime() : null;
 
-    // Mulai baru: belum ada mulai, atau rentang sudah lengkap → reset.
-    if (startMs === null || selectedEnd) {
+    // Belum ada mulai, atau klik <= mulai → set mulai baru (rentang 1 slot).
+    if (startMs === null || clickedMs <= startMs) {
       setSelectedSlot(iso);
       setSelectedEnd("");
       return;
     }
-    // Klik sebelum/sama dgn mulai → pindahkan mulai ke sini.
-    if (clickedMs <= startMs) {
-      setSelectedSlot(iso);
-      setSelectedEnd("");
-      return;
-    }
-    // Klik setelah mulai → selesai = akhir slot yang diklik.
+    // Klik setelah mulai → perpanjang/perpendek: selesai = jam diklik + 1 slot.
+    // Tiap klik di atas mulai selalu update selesai (tidak reset), jadi bisa
+    // bebas memperpanjang ke jam mana pun setelah mulai.
     setSelectedEnd(new Date(clickedMs + slotMs).toISOString());
   }
 
