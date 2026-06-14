@@ -10,7 +10,7 @@
  * Phase 5 cleanup nanti baru migrate types ke camelCase kalau diputuskan.
  */
 
-import { eq, and, inArray, asc, sql } from "drizzle-orm";
+import { eq, and, inArray, asc, sql, lte, gt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { bars, floorAreas, tables } from "@/lib/db/schema/venue";
 import {
@@ -191,8 +191,8 @@ export async function promoteDueReservations(barId: string): Promise<number> {
       and(
         eq(floorAreas.barId, barId),
         eq(tableSessions.status, "reserved"),
-        sql`${tableSessions.reservationAt} <= ${now}`,
-        sql`${tableSessions.reservationEndAt} > ${now}`
+        lte(tableSessions.reservationAt, now),
+        gt(tableSessions.reservationEndAt, now)
       )
     );
   if (due.length === 0) return 0;
