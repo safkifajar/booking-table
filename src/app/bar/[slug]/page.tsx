@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations } from "@/lib/queries";
+import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions } from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import {
@@ -24,7 +24,11 @@ export default async function BarPage({ params }: PageProps) {
   const bar = await getBarBySlug(slug);
   if (!bar) notFound();
 
-  // Promote reservasi yg waktunya sudah tiba → open (lazy, tiap floor di-load).
+  // Lifecycle reservasi (lazy, tiap floor di-load):
+  // 1. Tutup session yg sudah selesai (reservation_end_at lewat / walk-in basi).
+  // 2. Promote reservasi yg waktunya tiba → open. Urutan ini penting: meja yg
+  //    baru di-close bisa langsung dipakai reservasi berikutnya.
+  await expireFinishedSessions(bar.id);
   await promoteDueReservations(bar.id);
 
   const areas = await getFloorAreas(bar.id);

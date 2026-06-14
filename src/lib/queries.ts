@@ -171,6 +171,56 @@ export async function getActiveSessionsForArea(
 }
 
 /**
+ * Tutup session yang sudah selesai (lazy, dipanggil saat floor di-load):
+ * - Session hasil reservasi (punya reservation_end_at): close kalau
+ *   reservation_end_at <= now. Meja jadi available (atau reserved kalau ada
+ *   booking berikutnya yg belum due — itu tetap 'reserved' di tabel).
+ * - Walk-in basi (reservation_at NULL, open): close kalau started_at sudah
+ *   lebih dari WALKIN_MAX_HOURS jam lalu (sisa sesi yg lupa ditutup).
+ *
+ * Return jumlah session yang di-close.
+ */
+const WALKIN_MAX_HOURS = 12;
+
+export async function expireFinishedSessions(barId: string): Promise<number> {
+  const now = new Date();
+  const walkinCutoff = new Date(now.getTime() - WALKIN_MAX_HOURS * 60 * 60 * 1000);
+
+  const open = await db
+    .select({
+      id: tableSessions.id,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
+      startedAt: tableSessions.startedAt,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        inArray(tableSessions.status, ["open", "locked"])
+      )
+    );
+
+  let closed = 0;
+  for (const s of open) {
+    const fromReservation =
+      !!s.reservationEndAt && s.reservationEndAt.getTime() <= now.getTime();
+    const staleWalkIn =
+      !s.reservationAt && s.startedAt.getTime() <= walkinCutoff.getTime();
+    if (fromReservation || staleWalkIn) {
+      await db
+        .update(tableSessions)
+        .set({ status: "closed", closedAt: now })
+        .where(eq(tableSessions.id, s.id));
+      closed++;
+    }
+  }
+  return closed;
+}
+
+/**
  * Promote reservasi yang waktunya SUDAH TIBA (reservation_at <= now dan
  * reservation_end_at > now) dari status 'reserved' → 'open'. Dipanggil lazy
  * saat floor view di-load (tanpa cron). Meja yang sudah punya session
