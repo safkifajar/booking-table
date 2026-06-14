@@ -27,7 +27,8 @@ interface Props {
  * - Map (/bar/[slug] — floor plan)
  * - Profile (/profile)
  *
- * Hidden di desktop (md+) — desktop pakai top nav atau sidebar.
+ * Tampil di mobile & desktop (di desktop tetap di bawah, lebar dibatasi
+ * max-w-md di tengah).
  */
 export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
   const pathname = usePathname();
@@ -39,7 +40,7 @@ export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md md:hidden"
+      className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md"
       aria-label="Bottom navigation"
     >
       <div className="max-w-md mx-auto px-2 grid grid-cols-5 items-end h-16">
