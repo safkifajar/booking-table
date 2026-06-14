@@ -103,12 +103,26 @@ export default async function HomePage() {
               href={`/bar/${barSlug}`}
               className="text-xs text-primary hover:underline flex items-center gap-0.5"
             >
-              Lihat denah
+              Lihat semua
               <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <LiveTablesFeed sessions={activeSessions} isAnon={isAnon} />
+          <LiveTablesFeed
+            sessions={activeSessions.slice(0, 5)}
+            isAnon={isAnon}
+          />
+
+          {/* Lihat semua kalau ada lebih dari 5 meja live */}
+          {activeSessions.length > 5 && (
+            <Link
+              href={`/bar/${barSlug}`}
+              className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-sm font-medium text-primary hover:bg-primary/[0.06] transition"
+            >
+              Lihat semua ({activeSessions.length} meja)
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          )}
 
           {/* CTA: buka meja sendiri */}
           {!isAnon && (
