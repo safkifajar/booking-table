@@ -180,7 +180,6 @@ interface Props {
   slotIntervalMinutes?: number;
   /** Booking window (hari) untuk panjang strip tanggal. */
   bookingWindowDays?: number;
-  userMenu?: React.ReactNode;
 }
 
 export function BarFloorView({
@@ -190,7 +189,6 @@ export function BarFloorView({
   operatingHours,
   slotIntervalMinutes = 60,
   bookingWindowDays = 7,
-  userMenu,
 }: Props) {
   const router = useRouter();
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
@@ -256,7 +254,6 @@ export function BarFloorView({
             <MapPin className="h-3.5 w-3.5" />
             <span className="truncate max-w-[200px]">{bar.address}</span>
           </div>
-          {userMenu}
         </div>
 
         {/* Area tabs */}

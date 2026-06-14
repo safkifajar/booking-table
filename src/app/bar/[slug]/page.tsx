@@ -10,7 +10,8 @@ import {
   type ReservationConfig,
 } from "@/lib/settings-constants";
 import { BarFloorView } from "./BarFloorView";
-import { UserMenu } from "@/components/UserMenu";
+import { HomeBottomNav } from "@/components/HomeBottomNav";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
 import type { ActiveSessionView } from "@/types/db";
 
@@ -81,15 +82,19 @@ export default async function BarPage({ params }: PageProps) {
     })
   );
 
+  const profile = await getCurrentProfile();
+
   return (
-    <BarFloorView
-      bar={bar}
-      areasWithTables={areasWithTables}
-      reservationsByTable={reservationsByTable}
-      operatingHours={operatingHours}
-      slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
-      bookingWindowDays={reservationConfig.bookingWindowDays}
-      userMenu={<UserMenu />}
-    />
+    <>
+      <BarFloorView
+        bar={bar}
+        areasWithTables={areasWithTables}
+        reservationsByTable={reservationsByTable}
+        operatingHours={operatingHours}
+        slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
+        bookingWindowDays={reservationConfig.bookingWindowDays}
+      />
+      <HomeBottomNav barId={bar.id} isAnon={!profile} />
+    </>
   );
 }
