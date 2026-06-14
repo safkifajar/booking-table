@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions } from "@/lib/queries";
 import { db } from "@/lib/db/client";
-import { bars } from "@/lib/db/schema/venue";
+import { bars, tables, floorAreas } from "@/lib/db/schema/venue";
+import { tableSessions } from "@/lib/db/schema/sessions";
+import { profiles } from "@/lib/db/schema/profiles";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
@@ -17,6 +19,15 @@ import type { ActiveSessionView } from "@/types/db";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+/** Window history reservasi: dari kemarin sampai N hari ke depan. */
+function historyWindow(bookingWindowDays: number): { start: Date; end: Date } {
+  const nowMs = Date.now();
+  return {
+    start: new Date(nowMs - 24 * 60 * 60 * 1000),
+    end: new Date(nowMs + bookingWindowDays * 24 * 60 * 60 * 1000),
+  };
 }
 
 export default async function BarPage({ params }: PageProps) {
@@ -51,9 +62,58 @@ export default async function BarPage({ params }: PageProps) {
     ...((barSettings?.reservation_config as Partial<ReservationConfig>) ?? {}),
   };
 
-  // Map tableId → semua reservasi 'reserved' (urut by jam mulai). Satu meja
-  // bisa punya banyak reservasi di slot berbeda — bottom sheet tampilkan semua.
+  // Map tableId → semua reservasi (urut by jam mulai). Satu meja bisa punya
+  // banyak reservasi di slot berbeda — bottom sheet tampilkan semua + history.
   const reservationsByTable: Record<string, ActiveSessionView[]> = {};
+
+  // History: reservasi yg sudah SELESAI (closed) tapi masih dalam booking
+  // window — untuk ditandai 'Selesai' di list jam (bukan 'Tersedia' lagi).
+  const { start: windowStart, end: windowEnd } = historyWindow(
+    reservationConfig.bookingWindowDays
+  );
+  const historyRows = await db
+    .select({
+      id: tableSessions.id,
+      table_id: tableSessions.tableId,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
+      host_name: profiles.displayName,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(
+      and(
+        eq(floorAreas.barId, bar.id),
+        eq(tableSessions.status, "closed"),
+        gte(tableSessions.reservationAt, windowStart),
+        lte(tableSessions.reservationAt, windowEnd)
+      )
+    );
+  const historyByTable: Record<string, ActiveSessionView[]> = {};
+  for (const h of historyRows) {
+    if (!h.reservation_at) continue;
+    (historyByTable[h.table_id] ??= []).push({
+      id: h.id,
+      table_id: h.table_id,
+      table_label: "",
+      area_id: "",
+      area_name: "",
+      status: "closed" as never,
+      visibility: "public",
+      title: null,
+      vibe_tags: [],
+      host_id: "",
+      host_name: h.host_name,
+      host_avatar: null,
+      started_at: h.reservation_at.toISOString(),
+      reservation_at: h.reservation_at.toISOString(),
+      reservation_end_at: h.reservation_end_at?.toISOString() ?? null,
+      member_count: 0,
+      table_capacity: 0,
+    });
+  }
 
   const areasWithTables = await Promise.all(
     areas.map(async (area) => {
@@ -63,22 +123,25 @@ export default async function BarPage({ params }: PageProps) {
       ]);
       const tablesWithSession: FloorMapTable[] = tables.map((t) => {
         const forTable = sessions.filter((s) => s.table_id === t.id);
-        // Jadwal jam meja = semua session yg punya reservation_at (reserved
-        // ATAU open hasil promote reservasi yg masih berlangsung). Walk-in
-        // murni (reservation_at null) tidak masuk jadwal.
-        const reservations = forTable
-          .filter((s) => s.reservation_at)
-          .sort((a, b) =>
-            (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
-          );
+        // Jadwal jam meja = session aktif yg punya reservation_at (reserved /
+        // open hasil promote) + history reservasi closed. Walk-in murni
+        // (reservation_at null) tidak masuk jadwal.
+        const reservations = [
+          ...forTable.filter((s) => s.reservation_at),
+          ...(historyByTable[t.id] ?? []),
+        ].sort((a, b) =>
+          (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
+        );
         if (reservations.length > 0) {
           reservationsByTable[t.id] = reservations;
         }
         // active_session untuk denah: prioritaskan session open/locked (meja
-        // sedang dipakai), kalau tidak ada pakai reservasi terdekat berikutnya.
+        // sedang dipakai), kalau tidak ada pakai reservasi AKTIF terdekat
+        // (bukan history closed — biar meja yg reservasinya selesai = available).
+        const activeReservations = forTable.filter((s) => s.reservation_at);
         const active =
           forTable.find((s) => s.status === "open" || s.status === "locked") ??
-          reservations[0] ??
+          activeReservations[0] ??
           null;
         return { ...t, active_session: active };
       });

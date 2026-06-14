@@ -186,9 +186,11 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
   const now = new Date();
   const walkinCutoff = new Date(now.getTime() - WALKIN_MAX_HOURS * 60 * 60 * 1000);
 
-  const open = await db
+  // Ambil semua session aktif (reserved/open/locked) milik bar ini.
+  const active = await db
     .select({
       id: tableSessions.id,
+      status: tableSessions.status,
       reservationAt: tableSessions.reservationAt,
       reservationEndAt: tableSessions.reservationEndAt,
       startedAt: tableSessions.startedAt,
@@ -199,17 +201,22 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
     .where(
       and(
         eq(floorAreas.barId, barId),
-        inArray(tableSessions.status, ["open", "locked"])
+        inArray(tableSessions.status, ["reserved", "open", "locked"])
       )
     );
 
   let closed = 0;
-  for (const s of open) {
-    const fromReservation =
+  for (const s of active) {
+    // Session dgn rentang reservasi (reserved no-show ATAU open hasil promote):
+    // close kalau reservation_end_at sudah lewat.
+    const reservationEnded =
       !!s.reservationEndAt && s.reservationEndAt.getTime() <= now.getTime();
+    // Walk-in basi (open tanpa reservasi, started > 12 jam lalu).
     const staleWalkIn =
-      !s.reservationAt && s.startedAt.getTime() <= walkinCutoff.getTime();
-    if (fromReservation || staleWalkIn) {
+      s.status !== "reserved" &&
+      !s.reservationAt &&
+      s.startedAt.getTime() <= walkinCutoff.getTime();
+    if (reservationEnded || staleWalkIn) {
       await db
         .update(tableSessions)
         .set({ status: "closed", closedAt: now })

@@ -93,6 +93,8 @@ interface HourRow {
   booked: boolean;
   /** true kalau slot dipakai session yg sudah aktif (open), bukan cuma reserved. */
   inUse?: boolean;
+  /** true kalau slot ini sudah lewat (jam selesai < sekarang). */
+  past?: boolean;
   host?: string;
 }
 
@@ -105,7 +107,8 @@ function buildHourRows(
   gk: string,
   dayReservations: ActiveSessionView[],
   hours: OperatingHours | undefined,
-  slotMinutes: number
+  slotMinutes: number,
+  nowMs: number
 ): HourRow[] {
   if (!hours) {
     // Tanpa jam operasi: fallback ke list reservasi yang ada saja.
@@ -156,6 +159,7 @@ function buildHourRows(
       label: `${formatTime(slotStart.toISOString())}–${formatTime(slotEnd.toISOString())}`,
       booked: !!hit,
       inUse: hit?.inUse,
+      past: slotEnd.getTime() <= nowMs,
       host: hit?.host,
     });
   }
@@ -508,6 +512,8 @@ function TableSheet({
   const [activeDate, setActiveDate] = React.useState<string>(
     () => dateChips[0] ?? "today"
   );
+  // Stabil per mount (lazy init) — hindari Date.now() di render body.
+  const [nowMs] = React.useState(() => Date.now());
 
   // List SEMUA jam operasi di tanggal terpilih, ditandai booked/available.
   const hourRows = React.useMemo(
@@ -516,9 +522,10 @@ function TableSheet({
         activeDate,
         byDate.get(activeDate) ?? [],
         operatingHours,
-        slotIntervalMinutes ?? 60
+        slotIntervalMinutes ?? 60,
+        nowMs
       ),
-    [activeDate, byDate, operatingHours, slotIntervalMinutes]
+    [activeDate, byDate, operatingHours, slotIntervalMinutes, nowMs]
   );
 
   return (
@@ -619,35 +626,53 @@ function TableSheet({
               {/* List SEMUA jam operasi (booked / tersedia) */}
               {hourRows.length > 0 ? (
                 <div className="rounded-lg border border-border divide-y divide-border">
-                  {hourRows.map((h) => (
-                    <div
-                      key={h.label}
-                      className={cn(
-                        "flex items-center justify-between gap-3 px-3 py-2.5",
-                        h.booked && "bg-muted/30"
-                      )}
-                    >
-                      <span
+                  {hourRows.map((h) => {
+                    // Status & warna jam:
+                    // - lewat + booking → "Selesai" (abu)
+                    // - lewat + kosong → "Lewat" (abu redup)
+                    // - aktif dipakai → "Sedang dipakai" (biru)
+                    // - dibooking (belum mulai) → "Dibooking" (biru)
+                    // - kosong & belum lewat → "Tersedia" (hijau)
+                    const status = h.past
+                      ? h.booked
+                        ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
+                        : "Lewat"
+                      : h.booked
+                        ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
+                        : "Tersedia";
+                    const timeColor = h.past
+                      ? "text-muted-foreground/50"
+                      : h.booked
+                        ? "text-blue-400"
+                        : "text-foreground";
+                    const statusColor = h.past
+                      ? "text-muted-foreground/50"
+                      : h.booked
+                        ? "text-muted-foreground"
+                        : "text-emerald-500/80";
+                    return (
+                      <div
+                        key={h.label}
                         className={cn(
-                          "inline-flex items-center gap-1.5 text-sm tabular-nums",
-                          h.booked ? "text-blue-400" : "text-foreground"
+                          "flex items-center justify-between gap-3 px-3 py-2.5",
+                          h.past ? "bg-muted/20" : h.booked && "bg-muted/30"
                         )}
                       >
-                        <Clock className="h-3.5 w-3.5 shrink-0" />
-                        {h.label}
-                      </span>
-                      {h.booked ? (
-                        <span className="text-xs text-muted-foreground truncate">
-                          {h.inUse ? "Sedang dipakai" : "Dibooking"}
-                          {h.host ? ` · a/n ${h.host}` : ""}
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                            timeColor
+                          )}
+                        >
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          {h.label}
                         </span>
-                      ) : (
-                        <span className="text-xs text-emerald-500/80">
-                          Tersedia
+                        <span className={cn("text-xs truncate", statusColor)}>
+                          {status}
                         </span>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
