@@ -226,6 +226,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
     // Ambil reservasi 'reserved' existing di meja ini untuk cek overlap.
     // Hanya yang belum lewat (end > now) yang relevan.
+    // Cek overlap dgn session yg punya rentang waktu: reserved ATAU open/locked
+    // hasil promote reservasi (yg masih punya reservation range).
     const existingRows = await db
       .select({
         startAt: tableSessions.reservationAt,
@@ -235,7 +237,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       .where(
         and(
           eq(tableSessions.tableId, data.tableId),
-          eq(tableSessions.status, "reserved")
+          inArray(tableSessions.status, ["reserved", "open", "locked"])
         )
       );
     const existing: BookedRange[] = existingRows

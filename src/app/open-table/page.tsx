@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
@@ -82,7 +82,8 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
       .where(
         and(
           eq(tableSessions.tableId, row.table_id),
-          eq(tableSessions.status, "reserved")
+          // reserved + open/locked hasil promote reservasi (punya rentang)
+          inArray(tableSessions.status, ["reserved", "open", "locked"])
         )
       );
     const existing: BookedRange[] = existingRows
