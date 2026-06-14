@@ -66,12 +66,16 @@ const DAY_KEYS_FLOOR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as cons
 interface HourRow {
   /** "20:00–21:00" */
   label: string;
+  /** ISO jam mulai slot ini (untuk key + booking jam itu). */
+  startIso: string;
   booked: boolean;
   /** true kalau slot dipakai session yg sudah aktif (open), bukan cuma reserved. */
   inUse?: boolean;
   /** true kalau slot ini sudah lewat (jam selesai < sekarang). */
   past?: boolean;
   host?: string;
+  /** session id booking yg nge-hit slot ini (untuk Lihat Meja). */
+  sessionId?: string;
 }
 
 /**
@@ -92,8 +96,10 @@ function buildHourRows(
       .filter((r) => r.reservation_at)
       .map((r) => ({
         label: `${formatTime(r.reservation_at!)}–${r.reservation_end_at ? formatTime(r.reservation_end_at) : "?"}`,
+        startIso: r.reservation_at!,
         booked: true,
         host: r.host_name,
+        sessionId: r.id,
       }));
   }
 
@@ -124,6 +130,7 @@ function buildHourRows(
       end: new Date(r.reservation_end_at!).getTime(),
       host: r.host_name,
       inUse: r.status === "open" || r.status === "locked",
+      sessionId: r.id,
     }));
 
   // Iterasi per slot dalam HARI KALENDER yg sama (00:00 s/d <24:00). Slot dini
@@ -140,10 +147,12 @@ function buildHourRows(
     const hit = ranges.find((r) => sMs >= r.start && sMs < r.end);
     rows.push({
       label: `${formatTime(slotStart.toISOString())}–${formatTime(slotEnd.toISOString())}`,
+      startIso: slotStart.toISOString(),
       booked: !!hit,
       inUse: hit?.inUse,
       past: slotEnd.getTime() <= nowMs,
       host: hit?.host,
+      sessionId: hit?.sessionId,
     });
   }
   return rows;
@@ -443,45 +452,29 @@ function BookingSchedule({
                 ? "text-emerald-400"
                 : "text-blue-400";
             return (
-              <div key={r.id} className="px-3 py-2.5">
-                <div className="flex items-center gap-3">
-                  <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-                    {r.table_label}
-                  </Badge>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{r.host_name}</p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      {r.reservation_at ? formatTime(r.reservation_at) : "?"}
-                      {r.reservation_end_at
-                        ? `–${formatTime(r.reservation_end_at)}`
-                        : ""}
-                      {r.area_name ? ` · ${r.area_name}` : ""}
-                    </p>
-                  </div>
-                  <span className={cn("text-[11px] shrink-0", statusColor)}>
-                    {statusLabel}
-                  </span>
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onViewTable(r.table_id)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition hover:bg-muted/40"
+              >
+                <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+                  {r.table_label}
+                </Badge>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{r.host_name}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {r.reservation_at ? formatTime(r.reservation_at) : "?"}
+                    {r.reservation_end_at
+                      ? `–${formatTime(r.reservation_end_at)}`
+                      : ""}
+                    {r.area_name ? ` · ${r.area_name}` : ""}
+                  </p>
                 </div>
-                {/* Aksi: lihat detail meja + booking jam lain */}
-                <div className="flex gap-2 mt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 h-8 text-xs"
-                    onClick={() => onViewTable(r.table_id)}
-                  >
-                    Lihat Meja
-                  </Button>
-                  <Button
-                    variant="gold"
-                    size="sm"
-                    className="flex-1 h-8 text-xs"
-                    asChild
-                  >
-                    <Link href={`/open-table?tableId=${r.table_id}`}>Booking</Link>
-                  </Button>
-                </div>
-              </div>
+                <span className={cn("text-[11px] shrink-0", statusColor)}>
+                  {statusLabel}
+                </span>
+              </button>
             );
           })}
         </Card>
@@ -691,24 +684,50 @@ function TableSheet({
                         : "text-emerald-500/80";
                     return (
                       <div
-                        key={h.label}
+                        key={h.startIso}
                         className={cn(
-                          "flex items-center justify-between gap-3 px-3 py-2.5",
+                          "px-3 py-2.5",
                           h.past ? "bg-muted/20" : h.booked && "bg-muted/30"
                         )}
                       >
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1.5 text-sm tabular-nums",
-                            timeColor
-                          )}
-                        >
-                          <Clock className="h-3.5 w-3.5 shrink-0" />
-                          {h.label}
-                        </span>
-                        <span className={cn("text-xs truncate", statusColor)}>
-                          {status}
-                        </span>
+                        <div className="flex items-center justify-between gap-3">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                              timeColor
+                            )}
+                          >
+                            <Clock className="h-3.5 w-3.5 shrink-0" />
+                            {h.label}
+                          </span>
+                          <span className={cn("text-xs truncate", statusColor)}>
+                            {status}
+                          </span>
+                        </div>
+                        {/* Aksi per jam: lihat detail meja (booking) / booking (kosong) */}
+                        {h.sessionId ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full h-8 text-xs mt-2"
+                            asChild
+                          >
+                            <Link href={`/session/${h.sessionId}`}>
+                              Lihat Meja
+                            </Link>
+                          </Button>
+                        ) : !h.past ? (
+                          <Button
+                            variant="gold"
+                            size="sm"
+                            className="w-full h-8 text-xs mt-2"
+                            asChild
+                          >
+                            <Link href={`/open-table?tableId=${table.id}`}>
+                              Booking jam ini
+                            </Link>
+                          </Button>
+                        ) : null}
                       </div>
                     );
                   })}
