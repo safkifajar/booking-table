@@ -547,14 +547,15 @@ function TableSheet({
               </span>
             </div>
             <h2 className="text-lg sm:text-xl font-semibold">
-              {isOpen
-                ? session?.title ?? "Open Table"
-                : "Jadwal meja"}
+              {isOpen ? "Meja sedang digunakan" : "Jadwal meja"}
             </h2>
-            {session && !isReserved && !isAvailable && (
+            {isOpen && session && (
               <p className="text-sm text-muted-foreground mt-0.5">
-                Host: {session.host_name} ·{" "}
-                <Users className="inline h-3 w-3 -mt-0.5" /> {session.member_count}/{table.capacity}
+                Saat ini dipakai oleh host{" "}
+                <span className="text-foreground font-medium">
+                  {session.host_name}
+                </span>
+                .
               </p>
             )}
             {table.min_spend && table.min_spend > 0 && (
