@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowLeft, MapPin, Users, Lock, Sparkles, Clock } from "lucide-react";
 import { formatIDR, initials } from "@/lib/utils";
-import type { Bar, FloorArea } from "@/types/db";
+import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 
 const HARI_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const BULAN_ID = [
@@ -55,10 +55,17 @@ function formatReservationRange(startIso: string, endIso: string | null): string
 interface Props {
   bar: Bar;
   areasWithTables: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
+  /** tableId → semua reservasi 'reserved' (urut by jam mulai). */
+  reservationsByTable?: Record<string, ActiveSessionView[]>;
   userMenu?: React.ReactNode;
 }
 
-export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
+export function BarFloorView({
+  bar,
+  areasWithTables,
+  reservationsByTable = {},
+  userMenu,
+}: Props) {
   const router = useRouter();
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     areasWithTables[0]?.area.slug ?? ""
@@ -294,6 +301,7 @@ export function BarFloorView({ bar, areasWithTables, userMenu }: Props) {
           />
           <TableSheet
             table={selectedTable}
+            reservations={reservationsByTable[selectedTable.id] ?? []}
             onClose={() => setSelectedTable(null)}
           />
         </>
@@ -326,9 +334,11 @@ function LegendDot({
 
 function TableSheet({
   table,
+  reservations,
   onClose,
 }: {
   table: FloorMapTable;
+  reservations: ActiveSessionView[];
   onClose: () => void;
 }) {
   const session = table.active_session;
@@ -363,17 +373,10 @@ function TableSheet({
                 : session?.title ?? "Open Table"}
             </h2>
             {session && isReserved && (
-              <p className="text-sm mt-0.5">
-                <span className="text-blue-400 inline-flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {session.reservation_at
-                    ? formatReservationRange(
-                        session.reservation_at,
-                        session.reservation_end_at
-                      )
-                    : "Terjadwal"}
-                </span>
-                <span className="text-muted-foreground"> · a/n {session.host_name}</span>
+              <p className="text-sm text-blue-400 mt-0.5">
+                {reservations.length > 1
+                  ? `${reservations.length} reservasi terjadwal`
+                  : "Sudah direservasi"}
               </p>
             )}
             {session && !isReserved && (
@@ -396,6 +399,31 @@ function TableSheet({
             Tutup
           </button>
         </div>
+
+        {/* Daftar semua reservasi meja ini (kalau reserved) */}
+        {isReserved && reservations.length > 0 && (
+          <div className="mb-3 rounded-lg border border-border divide-y divide-border max-h-44 overflow-y-auto">
+            {reservations.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between gap-3 px-3 py-2"
+              >
+                <span className="inline-flex items-center gap-1.5 text-sm text-blue-400 tabular-nums">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  {r.reservation_at
+                    ? formatReservationRange(
+                        r.reservation_at,
+                        r.reservation_end_at
+                      )
+                    : "Terjadwal"}
+                </span>
+                <span className="text-xs text-muted-foreground truncate">
+                  a/n {r.host_name}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {isAvailable && (

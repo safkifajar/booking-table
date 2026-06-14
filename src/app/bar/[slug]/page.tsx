@@ -3,6 +3,7 @@ import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea 
 import { BarFloorView } from "./BarFloorView";
 import { UserMenu } from "@/components/UserMenu";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
+import type { ActiveSessionView } from "@/types/db";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -15,16 +16,34 @@ export default async function BarPage({ params }: PageProps) {
 
   const areas = await getFloorAreas(bar.id);
 
+  // Map tableId → semua reservasi 'reserved' (urut by jam mulai). Satu meja
+  // bisa punya banyak reservasi di slot berbeda — bottom sheet tampilkan semua.
+  const reservationsByTable: Record<string, ActiveSessionView[]> = {};
+
   const areasWithTables = await Promise.all(
     areas.map(async (area) => {
       const [tables, sessions] = await Promise.all([
         getTablesByArea(area.id),
         getActiveSessionsForArea(area.id),
       ]);
-      const tablesWithSession: FloorMapTable[] = tables.map((t) => ({
-        ...t,
-        active_session: sessions.find((s) => s.table_id === t.id) ?? null,
-      }));
+      const tablesWithSession: FloorMapTable[] = tables.map((t) => {
+        const forTable = sessions.filter((s) => s.table_id === t.id);
+        const reservations = forTable
+          .filter((s) => s.status === "reserved")
+          .sort((a, b) =>
+            (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
+          );
+        if (reservations.length > 0) {
+          reservationsByTable[t.id] = reservations;
+        }
+        // active_session untuk denah: prioritaskan session open/locked (meja
+        // sedang dipakai), kalau tidak ada pakai reservasi terdekat berikutnya.
+        const active =
+          forTable.find((s) => s.status === "open" || s.status === "locked") ??
+          reservations[0] ??
+          null;
+        return { ...t, active_session: active };
+      });
       return { area, tables: tablesWithSession };
     })
   );
@@ -33,6 +52,7 @@ export default async function BarPage({ params }: PageProps) {
     <BarFloorView
       bar={bar}
       areasWithTables={areasWithTables}
+      reservationsByTable={reservationsByTable}
       userMenu={<UserMenu />}
     />
   );
