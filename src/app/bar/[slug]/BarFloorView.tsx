@@ -7,7 +7,7 @@ import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Lock, Clock } from "lucide-react";
+import { ArrowLeft, MapPin, Clock } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -510,7 +510,6 @@ function TableSheet({
   onClose: () => void;
 }) {
   const session = table.active_session;
-  const isAvailable = !session;
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
 
@@ -682,52 +681,44 @@ function TableSheet({
                       : h.booked
                         ? "text-muted-foreground"
                         : "text-emerald-500/80";
-                    return (
-                      <div
-                        key={h.startIso}
-                        className={cn(
-                          "px-3 py-2.5",
-                          h.past ? "bg-muted/20" : h.booked && "bg-muted/30"
-                        )}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1.5 text-sm tabular-nums",
-                              timeColor
-                            )}
-                          >
-                            <Clock className="h-3.5 w-3.5 shrink-0" />
-                            {h.label}
-                          </span>
-                          <span className={cn("text-xs truncate", statusColor)}>
-                            {status}
-                          </span>
-                        </div>
-                        {/* Aksi per jam: lihat detail meja (booking) / booking (kosong) */}
-                        {h.sessionId ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full h-8 text-xs mt-2"
-                            asChild
-                          >
-                            <Link href={`/session/${h.sessionId}`}>
-                              Lihat Meja
-                            </Link>
-                          </Button>
-                        ) : !h.past ? (
-                          <Button
-                            variant="gold"
-                            size="sm"
-                            className="w-full h-8 text-xs mt-2"
-                            asChild
-                          >
-                            <Link href={`/open-table?tableId=${table.id}`}>
-                              Booking jam ini
-                            </Link>
-                          </Button>
-                        ) : null}
+                    // Baris bisa diklik: ada booking → lihat session; tersedia →
+                    // booking jam itu; lewat+kosong → tidak bisa diklik.
+                    const href = h.sessionId
+                      ? `/session/${h.sessionId}`
+                      : !h.past
+                        ? `/open-table?tableId=${table.id}`
+                        : null;
+
+                    const inner = (
+                      <div className="flex items-center justify-between gap-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                            timeColor
+                          )}
+                        >
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          {h.label}
+                        </span>
+                        <span className={cn("text-xs truncate", statusColor)}>
+                          {status}
+                        </span>
+                      </div>
+                    );
+
+                    const rowClass = cn(
+                      "block px-3 py-2.5",
+                      h.past ? "bg-muted/20" : h.booked && "bg-muted/30",
+                      href && "transition hover:bg-muted/50 cursor-pointer"
+                    );
+
+                    return href ? (
+                      <Link key={h.startIso} href={href} className={rowClass}>
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div key={h.startIso} className={rowClass}>
+                        {inner}
                       </div>
                     );
                   })}
@@ -743,27 +734,6 @@ function TableSheet({
               Meja ini sedang dipakai. Hanya bisa di-join lewat link invite
               dari host.
             </p>
-          )}
-        </div>
-
-        {/* Footer: tombol aksi (sticky) */}
-        <div className="border-t border-border p-4 sm:p-5 shrink-0 flex flex-wrap gap-2">
-          {session?.status !== "locked" && (
-            <Button variant="gold" size="lg" className="flex-1 min-w-[140px]" asChild>
-              <Link href={`/open-table?tableId=${table.id}`}>
-                {isAvailable ? "Booking meja ini" : "Booking jam lain"}
-              </Link>
-            </Button>
-          )}
-          {isOpen && (
-            <Button variant="outline" size="lg" className="flex-1 min-w-[140px]" asChild>
-              <Link href={`/session/${session.id}/preview`}>Lihat Meja</Link>
-            </Button>
-          )}
-          {session?.status === "locked" && (
-            <Button variant="outline" size="lg" className="flex-1" disabled>
-              <Lock className="h-4 w-4" /> Locked
-            </Button>
           )}
         </div>
       </div>
