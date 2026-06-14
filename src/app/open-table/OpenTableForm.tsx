@@ -138,6 +138,12 @@ export function OpenTableForm({
     const clickedMs = new Date(iso).getTime();
     const startMs = selectedSlot ? new Date(selectedSlot).getTime() : null;
 
+    // Klik tepat di jam mulai yang sedang terpilih → batalkan (uncheck).
+    if (startMs !== null && clickedMs === startMs && !selectedEnd) {
+      setSelectedSlot("");
+      setSelectedEnd("");
+      return;
+    }
     // Belum ada mulai, atau klik <= mulai → set mulai baru (rentang 1 slot).
     if (startMs === null || clickedMs <= startMs) {
       setSelectedSlot(iso);
