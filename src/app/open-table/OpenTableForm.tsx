@@ -28,6 +28,7 @@ import { openTable } from "@/lib/actions";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
 import type { TableShape, SessionVisibility } from "@/types/db";
 import type { ReservationConfig } from "@/lib/settings-constants";
+import { formatGroupKey } from "@/lib/reservation-format";
 import type { AvailableSlot } from "@/lib/reservation-format";
 
 interface MenuItemLite {
@@ -95,19 +96,19 @@ export function OpenTableForm({
   // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
   // Walk-in immediate ada di flow staff/waiter terpisah.
   const waktuMode: WaktuMode = "reservation";
-  // Prefill dari deep-link (bottom sheet denah): kalau initialStart cocok salah
-  // satu slot, pakai tanggal+jam itu. Kalau tidak, default slot pertama.
-  const initialSlot = initialStart
-    ? slots.find((s) => s.iso === initialStart) ?? null
-    : null;
-  const [selectedDate, setSelectedDate] = React.useState<string>(
-    () => initialSlot?.groupKey ?? slots[0]?.groupKey ?? ""
+  // Prefill dari deep-link (bottom sheet denah). Tanggal di-derive LANGSUNG
+  // dari initialStart (bukan cari di slots) supaya jam yg dipilih di jadwal
+  // tetap tampil terpilih walau slot itu tak persis ada di list generate.
+  const [selectedDate, setSelectedDate] = React.useState<string>(() =>
+    initialStart
+      ? formatGroupKey(new Date(initialStart), new Date())
+      : slots[0]?.groupKey ?? ""
   );
   const [selectedSlot, setSelectedSlot] = React.useState<string>(
-    () => (initialSlot ? initialSlot.iso : "")
+    () => initialStart ?? ""
   );
   const [selectedEnd, setSelectedEnd] = React.useState<string>(
-    () => (initialSlot && initialEnd ? initialEnd : "")
+    () => (initialStart && initialEnd ? initialEnd : "")
   );
 
   // Cart order awal: Map<menuItemId, quantity>
