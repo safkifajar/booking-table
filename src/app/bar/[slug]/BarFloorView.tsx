@@ -559,6 +559,76 @@ function TableSheet({
     [activeDate, byDate, operatingHours, slotIntervalMinutes, nowMs]
   );
 
+  // ── Pilih rentang jam (untuk booking) — pola klik mulai→selesai spt form ──
+  const slotMs = (slotIntervalMinutes ?? 60) * 60 * 1000;
+  const [selStart, setSelStart] = React.useState<string>("");
+  const [selEnd, setSelEnd] = React.useState<string>("");
+
+  // Reset pilihan saat ganti tanggal.
+  function changeDate(gk: string) {
+    setActiveDate(gk);
+    setSelStart("");
+    setSelEnd("");
+  }
+
+  // Slot yg bisa dipilih = tersedia (tidak booked, tidak lewat).
+  function isSelectable(h: HourRow) {
+    return !h.booked && !h.past;
+  }
+
+  // Klik slot tersedia: klik mulai → set; klik dalam rentang → batal; klik
+  // setelah → perpanjang; klik sebelum → mulai baru. Tidak boleh menembus
+  // slot non-selectable (booked/lewat) di antara.
+  function clickSlot(h: HourRow) {
+    const iso = h.startIso;
+    const ms = new Date(iso).getTime();
+    if (!selStart) {
+      setSelStart(iso);
+      setSelEnd("");
+      return;
+    }
+    const startMs = new Date(selStart).getTime();
+    const endMs = selEnd ? new Date(selEnd).getTime() : startMs + slotMs;
+    if (ms >= startMs && ms < endMs) {
+      // klik di dalam rentang → batal
+      setSelStart("");
+      setSelEnd("");
+      return;
+    }
+    if (ms < startMs) {
+      setSelStart(iso);
+      setSelEnd("");
+      return;
+    }
+    // klik setelah mulai → perpanjang, tapi pastikan semua slot di [start, ms]
+    // selectable (tidak ada booked/lewat di tengah).
+    const between = hourRows.filter((r) => {
+      const t = new Date(r.startIso).getTime();
+      return t >= startMs && t <= ms;
+    });
+    if (between.some((r) => !isSelectable(r))) {
+      // ada slot tak bisa dipilih di antara → mulai baru dari sini
+      setSelStart(iso);
+      setSelEnd("");
+      return;
+    }
+    setSelEnd(new Date(ms + slotMs).toISOString());
+  }
+
+  // Set ISO yg termasuk rentang terpilih (untuk highlight).
+  const selRange = React.useMemo(() => {
+    const set = new Set<string>();
+    if (!selStart) return set;
+    const startMs = new Date(selStart).getTime();
+    const endMs = selEnd ? new Date(selEnd).getTime() : startMs + slotMs;
+    for (let t = startMs; t < endMs; t += slotMs) {
+      set.add(new Date(t).toISOString());
+    }
+    return set;
+  }, [selStart, selEnd, slotMs]);
+
+  const effEnd = selEnd || (selStart ? new Date(new Date(selStart).getTime() + slotMs).toISOString() : "");
+
   return (
     <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4">
       <div className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] flex flex-col bg-card border border-border sm:rounded-2xl shadow-2xl">
@@ -630,7 +700,7 @@ function TableSheet({
                     <button
                       key={gk}
                       type="button"
-                      onClick={() => setActiveDate(gk)}
+                      onClick={() => changeDate(gk)}
                       className={cn(
                         "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
                         active
@@ -664,30 +734,31 @@ function TableSheet({
                     // - aktif dipakai → "Sedang dipakai" (biru)
                     // - dibooking (belum mulai) → "Dibooking" (biru)
                     // - kosong & belum lewat → "Tersedia" (hijau)
-                    const status = h.past
-                      ? h.booked
-                        ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
-                        : "Lewat"
-                      : h.booked
-                        ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
-                        : "Tersedia";
-                    const timeColor = h.past
-                      ? "text-muted-foreground/50"
-                      : h.booked
-                        ? "text-blue-400"
-                        : "text-foreground";
-                    const statusColor = h.past
-                      ? "text-muted-foreground/50"
-                      : h.booked
-                        ? "text-muted-foreground"
-                        : "text-emerald-500/80";
-                    // Baris bisa diklik: ada booking → lihat session; tersedia →
-                    // booking jam itu; lewat+kosong → tidak bisa diklik.
-                    const href = h.sessionId
-                      ? `/session/${h.sessionId}`
-                      : !h.past
-                        ? `/open-table?tableId=${table.id}`
-                        : null;
+                    const selectable = isSelectable(h);
+                    const picked = selRange.has(h.startIso);
+                    const status = picked
+                      ? "Dipilih ✓"
+                      : h.past
+                        ? h.booked
+                          ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
+                          : "Lewat"
+                        : h.booked
+                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
+                          : "Tersedia";
+                    const timeColor = picked
+                      ? "text-primary"
+                      : h.past
+                        ? "text-muted-foreground/50"
+                        : h.booked
+                          ? "text-blue-400"
+                          : "text-foreground";
+                    const statusColor = picked
+                      ? "text-primary"
+                      : h.past
+                        ? "text-muted-foreground/50"
+                        : h.booked
+                          ? "text-muted-foreground"
+                          : "text-emerald-500/80";
 
                     const inner = (
                       <div className="flex items-center justify-between gap-3">
@@ -707,16 +778,43 @@ function TableSheet({
                     );
 
                     const rowClass = cn(
-                      "block px-3 py-2.5",
-                      h.past ? "bg-muted/20" : h.booked && "bg-muted/30",
-                      href && "transition hover:bg-muted/50 cursor-pointer"
+                      "block w-full text-left px-3 py-2.5 transition",
+                      picked
+                        ? "bg-primary/15"
+                        : h.past
+                          ? "bg-muted/20"
+                          : h.booked
+                            ? "bg-muted/30"
+                            : "",
+                      (selectable || h.sessionId) && !picked && "hover:bg-muted/50",
+                      (selectable || h.sessionId) && "cursor-pointer"
                     );
 
-                    return href ? (
-                      <Link key={h.startIso} href={href} className={rowClass}>
-                        {inner}
-                      </Link>
-                    ) : (
+                    // Ada booking → Link lihat session. Tersedia → pilih rentang.
+                    if (h.sessionId) {
+                      return (
+                        <Link
+                          key={h.startIso}
+                          href={`/session/${h.sessionId}`}
+                          className={rowClass}
+                        >
+                          {inner}
+                        </Link>
+                      );
+                    }
+                    if (selectable) {
+                      return (
+                        <button
+                          key={h.startIso}
+                          type="button"
+                          onClick={() => clickSlot(h)}
+                          className={rowClass}
+                        >
+                          {inner}
+                        </button>
+                      );
+                    }
+                    return (
                       <div key={h.startIso} className={rowClass}>
                         {inner}
                       </div>
@@ -736,6 +834,22 @@ function TableSheet({
             </p>
           )}
         </div>
+
+        {/* Footer: tombol booking — muncul saat ada rentang jam terpilih */}
+        {selStart && (
+          <div className="border-t border-border p-4 sm:p-5 shrink-0">
+            <p className="text-xs text-muted-foreground mb-2 text-center">
+              Terpilih: {formatTime(selStart)}–{formatTime(effEnd)}
+            </p>
+            <Button variant="gold" size="lg" className="w-full" asChild>
+              <Link
+                href={`/open-table?tableId=${table.id}&start=${encodeURIComponent(selStart)}&end=${encodeURIComponent(effEnd)}`}
+              >
+                Booking jam ini
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

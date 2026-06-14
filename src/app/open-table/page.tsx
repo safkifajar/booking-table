@@ -20,11 +20,11 @@ import {
 import { OpenTableForm } from "./OpenTableForm";
 
 interface PageProps {
-  searchParams: Promise<{ tableId?: string }>;
+  searchParams: Promise<{ tableId?: string; start?: string; end?: string }>;
 }
 
 export default async function OpenTablePage({ searchParams }: PageProps) {
-  const { tableId } = await searchParams;
+  const { tableId, start, end } = await searchParams;
   if (!tableId) redirect("/");
 
   const user = await getCurrentUser();
@@ -116,6 +116,8 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
           reservationConfig={resConfig}
           slots={slots}
           bookedSlotIsos={bookedSlotIsos}
+          initialStart={start}
+          initialEnd={end}
           menu={menu.map((c) => ({
             id: c.id,
             name: c.name,

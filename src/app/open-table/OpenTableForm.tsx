@@ -58,6 +58,9 @@ interface Props {
   slots: AvailableSlot[];
   /** ISO slot yang sudah ke-booking reservasi lain (di-disable di picker). */
   bookedSlotIsos?: string[];
+  /** Prefill jam mulai/selesai (ISO) — dari deep-link bottom sheet denah. */
+  initialStart?: string;
+  initialEnd?: string;
   menu: MenuCategoryLite[];
 }
 
@@ -79,6 +82,8 @@ export function OpenTableForm({
   reservationConfig,
   slots,
   bookedSlotIsos = [],
+  initialStart,
+  initialEnd,
   menu,
 }: Props) {
   const [title, setTitle] = React.useState("");
@@ -90,12 +95,20 @@ export function OpenTableForm({
   // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
   // Walk-in immediate ada di flow staff/waiter terpisah.
   const waktuMode: WaktuMode = "reservation";
-  // Default tanggal = groupKey slot pertama (tanggal paling awal yang tersedia).
+  // Prefill dari deep-link (bottom sheet denah): kalau initialStart cocok salah
+  // satu slot, pakai tanggal+jam itu. Kalau tidak, default slot pertama.
+  const initialSlot = initialStart
+    ? slots.find((s) => s.iso === initialStart) ?? null
+    : null;
   const [selectedDate, setSelectedDate] = React.useState<string>(
-    () => slots[0]?.groupKey ?? ""
+    () => initialSlot?.groupKey ?? slots[0]?.groupKey ?? ""
   );
-  const [selectedSlot, setSelectedSlot] = React.useState<string>(""); // jam mulai
-  const [selectedEnd, setSelectedEnd] = React.useState<string>(""); // jam selesai
+  const [selectedSlot, setSelectedSlot] = React.useState<string>(
+    () => (initialSlot ? initialSlot.iso : "")
+  );
+  const [selectedEnd, setSelectedEnd] = React.useState<string>(
+    () => (initialSlot && initialEnd ? initialEnd : "")
+  );
 
   // Cart order awal: Map<menuItemId, quantity>
   const [cart, setCart] = React.useState<Map<string, number>>(new Map());
