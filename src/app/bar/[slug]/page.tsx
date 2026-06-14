@@ -58,8 +58,11 @@ export default async function BarPage({ params }: PageProps) {
       ]);
       const tablesWithSession: FloorMapTable[] = tables.map((t) => {
         const forTable = sessions.filter((s) => s.table_id === t.id);
+        // Jadwal jam meja = semua session yg punya reservation_at (reserved
+        // ATAU open hasil promote reservasi yg masih berlangsung). Walk-in
+        // murni (reservation_at null) tidak masuk jadwal.
         const reservations = forTable
-          .filter((s) => s.status === "reserved")
+          .filter((s) => s.reservation_at)
           .sort((a, b) =>
             (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
           );

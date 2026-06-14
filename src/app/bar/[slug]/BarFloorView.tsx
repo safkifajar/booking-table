@@ -91,6 +91,8 @@ interface HourRow {
   /** "20:00–21:00" */
   label: string;
   booked: boolean;
+  /** true kalau slot dipakai session yg sudah aktif (open), bukan cuma reserved. */
+  inUse?: boolean;
   host?: string;
 }
 
@@ -131,13 +133,15 @@ function buildHourRows(
   // Perlakukan close sebagai hari berikutnya: tambah 24 jam.
   if (closeMin <= openMin) closeMin += 24 * 60;
 
-  // Rentang booked (ms epoch) untuk tanggal ini.
+  // Rentang booked (ms epoch) untuk tanggal ini. inUse = session sudah aktif
+  // (open/locked) hasil promote reservasi, bukan cuma reserved.
   const ranges = dayReservations
     .filter((r) => r.reservation_at && r.reservation_end_at)
     .map((r) => ({
       start: new Date(r.reservation_at!).getTime(),
       end: new Date(r.reservation_end_at!).getTime(),
       host: r.host_name,
+      inUse: r.status === "open" || r.status === "locked",
     }));
 
   const rows: HourRow[] = [];
@@ -151,6 +155,7 @@ function buildHourRows(
     rows.push({
       label: `${formatTime(slotStart.toISOString())}–${formatTime(slotEnd.toISOString())}`,
       booked: !!hit,
+      inUse: hit?.inUse,
       host: hit?.host,
     });
   }
@@ -635,7 +640,8 @@ function TableSheet({
                       </span>
                       {h.booked ? (
                         <span className="text-xs text-muted-foreground truncate">
-                          Dibooking{h.host ? ` · a/n ${h.host}` : ""}
+                          {h.inUse ? "Sedang dipakai" : "Dibooking"}
+                          {h.host ? ` · a/n ${h.host}` : ""}
                         </span>
                       ) : (
                         <span className="text-xs text-emerald-500/80">
