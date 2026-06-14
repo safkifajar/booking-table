@@ -91,6 +91,10 @@ export function OpenTableForm({
   // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
   // Walk-in immediate ada di flow staff/waiter terpisah.
   const waktuMode: WaktuMode = "reservation";
+  // Default tanggal = groupKey slot pertama (tanggal paling awal yang tersedia).
+  const [selectedDate, setSelectedDate] = React.useState<string>(
+    () => slots[0]?.groupKey ?? ""
+  );
   const [selectedSlot, setSelectedSlot] = React.useState<string>(""); // jam mulai
   const [selectedEnd, setSelectedEnd] = React.useState<string>(""); // jam selesai
 
@@ -107,8 +111,18 @@ export function OpenTableForm({
     [bookedSlotIsos]
   );
 
-  // Slot mulai yang bisa dipilih = semua slot kecuali yang sudah booked.
-  // (Slot booked tetap ditampilkan tapi disabled — handled di SlotPicker.)
+  // Daftar tanggal unik (groupKey) dari slots — untuk chip pilih hari.
+  const dateOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    for (const s of slots) seen.add(s.groupKey);
+    return Array.from(seen);
+  }, [slots]);
+
+  // Slot jam mulai hanya untuk tanggal terpilih.
+  const startSlotsForDate = React.useMemo(
+    () => slots.filter((s) => s.groupKey === selectedDate),
+    [slots, selectedDate]
+  );
 
   // Opsi jam selesai: slot SETELAH jam mulai, di hari yang sama, kontigu
   // (tiap step = slotInterval), berhenti tepat di slot booked pertama
@@ -273,33 +287,66 @@ export function OpenTableForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Pilih waktu reservasi: jam mulai + jam selesai */}
+          {/* Pilih waktu reservasi: tanggal → jam mulai → jam selesai */}
           {reservationEnabled ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Step 1: tanggal */}
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Tanggal
+                </label>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {dateOptions.map((gk) => (
+                    <button
+                      key={gk}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(gk);
+                        setSelectedSlot("");
+                        setSelectedEnd("");
+                      }}
+                      className={cn(
+                        "shrink-0 px-3.5 py-2 rounded-full border text-sm font-medium transition whitespace-nowrap",
+                        selectedDate === gk
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+                      )}
+                    >
+                      {formatGroupLabel(gk)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 2: jam mulai (hanya tanggal terpilih) */}
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Jam mulai
                 </label>
-                <SlotPicker
-                  slots={slots}
+                <TimeGrid
+                  slots={startSlotsForDate}
                   value={selectedSlot}
                   disabledIsos={bookedSet}
                   onChange={(iso) => {
                     setSelectedSlot(iso);
                     setSelectedEnd(""); // reset jam selesai saat mulai berubah
                   }}
+                  emptyText="Tidak ada slot tersedia di tanggal ini."
                 />
               </div>
+
+              {/* Step 3: jam selesai */}
               {selectedSlot && (
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Jam selesai
                   </label>
                   {endOptions.length > 0 ? (
-                    <EndSlotPicker
-                      options={endOptions}
+                    <TimeGrid
+                      slots={endOptions}
                       value={selectedEnd}
                       onChange={setSelectedEnd}
+                      emptyText=""
                     />
                   ) : (
                     <p className="text-xs text-muted-foreground">
@@ -537,104 +584,60 @@ export function OpenTableForm({
 }
 
 // ============================================================
-// SLOT PICKER
+// TIME GRID — grid jam flat (slot sudah difilter per tanggal)
 // ============================================================
 
-function SlotPicker({
+/** Ambil "HH:MM" dari label slot ("Hari ini · 14:00" → "14:00", "14:00" → "14:00"). */
+function slotTime(label: string): string {
+  return label.split("·")[1]?.trim() ?? label;
+}
+
+function TimeGrid({
   slots,
   value,
   onChange,
   disabledIsos,
+  emptyText,
 }: {
   slots: AvailableSlot[];
   value: string;
   onChange: (iso: string) => void;
   /** Slot yang sudah ke-booking reservasi lain — tampil tapi disabled. */
   disabledIsos?: Set<string>;
+  emptyText: string;
 }) {
-  const groups = React.useMemo(() => {
-    const map = new Map<string, AvailableSlot[]>();
-    for (const s of slots) {
-      const list = map.get(s.groupKey) ?? [];
-      list.push(s);
-      map.set(s.groupKey, list);
-    }
-    return Array.from(map.entries());
-  }, [slots]);
-
   if (slots.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-        Tidak ada slot tersedia. Coba lagi nanti atau hubungi bar.
+        {emptyText || "Tidak ada slot tersedia."}
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 max-h-64 overflow-y-auto rounded-md border border-border p-3">
-      {groups.map(([groupKey, groupSlots]) => (
-        <div key={groupKey}>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-            {formatGroupLabel(groupKey)}
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {groupSlots.map((s) => {
-              const time = s.label.split("·")[1]?.trim() ?? s.label;
-              const isBooked = disabledIsos?.has(s.iso) ?? false;
-              return (
-                <button
-                  key={s.iso}
-                  type="button"
-                  disabled={isBooked}
-                  title={isBooked ? "Sudah dibooking" : undefined}
-                  onClick={() => onChange(s.iso)}
-                  className={cn(
-                    "px-2 py-1.5 rounded-md border text-xs font-medium tabular-nums transition",
-                    isBooked
-                      ? "border-border/50 bg-muted/40 text-muted-foreground/50 line-through cursor-not-allowed"
-                      : value === s.iso
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-                  )}
-                >
-                  {time}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// Picker sederhana untuk jam selesai (flat list, no grouping).
-function EndSlotPicker({
-  options,
-  value,
-  onChange,
-}: {
-  options: AvailableSlot[];
-  value: string;
-  onChange: (iso: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-3 gap-1.5 max-h-40 overflow-y-auto rounded-md border border-border p-3">
-      {options.map((s) => (
-        <button
-          key={s.iso}
-          type="button"
-          onClick={() => onChange(s.iso)}
-          className={cn(
-            "px-2 py-1.5 rounded-md border text-xs font-medium tabular-nums transition",
-            value === s.iso
-              ? "border-primary bg-primary/15 text-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
-          )}
-        >
-          {s.label}
-        </button>
-      ))}
+    <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-52 overflow-y-auto rounded-md border border-border p-3">
+      {slots.map((s) => {
+        const isBooked = disabledIsos?.has(s.iso) ?? false;
+        return (
+          <button
+            key={s.iso}
+            type="button"
+            disabled={isBooked}
+            title={isBooked ? "Sudah dibooking" : undefined}
+            onClick={() => onChange(s.iso)}
+            className={cn(
+              "px-2 py-2 rounded-md border text-sm font-medium tabular-nums transition",
+              isBooked
+                ? "border-border/50 bg-muted/40 text-muted-foreground/50 line-through cursor-not-allowed"
+                : value === s.iso
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+            )}
+          >
+            {slotTime(s.label)}
+          </button>
+        );
+      })}
     </div>
   );
 }
