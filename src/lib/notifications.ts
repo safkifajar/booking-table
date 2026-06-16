@@ -14,6 +14,7 @@ import { notifications } from "@/lib/db/schema/notifications";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { sendPushToProfile } from "@/lib/push";
 
 type NotifType = "table_joined" | "table_invite" | "invite_accepted" | "general";
 
@@ -46,7 +47,14 @@ export async function createNotification(input: {
     body: input.body ?? null,
     link: input.link ?? null,
   });
+  // Realtime in-app (SSE) — refresh bell.
   await notify(channels.user(input.profileId), { kind: "notification" });
+  // Web push (popup OS, walau web ditutup) — best-effort, jangan gagalkan flow.
+  void sendPushToProfile(input.profileId, {
+    title: input.title,
+    body: input.body ?? undefined,
+    url: input.link ?? undefined,
+  }).catch(() => {});
 }
 
 /** List notif user yg sedang login (terbaru dulu, limit). */

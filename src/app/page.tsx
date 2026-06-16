@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Search, MapPin, Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
+import { PushSetup } from "@/components/PushSetup";
 import { StoryBarSection } from "@/components/story/StoryBarSection";
 import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
@@ -56,8 +57,13 @@ export default async function HomePage() {
             <Search className="h-4 w-4" />
           </button>
 
-          {/* Notifikasi in-app (hanya user login) */}
-          {!isAnon && profile && <NotificationBell userId={profile.id} />}
+          {/* Notifikasi: tombol aktifkan push + bell (hanya user login) */}
+          {!isAnon && profile && (
+            <>
+              <PushSetup />
+              <NotificationBell userId={profile.id} />
+            </>
+          )}
         </div>
       </header>
 
