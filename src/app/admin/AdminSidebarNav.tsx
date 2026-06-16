@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   Users,
   UserCircle,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,12 @@ const NAV: NavItem[] = [
         href: "/admin/banners",
         label: "Banner Promo",
         icon: <ImageIcon className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/floor",
+        label: "Kelola Denah",
+        icon: <LayoutGrid className="h-4 w-4" />,
       },
     ],
   },
