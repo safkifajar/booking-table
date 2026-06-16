@@ -154,15 +154,10 @@ export function ProfileMenuList() {
         />
       </MenuGroup>
 
-      {/* Group: Notifikasi (toggle push per perangkat) */}
+      {/* Group: Notifikasi (toggle push per perangkat) — switch ala iOS */}
       {pushState.supported && (
         <MenuGroup>
-          <button
-            type="button"
-            onClick={handleTogglePush}
-            disabled={pushState.busy}
-            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/40 active:bg-muted/60 disabled:opacity-50 disabled:cursor-not-allowed transition group"
-          >
+          <div className="w-full flex items-center gap-3 px-4 py-3.5">
             <span
               className={
                 pushState.active
@@ -170,9 +165,7 @@ export function ProfileMenuList() {
                   : "h-8 w-8 rounded-md bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground"
               }
             >
-              {pushState.busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : pushState.active ? (
+              {pushState.active ? (
                 <BellRing className="h-4 w-4" />
               ) : (
                 <BellOff className="h-4 w-4" />
@@ -182,20 +175,39 @@ export function ProfileMenuList() {
               <span className="block text-sm font-medium">Notifikasi</span>
               <span className="block text-xs text-muted-foreground truncate">
                 {pushState.active
-                  ? "Aktif di perangkat ini · ketuk untuk matikan"
-                  : "Nonaktif · ketuk untuk aktifkan"}
+                  ? "Aktif di perangkat ini"
+                  : "Nonaktif di perangkat ini"}
               </span>
             </span>
-            <span
-              className={
-                pushState.active
-                  ? "text-xs font-medium text-primary shrink-0"
-                  : "text-xs font-medium text-muted-foreground shrink-0"
+            {/* Switch: geser kanan = aktif (emas), kiri = mati (abu) */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={pushState.active}
+              aria-label={
+                pushState.active ? "Matikan notifikasi" : "Aktifkan notifikasi"
               }
+              onClick={handleTogglePush}
+              disabled={pushState.busy}
+              className={[
+                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                "disabled:cursor-not-allowed disabled:opacity-60",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                pushState.active ? "bg-primary" : "bg-muted-foreground/30",
+              ].join(" ")}
             >
-              {pushState.active ? "Aktif" : "Mati"}
-            </span>
-          </button>
+              <span
+                className={[
+                  "inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm transition-transform",
+                  pushState.active ? "translate-x-[22px]" : "translate-x-0.5",
+                ].join(" ")}
+              >
+                {pushState.busy && (
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                )}
+              </span>
+            </button>
+          </div>
         </MenuGroup>
       )}
 
