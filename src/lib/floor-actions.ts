@@ -17,6 +17,7 @@ import { db } from "@/lib/db/client";
 import { floorAreas, tables } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
+import { tableSize } from "@/lib/table-size";
 
 function slugify(name: string): string {
   return (
@@ -148,8 +149,6 @@ const tableSchema = z.object({
   capacity: z.number().int().min(1).max(50),
   posX: z.number().int().min(0).max(3000),
   posY: z.number().int().min(0).max(3000),
-  width: z.number().int().min(20).max(600),
-  height: z.number().int().min(20).max(600),
   rotation: z.number().int().min(0).max(359),
   minSpend: z.number().int().min(0).max(100_000_000),
 });
@@ -166,6 +165,7 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     .where(and(eq(tables.areaId, data.areaId), eq(tables.label, data.label)));
   if (clash) throw new Error(`Label "${data.label}" sudah ada di area ini`);
 
+  const size = tableSize(data.shape, data.capacity);
   await db.insert(tables).values({
     areaId: data.areaId,
     label: data.label,
@@ -173,8 +173,8 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     capacity: data.capacity,
     posX: data.posX,
     posY: data.posY,
-    width: data.width,
-    height: data.height,
+    width: size.width,
+    height: size.height,
     rotation: data.rotation,
     minSpend: data.minSpend,
   });
@@ -207,6 +207,7 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
     throw new Error(`Label "${data.label}" sudah ada di area ini`);
   }
 
+  const size = tableSize(data.shape, data.capacity);
   await db
     .update(tables)
     .set({
@@ -215,8 +216,8 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
       capacity: data.capacity,
       posX: data.posX,
       posY: data.posY,
-      width: data.width,
-      height: data.height,
+      width: size.width,
+      height: size.height,
       rotation: data.rotation,
       minSpend: data.minSpend,
     })

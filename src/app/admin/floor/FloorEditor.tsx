@@ -35,6 +35,7 @@ import {
   saveDraftPositions,
   publishPositions,
 } from "@/lib/floor-actions";
+import { tableSize } from "@/lib/table-size";
 import type { FloorArea, BarTable, TableShape } from "@/types/db";
 
 type AreaWithTables = { area: FloorArea; tables: BarTable[] };
@@ -196,11 +197,11 @@ function AreaWorkspace({
   type SaveStatus = "saved" | "unsaved" | "saving" | "error";
   const [status, setStatus] = React.useState<SaveStatus>("saved");
 
-  // Ada draft belum di-publish? (dari props) — untuk enable tombol Publish.
-  const hasUnpublishedDraft = tables.some(
-    (t) => t.draft_pos_x != null || t.draft_pos_y != null
+  // Ada draft belum di-publish? Awal dari props (data server), lalu jadi true
+  // begitu ada auto-save draft baru. Reset false setelah publish.
+  const [hasDraft, setHasDraft] = React.useState(
+    tables.some((t) => t.draft_pos_x != null || t.draft_pos_y != null)
   );
-  const [published, setPublished] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
 
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
@@ -229,7 +230,7 @@ function AreaWorkspace({
         })),
       });
       setStatus("saved");
-      setPublished(false); // ada draft baru → belum publish
+      setHasDraft(true); // ada draft baru → tombol publish aktif
     } catch {
       setStatus("error");
     }
@@ -265,7 +266,7 @@ function AreaWorkspace({
       await flushDraft(); // pastikan draft terbaru tersimpan dulu
       await publishPositions(area.id);
       toast.success("Posisi dipublish — tampilan customer diperbarui");
-      setPublished(true);
+      setHasDraft(false);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal publish posisi"));
@@ -298,8 +299,8 @@ function AreaWorkspace({
     }
   }
 
-  const canPublish =
-    (hasUnpublishedDraft || status !== "saved") && !published;
+  // Bisa publish kalau ada draft belum dipublish, atau lagi/baru ada perubahan.
+  const canPublish = hasDraft || status !== "saved";
 
   return (
     <>
@@ -309,7 +310,7 @@ function AreaWorkspace({
           {area.name} · {area.canvas_width}×{area.canvas_height} ·{" "}
           {tables.length} meja
         </span>
-        <SaveStatusBadge status={status} published={published} />
+        <SaveStatusBadge status={status} published={!hasDraft} />
         <div className="flex-1" />
         <Button variant="ghost" size="sm" onClick={onEditArea}>
           <Pencil className="h-4 w-4" /> Edit Area
@@ -572,8 +573,6 @@ function TableDialog({
   const [label, setLabel] = React.useState(t?.label ?? "");
   const [shape, setShape] = React.useState<TableShape>(t?.shape ?? "round");
   const [capacity, setCapacity] = React.useState(String(t?.capacity ?? 4));
-  const [width, setWidth] = React.useState(String(t?.width ?? 80));
-  const [height, setHeight] = React.useState(String(t?.height ?? 80));
   const [rotation, setRotation] = React.useState(String(t?.rotation ?? 0));
   const [minSpend, setMinSpend] = React.useState(String(t?.min_spend ?? 0));
   const [saving, setSaving] = React.useState(false);
@@ -586,18 +585,17 @@ function TableDialog({
         label: label.trim(),
         shape,
         capacity: Number(capacity),
-        width: Number(width),
-        height: Number(height),
         rotation: Number(rotation),
         minSpend: Number(minSpend) || 0,
       };
       if (isNew) {
-        // Taruh meja baru di tengah kanvas.
+        // Ukuran otomatis dari kapasitas+bentuk → taruh di tengah kanvas.
+        const size = tableSize(shape, Number(capacity));
         await createTable({
           areaId,
           ...common,
-          posX: Math.round((canvas.w - common.width) / 2),
-          posY: Math.round((canvas.h - common.height) / 2),
+          posX: Math.round((canvas.w - size.width) / 2),
+          posY: Math.round((canvas.h - size.height) / 2),
         });
         toast.success("Meja dibuat");
       } else {
@@ -662,40 +660,19 @@ function TableDialog({
               ))}
             </select>
           </Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Lebar">
-              <input
-                type="number"
-                value={width}
-                onChange={(e) => setWidth(e.target.value)}
-                required
-                min={20}
-                max={600}
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Tinggi">
-              <input
-                type="number"
-                value={height}
-                onChange={(e) => setHeight(e.target.value)}
-                required
-                min={20}
-                max={600}
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Rotasi °">
-              <input
-                type="number"
-                value={rotation}
-                onChange={(e) => setRotation(e.target.value)}
-                min={0}
-                max={359}
-                className={inputCls}
-              />
-            </Field>
-          </div>
+          <Field label="Rotasi ° (0 = normal)">
+            <input
+              type="number"
+              value={rotation}
+              onChange={(e) => setRotation(e.target.value)}
+              min={0}
+              max={359}
+              className={inputCls}
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Ukuran meja otomatis menyesuaikan jumlah kursi & bentuk.
+          </p>
           <Field label="Min spend (Rp, 0 = tidak ada)">
             <input
               type="number"
