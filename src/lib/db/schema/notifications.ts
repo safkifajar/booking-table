@@ -29,6 +29,9 @@ export const notifications = pgTable(
     body: text("body"),
     link: text("link"),
     readAt: timestamp("read_at", { mode: "date" }),
+    // Saat notif undangan (table_invite) direspon (terima/tolak). NULL = belum
+    // → tombol Terima/Tolak masih muncul di bell.
+    respondedAt: timestamp("responded_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

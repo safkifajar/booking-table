@@ -35,11 +35,14 @@ export const tableShapeEnum = pgEnum("table_shape", [
   "booth",
 ]);
 
+// Urutan mengikuti urutan fisik di Postgres: 4 nilai awal dari migration 0023,
+// lalu 'invite_rejected' ditambah di akhir via ALTER TYPE (migration 0025).
 export const notificationTypeEnum = pgEnum("notification_type", [
   "table_joined", // auto-join (friends) — kamu sudah digabung ke meja
   "table_invite", // invite_only — kamu diundang, perlu terima
-  "invite_accepted", // host: undangan diterima
+  "invite_accepted", // pengundang: undangan diterima
   "general",
+  "invite_rejected", // pengundang: undangan ditolak
 ]);
 
 export const orderStatusEnum = pgEnum("order_status", [

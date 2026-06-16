@@ -36,7 +36,7 @@ import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
-import { createNotification } from "@/lib/notifications";
+import { createNotification, markInviteResponded } from "@/lib/notifications";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -820,23 +820,46 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     .set({ status: "joined", joinedAt: new Date() })
     .where(eq(sessionMembers.id, member.id));
 
-  // Notif ke host bahwa undangan diterima.
+  // Notif ke pengundang bahwa undangan diterima. Pengundang = invited_by
+  // (fallback host kalau null, mestinya selalu terisi untuk invite).
   await createNotification({
-    profileId: row.host_id,
+    profileId: member.invitedBy ?? row.host_id,
     type: "invite_accepted",
     title: `${profile.displayName} menerima undanganmu`,
     body: `${profile.displayName} bergabung ke meja.`,
     link: `/session/${sessionId}`,
   });
 
+  // Tandai notif undangan milik penerima sudah direspon → tombol Terima/Tolak
+  // di bell hilang, diganti label status.
+  await markInviteResponded(`/session/${sessionId}`);
+
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
 
-/** Tolak undangan: hapus member pending yg diundang. */
+/** Tolak undangan: hapus member pending yg diundang + beri tahu pengundang. */
 export async function declineInvite(input: z.infer<typeof joinSchema>) {
   const profile = await requireProfile();
   const { sessionId } = joinSchema.parse(input);
+
+  // Baca pengundang + label meja SEBELUM delete (row member hilang setelahnya).
+  const [info] = await db
+    .select({
+      invitedBy: sessionMembers.invitedBy,
+      hostId: tableSessions.hostId,
+      tableLabel: tables.label,
+    })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "pending")
+      )
+    );
 
   await db
     .delete(sessionMembers)
@@ -847,6 +870,20 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
         eq(sessionMembers.status, "pending")
       )
     );
+
+  // Notif ke pengundang bahwa undangan ditolak (counterpart invite_accepted).
+  if (info) {
+    await createNotification({
+      profileId: info.invitedBy ?? info.hostId,
+      type: "invite_rejected",
+      title: `${profile.displayName} menolak undanganmu`,
+      body: `${profile.displayName} tidak bergabung ke meja ${info.tableLabel}.`,
+      link: `/session/${sessionId}`,
+    });
+  }
+
+  // Tandai notif undangan milik penolak sudah direspon → tombol aksi hilang.
+  await markInviteResponded(`/session/${sessionId}`);
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);

@@ -16,7 +16,12 @@ import { channels } from "@/lib/realtime/channels";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { sendPushToProfile } from "@/lib/push";
 
-type NotifType = "table_joined" | "table_invite" | "invite_accepted" | "general";
+type NotifType =
+  | "table_joined"
+  | "table_invite"
+  | "invite_accepted"
+  | "invite_rejected"
+  | "general";
 
 export interface AdminNotificationRow {
   id: string;
@@ -25,6 +30,8 @@ export interface AdminNotificationRow {
   body: string | null;
   link: string | null;
   read: boolean;
+  /** Notif undangan sudah direspon (terima/tolak) → tombol aksi disembunyikan. */
+  responded: boolean;
   created_at: string;
 }
 
@@ -71,6 +78,7 @@ export async function getNotifications(
       body: notifications.body,
       link: notifications.link,
       readAt: notifications.readAt,
+      respondedAt: notifications.respondedAt,
       createdAt: notifications.createdAt,
     })
     .from(notifications)
@@ -84,8 +92,32 @@ export async function getNotifications(
     body: r.body,
     link: r.link,
     read: r.readAt != null,
+    responded: r.respondedAt != null,
     created_at: r.createdAt.toISOString(),
   }));
+}
+
+/**
+ * Tandai notif undangan (table_invite) milik user login sebagai SUDAH direspon
+ * (dipanggil setelah acceptInvite/declineInvite). Dimatch by link
+ * (/session/<id>) karena notif tidak menyimpan sessionId terstruktur.
+ * Sekaligus set read_at supaya badge unread ikut turun.
+ */
+export async function markInviteResponded(link: string): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile) return;
+  const now = new Date();
+  await db
+    .update(notifications)
+    .set({ respondedAt: now, readAt: now })
+    .where(
+      and(
+        eq(notifications.profileId, profile.id),
+        eq(notifications.type, "table_invite"),
+        eq(notifications.link, link),
+        isNull(notifications.respondedAt)
+      )
+    );
 }
 
 /** Jumlah notif belum dibaca user login. */

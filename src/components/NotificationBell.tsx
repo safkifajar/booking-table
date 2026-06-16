@@ -98,7 +98,8 @@ export function NotificationBell({ userId }: { userId: string }) {
     setBusyId(n.id);
     try {
       await acceptInvite({ sessionId: sid });
-      await markNotificationRead(n.id);
+      // Server (acceptInvite) sudah set responded_at; refresh() di finally
+      // akan re-fetch sehingga tombol hilang & jadi label status.
       toast.success("Undangan diterima — kamu bergabung ke meja");
       setOpen(false);
       router.push(n.link!);
@@ -116,7 +117,8 @@ export function NotificationBell({ userId }: { userId: string }) {
     setBusyId(n.id);
     try {
       await declineInvite({ sessionId: sid });
-      await markNotificationRead(n.id);
+      // Server (declineInvite) sudah set responded_at; refresh() di finally
+      // akan re-fetch sehingga tombol hilang & jadi label status.
       toast.success("Undangan ditolak");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal tolak undangan"));
@@ -173,7 +175,11 @@ export function NotificationBell({ userId }: { userId: string }) {
                 </p>
               ) : (
                 items.map((n) => {
-                  const isInvite = n.type === "table_invite";
+                  // Tombol Terima/Tolak hanya untuk undangan yg BELUM direspon.
+                  const isPendingInvite =
+                    n.type === "table_invite" && !n.responded;
+                  const isRespondedInvite =
+                    n.type === "table_invite" && n.responded;
                   return (
                     <div
                       key={n.id}
@@ -201,7 +207,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                           </div>
                         </div>
                       </button>
-                      {isInvite && (
+                      {isPendingInvite && (
                         <div className="flex gap-2 mt-2 pl-4">
                           <button
                             type="button"
@@ -225,6 +231,12 @@ export function NotificationBell({ userId }: { userId: string }) {
                             Tolak
                           </button>
                         </div>
+                      )}
+                      {isRespondedInvite && (
+                        <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
+                          <Check className="h-3 w-3" />
+                          Undangan sudah direspon
+                        </p>
                       )}
                     </div>
                   );
