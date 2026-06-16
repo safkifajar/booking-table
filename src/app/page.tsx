@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Bell, Search, MapPin, Plus, ChevronRight } from "lucide-react";
+import { Search, MapPin, Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/NotificationBell";
 import { StoryBarSection } from "@/components/story/StoryBarSection";
 import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
@@ -55,14 +56,8 @@ export default async function HomePage() {
             <Search className="h-4 w-4" />
           </button>
 
-          {/* Notification (placeholder action — future feature) */}
-          <button
-            type="button"
-            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition text-muted-foreground hover:text-foreground"
-            aria-label="Notifikasi"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
+          {/* Notifikasi in-app (hanya user login) */}
+          {!isAnon && profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
 

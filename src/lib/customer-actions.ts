@@ -24,6 +24,7 @@ import { staffRoles } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 
 // ============================================================
 // LIST
@@ -261,4 +262,54 @@ export async function deleteCustomer(id: string) {
   });
 
   revalidatePath("/admin/users");
+}
+
+// ============================================================
+// SEARCH KANDIDAT UNDANGAN (publik — utk ajak/undang ke meja)
+// ============================================================
+
+export interface InviteCandidate {
+  id: string;
+  name: string;
+  email: string;
+}
+
+/**
+ * Cari user yg bisa diajak/diundang ke meja. PUBLIK (auth = user login,
+ * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri.
+ * Wajib ada query (min 1 char) supaya tidak dump semua user.
+ */
+export async function searchInviteCandidates(
+  queryRaw: string
+): Promise<InviteCandidate[]> {
+  const me = await getCurrentProfile();
+  if (!me) return [];
+  const q = (queryRaw ?? "").trim();
+  if (q.length < 1) return [];
+
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const rows = await db
+    .select({
+      id: users.id,
+      name: profiles.displayName,
+      email: users.email,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .where(
+      and(
+        sql`${users.id} <> ${me.id}`,
+        sql`${users.id} NOT IN (${staffIds})`,
+        eq(profiles.isGuest, false),
+        or(
+          ilike(profiles.displayName, `%${q}%`),
+          ilike(users.email, `%${q}%`)
+        )
+      )
+    )
+    .orderBy(profiles.displayName)
+    .limit(10);
+
+  return rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
 }

@@ -104,6 +104,13 @@ export const sessionMembers = pgTable(
       .references(() => profiles.id, { onDelete: "cascade" }),
     role: memberRoleEnum("role").notNull().default("member"),
     status: memberStatusEnum("status").notNull().default("joined"),
+    /**
+     * Host yg mengundang (invite_only). Terisi = undangan (user yg approve).
+     * NULL + status pending = request-join biasa (host yg approve).
+     */
+    invitedBy: uuid("invited_by").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
     joinedAt: timestamp("joined_at", { mode: "date" }).notNull().defaultNow(),
     leftAt: timestamp("left_at", { mode: "date" }),
   },

@@ -284,3 +284,125 @@ Email ini dikirim ke ${email}. Kalau bukan kamu, abaikan saja.
 
   return { html, text };
 }
+
+interface TableInviteInput {
+  email: string;
+  /** Nama orang yg mengajak/mengundang */
+  inviterName: string;
+  /** Label meja, mis "T4" */
+  tableLabel: string;
+  /** Nama venue */
+  barName: string;
+  /** Link ke session (mis. https://.../session/<id>) */
+  link: string;
+  /**
+   * "joined" = friends, sudah otomatis gabung.
+   * "invited" = invite_only, perlu terima undangan dulu.
+   */
+  mode: "joined" | "invited";
+}
+
+/**
+ * Email ajak/undang gabung meja.
+ * - mode "joined": "kamu sudah digabung" (friends auto-join).
+ * - mode "invited": "kamu diundang, buka untuk terima" (invite_only).
+ */
+export function tableInviteEmail(
+  input: TableInviteInput
+): { html: string; text: string } {
+  const { email, inviterName, tableLabel, barName, link, mode } = input;
+  const joined = mode === "joined";
+  const heading = joined
+    ? `Kamu diajak gabung meja ${tableLabel}`
+    : `Kamu diundang ke meja ${tableLabel}`;
+  const bodyLine = joined
+    ? `<strong style="color:${COLORS.text};">${inviterName}</strong> mengajak kamu gabung ke meja <strong style="color:${COLORS.text};">${tableLabel}</strong> di ${barName}. Kamu sudah otomatis bergabung — buka untuk lihat mejanya.`
+    : `<strong style="color:${COLORS.text};">${inviterName}</strong> mengundang kamu ke meja <strong style="color:${COLORS.text};">${tableLabel}</strong> di ${barName}. Buka untuk <strong style="color:${COLORS.text};">terima undangan</strong>.`;
+  const cta = joined ? "Lihat Meja →" : "Terima Undangan →";
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${heading}</title>
+</head>
+<body style="margin:0;padding:0;background:${COLORS.bg};color:${COLORS.text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${COLORS.bg};padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:16px;overflow:hidden;">
+          <tr>
+            <td style="padding:32px 32px 8px 32px;">
+              <div style="display:inline-block;width:48px;height:1px;background:${COLORS.primary};vertical-align:middle;"></div>
+              <span style="margin-left:12px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${COLORS.primary};font-weight:600;vertical-align:middle;">
+                ${barName}
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 32px 8px 32px;">
+              <h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:700;color:${COLORS.text};">
+                ${heading}
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 24px 32px;">
+              <p style="margin:0;font-size:15px;line-height:1.55;color:${COLORS.muted};">
+                ${bodyLine}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <a href="${link}" target="_blank" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,${COLORS.primaryLight} 0%,${COLORS.primary} 50%,${COLORS.primaryDark} 100%);color:${COLORS.bg};text-decoration:none;font-weight:600;font-size:15px;border-radius:8px;">
+                ${cta}
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <p style="margin:0 0 8px 0;font-size:12px;color:${COLORS.muted};">
+                Atau buka URL berikut:
+              </p>
+              <p style="margin:0;font-size:12px;color:${COLORS.primary};word-break:break-all;">
+                <a href="${link}" style="color:${COLORS.primary};text-decoration:underline;">${link}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px;">
+              <div style="height:1px;background:${COLORS.border};"></div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px 28px 32px;">
+              <p style="margin:0;font-size:12px;color:${COLORS.muted};">
+                Email ini dikirim ke <strong style="color:${COLORS.text};">${email}</strong>. Kalau kamu tidak mengenal pengirim, abaikan saja.
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:24px 0 0 0;font-size:11px;color:${COLORS.muted};letter-spacing:1px;">
+          © ${new Date().getFullYear()} ${barName}
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `${heading}
+
+${inviterName} ${joined ? "mengajak" : "mengundang"} kamu ke meja ${tableLabel} di ${barName}.
+${joined ? "Kamu sudah otomatis bergabung." : "Buka untuk terima undangan."}
+
+${link}
+
+Email ini dikirim ke ${email}.
+
+© ${new Date().getFullYear()} ${barName}`;
+
+  return { html, text };
+}

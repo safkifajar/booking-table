@@ -35,6 +35,13 @@ export const tableShapeEnum = pgEnum("table_shape", [
   "booth",
 ]);
 
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "table_joined", // auto-join (friends) — kamu sudah digabung ke meja
+  "table_invite", // invite_only — kamu diundang, perlu terima
+  "invite_accepted", // host: undangan diterima
+  "general",
+]);
+
 export const orderStatusEnum = pgEnum("order_status", [
   "open",
   "submitted",

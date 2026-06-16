@@ -10,4 +10,6 @@ export const channels = {
   staff: (barId: string) => `staff:${barId}`,
   /** Story updates broadcast ke semua viewer di bar */
   bar: (barId: string) => `bar:${barId}`,
+  /** Notifikasi in-app per user (profileId) */
+  user: (profileId: string) => `user:${profileId}`,
 };

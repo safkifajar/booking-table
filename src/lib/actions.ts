@@ -31,10 +31,14 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
+import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { createNotification } from "@/lib/notifications";
+import { sendEmail } from "@/lib/auth-v2/email-service";
+import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import type { PaymentStatus } from "@/types/db";
 import {
@@ -91,6 +95,13 @@ const openTableSchema = z.object({
   dpMethod: z
     .enum(["qris", "cash", "card", "gopay", "ovo", "mock"])
     .optional(),
+  /**
+   * User yg diajak/diundang (profile id). Untuk visibility:
+   * - "friends": langsung di-join (status joined)
+   * - "invite_only": diundang (status pending + invited_by = host)
+   * Diabaikan kalau visibility "public".
+   */
+  invitedUserIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 const addOrderItemSchema = z.object({
@@ -177,10 +188,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   const [tableRow] = await db
     .select({
       id: tables.id,
+      label: tables.label,
       capacity: tables.capacity,
       is_active: tables.isActive,
       min_spend: tables.minSpend,
       bar_id: floorAreas.barId,
+      bar_name: bars.name,
       opening_hours: bars.openingHours,
       reservation_config: bars.reservationConfig,
     })
@@ -332,6 +345,50 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     }
   }
 
+  // 7b. Resolusi user yg diajak/diundang (cuma untuk friends/invite_only).
+  // Validasi: bukan host, non-staff, non-guest, dedup. Cek kapasitas.
+  type Invitee = { id: string; name: string; email: string };
+  let invitees: Invitee[] = [];
+  const inviteMode: "joined" | "invited" | null =
+    data.visibility === "friends"
+      ? "joined"
+      : data.visibility === "invite_only"
+        ? "invited"
+        : null;
+  if (inviteMode && data.invitedUserIds && data.invitedUserIds.length > 0) {
+    const uniqueIds = Array.from(new Set(data.invitedUserIds)).filter(
+      (id) => id !== profile.id
+    );
+    if (uniqueIds.length > 0) {
+      const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+      const rows = await db
+        .select({
+          id: profiles.id,
+          name: profiles.displayName,
+          email: users.email,
+        })
+        .from(profiles)
+        .innerJoin(users, eq(users.id, profiles.id))
+        .where(
+          and(
+            inArray(profiles.id, uniqueIds),
+            eq(profiles.isGuest, false),
+            sql`${profiles.id} NOT IN (${staffIds})`
+          )
+        );
+      invitees = rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+      // friends auto-join makan slot → cek kapasitas (host + invitees).
+      if (inviteMode === "joined") {
+        const cap = data.maxGuests ?? tableRow.capacity;
+        if (1 + invitees.length > cap) {
+          throw new Error(
+            `Melebihi kapasitas meja (${cap}). Kurangi teman yang diajak.`
+          );
+        }
+      }
+    }
+  }
+
   // 8. Transaction: create session + members + order + items + invite + DP
   let sessionId: string;
   let dpPaymentId: string | null = null;
@@ -398,6 +455,19 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         code: generateInviteCode(),
         createdBy: profile.id,
       });
+
+      // Ajak/undang user: friends → joined, invite_only → pending+invited_by.
+      if (inviteMode && invitees.length > 0) {
+        await tx.insert(sessionMembers).values(
+          invitees.map((u) => ({
+            sessionId: newSession.id,
+            profileId: u.id,
+            role: "member" as const,
+            status: inviteMode === "joined" ? ("joined" as const) : ("pending" as const),
+            invitedBy: inviteMode === "invited" ? profile.id : null,
+          }))
+        );
+      }
 
       // DP payment (kalau perlu) — insert pending dulu, gateway call di luar tx
       if (dpRequired && hostMember) {
@@ -466,6 +536,46 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
   await notifySessionAndStaff(sessionId);
   revalidatePath("/bar/[slug]", "page");
+
+  // 10. Notif in-app + email ke user yg diajak/diundang (best-effort).
+  if (inviteMode && invitees.length > 0) {
+    const link = `/session/${sessionId}`;
+    const tableLabel = tableRow.label ?? "meja";
+    await Promise.allSettled(
+      invitees.map(async (u) => {
+        await createNotification({
+          profileId: u.id,
+          type: inviteMode === "joined" ? "table_joined" : "table_invite",
+          title:
+            inviteMode === "joined"
+              ? `${profile.displayName} mengajak kamu gabung`
+              : `${profile.displayName} mengundang kamu ke meja ${tableLabel}`,
+          body:
+            inviteMode === "joined"
+              ? `Kamu sudah otomatis bergabung ke meja ${tableLabel}.`
+              : `Buka untuk terima undangan ke meja ${tableLabel}.`,
+          link,
+        });
+        const tpl = tableInviteEmail({
+          email: u.email,
+          inviterName: profile.displayName,
+          tableLabel,
+          barName: tableRow.bar_name ?? "SOHO",
+          link,
+          mode: inviteMode,
+        });
+        await sendEmail({
+          to: u.email,
+          subject:
+            inviteMode === "joined"
+              ? `Kamu diajak gabung meja ${tableLabel}`
+              : `Undangan ke meja ${tableLabel}`,
+          html: tpl.html,
+          text: tpl.text,
+        });
+      })
+    );
+  }
 
   // Walk-in → langsung session view (mulai pesan). Reservation → session
   // view juga (lihat status pending DP). Kalau DP pending (mis. QRIS), client
@@ -656,6 +766,84 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
       and(
         eq(sessionMembers.id, memberId),
         eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending")
+      )
+    );
+
+  await notifySessionAndStaff(sessionId);
+  revalidatePath(`/session/${sessionId}`);
+}
+
+/**
+ * Terima undangan (invite_only): user yg DIUNDANG (member pending dgn
+ * invited_by terisi) → jadi joined. Cek kapasitas. Beda dgn approveJoinRequest
+ * (itu host yg approve request-join). Di sini USER sendiri yg terima.
+ */
+export async function acceptInvite(input: z.infer<typeof joinSchema>) {
+  const profile = await requireProfile();
+  const { sessionId } = joinSchema.parse(input);
+
+  // Pastikan caller adalah member pending yg DIUNDANG (invited_by not null).
+  const [member] = await db
+    .select({ id: sessionMembers.id, invitedBy: sessionMembers.invitedBy })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "pending")
+      )
+    );
+  if (!member || member.invitedBy == null) {
+    throw new Error("Undangan tidak ditemukan atau sudah tidak berlaku");
+  }
+
+  // Kapasitas
+  const [row] = await db
+    .select({ capacity: tables.capacity, host_id: tableSessions.hostId })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!row) throw new Error("Session tidak ditemukan");
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(
+      and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
+    );
+  if (Number(count) >= row.capacity) {
+    throw new Error("Meja sudah penuh");
+  }
+
+  await db
+    .update(sessionMembers)
+    .set({ status: "joined", joinedAt: new Date() })
+    .where(eq(sessionMembers.id, member.id));
+
+  // Notif ke host bahwa undangan diterima.
+  await createNotification({
+    profileId: row.host_id,
+    type: "invite_accepted",
+    title: `${profile.displayName} menerima undanganmu`,
+    body: `${profile.displayName} bergabung ke meja.`,
+    link: `/session/${sessionId}`,
+  });
+
+  await notifySessionAndStaff(sessionId);
+  revalidatePath(`/session/${sessionId}`);
+}
+
+/** Tolak undangan: hapus member pending yg diundang. */
+export async function declineInvite(input: z.infer<typeof joinSchema>) {
+  const profile = await requireProfile();
+  const { sessionId } = joinSchema.parse(input);
+
+  await db
+    .delete(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id),
         eq(sessionMembers.status, "pending")
       )
     );
