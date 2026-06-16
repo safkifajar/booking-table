@@ -21,12 +21,17 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-/** Window history reservasi: dari kemarin sampai N hari ke depan. */
-function historyWindow(bookingWindowDays: number): { start: Date; end: Date } {
+/** Window history reservasi: dari kemarin sampai N hari ke depan + 'now'. */
+function historyWindow(bookingWindowDays: number): {
+  start: Date;
+  end: Date;
+  now: Date;
+} {
   const nowMs = Date.now();
   return {
     start: new Date(nowMs - 24 * 60 * 60 * 1000),
     end: new Date(nowMs + bookingWindowDays * 24 * 60 * 60 * 1000),
+    now: new Date(nowMs),
   };
 }
 
@@ -66,11 +71,15 @@ export default async function BarPage({ params }: PageProps) {
   // banyak reservasi di slot berbeda — bottom sheet tampilkan semua + history.
   const reservationsByTable: Record<string, ActiveSessionView[]> = {};
 
-  // History: reservasi yg sudah SELESAI (closed) tapi masih dalam booking
-  // window — untuk ditandai 'Selesai' di list jam (bukan 'Tersedia' lagi).
-  const { start: windowStart, end: windowEnd } = historyWindow(
-    reservationConfig.bookingWindowDays
-  );
+  // History: reservasi yg sudah SELESAI (closed) DAN waktunya sudah lewat
+  // (reservation_end_at <= now) — ditandai 'Selesai' di list jam.
+  // Reservasi closed yg BELUM lewat (meja ditutup lebih awal / dibatalkan)
+  // TIDAK masuk history → slot kembali Tersedia & bisa dibooking orang lain.
+  const {
+    start: windowStart,
+    end: windowEnd,
+    now,
+  } = historyWindow(reservationConfig.bookingWindowDays);
   const historyRows = await db
     .select({
       id: tableSessions.id,
@@ -90,7 +99,9 @@ export default async function BarPage({ params }: PageProps) {
         eq(floorAreas.barId, bar.id),
         eq(tableSessions.status, "closed"),
         gte(tableSessions.reservationAt, windowStart),
-        lte(tableSessions.reservationAt, windowEnd)
+        lte(tableSessions.reservationAt, windowEnd),
+        // Hanya yg waktunya sudah lewat = history sungguhan.
+        lte(tableSessions.reservationEndAt, now)
       )
     );
   const historyByTable: Record<string, ActiveSessionView[]> = {};
