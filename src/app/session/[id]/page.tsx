@@ -84,6 +84,7 @@ export default async function SessionPage({ params }: PageProps) {
       role: sessionMembers.role,
       status: sessionMembers.status,
       joined_at: sessionMembers.joinedAt,
+      invited_by: sessionMembers.invitedBy,
       profile_id: profiles.id,
       profile_display_name: profiles.displayName,
       profile_avatar_url: profiles.avatarUrl,
@@ -219,6 +220,7 @@ export default async function SessionPage({ params }: PageProps) {
         role: m.role,
         status: m.status,
         joined_at: m.joined_at.toISOString(),
+        invited_by: m.invited_by,
         profile: {
           id: m.profile_id,
           display_name: m.profile_display_name,

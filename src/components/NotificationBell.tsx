@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, Loader2 } from "lucide-react";
+import { Bell, Check, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getNotifications,
@@ -178,8 +178,20 @@ export function NotificationBell({ userId }: { userId: string }) {
                   // Tombol Terima/Tolak hanya untuk undangan yg BELUM direspon.
                   const isPendingInvite =
                     n.type === "table_invite" && !n.responded;
-                  const isRespondedInvite =
-                    n.type === "table_invite" && n.responded;
+                  // Notif undangan milik PENERIMA yg sudah direspon: type sudah
+                  // berubah jadi invite_accepted/invite_rejected DAN responded.
+                  // (Notif ke pengundang juga bertipe sama tapi responded=false,
+                  // jadi tidak kena ke sini.)
+                  const respondedOutcome =
+                    n.responded && n.type === "invite_accepted"
+                      ? "accepted"
+                      : n.responded && n.type === "invite_rejected"
+                        ? "rejected"
+                        : // Notif lama (direspon sebelum fitur ini, type belum
+                          // di-migrasi): tampilkan label generik.
+                          n.responded && n.type === "table_invite"
+                          ? "done"
+                          : null;
                   return (
                     <div
                       key={n.id}
@@ -232,7 +244,19 @@ export function NotificationBell({ userId }: { userId: string }) {
                           </button>
                         </div>
                       )}
-                      {isRespondedInvite && (
+                      {respondedOutcome === "accepted" && (
+                        <p className="mt-2 pl-4 text-xs text-emerald-500 flex items-center gap-1">
+                          <Check className="h-3 w-3" />
+                          Kamu menerima undangan ini
+                        </p>
+                      )}
+                      {respondedOutcome === "rejected" && (
+                        <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
+                          <X className="h-3 w-3" />
+                          Kamu menolak undangan ini
+                        </p>
+                      )}
+                      {respondedOutcome === "done" && (
                         <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
                           <Check className="h-3 w-3" />
                           Undangan sudah direspon

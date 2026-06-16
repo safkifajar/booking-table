@@ -831,8 +831,8 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
   });
 
   // Tandai notif undangan milik penerima sudah direspon → tombol Terima/Tolak
-  // di bell hilang, diganti label status.
-  await markInviteResponded(`/session/${sessionId}`);
+  // di bell hilang, diganti label "Kamu menerima undangan ini".
+  await markInviteResponded(`/session/${sessionId}`, "accepted");
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
@@ -882,8 +882,9 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
     });
   }
 
-  // Tandai notif undangan milik penolak sudah direspon → tombol aksi hilang.
-  await markInviteResponded(`/session/${sessionId}`);
+  // Tandai notif undangan milik penolak sudah direspon → tombol aksi hilang,
+  // diganti label "Kamu menolak undangan ini".
+  await markInviteResponded(`/session/${sessionId}`, "rejected");
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);

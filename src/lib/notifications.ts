@@ -101,15 +101,25 @@ export async function getNotifications(
  * Tandai notif undangan (table_invite) milik user login sebagai SUDAH direspon
  * (dipanggil setelah acceptInvite/declineInvite). Dimatch by link
  * (/session/<id>) karena notif tidak menyimpan sessionId terstruktur.
- * Sekaligus set read_at supaya badge unread ikut turun.
+ *
+ * Sekalian ubah `type` jadi invite_accepted / invite_rejected supaya UI bisa
+ * tampilkan hasil respon (Diterima/Ditolak), dan set read_at supaya badge
+ * unread ikut turun.
  */
-export async function markInviteResponded(link: string): Promise<void> {
+export async function markInviteResponded(
+  link: string,
+  outcome: "accepted" | "rejected"
+): Promise<void> {
   const profile = await getCurrentProfile();
   if (!profile) return;
   const now = new Date();
   await db
     .update(notifications)
-    .set({ respondedAt: now, readAt: now })
+    .set({
+      respondedAt: now,
+      readAt: now,
+      type: outcome === "accepted" ? "invite_accepted" : "invite_rejected",
+    })
     .where(
       and(
         eq(notifications.profileId, profile.id),

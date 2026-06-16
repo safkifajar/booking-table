@@ -22,6 +22,7 @@ import {
   Star,
   Sparkles,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -77,6 +78,8 @@ interface SessionViewProps {
     role: MemberRole;
     status: MemberStatus;
     joined_at: string;
+    /** Terisi = diundang host (user yg approve). NULL + pending = request-join. */
+    invited_by: string | null;
     profile: { id: string; display_name: string; avatar_url: string | null; hobbies?: string[] };
     rating: { avg_stars: number; rating_count: number; top_tags: string[] | null } | null;
   }>;
@@ -201,7 +204,11 @@ export function SessionView(props: SessionViewProps) {
               badge={props.members.filter((m) => m.status === "joined").length}
               alert={
                 props.isHost &&
-                props.members.some((m) => m.status === "pending")
+                // Alert kuning hanya untuk request-join (butuh aksi host).
+                // Undangan menunggu (invited_by terisi) bukan tugas host.
+                props.members.some(
+                  (m) => m.status === "pending" && m.invited_by == null
+                )
               }
             />
             <TabButton
@@ -401,7 +408,15 @@ function TabButton({
 // VIBE / MEMBERS TAB
 function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
   const joined = props.members.filter((m) => m.status === "joined");
-  const pending = props.members.filter((m) => m.status === "pending");
+  // "Request masuk" = orang yang minta join sendiri (host yg approve) →
+  // invited_by NULL. Yang DIUNDANG host (invited_by terisi) bukan request,
+  // melainkan menunggu si user sendiri yang terima → tampil terpisah.
+  const pending = props.members.filter(
+    (m) => m.status === "pending" && m.invited_by == null
+  );
+  const invitedPending = props.members.filter(
+    (m) => m.status === "pending" && m.invited_by != null
+  );
   const slotsAvailable = props.table.capacity - joined.length;
   const [addGuestModal, setAddGuestModal] = React.useState(false);
   // Tombol "Tambah Tamu" cuma muncul untuk staff di session walk-in
@@ -426,6 +441,12 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
       {/* Pending requests — host only */}
       {props.isHost && pending.length > 0 && (
         <PendingRequests sessionId={props.session.id} pending={pending} />
+      )}
+
+      {/* Undangan menunggu konfirmasi user — host only, TANPA tombol approve
+          (yang menerima undangan adalah si user, bukan host). */}
+      {props.isHost && invitedPending.length > 0 && (
+        <InvitedPending invited={invitedPending} />
       )}
 
       {/* Members */}
@@ -1055,6 +1076,47 @@ function PendingRequests({
                 {loadingId === m.id ? "..." : <Check className="h-4 w-4" />}
               </Button>
             </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ============================================================
+// UNDANGAN MENUNGGU KONFIRMASI (host only — info, tanpa aksi)
+// User yg diundang (invited_by terisi) belum menerima. Host hanya melihat
+// statusnya — yang menerima/menolak adalah si user lewat notifikasi.
+// ============================================================
+function InvitedPending({
+  invited,
+}: {
+  invited: SessionViewProps["members"];
+}) {
+  return (
+    <Card className="p-5 border-border bg-muted/20">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+        <Clock className="h-4 w-4" />
+        Menunggu konfirmasi ({invited.length})
+      </h2>
+      <div className="space-y-3">
+        {invited.map((m) => (
+          <div key={m.id} className="flex items-center gap-3">
+            <Avatar>
+              {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
+              <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">
+                {m.profile.display_name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Diundang · belum dijawab
+              </p>
+            </div>
+            <Badge variant="secondary" className="text-xs shrink-0">
+              Diundang
+            </Badge>
           </div>
         ))}
       </div>
