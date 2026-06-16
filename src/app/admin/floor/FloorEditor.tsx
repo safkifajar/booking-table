@@ -199,26 +199,45 @@ function AreaWorkspace({
 
   const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null;
 
+  // Commit posisi drag ke server (tanpa refresh/toast). Dipakai langsung
+  // (tombol Simpan) maupun sebelum tambah/edit/hapus meja supaya drag yg
+  // belum disimpan tidak hilang saat data di-refresh.
+  async function commitPositions() {
+    if (!dirty) return;
+    await updateTablePositions({
+      areaId: area.id,
+      positions: tables.map((t) => ({
+        id: t.id,
+        posX: Math.round(positions[t.id]?.x ?? t.pos_x),
+        posY: Math.round(positions[t.id]?.y ?? t.pos_y),
+      })),
+    });
+    setDirty(false);
+  }
+
   async function handleSavePositions() {
     if (!dirty) return;
     setSavingPos(true);
     try {
-      await updateTablePositions({
-        areaId: area.id,
-        positions: tables.map((t) => ({
-          id: t.id,
-          posX: Math.round(positions[t.id]?.x ?? t.pos_x),
-          posY: Math.round(positions[t.id]?.y ?? t.pos_y),
-        })),
-      });
+      await commitPositions();
       toast.success("Posisi meja tersimpan");
-      setDirty(false);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal simpan posisi"));
     } finally {
       setSavingPos(false);
     }
+  }
+
+  // Sebelum buka dialog tambah/edit meja: commit posisi drag dulu (silent).
+  async function openTableDialog(target: BarTable | "new") {
+    try {
+      await commitPositions();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal simpan posisi"));
+      return;
+    }
+    setEditTarget(target);
   }
 
   async function handleDeleteTable(t: BarTable) {
@@ -230,6 +249,7 @@ function AreaWorkspace({
     });
     if (!ok) return;
     try {
+      await commitPositions(); // jaga posisi drag sebelum refresh
       await deleteTable(t.id);
       toast.success(`Meja ${t.label} dihapus`);
       setSelectedTableId(null);
@@ -254,7 +274,7 @@ function AreaWorkspace({
         <Button variant="ghost" size="sm" onClick={onDeleteArea}>
           <Trash2 className="h-4 w-4 text-red-400" /> Hapus Area
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setEditTarget("new")}>
+        <Button variant="outline" size="sm" onClick={() => openTableDialog("new")}>
           <Plus className="h-4 w-4" /> Tambah Meja
         </Button>
         <Button
@@ -299,7 +319,7 @@ function AreaWorkspace({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setEditTarget(selectedTable)}
+            onClick={() => openTableDialog(selectedTable)}
           >
             <Pencil className="h-4 w-4" /> Edit
           </Button>
