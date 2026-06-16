@@ -19,6 +19,19 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "12mb",
     },
   },
+  images: {
+    /**
+     * File upload lokal (/uploads/**) dipakai <Image> dengan query string
+     * cache-bust (?v=timestamp). Next 16 butuh localPatterns; `search` di-omit
+     * supaya query string apa pun (?v=...) lolos. Tanpa ini → error
+     * "not configured in images.localPatterns".
+     */
+    localPatterns: [
+      {
+        pathname: "/uploads/**",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
