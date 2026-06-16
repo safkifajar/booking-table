@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
    * - heic-convert: heavy + dynamic require chain
    */
   serverExternalPackages: ["sharp", "heic-convert", "xlsx", "jszip"],
+  experimental: {
+    /**
+     * Server Actions body limit. Default Next.js cuma 1MB — terlalu kecil
+     * untuk upload (banner/menu/avatar) yg dikirim via FormData ke action.
+     * Naikkan ke 12MB supaya file s/d 10MB (+overhead) lolos ke validasi app.
+     */
+    serverActions: {
+      bodySizeLimit: "12mb",
+    },
+  },
 };
 
 export default nextConfig;

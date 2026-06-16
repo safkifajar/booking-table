@@ -413,7 +413,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           {/* Image preview + picker */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Foto banner * (16:9, max 10MB)
+              Foto banner *
             </label>
             {previewUrl ? (
               <div className="relative aspect-[16/9] rounded-md overflow-hidden bg-zinc-900">
@@ -452,6 +452,12 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
               onChange={handleFileChange}
               className="hidden"
             />
+            {/* Hint detail: rasio, rekomendasi resolusi, format, ukuran max */}
+            <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground/70">
+              <li>• Rasio 16:9 (landscape) — rekomendasi 1920×1080 px</li>
+              <li>• Format: JPG, PNG, WebP, atau HEIC</li>
+              <li>• Ukuran maksimal 10 MB</li>
+            </ul>
           </div>
 
           {/* Title */}
