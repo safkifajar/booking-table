@@ -43,7 +43,7 @@ export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
       className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md"
       aria-label="Bottom navigation"
     >
-      <div className="max-w-md mx-auto px-2 grid grid-cols-5 items-end h-16">
+      <div className="max-w-md mx-auto px-2 grid grid-cols-5 items-stretch h-16">
         <NavItem href="/" icon={<Home />} label="Home" active={isActive("/")} />
         <NavItem
           href="/booking"
@@ -91,11 +91,13 @@ function NavItem({
     <Link
       href={href}
       className={cn(
-        "flex flex-col items-center justify-center gap-0.5 h-full text-[10px] transition",
+        "flex flex-col items-center justify-end gap-1 h-full pb-2 text-[10px] leading-none transition",
         active ? "text-primary" : "text-muted-foreground hover:text-foreground"
       )}
     >
-      <span className={cn("h-5 w-5", active && "scale-110")}>{icon}</span>
+      <span className={cn("h-5 w-5 flex items-center justify-center", active && "scale-110")}>
+        {icon}
+      </span>
       <span>{label}</span>
     </Link>
   );
@@ -114,10 +116,10 @@ function CenterCameraButton({
     return (
       <Link
         href="/auth?next=/"
-        className="flex flex-col items-center justify-center gap-0.5 -mt-4"
+        className="flex flex-col items-center justify-end gap-1 h-full pb-2 leading-none"
         aria-label="Sign in untuk upload story"
       >
-        <span className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-background">
+        <span className="h-12 w-12 -mt-6 rounded-full bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-background">
           <Camera className="h-6 w-6 text-primary-foreground" />
         </span>
         <span className="text-[10px] text-muted-foreground">Story</span>
@@ -130,10 +132,10 @@ function CenterCameraButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex flex-col items-center justify-center gap-0.5 -mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex flex-col items-center justify-end gap-1 h-full pb-2 leading-none disabled:opacity-50 disabled:cursor-not-allowed"
       aria-label="Upload story"
     >
-      <span className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-background transition hover:scale-105 active:scale-95">
+      <span className="h-12 w-12 -mt-6 rounded-full bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-background transition hover:scale-105 active:scale-95">
         <Camera className="h-6 w-6 text-primary-foreground" />
       </span>
       <span className="text-[10px] text-muted-foreground">Story</span>
