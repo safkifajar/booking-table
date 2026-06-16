@@ -132,28 +132,39 @@ Isi:
 - `RESEND_API_KEY=re_xxx` (dari Resend dashboard)
 - `RESEND_FROM=noreply@yourdomain.com` (perlu verify domain di Resend dulu)
 - `NEXT_PUBLIC_DEMO_MODE=false`
+- `NEXT_PUBLIC_BAR_SLUG=soho-purwokerto` (slug bar default; cocokkan dgn seed)
+- **Web Push (VAPID)** — generate sekali: `npx web-push generate-vapid-keys`
+  - `NEXT_PUBLIC_VAPID_PUBLIC_KEY=` (public key)
+  - `VAPID_PRIVATE_KEY=` (private key — JANGAN commit / bocor)
+  - `VAPID_SUBJECT=mailto:you@yourdomain.com`
+  - Catatan: Web Push hanya jalan di HTTPS (produksi pakai domain + TLS).
 
-### Apply schema
+### Apply schema (migrasi DB)
+
+**Sumber kebenaran skema = `src/lib/db/schema/`** (Drizzle). DB produksi yang
+kosong dibangun LENGKAP sekali jalan dengan:
 ```bash
-npx drizzle-kit push
+npm run db:push        # = drizzle-kit push
 ```
+`push` mendiff schema TS ↔ DB dan membuat semua tabel/kolom/enum yang belum
+ada. **Tidak perlu** menjalankan file `drizzle/*.sql` satu per satu.
 
-Ini bikin semua tables. Untuk seed data initial (bars/menu/etc):
+> Soal file `drizzle/00XX_*.sql`: itu catatan perubahan inkremental yang ditulis
+> tangan untuk DB **lokal yang sudah ada** (mis. `ALTER TYPE ... ADD VALUE` yang
+> lebih aman dijalankan manual daripada lewat `push`). File 0001–0014 sengaja
+> tidak ada — skema awal dibuat lewat `push`. Jadi menjalankan `*.sql` ke DB
+> kosong akan gagal (0015 `ALTER TABLE` butuh tabel yang belum dibuat). Untuk
+> produksi: pakai `db:push`, bukan `*.sql`.
+>
+> ⚠️ `push` bisa destruktif pada perubahan tertentu (drop kolom/rename) — selalu
+> review prompt-nya sebelum konfirmasi di produksi.
+
+### Seed data initial (bars/menu/floor/staff)
 ```bash
-# Edit supabase/migrations/0002_seed.sql kalau perlu adjustment
-sudo -u postgres psql -d booking_table -f supabase/migrations/0002_seed.sql
+npm run db:seed        # = tsx scripts/seed.ts (IDEMPOTENT, aman diulang)
 ```
-
-(Note: migration files masih di folder `supabase/migrations/` dari fase Supabase
-sebelumnya, isinya SQL biasa — tidak butuh Supabase. Rename folder kalau mau
-bersih.)
-
-### Apply admin RPC functions
-```bash
-sudo -u postgres psql -d booking_table -f supabase/migrations/0012_admin_reports.sql
-```
-
-(Required untuk admin sales reports — lihat src/lib/admin.ts.)
+Skip otomatis bar yang sudah ada by slug. Termasuk data SOHO Social House +
+admin RPC/master data (lihat `scripts/seed.ts`).
 
 ### Build production
 ```bash
@@ -427,7 +438,7 @@ Saat ada update di repo:
 cd /home/booking/booking-table
 git pull
 npm ci
-npx drizzle-kit push  # apply schema changes (review dulu kalau ada destructive!)
+npm run db:push  # apply schema changes (review prompt kalau ada destructive!)
 npm run build
 pm2 restart booking-table
 ```
