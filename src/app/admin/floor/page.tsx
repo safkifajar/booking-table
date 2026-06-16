@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
-import { getFloorAreas, getTablesByArea } from "@/lib/queries";
+import { getFloorAreas, getTablesByAreaForEditor } from "@/lib/queries";
 import { FloorEditor } from "./FloorEditor";
 
 /**
@@ -12,7 +12,7 @@ export default async function AdminFloorPage() {
   const areasWithTables = await Promise.all(
     areas.map(async (area) => ({
       area,
-      tables: await getTablesByArea(area.id),
+      tables: await getTablesByAreaForEditor(area.id),
     }))
   );
 

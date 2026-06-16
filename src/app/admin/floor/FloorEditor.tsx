@@ -21,6 +21,8 @@ import {
   Pencil,
   Loader2,
   LayoutGrid,
+  Check,
+  CloudOff,
 } from "lucide-react";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import {
@@ -30,7 +32,8 @@ import {
   createTable,
   updateTable,
   deleteTable,
-  updateTablePositions,
+  saveDraftPositions,
+  publishPositions,
 } from "@/lib/floor-actions";
 import type { FloorArea, BarTable, TableShape } from "@/types/db";
 
@@ -188,55 +191,91 @@ function AreaWorkspace({
     for (const t of tables) seed[t.id] = { x: t.pos_x, y: t.pos_y };
     return seed;
   });
-  const [dirty, setDirty] = React.useState(false);
-  const [savingPos, setSavingPos] = React.useState(false);
+
+  // Status auto-save (draft): saved = tersimpan ke draft, unsaved/saving/error.
+  type SaveStatus = "saved" | "unsaved" | "saving" | "error";
+  const [status, setStatus] = React.useState<SaveStatus>("saved");
+
+  // Ada draft belum di-publish? (dari props) — untuk enable tombol Publish.
+  const hasUnpublishedDraft = tables.some(
+    (t) => t.draft_pos_x != null || t.draft_pos_y != null
+  );
+  const [published, setPublished] = React.useState(false);
+  const [publishing, setPublishing] = React.useState(false);
+
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
     null
   );
   const [editTarget, setEditTarget] = React.useState<BarTable | "new" | null>(
     null
   );
-
   const selectedTable = tables.find((t) => t.id === selectedTableId) ?? null;
 
-  // Commit posisi drag ke server (tanpa refresh/toast). Dipakai langsung
-  // (tombol Simpan) maupun sebelum tambah/edit/hapus meja supaya drag yg
-  // belum disimpan tidak hilang saat data di-refresh.
-  async function commitPositions() {
-    if (!dirty) return;
-    await updateTablePositions({
-      areaId: area.id,
-      positions: tables.map((t) => ({
-        id: t.id,
-        posX: Math.round(positions[t.id]?.x ?? t.pos_x),
-        posY: Math.round(positions[t.id]?.y ?? t.pos_y),
-      })),
-    });
-    setDirty(false);
+  // Latest positions via ref — di-update di event handler (handleMove), BUKAN
+  // saat render. Dipakai debounce callback tanpa stale closure.
+  const positionsRef = React.useRef(positions);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Simpan draft ke server (auto-save).
+  async function saveDraftNow() {
+    setStatus("saving");
+    try {
+      await saveDraftPositions({
+        areaId: area.id,
+        positions: tables.map((t) => ({
+          id: t.id,
+          posX: Math.round(positionsRef.current[t.id]?.x ?? t.pos_x),
+          posY: Math.round(positionsRef.current[t.id]?.y ?? t.pos_y),
+        })),
+      });
+      setStatus("saved");
+      setPublished(false); // ada draft baru → belum publish
+    } catch {
+      setStatus("error");
+    }
   }
 
-  async function handleSavePositions() {
-    if (!dirty) return;
-    setSavingPos(true);
+  // Dipanggil saat drag (event handler): update posisi lokal + ref + jadwalkan
+  // auto-save (debounce).
+  function handleMove(id: string, x: number, y: number) {
+    const next = { ...positionsRef.current, [id]: { x, y } };
+    positionsRef.current = next;
+    setPositions(next);
+    setStatus("unsaved");
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void saveDraftNow();
+    }, 700);
+  }
+
+  // Flush draft tertunda sebelum aksi lain (tambah/edit/hapus meja).
+  async function flushDraft() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (status === "unsaved" || status === "saving") {
+      await saveDraftNow();
+    }
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
     try {
-      await commitPositions();
-      toast.success("Posisi meja tersimpan");
+      await flushDraft(); // pastikan draft terbaru tersimpan dulu
+      await publishPositions(area.id);
+      toast.success("Posisi dipublish — tampilan customer diperbarui");
+      setPublished(true);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan posisi"));
+      toast.error(getActionErrorMessage(err, "Gagal publish posisi"));
     } finally {
-      setSavingPos(false);
+      setPublishing(false);
     }
   }
 
-  // Sebelum buka dialog tambah/edit meja: commit posisi drag dulu (silent).
   async function openTableDialog(target: BarTable | "new") {
-    try {
-      await commitPositions();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan posisi"));
-      return;
-    }
+    await flushDraft();
     setEditTarget(target);
   }
 
@@ -249,7 +288,7 @@ function AreaWorkspace({
     });
     if (!ok) return;
     try {
-      await commitPositions(); // jaga posisi drag sebelum refresh
+      await flushDraft();
       await deleteTable(t.id);
       toast.success(`Meja ${t.label} dihapus`);
       setSelectedTableId(null);
@@ -259,6 +298,9 @@ function AreaWorkspace({
     }
   }
 
+  const canPublish =
+    (hasUnpublishedDraft || status !== "saved") && !published;
+
   return (
     <>
       {/* Toolbar area */}
@@ -267,6 +309,7 @@ function AreaWorkspace({
           {area.name} · {area.canvas_width}×{area.canvas_height} ·{" "}
           {tables.length} meja
         </span>
+        <SaveStatusBadge status={status} published={published} />
         <div className="flex-1" />
         <Button variant="ghost" size="sm" onClick={onEditArea}>
           <Pencil className="h-4 w-4" /> Edit Area
@@ -280,10 +323,10 @@ function AreaWorkspace({
         <Button
           variant="gold"
           size="sm"
-          disabled={!dirty || savingPos}
-          onClick={handleSavePositions}
+          disabled={!canPublish || publishing || status === "saving"}
+          onClick={handlePublish}
         >
-          {savingPos ? (
+          {publishing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Save className="h-4 w-4" />
@@ -298,10 +341,7 @@ function AreaWorkspace({
         positions={positions}
         selectedId={selectedTableId}
         onSelect={setSelectedTableId}
-        onMove={(id, x, y) => {
-          setPositions((prev) => ({ ...prev, [id]: { x, y } }));
-          setDirty(true);
-        }}
+        onMove={handleMove}
       />
 
       {selectedTable ? (
@@ -780,6 +820,44 @@ function AreaDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Status simpan ala Notion: Menyimpan… / Draft tersimpan / dipublish.
+function SaveStatusBadge({
+  status,
+  published,
+}: {
+  status: "saved" | "unsaved" | "saving" | "error";
+  published: boolean;
+}) {
+  if (status === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Menyimpan…
+      </span>
+    );
+  }
+  if (status === "unsaved") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-amber-400">
+        <CloudOff className="h-3 w-3" /> Belum disimpan
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-red-400">
+        <CloudOff className="h-3 w-3" /> Gagal simpan
+      </span>
+    );
+  }
+  // saved
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+      <Check className="h-3 w-3" />
+      {published ? "Tersimpan & dipublish" : "Draft tersimpan"}
+    </span>
   );
 }
 

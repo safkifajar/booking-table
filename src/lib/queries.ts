@@ -94,6 +94,38 @@ export async function getTablesByArea(areaId: string): Promise<BarTable[]> {
   }));
 }
 
+/**
+ * Tables untuk floor EDITOR (admin): sertakan draft posisi. pos_x/pos_y di sini
+ * = draft kalau ada (supaya editor lanjut dari posisi draft terakhir), draft_*
+ * = nilai mentah untuk tahu apakah ada perubahan belum di-publish.
+ */
+export async function getTablesByAreaForEditor(
+  areaId: string
+): Promise<BarTable[]> {
+  const rows = await db.query.tables.findMany({
+    where: eq(tables.areaId, areaId),
+    orderBy: asc(tables.label),
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    area_id: row.areaId,
+    label: row.label,
+    shape: row.shape,
+    capacity: row.capacity,
+    // Editor lanjut dari draft kalau ada.
+    pos_x: row.draftPosX ?? row.posX,
+    pos_y: row.draftPosY ?? row.posY,
+    draft_pos_x: row.draftPosX,
+    draft_pos_y: row.draftPosY,
+    width: row.width,
+    height: row.height,
+    rotation: row.rotation,
+    is_active: row.isActive,
+    min_spend: row.minSpend,
+    created_at: row.createdAt.toISOString(),
+  }));
+}
+
 // ============================================================
 // ACTIVE SESSIONS (replaces v_active_sessions view)
 // ============================================================

@@ -11,7 +11,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, max } from "drizzle-orm";
+import { and, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { floorAreas, tables } from "@/lib/db/schema/venue";
@@ -256,7 +256,7 @@ export async function deleteTable(tableId: string) {
 }
 
 // ============================================================
-// BATCH POSISI (setelah drag-drop)
+// POSISI: DRAFT (auto-save) + PUBLISH
 // ============================================================
 
 const positionsSchema = z.object({
@@ -272,22 +272,46 @@ const positionsSchema = z.object({
     .max(200),
 });
 
-export async function updateTablePositions(
+/**
+ * Auto-save: simpan posisi ke kolom DRAFT (belum tampil ke customer).
+ * Tidak revalidate floor publik — cuma draft.
+ */
+export async function saveDraftPositions(
   input: z.infer<typeof positionsSchema>
 ) {
   const bar = await requireAdmin();
   const data = positionsSchema.parse(input);
   await assertAreaInBar(data.areaId, bar.id);
 
-  // Update tiap posisi (hanya meja di area ini).
   await db.transaction(async (tx) => {
     for (const p of data.positions) {
       await tx
         .update(tables)
-        .set({ posX: p.posX, posY: p.posY })
+        .set({ draftPosX: p.posX, draftPosY: p.posY })
         .where(and(eq(tables.id, p.id), eq(tables.areaId, data.areaId)));
     }
   });
+  // Tidak revalidate /bar — draft belum publish.
+}
+
+/**
+ * Publish: copy draft → pos sebenarnya (yg dipakai floor customer), lalu
+ * bersihkan draft. Meja tanpa draft tidak berubah.
+ */
+export async function publishPositions(areaId: string) {
+  const bar = await requireAdmin();
+  await assertAreaInBar(areaId, bar.id);
+
+  await db
+    .update(tables)
+    .set({
+      posX: sql`COALESCE(${tables.draftPosX}, ${tables.posX})`,
+      posY: sql`COALESCE(${tables.draftPosY}, ${tables.posY})`,
+      draftPosX: null,
+      draftPosY: null,
+    })
+    .where(eq(tables.areaId, areaId));
 
   revalidatePath("/admin/floor");
+  revalidatePath("/bar/[slug]", "page");
 }

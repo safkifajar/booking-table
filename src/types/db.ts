@@ -61,6 +61,9 @@ export interface BarTable {
   capacity: number;
   pos_x: number;
   pos_y: number;
+  /** Draft posisi (floor editor, belum publish). Hanya diisi di query editor. */
+  draft_pos_x?: number | null;
+  draft_pos_y?: number | null;
   width: number;
   height: number;
   rotation: number;

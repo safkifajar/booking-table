@@ -65,6 +65,9 @@ export const tables = pgTable(
     capacity: integer("capacity").notNull().default(4),
     posX: integer("pos_x").notNull().default(0),
     posY: integer("pos_y").notNull().default(0),
+    /** Draft posisi dari floor editor (belum publish). NULL = tak ada draft. */
+    draftPosX: integer("draft_pos_x"),
+    draftPosY: integer("draft_pos_y"),
     width: integer("width").notNull().default(80),
     height: integer("height").notNull().default(80),
     rotation: integer("rotation").notNull().default(0),
