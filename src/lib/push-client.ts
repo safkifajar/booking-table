@@ -76,3 +76,23 @@ export function notificationPermission(): NotificationPermission | null {
   if (typeof window === "undefined" || !("Notification" in window)) return null;
   return Notification.permission;
 }
+
+/**
+ * Unsubscribe push di device ini: browser pushManager.unsubscribe() +
+ * hapus subscription di server. Return endpoint yg di-unsubscribe (atau null).
+ * Catatan: ini TIDAK mencabut izin browser (cuma user di setting browser),
+ * tapi tanpa subscription tidak ada push lagi.
+ */
+export async function unsubscribePush(): Promise<string | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (!sub) return null;
+  const endpoint = sub.endpoint;
+  try {
+    await sub.unsubscribe();
+  } catch {
+    /* ignore — tetap hapus di server */
+  }
+  return endpoint;
+}

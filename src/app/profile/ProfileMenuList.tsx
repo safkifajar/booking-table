@@ -10,10 +10,21 @@ import {
   History,
   LogOut,
   Camera,
+  BellRing,
+  BellOff,
+  Loader2,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { signOutAction } from "@/lib/auth-v2/actions";
 import { getActionErrorMessage } from "@/lib/utils";
+import {
+  pushSupported,
+  getExistingSubscription,
+  subscribePush,
+  unsubscribePush,
+  notificationPermission,
+} from "@/lib/push-client";
+import { saveSubscription, removeSubscription } from "@/lib/push";
 
 /**
  * iOS Settings-style list: icon + label + chevron, dengan card grouping.
@@ -25,6 +36,74 @@ import { getActionErrorMessage } from "@/lib/utils";
 export function ProfileMenuList() {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
+
+  // Status notifikasi push di perangkat ini.
+  const [pushState, setPushState] = React.useState<{
+    supported: boolean;
+    active: boolean; // ada subscription di device ini
+    busy: boolean;
+  }>({ supported: false, active: false, busy: false });
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!pushSupported()) return;
+      const sub = await getExistingSubscription();
+      if (!cancelled) {
+        setPushState((s) => ({ ...s, supported: true, active: !!sub }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleTogglePush() {
+    if (pushState.busy) return;
+    if (pushState.active) {
+      // Matikan — konfirmasi dulu.
+      const ok = await confirm({
+        title: "Matikan notifikasi?",
+        description:
+          "Kamu tidak akan terima notifikasi (undangan meja, dll) di perangkat ini. Bisa diaktifkan lagi kapan saja.",
+        confirmText: "Matikan",
+        cancelText: "Batal",
+        variant: "danger",
+      });
+      if (!ok) return;
+      setPushState((s) => ({ ...s, busy: true }));
+      try {
+        const endpoint = await unsubscribePush();
+        if (endpoint) await removeSubscription(endpoint);
+        toast.success("Notifikasi dimatikan untuk perangkat ini");
+        setPushState((s) => ({ ...s, active: false, busy: false }));
+      } catch (err) {
+        toast.error(getActionErrorMessage(err, "Gagal matikan notifikasi"));
+        setPushState((s) => ({ ...s, busy: false }));
+      }
+    } else {
+      // Aktifkan — minta izin + subscribe.
+      setPushState((s) => ({ ...s, busy: true }));
+      try {
+        const sub = await subscribePush();
+        if (!sub) {
+          toast.error(
+            notificationPermission() === "denied"
+              ? "Izin notifikasi diblokir. Aktifkan dari pengaturan browser."
+              : "Izin notifikasi ditolak"
+          );
+          setPushState((s) => ({ ...s, busy: false }));
+          return;
+        }
+        await saveSubscription(sub);
+        toast.success("Notifikasi diaktifkan untuk perangkat ini");
+        setPushState((s) => ({ ...s, active: true, busy: false }));
+      } catch (err) {
+        toast.error(getActionErrorMessage(err, "Gagal aktifkan notifikasi"));
+        setPushState((s) => ({ ...s, busy: false }));
+      }
+    }
+  }
 
   async function handleLogout() {
     const ok = await confirm({
@@ -74,6 +153,51 @@ export function ProfileMenuList() {
           description="Story aktif yang kamu upload"
         />
       </MenuGroup>
+
+      {/* Group: Notifikasi (toggle push per perangkat) */}
+      {pushState.supported && (
+        <MenuGroup>
+          <button
+            type="button"
+            onClick={handleTogglePush}
+            disabled={pushState.busy}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/40 active:bg-muted/60 disabled:opacity-50 disabled:cursor-not-allowed transition group"
+          >
+            <span
+              className={
+                pushState.active
+                  ? "h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary"
+                  : "h-8 w-8 rounded-md bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground"
+              }
+            >
+              {pushState.busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : pushState.active ? (
+                <BellRing className="h-4 w-4" />
+              ) : (
+                <BellOff className="h-4 w-4" />
+              )}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">Notifikasi</span>
+              <span className="block text-xs text-muted-foreground truncate">
+                {pushState.active
+                  ? "Aktif di perangkat ini · ketuk untuk matikan"
+                  : "Nonaktif · ketuk untuk aktifkan"}
+              </span>
+            </span>
+            <span
+              className={
+                pushState.active
+                  ? "text-xs font-medium text-primary shrink-0"
+                  : "text-xs font-medium text-muted-foreground shrink-0"
+              }
+            >
+              {pushState.active ? "Aktif" : "Mati"}
+            </span>
+          </button>
+        </MenuGroup>
+      )}
 
       {/* Group 2: Logout (separate card, danger style) */}
       <MenuGroup>
