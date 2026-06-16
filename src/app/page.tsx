@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Search, MapPin, Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
-import { PushSetup } from "@/components/PushSetup";
+import { PushSetup, PushBanner } from "@/components/PushSetup";
 import { StoryBarSection } from "@/components/story/StoryBarSection";
 import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
@@ -68,6 +68,10 @@ export default async function HomePage() {
       </header>
 
       <div className="max-w-2xl mx-auto">
+        {/* Soft-banner aktifkan notifikasi (user login) — proaktif tanpa
+            auto-prompt. Klik Aktifkan baru minta izin browser. */}
+        {!isAnon && profile && <PushBanner />}
+
         {/* Story bar — logged-in only (Server Component skip render kalau anon) */}
         <StoryBarSection barSlug={barSlug} />
 
