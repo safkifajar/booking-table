@@ -72,6 +72,8 @@ export const tables = pgTable(
     height: integer("height").notNull().default(80),
     rotation: integer("rotation").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
+    /** Meja baru dari floor editor yg belum publish (tak tampil ke customer). */
+    isDraft: boolean("is_draft").notNull().default(false),
     minSpend: integer("min_spend").default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },

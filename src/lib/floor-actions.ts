@@ -177,6 +177,7 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     height: size.height,
     rotation: data.rotation,
     minSpend: data.minSpend,
+    isDraft: true, // meja baru = draft, belum tampil ke customer sampai publish
   });
 
   revalidatePath("/admin/floor");
@@ -310,6 +311,7 @@ export async function publishPositions(areaId: string) {
       posY: sql`COALESCE(${tables.draftPosY}, ${tables.posY})`,
       draftPosX: null,
       draftPosY: null,
+      isDraft: false, // publish meja baru juga → tampil ke customer
     })
     .where(eq(tables.areaId, areaId));
 

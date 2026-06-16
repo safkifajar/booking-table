@@ -200,7 +200,9 @@ function AreaWorkspace({
   // Ada draft belum di-publish? Awal dari props (data server), lalu jadi true
   // begitu ada auto-save draft baru. Reset false setelah publish.
   const [hasDraft, setHasDraft] = React.useState(
-    tables.some((t) => t.draft_pos_x != null || t.draft_pos_y != null)
+    tables.some(
+      (t) => t.draft_pos_x != null || t.draft_pos_y != null || t.is_draft
+    )
   );
   const [publishing, setPublishing] = React.useState(false);
 
@@ -489,8 +491,17 @@ function EditorCanvas({
           const cx = pos.x + t.width / 2;
           const cy = pos.y + t.height / 2;
           const selected = selectedId === t.id;
-          const stroke = selected ? "#e6c478" : "#c9a961";
-          const fill = "rgba(201,169,97,0.18)";
+          // Meja draft (baru, belum publish) → stroke biru putus-putus.
+          const isDraft = !!t.is_draft;
+          const stroke = selected
+            ? "#e6c478"
+            : isDraft
+              ? "#60a5fa"
+              : "#c9a961";
+          const fill = isDraft
+            ? "rgba(96,165,250,0.12)"
+            : "rgba(201,169,97,0.18)";
+          const dash = isDraft ? "6 4" : undefined;
           return (
             <g
               key={t.id}
@@ -506,6 +517,7 @@ function EditorCanvas({
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={selected ? 3 : 2}
+                  strokeDasharray={dash}
                   transform={t.rotation ? `rotate(${t.rotation} ${cx} ${cy})` : undefined}
                 />
               ) : (
@@ -518,6 +530,7 @@ function EditorCanvas({
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={selected ? 3 : 2}
+                  strokeDasharray={dash}
                   transform={t.rotation ? `rotate(${t.rotation} ${cx} ${cy})` : undefined}
                 />
               )}

@@ -74,7 +74,12 @@ export async function getFloorAreas(barId: string): Promise<FloorArea[]> {
 
 export async function getTablesByArea(areaId: string): Promise<BarTable[]> {
   const rows = await db.query.tables.findMany({
-    where: and(eq(tables.areaId, areaId), eq(tables.isActive, true)),
+    // Customer: hanya meja aktif & sudah publish (bukan draft).
+    where: and(
+      eq(tables.areaId, areaId),
+      eq(tables.isActive, true),
+      eq(tables.isDraft, false)
+    ),
     orderBy: asc(tables.label),
   });
   return rows.map((row) => ({
@@ -117,6 +122,7 @@ export async function getTablesByAreaForEditor(
     pos_y: row.draftPosY ?? row.posY,
     draft_pos_x: row.draftPosX,
     draft_pos_y: row.draftPosY,
+    is_draft: row.isDraft,
     width: row.width,
     height: row.height,
     rotation: row.rotation,

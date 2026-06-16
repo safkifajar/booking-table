@@ -64,6 +64,8 @@ export interface BarTable {
   /** Draft posisi (floor editor, belum publish). Hanya diisi di query editor. */
   draft_pos_x?: number | null;
   draft_pos_y?: number | null;
+  /** Meja baru belum publish (tak tampil ke customer). */
+  is_draft?: boolean;
   width: number;
   height: number;
   rotation: number;
