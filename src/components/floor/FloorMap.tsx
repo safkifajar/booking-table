@@ -292,17 +292,22 @@ export function FloorMap({
         data-zoom-control
         className="absolute bottom-3 right-3 flex flex-col gap-1.5"
       >
+        {/* Reset SELALU dirender (di atas), cuma di-hide saat scale=1 — supaya
+            posisi +/− TIDAK bergeser saat reset muncul/hilang (cegah salah
+            pencet ketika klik beruntun). */}
+        <ZoomBtn
+          label="Reset zoom"
+          onClick={resetZoom}
+          hidden={scale <= 1.001}
+        >
+          ⟲
+        </ZoomBtn>
         <ZoomBtn label="Perbesar" onClick={() => zoomButton(1)} disabled={scale >= MAX_SCALE - 0.001}>
           +
         </ZoomBtn>
         <ZoomBtn label="Perkecil" onClick={() => zoomButton(-1)} disabled={scale <= MIN_SCALE + 0.001}>
           −
         </ZoomBtn>
-        {scale > 1.001 && (
-          <ZoomBtn label="Reset zoom" onClick={resetZoom}>
-            ⟲
-          </ZoomBtn>
-        )}
       </div>
     </div>
   );
@@ -313,19 +318,28 @@ function ZoomBtn({
   label,
   onClick,
   disabled,
+  hidden,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  /** Sembunyikan TAPI tetap pakai ruang layout (visibility, bukan display) —
+      supaya tombol lain tidak bergeser. */
+  hidden?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
-      disabled={disabled}
-      className="h-9 w-9 rounded-lg border border-border bg-background/90 backdrop-blur-sm text-lg font-semibold text-foreground/80 hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition touch-auto"
+      disabled={disabled || hidden}
+      aria-hidden={hidden}
+      tabIndex={hidden ? -1 : undefined}
+      className={cn(
+        "h-9 w-9 rounded-lg border border-border bg-background/90 backdrop-blur-sm text-lg font-semibold text-foreground/80 hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition touch-auto",
+        hidden && "invisible pointer-events-none"
+      )}
     >
       {children}
     </button>
