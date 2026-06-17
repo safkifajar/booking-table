@@ -18,7 +18,7 @@ const DrawerOverlay = React.forwardRef<
     data-radix-drawer-overlay=""
     className={cn(
       // Tipis & no-blur supaya halaman belakang tetap kelihatan jelas
-      "fixed inset-0 z-50 bg-black/25",
+      "fixed inset-0 z-50 bg-black/40",
       className
     )}
     {...props}

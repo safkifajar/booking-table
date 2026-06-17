@@ -363,7 +363,7 @@ function InviteSuccessModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center overflow-y-auto p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <Card className="w-full max-w-lg my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -584,7 +584,7 @@ function InviteStaffModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start sm:items-center justify-center overflow-y-auto p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <Card className="w-full max-w-lg my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold">Invite Staff Baru</h2>

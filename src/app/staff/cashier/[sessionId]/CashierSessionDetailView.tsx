@@ -480,7 +480,7 @@ function PaymentModal({
 
   if (detail.members.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
         <Card className="max-w-sm p-6 text-center">
           <p className="text-sm">
             Tidak ada member joined. Tidak bisa terima pembayaran.
@@ -577,7 +577,7 @@ function PaymentModal({
   const methodMeta = PAYMENT_METHODS.find((m) => m.value === method);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <Card className="w-full max-w-md my-auto max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <h2 className="font-semibold">
