@@ -10,8 +10,6 @@ import {
   Utensils,
   Receipt,
   Wallet,
-  Share2,
-  Copy,
   Check,
   Lock,
   Globe,
@@ -290,27 +288,6 @@ export function SessionView(props: SessionViewProps) {
 // ============================================================
 
 function SessionHeader(props: SessionViewProps) {
-  const [copied, setCopied] = React.useState(false);
-  const [inviteUrl, setInviteUrl] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (props.inviteCode) {
-      setInviteUrl(`${window.location.origin}/join/${props.inviteCode}`);
-    }
-  }, [props.inviteCode]);
-
-  async function copy() {
-    if (!inviteUrl) return;
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      toast.success("Link disalin");
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Gagal salin");
-    }
-  }
-
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
@@ -341,12 +318,6 @@ function SessionHeader(props: SessionViewProps) {
             </div>
           )}
         </div>
-        {props.isMember && inviteUrl && (
-          <Button variant="outline" size="sm" onClick={copy}>
-            {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-            <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
-          </Button>
-        )}
       </div>
     </header>
   );
@@ -553,26 +524,40 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
               </div>
             ))}
 
-          {/* Ajak/Undang user (host only) — 2 mode seperti open table */}
-          {props.isHost && (
-            <button
-              type="button"
-              onClick={() => setInviteModal(true)}
-              className="w-full flex items-center gap-3 pt-3 mt-1 border-t border-border text-left group"
-            >
-              <div className="h-10 w-10 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition shrink-0">
-                <UserPlus className="h-4 w-4 text-primary" />
+          {/* Ajak/Undang user (host only) — 2 mode seperti open table.
+              Sembunyikan kalau meja penuh; tampilkan info "penuh" sbg gantinya. */}
+          {props.isHost &&
+            (slotsAvailable > 0 ? (
+              <button
+                type="button"
+                onClick={() => setInviteModal(true)}
+                className="w-full flex items-center gap-3 pt-3 mt-1 border-t border-border text-left group"
+              >
+                <div className="h-10 w-10 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition shrink-0">
+                  <UserPlus className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-primary">
+                    Ajak / Undang teman
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Pilih user untuk gabung langsung atau via undangan
+                  </p>
+                </div>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 pt-3 mt-1 border-t border-border text-muted-foreground">
+                <div className="h-10 w-10 rounded-full border-2 border-dashed border-border flex items-center justify-center shrink-0">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Meja sudah penuh</p>
+                  <p className="text-xs text-muted-foreground">
+                    Semua {props.table.capacity} kursi terisi
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-primary">
-                  Ajak / Undang teman
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Pilih user untuk gabung langsung atau via undangan
-                </p>
-              </div>
-            </button>
-          )}
+            ))}
         </div>
       </Card>
 
@@ -625,7 +610,7 @@ function AddGuestModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -736,7 +721,7 @@ function InviteToSessionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
       onClick={onClose}
     >
       <div
@@ -1308,9 +1293,46 @@ function SessionFooter({
   isStaff: boolean;
   sessionId: string;
 }) {
-  const [showActions, setShowActions] = React.useState(false);
   const confirm = useConfirm();
   const isLunas = subtotal > 0 && remaining === 0;
+  // Host & staff bisa tutup meja; member biasa bisa keluar.
+  const canClose = isHost || isStaff;
+
+  async function handleClose() {
+    const ok = await confirm({
+      title: "Tutup meja ini?",
+      description: isStaff
+        ? "Pesanan akan dikunci. Tamu tidak bisa tambah order lagi."
+        : "Setelah ditutup, pesanan dikunci dan kalian diarahkan ke halaman rating.",
+      confirmText: "Tutup meja",
+      cancelText: "Belum dulu",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await closeSession(sessionId);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal"));
+    }
+  }
+
+  async function handleLeave() {
+    const ok = await confirm({
+      title: "Keluar dari meja ini?",
+      description:
+        "Bagian bill yang sudah kamu pesan tetap muncul untuk anggota lain. Kamu bisa join lagi via link invite kalau berubah pikiran.",
+      confirmText: "Keluar",
+      cancelText: "Tetap di meja",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    try {
+      await leaveSession(sessionId);
+      toast.success("Kamu meninggalkan meja");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal"));
+    }
+  }
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-card/95 backdrop-blur-md">
@@ -1328,107 +1350,34 @@ function SessionFooter({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 relative">
-          {isMember && (
+        {isMember &&
+          (canClose ? (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowActions((v) => !v)}
-              aria-label="More actions"
+              onClick={handleClose}
+              // Staff: hanya boleh tutup kalau lunas (sama spt guard sebelumnya).
+              disabled={isStaff && !isLunas}
+              title={
+                isStaff && !isLunas
+                  ? "Meja belum lunas — arahkan tamu ke kasir"
+                  : undefined
+              }
             >
-              Menu Aksi
+              <Lock className="h-4 w-4" />
+              Tutup meja{isStaff && !isLunas ? " (belum lunas)" : ""}
             </Button>
-          )}
-          {showActions && (
-            <div className="absolute bottom-full right-0 mb-2 w-56 rounded-md border border-border bg-card shadow-xl overflow-hidden">
-              {isStaff ? (
-                <button
-                  className={cn(
-                    "w-full text-left px-3 py-2 text-sm flex items-center gap-2",
-                    isLunas
-                      ? "hover:bg-muted"
-                      : "text-muted-foreground cursor-not-allowed"
-                  )}
-                  disabled={!isLunas}
-                  title={
-                    isLunas
-                      ? "Tutup meja"
-                      : "Meja belum lunas — arahkan tamu ke kasir"
-                  }
-                  onClick={async () => {
-                    setShowActions(false);
-                    const ok = await confirm({
-                      title: "Tutup meja ini?",
-                      description:
-                        "Pesanan akan dikunci. Tamu tidak bisa tambah order lagi.",
-                      confirmText: "Tutup meja",
-                      cancelText: "Belum dulu",
-                      variant: "danger",
-                    });
-                    if (!ok) return;
-                    try {
-                      await closeSession(sessionId);
-                    } catch (err) {
-                      toast.error(getActionErrorMessage(err, "Gagal"));
-                    }
-                  }}
-                >
-                  <Lock className="h-4 w-4" />
-                  Tutup meja {!isLunas && "(belum lunas)"}
-                </button>
-              ) : isHost ? (
-                <button
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                  onClick={async () => {
-                    setShowActions(false);
-                    const ok = await confirm({
-                      title: "Tutup meja & selesaikan bill?",
-                      description:
-                        "Setelah ditutup, pesanan dikunci dan kalian diarahkan ke halaman rating untuk anggota lain.",
-                      confirmText: "Tutup meja",
-                      cancelText: "Belum dulu",
-                      variant: "danger",
-                    });
-                    if (!ok) return;
-                    try {
-                      await closeSession(sessionId);
-                    } catch (err) {
-                      toast.error(getActionErrorMessage(err, "Gagal"));
-                    }
-                  }}
-                >
-                  <Lock className="h-4 w-4" />
-                  Tutup meja (host)
-                </button>
-              ) : (
-                <button
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 text-red-400"
-                  onClick={async () => {
-                    setShowActions(false);
-                    const ok = await confirm({
-                      title: "Keluar dari meja ini?",
-                      description:
-                        "Bagian bill yang sudah kamu pesan tetap muncul untuk anggota lain. Kamu bisa join lagi via link invite kalau berubah pikiran.",
-                      confirmText: "Keluar",
-                      cancelText: "Tetap di meja",
-                      variant: "destructive",
-                    });
-                    if (!ok) return;
-                    try {
-                      await leaveSession(sessionId);
-                      toast.success("Kamu meninggalkan meja");
-                    } catch (err) {
-                      toast.error(getActionErrorMessage(err, "Gagal"));
-                    }
-                  }}
-                >
-                  <LogOut className="h-4 w-4" />
-                  Keluar dari meja
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLeave}
+              className="text-red-400"
+            >
+              <LogOut className="h-4 w-4" />
+              Keluar
+            </Button>
+          ))}
       </div>
     </div>
   );
