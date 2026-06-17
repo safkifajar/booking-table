@@ -54,6 +54,19 @@ function compareGroupKey(a: string, b: string): number {
   return groupKeyToDate(a).getTime() - groupKeyToDate(b).getTime();
 }
 
+/**
+ * true kalau groupKey ini sebelum hari ini (start-of-day). Dipakai untuk
+ * menyaring tanggal booking lampau (kemarin dst) dari strip tanggal — jadwal
+ * hanya menampilkan hari ini ke depan.
+ */
+function isBeforeToday(gk: string): boolean {
+  const d = groupKeyToDate(gk);
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d.getTime() < today.getTime();
+}
+
 /** Label hari + tanggal angka dari groupKey untuk strip. */
 function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
   const d = groupKeyToDate(gk);
@@ -380,13 +393,16 @@ function BookingSchedule({
   }, [reservationsByTable]);
 
   // Strip tanggal: hari ini s/d booking window (mis. 7 hari) + tanggal lain
-  // yg punya booking (history kemarin dst).
+  // dalam window yg punya booking. TIDAK menampilkan tanggal lampau (kemarin
+  // dst) walau ada booking di sana.
   const dateChips = React.useMemo(() => {
     const keys = new Set<string>();
     for (let i = 0; i <= Math.max(1, bookingWindowDays); i++) {
       keys.add(dateGroupKey(addDays(nowMs, i)));
     }
-    for (const gk of byDate.keys()) keys.add(gk);
+    for (const gk of byDate.keys()) {
+      if (!isBeforeToday(gk)) keys.add(gk);
+    }
     return Array.from(keys).sort(compareGroupKey);
   }, [byDate, bookingWindowDays, nowMs]);
 
@@ -403,7 +419,6 @@ function BookingSchedule({
       <div className="flex gap-2 overflow-x-auto pb-1">
         {dateChips.map((gk) => {
           const active = activeDate === gk;
-          const count = byDate.get(gk)?.length ?? 0;
           const { dayLabel, dateNum } = groupKeyToParts(gk);
           return (
             <button
@@ -411,7 +426,7 @@ function BookingSchedule({
               type="button"
               onClick={() => setActiveDate(gk)}
               className={cn(
-                "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
+                "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition",
                 active
                   ? "border-primary bg-primary/15 text-primary"
                   : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
@@ -423,11 +438,6 @@ function BookingSchedule({
               <span className="text-lg font-semibold leading-none tabular-nums">
                 {dateNum}
               </span>
-              {count > 0 && (
-                <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
-                  {count}
-                </span>
-              )}
             </button>
           );
         })}
@@ -527,7 +537,8 @@ function TableSheet({
   }, [reservations]);
 
   // Strip tanggal: hari ini sampai booking window (mis. 7 hari), plus tanggal
-  // yang punya reservasi (defensive, kalau ada di luar window).
+  // dalam window yg punya reservasi. TIDAK menampilkan tanggal lampau (kemarin
+  // dst) walau ada booking — jadwal hanya hari ini ke depan.
   const dateChips = React.useMemo(() => {
     const keys = new Set<string>();
     const now = new Date();
@@ -536,7 +547,9 @@ function TableSheet({
       d.setDate(now.getDate() + i);
       keys.add(dateGroupKey(d));
     }
-    for (const gk of byDate.keys()) keys.add(gk);
+    for (const gk of byDate.keys()) {
+      if (!isBeforeToday(gk)) keys.add(gk);
+    }
     return Array.from(keys).sort(compareGroupKey);
   }, [byDate, bookingWindowDays]);
 
@@ -705,7 +718,6 @@ function TableSheet({
               <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
                 {dateChips.map((gk) => {
                   const active = activeDate === gk;
-                  const count = byDate.get(gk)?.length ?? 0;
                   const { dayLabel, dateNum } = groupKeyToParts(gk);
                   return (
                     <button
@@ -713,7 +725,7 @@ function TableSheet({
                       type="button"
                       onClick={() => changeDate(gk)}
                       className={cn(
-                        "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition relative",
+                        "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition",
                         active
                           ? "border-primary bg-primary/15 text-primary"
                           : "border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
@@ -725,11 +737,6 @@ function TableSheet({
                       <span className="text-lg font-semibold leading-none tabular-nums">
                         {dateNum}
                       </span>
-                      {count > 0 && (
-                        <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-blue-500 text-[9px] font-bold text-white flex items-center justify-center">
-                          {count}
-                        </span>
-                      )}
                     </button>
                   );
                 })}
