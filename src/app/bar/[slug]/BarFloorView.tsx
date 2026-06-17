@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -185,6 +186,8 @@ interface Props {
   slotIntervalMinutes?: number;
   /** Booking window (hari) untuk panjang strip tanggal. */
   bookingWindowDays?: number;
+  /** Profile id user login (untuk bell notifikasi). null = anon. */
+  userId?: string | null;
 }
 
 export function BarFloorView({
@@ -194,6 +197,7 @@ export function BarFloorView({
   operatingHours,
   slotIntervalMinutes = 60,
   bookingWindowDays = 7,
+  userId = null,
 }: Props) {
   const router = useRouter();
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
@@ -254,39 +258,7 @@ export function BarFloorView({
             <MapPin className="h-3.5 w-3.5" />
             <span className="truncate max-w-[200px]">{bar.address}</span>
           </div>
-        </div>
-
-        {/* Area tabs */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-2 flex gap-2 overflow-x-auto">
-          {areasWithTables.map(({ area, tables }) => {
-            const openCount = tables.filter(
-              (t) =>
-                t.active_session?.status === "open" ||
-                t.active_session?.status === "overdue"
-            ).length;
-            const active = activeAreaSlug === area.slug;
-            return (
-              <button
-                key={area.id}
-                onClick={() => {
-                  setActiveAreaSlug(area.slug);
-                  setSelectedTable(null);
-                }}
-                className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition border ${
-                  active
-                    ? "bg-primary/15 border-primary/40 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
-                }`}
-              >
-                {area.name}
-                {openCount > 0 && (
-                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1">
-                    {openCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {userId && <NotificationBell userId={userId} />}
         </div>
       </header>
 
@@ -311,6 +283,41 @@ export function BarFloorView({
             onSelectTable={setSelectedTable}
             className="bg-gradient-to-br from-[#0f0f0f] to-[#0a0a0a]"
           />
+        )}
+
+        {/* Area tabs — di bawah denah, rata tengah */}
+        {areasWithTables.length > 1 && (
+          <div className="mt-4 flex justify-center gap-2 flex-wrap">
+            {areasWithTables.map(({ area, tables }) => {
+              const openCount = tables.filter(
+                (t) =>
+                  t.active_session?.status === "open" ||
+                  t.active_session?.status === "overdue"
+              ).length;
+              const active = activeAreaSlug === area.slug;
+              return (
+                <button
+                  key={area.id}
+                  onClick={() => {
+                    setActiveAreaSlug(area.slug);
+                    setSelectedTable(null);
+                  }}
+                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium transition border ${
+                    active
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                  }`}
+                >
+                  {area.name}
+                  {openCount > 0 && (
+                    <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1">
+                      {openCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         )}
 
         {/* Jadwal booking — list per tanggal (semua meja) */}

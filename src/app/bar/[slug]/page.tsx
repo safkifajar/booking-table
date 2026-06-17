@@ -178,6 +178,7 @@ export default async function BarPage({ params }: PageProps) {
         operatingHours={operatingHours}
         slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
         bookingWindowDays={reservationConfig.bookingWindowDays}
+        userId={profile?.id ?? null}
       />
       <HomeBottomNav barId={bar.id} isAnon={!profile} />
     </>
