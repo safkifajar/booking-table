@@ -299,6 +299,8 @@ export function BarFloorView({
 
         {activeArea && (
           <FloorMap
+            // Remount saat ganti area → reset zoom/pan (canvas size berubah).
+            key={activeArea.area.slug}
             canvasWidth={activeArea.area.canvas_width}
             canvasHeight={activeArea.area.canvas_height}
             tables={activeArea.tables}

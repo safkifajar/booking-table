@@ -18,13 +18,31 @@ interface FloorMapProps {
   className?: string;
 }
 
+const MIN_SCALE = 1;
+const MAX_SCALE = 4;
+const ZOOM_STEP = 0.4;
+/** Geser pointer > nilai ini (px layar) dihitung sebagai drag, bukan klik. */
+const DRAG_THRESHOLD = 6;
+
 /**
  * Interactive SVG floor map. Each table is clickable.
  * Color coding:
  *   - Available (no session): muted with gold border on hover
  *   - Open session: gold filled, pulse animation
  *   - Locked/full: dim with lock badge
+ *
+ * Zoom/pan: tombol +/−/reset, wheel zoom (desktop), pinch zoom (2 jari),
+ * drag untuk geser saat ter-zoom. Klik meja tetap jalan (dibedakan dari drag
+ * via threshold pergerakan). Membantu di HP supaya meja bisa diperbesar.
  */
+/** viewBox saat ini (unit kanvas). scale = canvasWidth / view.w. */
+interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export function FloorMap({
   canvasWidth,
   canvasHeight,
@@ -34,21 +52,192 @@ export function FloorMap({
   highlightTableId,
   className,
 }: FloorMapProps) {
-  // Di HP, kanvas yang lebar dipaksa muat ke layar sempit bikin meja kecil.
-  // Solusi: scroll horizontal — SVG diberi lebar minimum (skala lebih besar)
-  // di mobile dan bisa digeser kiri-kanan. Di desktop (sm:) min-width dilepas
-  // jadi muat penuh seperti biasa. mobileMinWidth ~85% canvas: meja jadi besar
-  // tapi denah masih ringkas untuk digeser.
-  const mobileMinWidth = Math.round(canvasWidth * 0.85);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  // view = jendela viewBox yg terlihat. Awal = seluruh kanvas (scale 1).
+  const [view, setView] = React.useState<ViewBox>({
+    x: 0,
+    y: 0,
+    w: canvasWidth,
+    h: canvasHeight,
+  });
+
+  const scale = canvasWidth / view.w;
+
+  // Pointer tracking untuk pan (1 jari) & pinch (2 jari).
+  const pointers = React.useRef<Map<number, { x: number; y: number }>>(
+    new Map()
+  );
+  const panStart = React.useRef<{
+    px: number;
+    py: number;
+    view: ViewBox;
+    moved: boolean;
+  } | null>(null);
+  const pinchStart = React.useRef<{ dist: number; view: ViewBox } | null>(null);
+  // true kalau gerakan terakhir = drag (supaya klik meja tidak terpicu).
+  const lastDragMoved = React.useRef(false);
+
+  /** px layar (relatif container) → satuan kanvas, pakai view sekarang. */
+  function pxToCanvas(px: number, py: number, v: ViewBox) {
+    const el = containerRef.current;
+    const cw = el?.clientWidth || canvasWidth;
+    const ch = el?.clientHeight || canvasHeight;
+    return { cx: v.x + (px / cw) * v.w, cy: v.y + (py / ch) * v.h };
+  }
+
+  /** Clamp view supaya tidak keluar batas kanvas + batasi zoom. */
+  function clampView(v: ViewBox): ViewBox {
+    const minW = canvasWidth / MAX_SCALE;
+    const maxW = canvasWidth; // scale 1 = fit penuh, tidak zoom-out lebih
+    let w = Math.min(maxW, Math.max(minW, v.w));
+    let h = (w / canvasWidth) * canvasHeight;
+    let x = Math.min(Math.max(0, v.x), canvasWidth - w);
+    let y = Math.min(Math.max(0, v.y), canvasHeight - h);
+    if (w >= canvasWidth) {
+      w = canvasWidth;
+      h = canvasHeight;
+      x = 0;
+      y = 0;
+    }
+    return { x, y, w, h };
+  }
+
+  /** Zoom ke faktor tertentu di sekitar titik px (relatif container). */
+  function zoomTo(nextScale: number, px: number, py: number) {
+    setView((v) => {
+      const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextScale));
+      const newW = canvasWidth / s;
+      const newH = canvasHeight / s;
+      const { cx, cy } = pxToCanvas(px, py, v);
+      const el = containerRef.current;
+      const cw = el?.clientWidth || canvasWidth;
+      const ch = el?.clientHeight || canvasHeight;
+      // pertahankan titik (cx,cy) tetap di bawah kursor
+      const nx = cx - (px / cw) * newW;
+      const ny = cy - (py / ch) * newH;
+      return clampView({ x: nx, y: ny, w: newW, h: newH });
+    });
+  }
+
+  function zoomButton(dir: 1 | -1) {
+    const el = containerRef.current;
+    zoomTo(
+      scale + dir * ZOOM_STEP,
+      (el?.clientWidth || canvasWidth) / 2,
+      (el?.clientHeight || canvasHeight) / 2
+    );
+  }
+
+  function resetZoom() {
+    setView({ x: 0, y: 0, w: canvasWidth, h: canvasHeight });
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    const px = rect ? e.clientX - rect.left : 0;
+    const py = rect ? e.clientY - rect.top : 0;
+    const factor = e.deltaY < 0 ? 1 + ZOOM_STEP / 2 : 1 - ZOOM_STEP / 2;
+    zoomTo(scale * factor, px, py);
+  }
+
+  function relPoint(e: React.PointerEvent) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    return {
+      x: rect ? e.clientX - rect.left : e.clientX,
+      y: rect ? e.clientY - rect.top : e.clientY,
+    };
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    // Capture di CONTAINER (bukan e.target yg bisa elemen SVG anak) — supaya
+    // pan/pinch tetap mengalir ke handler container & tidak menelan event click
+    // meja di sebagian browser.
+    containerRef.current?.setPointerCapture?.(e.pointerId);
+    const p = relPoint(e);
+    pointers.current.set(e.pointerId, p);
+    if (pointers.current.size === 2) {
+      const pts = Array.from(pointers.current.values());
+      pinchStart.current = {
+        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        view,
+      };
+      panStart.current = null;
+    } else if (pointers.current.size === 1) {
+      panStart.current = { px: p.x, py: p.y, view, moved: false };
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!pointers.current.has(e.pointerId)) return;
+    const p = relPoint(e);
+    pointers.current.set(e.pointerId, p);
+
+    // Pinch zoom (2 jari)
+    if (pinchStart.current && pointers.current.size === 2) {
+      const pts = Array.from(pointers.current.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      const startScale = canvasWidth / pinchStart.current.view.w;
+      zoomTo((startScale * dist) / pinchStart.current.dist, midX, midY);
+      return;
+    }
+
+    // Pan (1 jari, hanya saat ter-zoom)
+    if (panStart.current && scale > 1) {
+      const el = containerRef.current;
+      const cw = el?.clientWidth || canvasWidth;
+      const ch = el?.clientHeight || canvasHeight;
+      const dxPx = p.x - panStart.current.px;
+      const dyPx = p.y - panStart.current.py;
+      if (Math.abs(dxPx) > DRAG_THRESHOLD || Math.abs(dyPx) > DRAG_THRESHOLD) {
+        panStart.current.moved = true;
+      }
+      const start = panStart.current.view;
+      // geser layar → geser viewBox berlawanan arah, dalam unit kanvas
+      const nx = start.x - (dxPx / cw) * start.w;
+      const ny = start.y - (dyPx / ch) * start.h;
+      setView(clampView({ x: nx, y: ny, w: start.w, h: start.h }));
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinchStart.current = null;
+    if (pointers.current.size === 0) {
+      lastDragMoved.current = !!panStart.current?.moved;
+      panStart.current = null;
+    }
+  }
+
+  function handleSelect(table: FloorMapTable) {
+    if (lastDragMoved.current) {
+      lastDragMoved.current = false;
+      return;
+    }
+    onSelectTable?.(table);
+  }
+
   return (
-    <div className={cn("relative w-full overflow-x-auto sm:overflow-hidden rounded-xl border border-border bg-card", className)}>
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative w-full overflow-hidden rounded-xl border border-border bg-card touch-none select-none",
+        className
+      )}
+      onWheel={onWheel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
       <svg
-        viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-        className="h-auto block w-full max-w-none min-w-[var(--fm-min-w)] sm:min-w-0"
-        style={{ ["--fm-min-w" as string]: `${mobileMinWidth}px` }}
+        viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+        className="h-auto block w-full"
         preserveAspectRatio="xMidYMid meet"
+        style={{ cursor: scale > 1 ? "grab" : "default" }}
       >
-        {/* subtle grid background */}
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
             <path
@@ -63,19 +252,58 @@ export function FloorMap({
             <stop offset="100%" stopColor="#c9a961" stopOpacity="0" />
           </radialGradient>
         </defs>
-        <rect width={canvasWidth} height={canvasHeight} fill="url(#grid)" />
 
+        <rect width={canvasWidth} height={canvasHeight} fill="url(#grid)" />
         {tables.map((table) => (
           <TableShape
             key={table.id}
             table={table}
             selected={selectedTableId === table.id}
             highlighted={highlightTableId === table.id}
-            onClick={() => onSelectTable?.(table)}
+            onClick={() => handleSelect(table)}
           />
         ))}
       </svg>
+
+      {/* Kontrol zoom */}
+      <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
+        <ZoomBtn label="Perbesar" onClick={() => zoomButton(1)} disabled={scale >= MAX_SCALE - 0.001}>
+          +
+        </ZoomBtn>
+        <ZoomBtn label="Perkecil" onClick={() => zoomButton(-1)} disabled={scale <= MIN_SCALE + 0.001}>
+          −
+        </ZoomBtn>
+        {scale > 1.001 && (
+          <ZoomBtn label="Reset zoom" onClick={resetZoom}>
+            ⟲
+          </ZoomBtn>
+        )}
+      </div>
     </div>
+  );
+}
+
+function ZoomBtn({
+  children,
+  label,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="h-9 w-9 rounded-lg border border-border bg-background/90 backdrop-blur-sm text-lg font-semibold text-foreground/80 hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition"
+    >
+      {children}
+    </button>
   );
 }
 
