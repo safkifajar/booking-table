@@ -194,24 +194,10 @@ di bawah.
 
 ## 5. Run dengan PM2
 
-Buat `ecosystem.config.js` di root project:
-```js
-module.exports = {
-  apps: [{
-    name: 'booking-table',
-    script: 'npm',
-    args: 'start',
-    cwd: '/home/booking/booking-table',
-    env: {
-      NODE_ENV: 'production',
-      PORT: 3000,
-    },
-    max_memory_restart: '1G',
-    instances: 1,
-    autorestart: true,
-  }]
-};
-```
+`ecosystem.config.js` sudah ada di root repo (termasuk `kill_timeout` untuk
+graceful shutdown — Next.js 16 menuntaskan in-flight request saat SIGTERM).
+`cwd` default ke folder repo (`__dirname`), jadi tidak perlu di-edit kalau clone
+langsung. Cukup jalankan dari root project:
 
 ```bash
 pm2 start ecosystem.config.js

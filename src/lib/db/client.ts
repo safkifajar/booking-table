@@ -34,6 +34,13 @@ const pgClient =
     max: process.env.VERCEL ? 1 : 10,
     idle_timeout: 20,
     connect_timeout: 10,
+    // Recycle koneksi tiap 1 jam. Mencegah koneksi "basi" (mis. setelah
+    // Postgres restart / network blip) bertahan di pool dan melempar error
+    // di query berikutnya — penyebab error "Failed query" intermittent.
+    max_lifetime: 60 * 60,
+    // Kill query yang menggantung >30s supaya satu query lambat tidak
+    // memblokir slot pool (penting di VPS shared).
+    connection: { statement_timeout: 30_000 },
     // SSL: required untuk production, optional di local
     ssl: DATABASE_URL.includes("sslmode=require") ? "require" : false,
   });

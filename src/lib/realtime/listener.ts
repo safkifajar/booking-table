@@ -37,6 +37,10 @@ export const listener =
     max: 50,
     idle_timeout: 0, // jangan timeout — LISTEN persistent
     connect_timeout: 10,
+    // Recycle koneksi LISTEN tiap 1 jam. postgres.js otomatis re-LISTEN
+    // channel yang aktif setelah reconnect, jadi subscription tetap jalan.
+    // TANPA statement_timeout — koneksi LISTEN memang menggantung selamanya.
+    max_lifetime: 60 * 60,
     ssl: DATABASE_URL.includes("sslmode=require") ? "require" : false,
   });
 

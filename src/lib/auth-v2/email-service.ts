@@ -33,8 +33,18 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM ?? "noreply@booking-table.dev";
 
-  // Dry-run mode — log only, jangan kirim
+  // Dry-run mode — log only, jangan kirim.
   if (!apiKey) {
+    // Di production ini hampir pasti misconfig: email penting (magic link,
+    // staff invite) diam-diam tidak terkirim → user tak bisa login/setup.
+    // Warning keras supaya kelihatan di log PM2, tapi JANGAN throw (biar
+    // fitur lain tetap jalan).
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "⚠️  [email] RESEND_API_KEY belum di-set di PRODUCTION — email TIDAK " +
+          "terkirim (dry-run). Set di .env.local lalu restart PM2."
+      );
+    }
     console.log("\n📧 [DRY-RUN] Email would be sent:");
     console.log(`   To: ${input.to}`);
     console.log(`   From: ${from}`);

@@ -57,11 +57,26 @@ function getNodePath(): NodePath {
 // LOCAL FILESYSTEM ADAPTER (inlined)
 // ============================================================
 
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR ??
-  (process.cwd
-    ? `${process.cwd()}/public/uploads`
-    : "./public/uploads");
+/**
+ * Direktori upload. Di PRODUCTION wajib di-set ke path absolut yang PERSISTENT
+ * (mis. /var/lib/booking-table/uploads) — kalau tidak, file ditulis ke folder
+ * app dan HILANG tiap re-deploy/rebuild. Di dev boleh fallback ke public/uploads.
+ *
+ * LAZY (dipanggil saat upload/delete, bukan module-load) supaya guard production
+ * tidak terpicu saat `next build` (yang jalan dgn NODE_ENV=production tapi belum
+ * tentu punya UPLOADS_DIR di environment CI).
+ */
+function resolveUploadsDir(): string {
+  const fromEnv = process.env.UPLOADS_DIR;
+  if (fromEnv) return fromEnv;
+  if (driver === "local" && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "UPLOADS_DIR wajib di-set di production (path absolut persistent, mis. " +
+        "/var/lib/booking-table/uploads). Tanpa ini, file upload hilang tiap deploy."
+    );
+  }
+  return process.cwd ? `${process.cwd()}/public/uploads` : "./public/uploads";
+}
 
 function extFor(contentType: UploadInput["contentType"]): string {
   if (contentType === "image/jpeg") return "jpg";
@@ -74,7 +89,8 @@ const localStorage: StorageAdapter = {
     const ext = extFor(input.contentType);
     const fs = getNodeFs();
     const path = getNodePath();
-    const fullPath = path.join(UPLOADS_DIR, input.folder, `${input.key}.${ext}`);
+    const uploadsDir = resolveUploadsDir();
+    const fullPath = path.join(uploadsDir, input.folder, `${input.key}.${ext}`);
 
     await fs.promises.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.promises.writeFile(fullPath, input.buffer);
@@ -92,11 +108,12 @@ const localStorage: StorageAdapter = {
     // Strip query string (cache-bust) sebelum parse path
     const cleanUrl = publicUrl.split("?")[0];
     const relative = cleanUrl.replace(/^\/uploads\//, "");
-    const fullPath = path.join(UPLOADS_DIR, relative);
+    const uploadsDir = resolveUploadsDir();
+    const fullPath = path.join(uploadsDir, relative);
 
     // Path traversal guard
     const resolved = path.resolve(fullPath);
-    const resolvedRoot = path.resolve(UPLOADS_DIR);
+    const resolvedRoot = path.resolve(uploadsDir);
     if (!resolved.startsWith(resolvedRoot)) {
       console.warn(`[storage] delete: path traversal blocked: ${publicUrl}`);
       return;
