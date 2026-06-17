@@ -3,14 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, Camera, Map, User } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Home, UserSearch, Camera, Map, User } from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { cn, initials } from "@/lib/utils";
 
 interface Props {
   /** Bar ID untuk story upload — kalau null, tombol center disabled */
   barId?: string;
   /** True kalau user belum login — center button redirect ke /auth */
   isAnon?: boolean;
+  /** Foto + nama user (untuk tab Profile). null = anon / belum ada. */
+  avatarUrl?: string | null;
+  displayName?: string | null;
   /** Slot untuk component yang trigger story uploader (handed dari parent
    *  yang mount StoryUploader modal). Kalau provided, tombol center fire
    *  callback ini bukannya redirect ke /story. */
@@ -30,13 +34,22 @@ interface Props {
  * Tampil di mobile & desktop (di desktop tetap di bawah, lebar dibatasi
  * max-w-md di tengah).
  */
-export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
+export function BottomNav({
+  barId,
+  isAnon,
+  avatarUrl,
+  displayName,
+  onUploadStory,
+}: Props) {
   const pathname = usePathname();
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
     return pathname.startsWith(path);
   };
+
+  // Nama depan (kata pertama) untuk label tab profile.
+  const firstName = displayName?.trim().split(/\s+/)[0] ?? null;
 
   return (
     <nav
@@ -45,11 +58,12 @@ export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
     >
       <div className="max-w-md mx-auto px-2 grid grid-cols-5 items-stretch h-16">
         <NavItem href="/" icon={<Home />} label="Home" active={isActive("/")} />
+        {/* Network — cari/terhubung dgn customer lain (halaman menyusul) */}
         <NavItem
-          href="/booking"
-          icon={<Calendar />}
-          label="Booking"
-          active={isActive("/booking")}
+          href="/"
+          icon={<UserSearch />}
+          label="Network"
+          active={isActive("/network")}
         />
 
         {/* Center: Story camera — prominent */}
@@ -65,12 +79,38 @@ export function BottomNav({ barId, isAnon, onUploadStory }: Props) {
           label="Map"
           active={isActive("/bar")}
         />
-        <NavItem
-          href="/profile"
-          icon={<User />}
-          label="Profile"
-          active={isActive("/profile")}
-        />
+
+        {/* Profile — avatar + nama depan (anon → ikon User + Masuk) */}
+        <Link
+          href={isAnon ? "/auth?next=/profile" : "/profile"}
+          className={cn(
+            "flex flex-col items-center justify-end gap-1 h-full pb-2 text-[10px] leading-none transition",
+            isActive("/profile")
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {isAnon ? (
+            <span className="h-5 w-5 flex items-center justify-center">
+              <User />
+            </span>
+          ) : (
+            <Avatar
+              className={cn(
+                "h-6 w-6 -mb-0.5",
+                isActive("/profile") && "ring-2 ring-primary"
+              )}
+            >
+              {avatarUrl && <AvatarImage src={avatarUrl} />}
+              <AvatarFallback className="text-[9px]">
+                {initials(displayName ?? "?")}
+              </AvatarFallback>
+            </Avatar>
+          )}
+          <span className="max-w-[60px] truncate">
+            {isAnon ? "Masuk" : firstName ?? "Profil"}
+          </span>
+        </Link>
       </div>
     </nav>
   );

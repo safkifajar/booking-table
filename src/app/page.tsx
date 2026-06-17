@@ -176,7 +176,12 @@ export default async function HomePage() {
       </div>
 
       {/* Bottom nav (mobile only) */}
-      <HomeBottomNav barId={bar.id} isAnon={isAnon} />
+      <HomeBottomNav
+        barId={bar.id}
+        isAnon={isAnon}
+        avatarUrl={profile?.avatarUrl ?? null}
+        displayName={profile?.displayName ?? null}
+      />
     </main>
   );
 }

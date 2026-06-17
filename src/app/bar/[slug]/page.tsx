@@ -180,7 +180,12 @@ export default async function BarPage({ params }: PageProps) {
         bookingWindowDays={reservationConfig.bookingWindowDays}
         userId={profile?.id ?? null}
       />
-      <HomeBottomNav barId={bar.id} isAnon={!profile} />
+      <HomeBottomNav
+        barId={bar.id}
+        isAnon={!profile}
+        avatarUrl={profile?.avatarUrl ?? null}
+        displayName={profile?.displayName ?? null}
+      />
     </>
   );
 }

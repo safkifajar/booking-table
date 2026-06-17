@@ -8,6 +8,8 @@ import { StoryUploader } from "@/components/story/StoryUploader";
 interface Props {
   barId: string;
   isAnon: boolean;
+  avatarUrl?: string | null;
+  displayName?: string | null;
 }
 
 /**
@@ -17,7 +19,12 @@ interface Props {
  * Setelah upload sukses, refresh server data supaya story baru langsung
  * tampil di feed.
  */
-export function HomeBottomNav({ barId, isAnon }: Props) {
+export function HomeBottomNav({
+  barId,
+  isAnon,
+  avatarUrl,
+  displayName,
+}: Props) {
   const router = useRouter();
   const [uploadOpen, setUploadOpen] = React.useState(false);
 
@@ -26,6 +33,8 @@ export function HomeBottomNav({ barId, isAnon }: Props) {
       <BottomNav
         barId={barId}
         isAnon={isAnon}
+        avatarUrl={avatarUrl}
+        displayName={displayName}
         onUploadStory={() => setUploadOpen(true)}
       />
 
