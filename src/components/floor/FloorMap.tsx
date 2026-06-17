@@ -72,10 +72,9 @@ export function FloorMap({
     py: number;
     view: ViewBox;
     moved: boolean;
+    table: FloorMapTable | null;
   } | null>(null);
   const pinchStart = React.useRef<{ dist: number; view: ViewBox } | null>(null);
-  // true kalau gerakan terakhir = drag (supaya klik meja tidak terpicu).
-  const lastDragMoved = React.useRef(false);
 
   /** px layar (relatif container) → satuan kanvas, pakai view sekarang. */
   function pxToCanvas(px: number, py: number, v: ViewBox) {
@@ -149,13 +148,31 @@ export function FloorMap({
     };
   }
 
+  /** Hit-test: meja di titik px layar (relatif container) pakai view sekarang. */
+  function tableAt(px: number, py: number): FloorMapTable | null {
+    const { cx, cy } = pxToCanvas(px, py, view);
+    // iterasi terbalik supaya yg di atas (render terakhir) menang.
+    for (let i = tables.length - 1; i >= 0; i--) {
+      const t = tables[i];
+      if (
+        cx >= t.pos_x &&
+        cx <= t.pos_x + t.width &&
+        cy >= t.pos_y &&
+        cy <= t.pos_y + t.height
+      ) {
+        return t;
+      }
+    }
+    return null;
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     // Abaikan pointer yg jatuh di tombol kontrol zoom — kalau di-capture ke
-    // container, event click tombol tidak ter-fire (tombol jadi mati).
+    // container, event-nya ketelan & tombol jadi mati.
     if ((e.target as Element).closest?.("[data-zoom-control]")) return;
-    // Capture di CONTAINER (bukan e.target yg bisa elemen SVG anak) — supaya
-    // pan/pinch tetap mengalir ke handler container & tidak menelan event click
-    // meja di sebagian browser.
+    // Capture di CONTAINER supaya pan/pinch tetap mengalir walau jari keluar
+    // dari elemen meja. Konsekuensinya event click DOM ketelan — maka SELECT
+    // meja dipicu manual di onPointerUp (lihat di bawah), bukan via onClick.
     containerRef.current?.setPointerCapture?.(e.pointerId);
     const p = relPoint(e);
     pointers.current.set(e.pointerId, p);
@@ -167,7 +184,13 @@ export function FloorMap({
       };
       panStart.current = null;
     } else if (pointers.current.size === 1) {
-      panStart.current = { px: p.x, py: p.y, view, moved: false };
+      panStart.current = {
+        px: p.x,
+        py: p.y,
+        view,
+        moved: false,
+        table: tableAt(p.x, p.y),
+      };
     }
   }
 
@@ -209,17 +232,14 @@ export function FloorMap({
     pointers.current.delete(e.pointerId);
     if (pointers.current.size < 2) pinchStart.current = null;
     if (pointers.current.size === 0) {
-      lastDragMoved.current = !!panStart.current?.moved;
+      // Tap (bukan drag) di atas meja → SELECT. Dipicu di sini, bukan via
+      // onClick DOM, karena pointer capture di container menelan click.
+      const ps = panStart.current;
+      if (ps && !ps.moved && ps.table) {
+        onSelectTable?.(ps.table);
+      }
       panStart.current = null;
     }
-  }
-
-  function handleSelect(table: FloorMapTable) {
-    if (lastDragMoved.current) {
-      lastDragMoved.current = false;
-      return;
-    }
-    onSelectTable?.(table);
   }
 
   return (
@@ -239,7 +259,7 @@ export function FloorMap({
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
         className="h-auto block w-full"
         preserveAspectRatio="xMidYMid meet"
-        style={{ cursor: scale > 1 ? "grab" : "default" }}
+        style={{ cursor: scale > 1 ? "grab" : "pointer" }}
       >
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -263,7 +283,6 @@ export function FloorMap({
             table={table}
             selected={selectedTableId === table.id}
             highlighted={highlightTableId === table.id}
-            onClick={() => handleSelect(table)}
           />
         ))}
       </svg>
@@ -317,10 +336,9 @@ interface TableShapeProps {
   table: FloorMapTable;
   selected: boolean;
   highlighted: boolean;
-  onClick: () => void;
 }
 
-function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) {
+function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isOpen = !!table.active_session && table.active_session.status === "open";
   const isLocked = !!table.active_session && table.active_session.status === "locked";
   const isReserved = !!table.active_session && table.active_session.status === "reserved";
@@ -352,9 +370,10 @@ function TableShape({ table, selected, highlighted, onClick }: TableShapeProps) 
 
   return (
     <g
-      onClick={onClick}
-      className="cursor-pointer transition-opacity hover:opacity-90"
-      role="button"
+      // pointer-events none: hit-test & select ditangani container via koordinat
+      // (onPointerUp). Ini menghindari pointer-capture container menelan event.
+      style={{ pointerEvents: "none" }}
+      className="transition-opacity"
       aria-label={`Table ${table.label}, capacity ${table.capacity}`}
     >
       {/* Glow halo for open sessions — di-render via <g> wrapper supaya
