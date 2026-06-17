@@ -167,15 +167,6 @@ export function SessionView(props: SessionViewProps) {
     }
   }, [isStaff, hostMember, joinedMembers, staffTargetMemberId]);
 
-  // Auto-redirect member ke halaman rate saat host menutup session.
-  // Host sendiri sudah di-redirect via Server Action closeSession().
-  // Staff TIDAK di-redirect (mereka tidak ikut rate).
-  React.useEffect(() => {
-    if (props.session.status === "closed" && props.isMember) {
-      router.replace(`/session/${props.session.id}/rate`);
-    }
-  }, [props.session.status, props.session.id, router, props.isMember]);
-
   const subtotal = props.orderItems.reduce(
     (acc, item) => acc + item.quantity * item.unit_price,
     0
@@ -185,6 +176,15 @@ export function SessionView(props: SessionViewProps) {
     .reduce((acc, p) => acc + p.amount, 0);
   const remaining = Math.max(0, subtotal - totalPaid);
   const isLunas = subtotal > 0 && remaining === 0;
+
+  // Auto-redirect member ke halaman rate saat host menutup session — TAPI hanya
+  // kalau sudah lunas. Kalau closed tapi masih nunggak (force-close / data lama),
+  // tetap di sini supaya bisa LUNASI dulu (jangan paksa ke rating).
+  React.useEffect(() => {
+    if (props.session.status === "closed" && props.isMember && remaining <= 0) {
+      router.replace(`/session/${props.session.id}/rate`);
+    }
+  }, [props.session.status, props.session.id, router, props.isMember, remaining]);
 
   return (
     <main className="flex-1 pb-32">

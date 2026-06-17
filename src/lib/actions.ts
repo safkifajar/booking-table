@@ -18,7 +18,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
@@ -37,7 +37,7 @@ import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { createNotification, markInviteResponded } from "@/lib/notifications";
-import { settleOverdueIfPaid } from "@/lib/queries";
+import { settleOverdueIfPaid, getOutstandingMap } from "@/lib/queries";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -1241,12 +1241,28 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     );
   if (!member) throw new Error("Bukan member meja ini");
 
-  // 2. Open order
-  const [order] = await db
+  // 2. Order untuk dibayar. Normal = order open. Tapi sesi yang sudah closed
+  // (force-close / overdue / data lama) order-nya juga closed — tetap boleh
+  // dilunasi SELAMA masih ada sisa tagihan. Cari open dulu, fallback ke order
+  // mana pun kalau sesi masih nunggak.
+  const [openOrder] = await db
     .select({ id: orders.id })
     .from(orders)
     .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
-  if (!order) throw new Error("Order tidak terbuka");
+  let order = openOrder;
+  if (!order) {
+    const outstanding =
+      (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
+    if (outstanding <= 0) throw new Error("Tagihan sudah lunas");
+    const [anyOrder] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.sessionId, data.sessionId))
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+    order = anyOrder;
+  }
+  if (!order) throw new Error("Order tidak ditemukan");
 
   // 3. Insert payment dengan status='pending'
   const [newPayment] = await db

@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { tableSessions } from "@/lib/db/schema/sessions";
 import { tables } from "@/lib/db/schema/venue";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getRatableMembers } from "@/lib/queries";
+import { getRatableMembers, getOutstandingMap } from "@/lib/queries";
 import { RateForm } from "./RateForm";
 
 interface PageProps {
@@ -34,6 +34,13 @@ export default async function RatePage({ params }: PageProps) {
 
   // Hanya bisa rate kalau session sudah closed
   if (row.status !== "closed") {
+    redirect(`/session/${id}`);
+  }
+
+  // Closed tapi masih nunggak (di-close paksa / data lama sebelum fitur overdue)
+  // → arahkan ke halaman sesi untuk LUNASI dulu, jangan paksa ke rating.
+  const outstanding = (await getOutstandingMap([id])).get(id) ?? 0;
+  if (outstanding > 0) {
     redirect(`/session/${id}`);
   }
 
