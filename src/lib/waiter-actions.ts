@@ -95,7 +95,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
       and(
         eq(floorAreas.barId, ctx.barId),
         eq(orderItems.status, "sent"),
-        inArray(tableSessions.status, ["open", "locked"])
+        inArray(tableSessions.status, ["open", "locked", "overdue"])
       )
     )
     .orderBy(asc(orderItems.createdAt));
@@ -159,7 +159,7 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        inArray(tableSessions.status, ["open", "locked"])
+        inArray(tableSessions.status, ["open", "locked", "overdue"])
       )
     )
     .orderBy(asc(tableSessions.startedAt));
@@ -372,7 +372,7 @@ export async function getAvailableTablesForWaiter(): Promise<AvailableTable[]> {
   const occupiedTableIds = await db
     .select({ table_id: tableSessions.tableId })
     .from(tableSessions)
-    .where(inArray(tableSessions.status, ["open", "locked"]));
+    .where(inArray(tableSessions.status, ["open", "locked", "overdue"]));
 
   const occupiedSet = new Set(occupiedTableIds.map((r) => r.table_id));
 

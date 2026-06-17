@@ -37,6 +37,7 @@ import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { createNotification, markInviteResponded } from "@/lib/notifications";
+import { settleOverdueIfPaid } from "@/lib/queries";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -250,7 +251,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       .where(
         and(
           eq(tableSessions.tableId, data.tableId),
-          inArray(tableSessions.status, ["reserved", "open", "locked"])
+          inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
         )
       );
     const existing: BookedRange[] = existingRows
@@ -1281,6 +1282,11 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       paidAt: chargeResult.status === "paid" ? new Date() : null,
     })
     .where(eq(payments.id, newPayment.id));
+
+  // Kalau sesi 'overdue' (lewat waktu tapi nunggak) dan kini lunas → tutup.
+  if (chargeResult.status === "paid") {
+    await settleOverdueIfPaid(data.sessionId);
+  }
 
   await notifySessionAndStaff(data.sessionId);
   revalidatePath(`/session/${data.sessionId}`);

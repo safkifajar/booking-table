@@ -54,7 +54,7 @@ export default async function QrScanPage({ params }: PageProps) {
     .where(
       and(
         eq(tableSessions.tableId, tableId),
-        inArray(tableSessions.status, ["open", "locked"])
+        inArray(tableSessions.status, ["open", "locked", "overdue"])
       )
     );
 

@@ -11,6 +11,10 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "locked",
   "closed",
   "cancelled",
+  // Reservasi/sesi yang waktunya sudah lewat TAPI masih ada tagihan belum
+  // lunas. Diperlakukan seperti aktif (tetap di kasir, meja terisi) sampai
+  // dilunasi → baru jadi 'closed'. Ditambah via migration 0026.
+  "overdue",
 ]);
 
 export const sessionVisibilityEnum = pgEnum("session_visibility", [

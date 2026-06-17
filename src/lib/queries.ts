@@ -10,13 +10,14 @@
  * Phase 5 cleanup nanti baru migrate types ke camelCase kalau diputuskan.
  */
 
-import { eq, and, inArray, asc, sql, lte, gt } from "drizzle-orm";
+import { eq, and, inArray, asc, sql, lte, gt, ne, or, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { bars, floorAreas, tables } from "@/lib/db/schema/venue";
 import {
   tableSessions,
   sessionMembers,
 } from "@/lib/db/schema/sessions";
+import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { profiles } from "@/lib/db/schema/profiles";
 import { memberRatings } from "@/lib/db/schema/extras";
@@ -182,7 +183,9 @@ async function activeSessionsBase(): Promise<
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
     .leftJoin(memberCountSq, eq(memberCountSq.sessionId, tableSessions.id))
-    .where(inArray(tableSessions.status, ["reserved", "open", "locked"]));
+    .where(
+      inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
+    );
 
   return rows.map((r) => ({
     ...r,
@@ -220,6 +223,146 @@ export async function getActiveSessionsForArea(
  */
 const WALKIN_MAX_HOURS = 12;
 
+/**
+ * Map sessionId → outstanding (sisa tagihan) = subtotal order_items non-void −
+ * total payments berstatus 'paid'. Hanya untuk sessionIds yang diberikan.
+ * Session tanpa order dianggap outstanding 0. Reuse pola cashier-actions.
+ */
+export async function getOutstandingMap(
+  sessionIds: string[]
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (sessionIds.length === 0) return out;
+
+  const bills = await db
+    .select({
+      session_id: orders.sessionId,
+      subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+    })
+    .from(orders)
+    .leftJoin(
+      orderItems,
+      and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
+    )
+    .where(inArray(orders.sessionId, sessionIds))
+    .groupBy(orders.sessionId);
+
+  const paidRows = await db
+    .select({
+      session_id: orders.sessionId,
+      paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+    )
+    .groupBy(orders.sessionId);
+
+  const paidMap = new Map(paidRows.map((r) => [r.session_id, Number(r.paid)]));
+  for (const b of bills) {
+    const outstanding = Math.max(
+      0,
+      Number(b.subtotal) - (paidMap.get(b.session_id) ?? 0)
+    );
+    out.set(b.session_id, outstanding);
+  }
+  return out;
+}
+
+/**
+ * Kalau session berstatus 'overdue' dan tagihannya sudah lunas (outstanding
+ * <= 0), tutup jadi 'closed'. Dipanggil setelah pembayaran berhasil (payShare /
+ * cashier mark-paid). No-op kalau session bukan overdue atau masih ada sisa.
+ */
+export interface UnpaidSessionView {
+  id: string;
+  table_label: string;
+  area_name: string;
+  bar_name: string;
+  status: string;
+  started_at: string;
+  outstanding: number;
+}
+
+/**
+ * Sesi yang DIIKUTI user (host atau member non-pending) dan masih punya tagihan
+ * belum lunas (outstanding > 0). Mencakup status 'overdue' (lewat waktu tapi
+ * nunggak) maupun 'closed' yang di-close paksa dengan sisa. Dipakai untuk banner
+ * "tagihan belum lunas" + badge riwayat. Dibatasi 60 hari terakhir.
+ */
+export async function getUnpaidSessionsForProfile(
+  profileId: string
+): Promise<UnpaidSessionView[]> {
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .selectDistinct({
+      id: tableSessions.id,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      bar_name: bars.name,
+      status: tableSessions.status,
+      started_at: tableSessions.startedAt,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .leftJoin(
+      sessionMembers,
+      and(
+        eq(sessionMembers.sessionId, tableSessions.id),
+        eq(sessionMembers.profileId, profileId)
+      )
+    )
+    .where(
+      and(
+        inArray(tableSessions.status, ["overdue", "closed"]),
+        gt(tableSessions.startedAt, since),
+        or(
+          eq(tableSessions.hostId, profileId),
+          and(
+            eq(sessionMembers.profileId, profileId),
+            ne(sessionMembers.status, "pending")
+          )
+        )
+      )
+    )
+    .orderBy(desc(tableSessions.startedAt))
+    .limit(50);
+
+  if (rows.length === 0) return [];
+  const outMap = await getOutstandingMap(rows.map((r) => r.id));
+  return rows
+    .map((r) => ({
+      id: r.id,
+      table_label: r.table_label,
+      area_name: r.area_name,
+      bar_name: r.bar_name,
+      status: r.status as string,
+      started_at: r.started_at.toISOString(),
+      outstanding: outMap.get(r.id) ?? 0,
+    }))
+    .filter((r) => r.outstanding > 0);
+}
+
+export async function settleOverdueIfPaid(sessionId: string): Promise<boolean> {
+  const [s] = await db
+    .select({ status: tableSessions.status })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
+  if (!s || s.status !== "overdue") return false;
+
+  const outstanding = (await getOutstandingMap([sessionId])).get(sessionId) ?? 0;
+  if (outstanding > 0) return false;
+
+  await db
+    .update(tableSessions)
+    .set({ status: "closed", closedAt: new Date() })
+    .where(eq(tableSessions.id, sessionId));
+  return true;
+}
+
 export async function expireFinishedSessions(barId: string): Promise<number> {
   const now = new Date();
   const walkinCutoff = new Date(now.getTime() - WALKIN_MAX_HOURS * 60 * 60 * 1000);
@@ -243,26 +386,39 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
       )
     );
 
-  let closed = 0;
-  for (const s of active) {
-    // Session dgn rentang reservasi (reserved no-show ATAU open hasil promote):
-    // close kalau reservation_end_at sudah lewat.
+  // Kandidat yg waktunya habis (reservasi lewat / walk-in basi).
+  const expiring = active.filter((s) => {
     const reservationEnded =
       !!s.reservationEndAt && s.reservationEndAt.getTime() <= now.getTime();
-    // Walk-in basi (open tanpa reservasi, started > 12 jam lalu).
     const staleWalkIn =
       s.status !== "reserved" &&
       !s.reservationAt &&
       s.startedAt.getTime() <= walkinCutoff.getTime();
-    if (reservationEnded || staleWalkIn) {
+    return reservationEnded || staleWalkIn;
+  });
+  if (expiring.length === 0) return 0;
+
+  // Cek tagihan: yg masih ada sisa → 'overdue' (jangan close, biar tetap
+  // tertagih). Yg lunas / tanpa tagihan → 'closed' seperti biasa.
+  const outstandingMap = await getOutstandingMap(expiring.map((s) => s.id));
+
+  let processed = 0;
+  for (const s of expiring) {
+    const outstanding = outstandingMap.get(s.id) ?? 0;
+    if (outstanding > 0) {
+      await db
+        .update(tableSessions)
+        .set({ status: "overdue" })
+        .where(eq(tableSessions.id, s.id));
+    } else {
       await db
         .update(tableSessions)
         .set({ status: "closed", closedAt: now })
         .where(eq(tableSessions.id, s.id));
-      closed++;
     }
+    processed++;
   }
-  return closed;
+  return processed;
 }
 
 /**
@@ -301,7 +457,7 @@ export async function promoteDueReservations(barId: string): Promise<number> {
       .where(
         and(
           eq(tableSessions.tableId, r.tableId),
-          inArray(tableSessions.status, ["open", "locked"])
+          inArray(tableSessions.status, ["open", "locked", "overdue"])
         )
       );
     if (busy) continue;

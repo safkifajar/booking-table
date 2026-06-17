@@ -153,7 +153,12 @@ export default async function BarPage({ params }: PageProps) {
         // (bukan history closed — biar meja yg reservasinya selesai = available).
         const activeReservations = forTable.filter((s) => s.reservation_at);
         const active =
-          forTable.find((s) => s.status === "open" || s.status === "locked") ??
+          forTable.find(
+            (s) =>
+              s.status === "open" ||
+              s.status === "locked" ||
+              s.status === "overdue"
+          ) ??
           activeReservations[0] ??
           null;
         return { ...t, active_session: active };

@@ -5,15 +5,17 @@ import { db } from "@/lib/db/client";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getOutstandingMap } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
+import { formatIDR } from "@/lib/utils";
 import { Crown, Users, Lock, ChevronRight, History } from "lucide-react";
 import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
 
 interface SessionRow {
   id: string;
   title: string | null;
-  status: "reserved" | "open" | "locked" | "closed" | "cancelled";
+  status: "reserved" | "open" | "locked" | "closed" | "cancelled" | "overdue";
   started_at: Date;
   closed_at: Date | null;
   table_label: string;
@@ -21,6 +23,8 @@ interface SessionRow {
   bar_name: string;
   is_host: boolean;
   member_status: "pending" | "joined" | "left" | "kicked" | null;
+  /** Sisa tagihan belum lunas (0 = lunas / tak ada bill). */
+  outstanding: number;
 }
 
 export default async function ProfileSessionsPage() {
@@ -31,7 +35,7 @@ export default async function ProfileSessionsPage() {
 
   // Query: semua session di mana user adalah host ATAU member (status apapun
   // kecuali 'pending' yg tidak pernah jadi joined). Sort terbaru di atas.
-  const rows: SessionRow[] = await db
+  const baseRows = await db
     .select({
       id: tableSessions.id,
       title: tableSessions.title,
@@ -67,6 +71,13 @@ export default async function ProfileSessionsPage() {
     .orderBy(desc(tableSessions.startedAt))
     .limit(100);
 
+  // Outstanding (sisa tagihan) per sesi → badge "Belum lunas".
+  const outMap = await getOutstandingMap(baseRows.map((r) => r.id));
+  const rows: SessionRow[] = baseRows.map((r) => ({
+    ...r,
+    outstanding: outMap.get(r.id) ?? 0,
+  }));
+
   return (
     <main className="flex-1 pb-12">
       <ProfileSubpageHeader title="Riwayat Session" eyebrow="Profile" />
@@ -87,9 +98,12 @@ export default async function ProfileSessionsPage() {
 }
 
 function SessionListItem({ session }: { session: SessionRow }) {
-  const isActive = session.status === "open" || session.status === "locked";
-  // Untuk session aktif → /session/[id]. Untuk closed/cancelled → /session/[id]/rate
-  // (rate page handle empty state untuk solo sessions, jadi aman).
+  const isActive =
+    session.status === "open" ||
+    session.status === "locked" ||
+    session.status === "overdue";
+  // Aktif/overdue → /session/[id] (overdue masih bisa dibayar). closed/cancelled
+  // → /session/[id]/rate (rate page handle empty state untuk solo, jadi aman).
   const href = isActive ? `/session/${session.id}` : `/session/${session.id}/rate`;
 
   return (
@@ -129,6 +143,14 @@ function SessionListItem({ session }: { session: SessionRow }) {
             memberStatus={session.member_status}
             isHost={session.is_host}
           />
+          {session.outstanding > 0 && (
+            <>
+              <span>·</span>
+              <span className="inline-flex items-center gap-1 text-orange-400 font-medium">
+                Belum lunas {formatIDR(session.outstanding)}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
@@ -156,6 +178,13 @@ function StatusBadge({
     return (
       <span className="inline-flex items-center gap-1 text-amber-400">
         <Lock className="h-3 w-3" /> Locked
+      </span>
+    );
+  }
+  if (status === "overdue") {
+    return (
+      <span className="inline-flex items-center gap-1 text-orange-400">
+        <Users className="h-3 w-3" /> Lewat waktu
       </span>
     );
   }

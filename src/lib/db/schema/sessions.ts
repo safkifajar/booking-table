@@ -70,11 +70,12 @@ export const tableSessions = pgTable(
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
-    // Hanya 1 session AKTIF (open/locked) per table. Reservasi (reserved)
-    // boleh banyak di slot berbeda — overlap dicegah di aplikasi (openTable).
+    // Hanya 1 session AKTIF (open/locked/overdue) per table. Reservasi
+    // (reserved) boleh banyak di slot berbeda — overlap dicegah di aplikasi
+    // (openTable). 'overdue' = lewat waktu tapi belum lunas, masih okupansi.
     uniqueIndex("uq_active_session_per_table")
       .on(t.tableId)
-      .where(sql`status in ('open', 'locked')`),
+      .where(sql`status in ('open', 'locked', 'overdue')`),
     index("idx_sessions_visibility").on(t.visibility, t.status),
     index("idx_sessions_host").on(t.hostId),
     // Filter upcoming reservations efficient

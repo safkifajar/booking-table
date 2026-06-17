@@ -142,7 +142,10 @@ function buildHourRows(
       start: new Date(r.reservation_at!).getTime(),
       end: new Date(r.reservation_end_at!).getTime(),
       host: r.host_name,
-      inUse: r.status === "open" || r.status === "locked",
+      inUse:
+        r.status === "open" ||
+        r.status === "locked" ||
+        r.status === "overdue",
       sessionId: r.id,
     }));
 
@@ -261,7 +264,11 @@ export function BarFloorView({
         {/* Area tabs */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-2 flex gap-2 overflow-x-auto">
           {areasWithTables.map(({ area, tables }) => {
-            const openCount = tables.filter((t) => t.active_session?.status === "open").length;
+            const openCount = tables.filter(
+              (t) =>
+                t.active_session?.status === "open" ||
+                t.active_session?.status === "overdue"
+            ).length;
             const active = activeAreaSlug === area.slug;
             return (
               <button
@@ -294,6 +301,7 @@ export function BarFloorView({
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
           <LegendDot color="rgba(201,169,97,0.4)" border="#c9a961" label="Open table" pulse />
           <LegendDot color="rgba(59,130,246,0.2)" border="#3b82f6" label="Reserved" />
+          <LegendDot color="rgba(249,115,22,0.2)" border="#f97316" label="Belum lunas" />
           <LegendDot color="rgba(220,38,38,0.15)" border="#dc2626" label="Locked / full" />
         </div>
 
@@ -452,17 +460,24 @@ function BookingSchedule({
             const ended =
               !!r.reservation_end_at &&
               new Date(r.reservation_end_at).getTime() <= nowMs;
-            const inUse = r.status === "open" || r.status === "locked";
+            const inUse =
+              r.status === "open" ||
+              r.status === "locked" ||
+              r.status === "overdue";
             const statusLabel = ended
               ? "Selesai"
-              : inUse
-                ? "Sedang dipakai"
-                : "Dibooking";
+              : r.status === "overdue"
+                ? "Belum lunas"
+                : inUse
+                  ? "Sedang dipakai"
+                  : "Dibooking";
             const statusColor = ended
               ? "text-muted-foreground/60"
-              : inUse
-                ? "text-emerald-400"
-                : "text-blue-400";
+              : r.status === "overdue"
+                ? "text-orange-400"
+                : inUse
+                  ? "text-emerald-400"
+                  : "text-blue-400";
             return (
               <button
                 key={r.id}
@@ -524,6 +539,7 @@ function TableSheet({
   const session = table.active_session;
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
+  const isOverdue = session?.status === "overdue";
 
   // Kelompokkan reservasi per tanggal (groupKey).
   const byDate = React.useMemo(() => {
@@ -671,6 +687,14 @@ function TableSheet({
                   className="text-xs border-blue-500/50 text-blue-400"
                 >
                   Reserved
+                </Badge>
+              )}
+              {isOverdue && (
+                <Badge
+                  variant="outline"
+                  className="text-xs border-orange-500/50 text-orange-400"
+                >
+                  Belum lunas
                 </Badge>
               )}
               <span className="text-xs text-muted-foreground capitalize">

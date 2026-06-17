@@ -122,7 +122,7 @@ export async function deleteArea(areaId: string) {
             tableSessions.tableId,
             tableIds.map((t) => t.id)
           ),
-          inArray(tableSessions.status, ["reserved", "open", "locked"])
+          inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
         )
       )
       .limit(1);
@@ -243,7 +243,7 @@ export async function deleteTable(tableId: string) {
     .where(
       and(
         eq(tableSessions.tableId, tableId),
-        inArray(tableSessions.status, ["reserved", "open", "locked"])
+        inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
       )
     )
     .limit(1);

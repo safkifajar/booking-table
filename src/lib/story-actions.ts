@@ -121,7 +121,7 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
         eq(sessionMembers.profileId, profile.id),
         eq(sessionMembers.status, "joined"),
         eq(floorAreas.barId, barId),
-        sql`${tableSessions.status} IN ('open', 'locked')`
+        sql`${tableSessions.status} IN ('open', 'locked', 'overdue')`
       )
     )
     .orderBy(desc(sessionMembers.joinedAt))

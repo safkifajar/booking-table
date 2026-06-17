@@ -342,25 +342,31 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isOpen = !!table.active_session && table.active_session.status === "open";
   const isLocked = !!table.active_session && table.active_session.status === "locked";
   const isReserved = !!table.active_session && table.active_session.status === "reserved";
+  // Lewat waktu tapi belum lunas — meja masih terisi, butuh penyelesaian bayar.
+  const isOverdue = !!table.active_session && table.active_session.status === "overdue";
   const isAvailable = !table.active_session;
 
   const fill = isOpen
     ? "rgba(201, 169, 97, 0.25)"
-    : isLocked
-      ? "rgba(220, 38, 38, 0.15)"
-      : isReserved
-        ? "rgba(59, 130, 246, 0.15)"
-        : "rgba(28, 28, 28, 0.9)";
+    : isOverdue
+      ? "rgba(249, 115, 22, 0.18)"
+      : isLocked
+        ? "rgba(220, 38, 38, 0.15)"
+        : isReserved
+          ? "rgba(59, 130, 246, 0.15)"
+          : "rgba(28, 28, 28, 0.9)";
 
   const stroke = selected
     ? "#e6c478"
     : isOpen
       ? "#c9a961"
-      : isLocked
-        ? "#dc2626"
-        : isReserved
-          ? "#3b82f6"
-          : "rgba(255,255,255,0.15)";
+      : isOverdue
+        ? "#f97316"
+        : isLocked
+          ? "#dc2626"
+          : isReserved
+            ? "#3b82f6"
+            : "rgba(255,255,255,0.15)";
 
   const strokeWidth = selected || highlighted ? 3 : 2;
 
@@ -431,11 +437,13 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         fill={
           isOpen
             ? "#e6c478"
-            : isReserved
-              ? "#60a5fa"
-              : isAvailable
-                ? "#a3a3a3"
-                : "#f87171"
+            : isOverdue
+              ? "#fb923c"
+              : isReserved
+                ? "#60a5fa"
+                : isAvailable
+                  ? "#a3a3a3"
+                  : "#f87171"
         }
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
@@ -453,7 +461,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
       </text>
 
       {/* Member count badge for active (open/locked) sessions */}
-      {table.active_session && !isReserved && (
+      {table.active_session && !isReserved && !isOverdue && (
         <g style={{ pointerEvents: "none" }}>
           <circle
             cx={table.pos_x + table.width - 6}
@@ -470,6 +478,28 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
             fill="#0a0a0a"
           >
             {table.active_session.member_count}
+          </text>
+        </g>
+      )}
+
+      {/* Overdue badge — tagihan belum lunas (oranye, tanda seru) */}
+      {isOverdue && (
+        <g style={{ pointerEvents: "none" }}>
+          <circle
+            cx={table.pos_x + table.width - 6}
+            cy={table.pos_y + 6}
+            r="10"
+            fill="#f97316"
+          />
+          <text
+            x={table.pos_x + table.width - 6}
+            y={table.pos_y + 10}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="700"
+            fill="#0a0a0a"
+          >
+            !
           </text>
         </g>
       )}

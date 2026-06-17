@@ -85,9 +85,19 @@ export function TransactionsList({
                   <div className="font-semibold text-primary tabular-nums">
                     {formatIDR(t.subtotal)}
                   </div>
-                  {t.paid_total < t.subtotal && (
-                    <div className="text-[10px] text-amber-400">
-                      partial ({formatIDR(t.paid_total)})
+                  {/* subtotal 0 = tak ada tagihan → jangan tampil "belum lunas" */}
+                  {t.subtotal === 0 ? null : t.paid_total >= t.subtotal ? (
+                    <Badge variant="success" className="mt-0.5 text-[9px] px-1.5">
+                      Lunas
+                    </Badge>
+                  ) : (
+                    <div className="mt-0.5">
+                      <Badge variant="warning" className="text-[9px] px-1.5">
+                        Belum lunas
+                      </Badge>
+                      <div className="text-[10px] text-amber-400 tabular-nums">
+                        sisa {formatIDR(t.subtotal - t.paid_total)}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -131,8 +141,19 @@ export function TransactionsList({
                     </span>
                     <span>{t.item_count} items</span>
                   </div>
-                  <div className="font-semibold text-primary tabular-nums text-sm">
-                    {formatIDR(t.subtotal)}
+                  <div className="text-right">
+                    <div className="font-semibold text-primary tabular-nums text-sm">
+                      {formatIDR(t.subtotal)}
+                    </div>
+                    {t.subtotal === 0 ? null : t.paid_total >= t.subtotal ? (
+                      <Badge variant="success" className="mt-0.5 text-[9px] px-1.5">
+                        Lunas
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" className="mt-0.5 text-[9px] px-1.5">
+                        Belum lunas · {formatIDR(t.subtotal - t.paid_total)}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>

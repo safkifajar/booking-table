@@ -7,7 +7,8 @@ export type SessionStatus =
   | "open"
   | "locked"
   | "closed"
-  | "cancelled";
+  | "cancelled"
+  | "overdue";
 export type SessionVisibility = "public" | "friends" | "invite_only";
 export type MemberRole = "host" | "member" | "guest";
 export type MemberStatus = "pending" | "joined" | "left" | "kicked";

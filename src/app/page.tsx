@@ -8,8 +8,13 @@ import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getBarBySlug, getActiveSessionsByBar } from "@/lib/queries";
+import {
+  getBarBySlug,
+  getActiveSessionsByBar,
+  getUnpaidSessionsForProfile,
+} from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
+import { UnpaidBanner } from "@/components/UnpaidBanner";
 
 export default async function HomePage() {
   const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
@@ -27,9 +32,10 @@ export default async function HomePage() {
   }
 
   // Fetch data feed (parallel)
-  const [activeSessions, banners] = await Promise.all([
+  const [activeSessions, banners, unpaidSessions] = await Promise.all([
     getActiveSessionsByBar(bar.id),
     getActiveBanners(bar.id),
+    profile ? getUnpaidSessionsForProfile(profile.id) : Promise.resolve([]),
   ]);
 
   const isAnon = !profile;
@@ -71,6 +77,9 @@ export default async function HomePage() {
         {/* Soft-banner aktifkan notifikasi (user login) — proaktif tanpa
             auto-prompt. Klik Aktifkan baru minta izin browser. */}
         {!isAnon && profile && <PushBanner />}
+
+        {/* Banner tagihan belum lunas (user login) — overdue / closed-belum-lunas */}
+        {!isAnon && profile && <UnpaidBanner sessions={unpaidSessions} />}
 
         {/* Story bar — logged-in only (Server Component skip render kalau anon) */}
         <StoryBarSection barSlug={barSlug} />

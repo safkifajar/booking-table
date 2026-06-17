@@ -39,6 +39,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { notifyAll } from "@/lib/realtime/notify";
+import { settleOverdueIfPaid } from "@/lib/queries";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
 // ============================================================
@@ -93,7 +94,7 @@ export async function getActiveSessionsForCashier(): Promise<
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        inArray(tableSessions.status, ["open", "locked"])
+        inArray(tableSessions.status, ["open", "locked", "overdue"])
       )
     )
     .orderBy(asc(tableSessions.startedAt));
@@ -575,6 +576,9 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     .update(payments)
     .set({ status: "paid", paidAt: new Date() })
     .where(eq(payments.id, paymentId));
+
+  // Sesi 'overdue' yang kini lunas → tutup otomatis.
+  await settleOverdueIfPaid(payment.sessionId);
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.paid" });
 

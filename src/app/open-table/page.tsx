@@ -82,8 +82,8 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
       .where(
         and(
           eq(tableSessions.tableId, row.table_id),
-          // reserved + open/locked hasil promote reservasi (punya rentang)
-          inArray(tableSessions.status, ["reserved", "open", "locked"])
+          // reserved + open/locked/overdue (semua menempati slot waktu)
+          inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
         )
       );
     const existing: BookedRange[] = existingRows
