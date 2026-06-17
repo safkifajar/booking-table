@@ -7,7 +7,7 @@ import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock } from "lucide-react";
+import { MapPin, Clock } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -244,11 +244,6 @@ export function BarFloorView({
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon">
-            <Link href="/" aria-label="Back to home">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-primary/70">
               {bar.tagline}
