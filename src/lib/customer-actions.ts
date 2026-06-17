@@ -15,7 +15,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ilike, or, sql, desc, count } from "drizzle-orm";
+import { and, eq, ilike, or, sql, desc, count, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
@@ -280,7 +280,8 @@ export interface InviteCandidate {
  * Wajib ada query (min 1 char) supaya tidak dump semua user.
  */
 export async function searchInviteCandidates(
-  queryRaw: string
+  queryRaw: string,
+  excludeSessionId?: string
 ): Promise<InviteCandidate[]> {
   const me = await getCurrentProfile();
   if (!me) return [];
@@ -288,6 +289,29 @@ export async function searchInviteCandidates(
   if (q.length < 1) return [];
 
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const conditions = [
+    sql`${users.id} <> ${me.id}`,
+    sql`${users.id} NOT IN (${staffIds})`,
+    eq(profiles.isGuest, false),
+    or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`)),
+  ];
+
+  // Saat dipanggil dari session (ajak/undang): sembunyikan user yg SUDAH jadi
+  // member meja itu (joined/pending). Yg pernah left/kicked tetap muncul supaya
+  // bisa diundang ulang.
+  if (excludeSessionId) {
+    const memberIds = db
+      .select({ id: sessionMembers.profileId })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, excludeSessionId),
+          inArray(sessionMembers.status, ["joined", "pending"])
+        )
+      );
+    conditions.push(sql`${users.id} NOT IN (${memberIds})`);
+  }
 
   const rows = await db
     .select({
@@ -297,17 +321,7 @@ export async function searchInviteCandidates(
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
-    .where(
-      and(
-        sql`${users.id} <> ${me.id}`,
-        sql`${users.id} NOT IN (${staffIds})`,
-        eq(profiles.isGuest, false),
-        or(
-          ilike(profiles.displayName, `%${q}%`),
-          ilike(users.email, `%${q}%`)
-        )
-      )
-    )
+    .where(and(...conditions))
     .orderBy(profiles.displayName)
     .limit(10);
 

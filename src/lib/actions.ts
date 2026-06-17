@@ -891,6 +891,163 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
   revalidatePath(`/session/${sessionId}`);
 }
 
+const inviteToSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  userIds: z.array(z.string().uuid()).min(1).max(20),
+  mode: z.enum(["friends", "invite"]),
+});
+
+/**
+ * Host mengajak/mengundang user ke session yang SUDAH berjalan (dari tab Meja).
+ * mode "friends" → langsung joined (makan slot, cek kapasitas). mode "invite" →
+ * pending + invited_by (user approve via acceptInvite, kapasitas dicek saat
+ * accept). Reuse pola openTable. Host-only.
+ */
+export async function inviteUsersToSession(
+  input: z.infer<typeof inviteToSessionSchema>
+) {
+  const profile = await requireProfile();
+  const { sessionId, userIds, mode } = inviteToSessionSchema.parse(input);
+
+  // 1. Session + guard host + status open.
+  const [row] = await db
+    .select({
+      status: tableSessions.status,
+      host_id: tableSessions.hostId,
+      capacity: tables.capacity,
+      max_guests: tableSessions.maxGuests,
+      table_label: tables.label,
+      bar_name: bars.name,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!row) throw new Error("Session tidak ditemukan");
+  if (row.host_id !== profile.id) {
+    throw new Error("Hanya host yang bisa mengundang");
+  }
+  if (row.status !== "open") {
+    throw new Error("Meja tidak sedang aktif");
+  }
+
+  // 2. Resolusi user: dedup, buang host, non-staff, non-guest. + email.
+  const uniqueIds = Array.from(new Set(userIds)).filter(
+    (id) => id !== profile.id
+  );
+  if (uniqueIds.length === 0) throw new Error("Tidak ada user yang dipilih");
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+  const candidates = await db
+    .select({
+      id: profiles.id,
+      name: profiles.displayName,
+      email: users.email,
+    })
+    .from(profiles)
+    .innerJoin(users, eq(users.id, profiles.id))
+    .where(
+      and(
+        inArray(profiles.id, uniqueIds),
+        eq(profiles.isGuest, false),
+        sql`${profiles.id} NOT IN (${staffIds})`
+      )
+    );
+  if (candidates.length === 0) throw new Error("User tidak valid");
+
+  // 3. Buang yang sudah joined (skip), dan kalau friends cek kapasitas.
+  const existing = await db
+    .select({
+      profileId: sessionMembers.profileId,
+      status: sessionMembers.status,
+    })
+    .from(sessionMembers)
+    .where(eq(sessionMembers.sessionId, sessionId));
+  const joinedCount = existing.filter((m) => m.status === "joined").length;
+  const alreadyJoined = new Set(
+    existing.filter((m) => m.status === "joined").map((m) => m.profileId)
+  );
+  const targets = candidates.filter((c) => !alreadyJoined.has(c.id));
+  if (targets.length === 0) {
+    throw new Error("Semua user sudah ada di meja");
+  }
+  if (mode === "friends") {
+    const cap = row.max_guests ?? row.capacity;
+    if (joinedCount + targets.length > cap) {
+      throw new Error(
+        `Melebihi kapasitas meja (${cap}). Kurangi teman yang diajak.`
+      );
+    }
+  }
+
+  // 4. Upsert member (handle yg pernah left/kicked/pending via conflict).
+  const newStatus = mode === "friends" ? "joined" : "pending";
+  for (const u of targets) {
+    await db
+      .insert(sessionMembers)
+      .values({
+        sessionId,
+        profileId: u.id,
+        role: "member",
+        status: newStatus,
+        invitedBy: mode === "invite" ? profile.id : null,
+        joinedAt: mode === "friends" ? new Date() : undefined,
+      })
+      .onConflictDoUpdate({
+        target: [sessionMembers.sessionId, sessionMembers.profileId],
+        set: {
+          status: newStatus,
+          invitedBy: mode === "invite" ? profile.id : null,
+          leftAt: null,
+          // Refresh joinedAt saat friends (user yg pernah left ikut lagi).
+          ...(mode === "friends" ? { joinedAt: new Date() } : {}),
+        },
+      });
+  }
+
+  // 5. Notif in-app + email (best-effort).
+  const link = `/session/${sessionId}`;
+  const tableLabel = row.table_label ?? "meja";
+  await Promise.allSettled(
+    targets.map(async (u) => {
+      await createNotification({
+        profileId: u.id,
+        type: mode === "friends" ? "table_joined" : "table_invite",
+        title:
+          mode === "friends"
+            ? `${profile.displayName} mengajak kamu gabung`
+            : `${profile.displayName} mengundang kamu ke meja ${tableLabel}`,
+        body:
+          mode === "friends"
+            ? `Kamu sudah otomatis bergabung ke meja ${tableLabel}.`
+            : `Buka untuk terima undangan ke meja ${tableLabel}.`,
+        link,
+      });
+      const tpl = tableInviteEmail({
+        email: u.email,
+        inviterName: profile.displayName,
+        tableLabel,
+        barName: row.bar_name ?? "SOHO",
+        link,
+        mode: mode === "friends" ? "joined" : "invited",
+      });
+      await sendEmail({
+        to: u.email,
+        subject:
+          mode === "friends"
+            ? `Kamu diajak gabung meja ${tableLabel}`
+            : `Undangan ke meja ${tableLabel}`,
+        html: tpl.html,
+        text: tpl.text,
+      });
+    })
+  );
+
+  await notifySessionAndStaff(sessionId);
+  revalidatePath(`/session/${sessionId}`);
+  return { invited: targets.length };
+}
+
 export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
   await requireProfile();
   const { code } = joinByCodeSchema.parse(input);

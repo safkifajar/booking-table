@@ -40,11 +40,14 @@ import {
   payShare,
   approveJoinRequest,
   rejectJoinRequest,
+  inviteUsersToSession,
 } from "@/lib/actions";
 import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { SplitPayment } from "@/components/session/SplitPayment";
+import { UserInvitePicker } from "@/components/session/UserInvitePicker";
+import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
   MemberRole,
   MemberStatus,
@@ -417,6 +420,7 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
   );
   const slotsAvailable = props.table.capacity - joined.length;
   const [addGuestModal, setAddGuestModal] = React.useState(false);
+  const [inviteModal, setInviteModal] = React.useState(false);
   // Tombol "Tambah Tamu" cuma muncul untuk staff di session walk-in
   // (yang dibuka oleh staff lewat opened_by_staff_id). Untuk session customer
   // reguler, tamu tambah lewat invite link.
@@ -548,8 +552,36 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
                 </div>
               </div>
             ))}
+
+          {/* Ajak/Undang user (host only) — 2 mode seperti open table */}
+          {props.isHost && (
+            <button
+              type="button"
+              onClick={() => setInviteModal(true)}
+              className="w-full flex items-center gap-3 pt-3 mt-1 border-t border-border text-left group"
+            >
+              <div className="h-10 w-10 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition shrink-0">
+                <UserPlus className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-primary">
+                  Ajak / Undang teman
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Pilih user untuk gabung langsung atau via undangan
+                </p>
+              </div>
+            </button>
+          )}
         </div>
       </Card>
+
+      {inviteModal && (
+        <InviteToSessionModal
+          sessionId={props.session.id}
+          onClose={() => setInviteModal(false)}
+        />
+      )}
 
       {addGuestModal && (
         <AddGuestModal
@@ -662,6 +694,145 @@ function AddGuestModal({
             )}
           </Button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Modal: host ajak/undang user ke meja berjalan (2 mode: friends / invite)
+function InviteToSessionModal({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [mode, setMode] = React.useState<"friends" | "invite">("friends");
+  const [selected, setSelected] = React.useState<InviteCandidate[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function handleSubmit() {
+    if (selected.length === 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await inviteUsersToSession({
+        sessionId,
+        userIds: selected.map((s) => s.id),
+        mode,
+      });
+      toast.success(
+        mode === "friends"
+          ? `${res.invited} teman bergabung`
+          : `Undangan dikirim ke ${res.invited} user`
+      );
+      onClose();
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal mengundang"));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-sm bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+              <UserPlus className="h-4 w-4 text-primary" />
+            </div>
+            <h2 className="text-sm font-semibold">Ajak / Undang ke Meja</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+            aria-label="Tutup"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Pilih mode */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("friends")}
+              className={cn(
+                "rounded-lg border p-3 text-left transition",
+                mode === "friends"
+                  ? "border-primary/40 bg-primary/15"
+                  : "border-border hover:border-foreground/30"
+              )}
+            >
+              <UserPlus
+                className={cn(
+                  "h-4 w-4 mb-1",
+                  mode === "friends" ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+              <p className="text-sm font-medium">Teman</p>
+              <p className="text-[11px] text-muted-foreground">Langsung gabung</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("invite")}
+              className={cn(
+                "rounded-lg border p-3 text-left transition",
+                mode === "invite"
+                  ? "border-primary/40 bg-primary/15"
+                  : "border-border hover:border-foreground/30"
+              )}
+            >
+              <Lock
+                className={cn(
+                  "h-4 w-4 mb-1",
+                  mode === "invite" ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+              <p className="text-sm font-medium">Undang</p>
+              <p className="text-[11px] text-muted-foreground">Perlu diterima</p>
+            </button>
+          </div>
+
+          <UserInvitePicker
+            mode={mode === "friends" ? "join" : "invite"}
+            selected={selected}
+            onChange={setSelected}
+            excludeSessionId={sessionId}
+          />
+
+          <Button
+            type="button"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            disabled={selected.length === 0 || submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Mengirim...
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-4 w-4" />
+                {mode === "friends"
+                  ? `Ajak ${selected.length || ""} teman`
+                  : `Undang ${selected.length || ""} user`}
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
