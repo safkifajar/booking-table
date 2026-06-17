@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search, MapPin, Plus, ChevronRight } from "lucide-react";
+import { MapPin, Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushSetup, PushBanner } from "@/components/PushSetup";
@@ -15,6 +15,14 @@ import {
 } from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
+
+/** Sapaan kontekstual berdasar jam (WIB / waktu server). */
+function greeting(hour: number): string {
+  if (hour < 11) return "Selamat pagi";
+  if (hour < 15) return "Selamat siang";
+  if (hour < 18) return "Selamat sore";
+  return "Selamat malam";
+}
 
 export default async function HomePage() {
   const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
@@ -39,6 +47,9 @@ export default async function HomePage() {
   ]);
 
   const isAnon = !profile;
+  // Sapaan (Server Component — aman akses Date di server). WIB.
+  const firstName = profile?.displayName?.trim().split(/\s+/)[0] ?? null;
+  const greet = greeting(new Date().getHours());
 
   return (
     <main className="flex-1 pb-24">
@@ -54,15 +65,6 @@ export default async function HomePage() {
 
           <div className="flex-1" />
 
-          {/* Search (placeholder action — future feature) */}
-          <button
-            type="button"
-            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition text-muted-foreground hover:text-foreground"
-            aria-label="Cari"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-
           {/* Notifikasi: tombol aktifkan push + bell (hanya user login) */}
           {!isAnon && profile && (
             <>
@@ -74,6 +76,16 @@ export default async function HomePage() {
       </header>
 
       <div className="max-w-2xl mx-auto">
+        {/* Sapaan kontekstual (user login) */}
+        {!isAnon && firstName && (
+          <div className="px-4 sm:px-6 pt-4">
+            <p className="text-xs text-muted-foreground">{greet},</p>
+            <h1 className="text-xl font-bold tracking-tight">
+              {firstName} <span className="font-normal">👋</span>
+            </h1>
+          </div>
+        )}
+
         {/* Soft-banner aktifkan notifikasi (user login) — proaktif tanpa
             auto-prompt. Klik Aktifkan baru minta izin browser. */}
         {!isAnon && profile && <PushBanner />}
