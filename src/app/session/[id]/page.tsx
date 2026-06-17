@@ -18,7 +18,6 @@ import {
   type StaffRoleName,
 } from "@/lib/auth-v2/permissions";
 import { SessionView } from "./SessionView";
-import { UserMenu } from "@/components/UserMenu";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -268,7 +267,6 @@ export default async function SessionPage({ params }: PageProps) {
       backHref={backHref}
       staffRole={!isMember ? staffRole : null}
       openedByStaff={openedByStaff}
-      userMenu={<UserMenu />}
     />
   );
 }

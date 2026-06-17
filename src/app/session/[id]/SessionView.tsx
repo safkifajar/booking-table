@@ -131,7 +131,6 @@ interface SessionViewProps {
    * Display sebagai badge "Dibuka oleh Waiter X" di header.
    */
   openedByStaff: { id: string; display_name: string } | null;
-  userMenu?: React.ReactNode;
 }
 
 export function SessionView(props: SessionViewProps) {
@@ -345,7 +344,6 @@ function SessionHeader(props: SessionViewProps) {
             <span className="hidden sm:inline">{copied ? "Copied" : "Invite"}</span>
           </Button>
         )}
-        {props.userMenu}
       </div>
     </header>
   );
