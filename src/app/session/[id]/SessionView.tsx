@@ -39,6 +39,7 @@ import {
   approveJoinRequest,
   rejectJoinRequest,
   inviteUsersToSession,
+  cancelInvite,
 } from "@/lib/actions";
 import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
@@ -390,6 +391,10 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
     (m) => m.status === "pending" && m.invited_by != null
   );
   const slotsAvailable = props.table.capacity - joined.length;
+  // Untuk ajak/undang: undangan yg belum dijawab (invitedPending) juga sudah
+  // "memesan" slot, jadi tidak bisa over-invite. Mis. kapasitas 4, joined 3,
+  // 1 undangan pending → 0 slot untuk undangan baru.
+  const inviteSlotsAvailable = slotsAvailable - invitedPending.length;
   const [addGuestModal, setAddGuestModal] = React.useState(false);
   const [inviteModal, setInviteModal] = React.useState(false);
   // Tombol "Tambah Tamu" cuma muncul untuk staff di session walk-in
@@ -419,7 +424,10 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
       {/* Undangan menunggu konfirmasi user — host only, TANPA tombol approve
           (yang menerima undangan adalah si user, bukan host). */}
       {props.isHost && invitedPending.length > 0 && (
-        <InvitedPending invited={invitedPending} />
+        <InvitedPending
+          invited={invitedPending}
+          sessionId={props.session.id}
+        />
       )}
 
       {/* Members */}
@@ -527,7 +535,7 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
           {/* Ajak/Undang user (host only) — 2 mode seperti open table.
               Sembunyikan kalau meja penuh; tampilkan info "penuh" sbg gantinya. */}
           {props.isHost &&
-            (slotsAvailable > 0 ? (
+            (inviteSlotsAvailable > 0 ? (
               <button
                 type="button"
                 onClick={() => setInviteModal(true)}
@@ -553,7 +561,9 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
                 <div>
                   <p className="text-sm font-medium">Meja sudah penuh</p>
                   <p className="text-xs text-muted-foreground">
-                    Semua {props.table.capacity} kursi terisi
+                    {invitedPending.length > 0
+                      ? `${joined.length} di meja + ${invitedPending.length} menunggu konfirmasi (kapasitas ${props.table.capacity})`
+                      : `Semua ${props.table.capacity} kursi terisi`}
                   </p>
                 </div>
               </div>
@@ -1244,9 +1254,35 @@ function PendingRequests({
 // ============================================================
 function InvitedPending({
   invited,
+  sessionId,
 }: {
   invited: SessionViewProps["members"];
+  sessionId: string;
 }) {
+  const confirm = useConfirm();
+  const [loadingId, setLoadingId] = React.useState<string | null>(null);
+
+  async function cancel(memberId: string, name: string) {
+    const ok = await confirm({
+      title: `Batalkan undangan ${name}?`,
+      description:
+        "Undangan akan dihapus. Kamu bisa mengundang mereka lagi nanti.",
+      confirmText: "Batalkan undangan",
+      cancelText: "Tidak",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    setLoadingId(memberId);
+    try {
+      await cancelInvite(memberId, sessionId);
+      toast.success("Undangan dibatalkan");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal batalkan undangan"));
+    } finally {
+      setLoadingId(null);
+    }
+  }
+
   return (
     <Card className="p-5 border-border bg-muted/20">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
@@ -1268,9 +1304,22 @@ function InvitedPending({
                 Diundang · belum dijawab
               </p>
             </div>
-            <Badge variant="secondary" className="text-xs shrink-0">
-              Diundang
-            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={loadingId === m.id}
+              onClick={() => cancel(m.id, m.profile.display_name)}
+              className="shrink-0 text-muted-foreground hover:text-red-400"
+            >
+              {loadingId === m.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <X className="h-4 w-4" />
+                  <span className="hidden sm:inline">Batalkan</span>
+                </>
+              )}
+            </Button>
           </div>
         ))}
       </div>

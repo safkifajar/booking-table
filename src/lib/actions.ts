@@ -955,29 +955,41 @@ export async function inviteUsersToSession(
     );
   if (candidates.length === 0) throw new Error("User tidak valid");
 
-  // 3. Buang yang sudah joined (skip), dan kalau friends cek kapasitas.
+  // 3. Buang yang sudah jadi member (joined / undangan pending), lalu cek
+  //    kapasitas. Slot terpakai = joined + undangan yg belum dijawab — undangan
+  //    pending sudah "memesan" kursi, jadi tidak boleh over-invite.
   const existing = await db
     .select({
       profileId: sessionMembers.profileId,
       status: sessionMembers.status,
+      invitedBy: sessionMembers.invitedBy,
     })
     .from(sessionMembers)
     .where(eq(sessionMembers.sessionId, sessionId));
   const joinedCount = existing.filter((m) => m.status === "joined").length;
-  const alreadyJoined = new Set(
-    existing.filter((m) => m.status === "joined").map((m) => m.profileId)
+  const pendingInviteCount = existing.filter(
+    (m) => m.status === "pending" && m.invitedBy != null
+  ).length;
+  // Sudah aktif/menunggu = jangan dipilih ulang (joined atau pending-invite).
+  const occupied = new Set(
+    existing
+      .filter(
+        (m) =>
+          m.status === "joined" ||
+          (m.status === "pending" && m.invitedBy != null)
+      )
+      .map((m) => m.profileId)
   );
-  const targets = candidates.filter((c) => !alreadyJoined.has(c.id));
+  const targets = candidates.filter((c) => !occupied.has(c.id));
   if (targets.length === 0) {
-    throw new Error("Semua user sudah ada di meja");
+    throw new Error("Semua user sudah ada di meja / sudah diundang");
   }
-  if (mode === "friends") {
-    const cap = row.max_guests ?? row.capacity;
-    if (joinedCount + targets.length > cap) {
-      throw new Error(
-        `Melebihi kapasitas meja (${cap}). Kurangi teman yang diajak.`
-      );
-    }
+  // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
+  const cap = row.max_guests ?? row.capacity;
+  if (joinedCount + pendingInviteCount + targets.length > cap) {
+    throw new Error(
+      `Melebihi kapasitas meja (${cap}). Kursi & undangan sudah terisi.`
+    );
   }
 
   // 4. Upsert member (handle yg pernah left/kicked/pending via conflict).
@@ -1046,6 +1058,39 @@ export async function inviteUsersToSession(
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
   return { invited: targets.length };
+}
+
+/**
+ * Host membatalkan undangan yang BELUM dijawab (member pending dgn invited_by
+ * terisi). Hapus member-nya. Host-only. Beda dgn declineInvite (user sendiri
+ * yg menolak) & rejectJoinRequest (host tolak request-join).
+ */
+export async function cancelInvite(memberId: string, sessionId: string) {
+  const profile = await requireProfile();
+
+  const [session] = await db
+    .select({ host_id: tableSessions.hostId })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
+  if (!session) throw new Error("Session tidak ditemukan");
+  if (session.host_id !== profile.id) {
+    throw new Error("Hanya host yang bisa membatalkan undangan");
+  }
+
+  await db
+    .delete(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending"),
+        // pastikan ini undangan (invited_by terisi), bukan request-join.
+        sql`${sessionMembers.invitedBy} IS NOT NULL`
+      )
+    );
+
+  await notifySessionAndStaff(sessionId);
+  revalidatePath(`/session/${sessionId}`);
 }
 
 export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
