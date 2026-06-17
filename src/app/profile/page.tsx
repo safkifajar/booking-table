@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
-import { UserMenu } from "@/components/UserMenu";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +39,6 @@ export default async function ProfilePage() {
               {profile.displayName}
             </h1>
           </div>
-          <UserMenu />
         </div>
       </header>
 

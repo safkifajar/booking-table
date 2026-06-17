@@ -8,7 +8,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -253,10 +253,6 @@ export function BarFloorView({
               {bar.tagline}
             </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">{bar.name}</h1>
-          </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
-            <span className="truncate max-w-[200px]">{bar.address}</span>
           </div>
           {userId && <NotificationBell userId={userId} />}
         </div>

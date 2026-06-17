@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PushSetup, PushBanner } from "@/components/PushSetup";
@@ -173,18 +173,6 @@ export default async function HomePage() {
           </section>
         )}
 
-        {/* Bar info footer */}
-        <section className="px-4 sm:px-6 pt-6 pb-4 border-t border-border mt-6">
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div className="font-semibold text-foreground">{bar.name}</div>
-            {bar.address && (
-              <div className="flex items-start gap-1">
-                <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
-                <span>{bar.address}</span>
-              </div>
-            )}
-          </div>
-        </section>
       </div>
 
       {/* Bottom nav (mobile only) */}
