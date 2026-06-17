@@ -187,11 +187,14 @@ export function NotificationBell({ userId }: { userId: string }) {
                       ? "accepted"
                       : n.responded && n.type === "invite_rejected"
                         ? "rejected"
-                        : // Notif lama (direspon sebelum fitur ini, type belum
-                          // di-migrasi): tampilkan label generik.
-                          n.responded && n.type === "table_invite"
-                          ? "done"
-                          : null;
+                        : // Undangan dibatalkan host → tombol hilang, label batal.
+                          n.type === "invite_cancelled"
+                          ? "cancelled"
+                          : // Notif lama (direspon sebelum fitur ini, type belum
+                            // di-migrasi): tampilkan label generik.
+                            n.responded && n.type === "table_invite"
+                            ? "done"
+                            : null;
                   return (
                     <div
                       key={n.id}
@@ -254,6 +257,12 @@ export function NotificationBell({ userId }: { userId: string }) {
                         <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
                           <X className="h-3 w-3" />
                           Kamu menolak undangan ini
+                        </p>
+                      )}
+                      {respondedOutcome === "cancelled" && (
+                        <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
+                          <X className="h-3 w-3" />
+                          Undangan dibatalkan host
                         </p>
                       )}
                       {respondedOutcome === "done" && (

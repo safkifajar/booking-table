@@ -21,6 +21,7 @@ type NotifType =
   | "table_invite"
   | "invite_accepted"
   | "invite_rejected"
+  | "invite_cancelled"
   | "general";
 
 export interface AdminNotificationRow {
@@ -128,6 +129,53 @@ export async function markInviteResponded(
         isNull(notifications.respondedAt)
       )
     );
+}
+
+/**
+ * Host membatalkan undangan: ubah notif undangan (table_invite) milik
+ * `profileId` jadi 'invite_cancelled' — tombol Terima/Tolak hilang, judul/body
+ * jadi "dibatalkan", dan jadikan UNREAD lagi (readAt null) supaya user sadar.
+ * Sekalian trigger realtime + push (ini sekaligus pemberitahuan pembatalan).
+ */
+export async function markInviteCancelled(
+  profileId: string,
+  link: string,
+  tableLabel: string
+): Promise<void> {
+  const title = `Undangan ke meja ${tableLabel} dibatalkan`;
+  const body = "Host membatalkan undangan ini.";
+  const res = await db
+    .update(notifications)
+    .set({
+      type: "invite_cancelled",
+      title,
+      body,
+      respondedAt: new Date(),
+      readAt: null, // jadikan unread lagi → user lihat update
+    })
+    .where(
+      and(
+        eq(notifications.profileId, profileId),
+        eq(notifications.type, "table_invite"),
+        eq(notifications.link, link)
+      )
+    )
+    .returning({ id: notifications.id });
+
+  // Kalau notif undangan aslinya sudah tidak ada (mis. terhapus), buat baru
+  // supaya user tetap diberi tahu pembatalan.
+  if (res.length === 0) {
+    await db.insert(notifications).values({
+      profileId,
+      type: "invite_cancelled",
+      title,
+      body,
+      link,
+    });
+  }
+
+  await notify(channels.user(profileId), { kind: "notification" });
+  void sendPushToProfile(profileId, { title, body, url: link }).catch(() => {});
 }
 
 /** Jumlah notif belum dibaca user login. */

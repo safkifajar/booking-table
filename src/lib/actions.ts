@@ -36,7 +36,11 @@ import { requireProfile } from "@/lib/auth-v2/current";
 import { generateInviteCode } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
-import { createNotification, markInviteResponded } from "@/lib/notifications";
+import {
+  createNotification,
+  markInviteResponded,
+  markInviteCancelled,
+} from "@/lib/notifications";
 import { settleOverdueIfPaid, getOutstandingMap } from "@/lib/queries";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
@@ -1068,13 +1072,31 @@ export async function inviteUsersToSession(
 export async function cancelInvite(memberId: string, sessionId: string) {
   const profile = await requireProfile();
 
-  const [session] = await db
-    .select({ host_id: tableSessions.hostId })
-    .from(tableSessions)
-    .where(eq(tableSessions.id, sessionId));
-  if (!session) throw new Error("Session tidak ditemukan");
-  if (session.host_id !== profile.id) {
+  // Host check + ambil profil yg diundang + label meja (untuk notif) sebelum
+  // delete.
+  const [info] = await db
+    .select({
+      hostId: tableSessions.hostId,
+      memberProfileId: sessionMembers.profileId,
+      memberStatus: sessionMembers.status,
+      invitedBy: sessionMembers.invitedBy,
+      tableLabel: tables.label,
+    })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId)
+      )
+    );
+  if (!info) throw new Error("Undangan tidak ditemukan");
+  if (info.hostId !== profile.id) {
     throw new Error("Hanya host yang bisa membatalkan undangan");
+  }
+  if (info.memberStatus !== "pending" || info.invitedBy == null) {
+    throw new Error("Hanya undangan yang belum dijawab yang bisa dibatalkan");
   }
 
   await db
@@ -1084,10 +1106,17 @@ export async function cancelInvite(memberId: string, sessionId: string) {
         eq(sessionMembers.id, memberId),
         eq(sessionMembers.sessionId, sessionId),
         eq(sessionMembers.status, "pending"),
-        // pastikan ini undangan (invited_by terisi), bukan request-join.
         sql`${sessionMembers.invitedBy} IS NOT NULL`
       )
     );
+
+  // Beri tahu user yg dibatalkan: notif undangan lamanya jadi "dibatalkan"
+  // (tombol Terima/Tolak hilang) + unread lagi.
+  await markInviteCancelled(
+    info.memberProfileId,
+    `/session/${sessionId}`,
+    info.tableLabel ?? "meja"
+  );
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
