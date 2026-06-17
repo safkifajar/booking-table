@@ -150,6 +150,9 @@ export function FloorMap({
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    // Abaikan pointer yg jatuh di tombol kontrol zoom — kalau di-capture ke
+    // container, event click tombol tidak ter-fire (tombol jadi mati).
+    if ((e.target as Element).closest?.("[data-zoom-control]")) return;
     // Capture di CONTAINER (bukan e.target yg bisa elemen SVG anak) — supaya
     // pan/pinch tetap mengalir ke handler container & tidak menelan event click
     // meja di sebagian browser.
@@ -266,7 +269,10 @@ export function FloorMap({
       </svg>
 
       {/* Kontrol zoom */}
-      <div className="absolute bottom-3 right-3 flex flex-col gap-1.5">
+      <div
+        data-zoom-control
+        className="absolute bottom-3 right-3 flex flex-col gap-1.5"
+      >
         <ZoomBtn label="Perbesar" onClick={() => zoomButton(1)} disabled={scale >= MAX_SCALE - 0.001}>
           +
         </ZoomBtn>
@@ -300,7 +306,7 @@ function ZoomBtn({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="h-9 w-9 rounded-lg border border-border bg-background/90 backdrop-blur-sm text-lg font-semibold text-foreground/80 hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition"
+      className="h-9 w-9 rounded-lg border border-border bg-background/90 backdrop-blur-sm text-lg font-semibold text-foreground/80 hover:text-foreground hover:border-primary/50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition touch-auto"
     >
       {children}
     </button>
