@@ -269,7 +269,6 @@ export function BarFloorView({
           <LegendDot color="rgba(201,169,97,0.4)" border="#c9a961" label="Open table" pulse />
           <LegendDot color="rgba(59,130,246,0.2)" border="#3b82f6" label="Reserved" />
           <LegendDot color="rgba(249,115,22,0.2)" border="#f97316" label="Belum lunas" />
-          <LegendDot color="rgba(220,38,38,0.15)" border="#dc2626" label="Locked / full" />
         </div>
 
         {activeArea && (
