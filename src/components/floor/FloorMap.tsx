@@ -34,11 +34,18 @@ export function FloorMap({
   highlightTableId,
   className,
 }: FloorMapProps) {
+  // Di HP, kanvas yang lebar dipaksa muat ke layar sempit bikin meja kecil.
+  // Solusi: scroll horizontal — SVG diberi lebar minimum (skala lebih besar)
+  // di mobile dan bisa digeser kiri-kanan. Di desktop (sm:) min-width dilepas
+  // jadi muat penuh seperti biasa. mobileMinWidth ~85% canvas: meja jadi besar
+  // tapi denah masih ringkas untuk digeser.
+  const mobileMinWidth = Math.round(canvasWidth * 0.85);
   return (
-    <div className={cn("relative w-full overflow-hidden rounded-xl border border-border bg-card", className)}>
+    <div className={cn("relative w-full overflow-x-auto sm:overflow-hidden rounded-xl border border-border bg-card", className)}>
       <svg
         viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
-        className="w-full h-auto block"
+        className="h-auto block w-full max-w-none min-w-[var(--fm-min-w)] sm:min-w-0"
+        style={{ ["--fm-min-w" as string]: `${mobileMinWidth}px` }}
         preserveAspectRatio="xMidYMid meet"
       >
         {/* subtle grid background */}
