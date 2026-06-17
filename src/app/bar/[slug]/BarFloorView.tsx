@@ -285,9 +285,10 @@ export function BarFloorView({
           />
         )}
 
-        {/* Area tabs — di bawah denah, rata tengah */}
+        {/* Area tabs — di bawah denah, rata tengah. Garis pemisah bawah
+            menandai bahwa tab ini milik section denah (pisah dari Jadwal). */}
         {areasWithTables.length > 1 && (
-          <div className="mt-4 flex justify-center gap-2 flex-wrap">
+          <div className="mt-4 pb-4 border-b border-border flex justify-center gap-2 flex-wrap">
             {areasWithTables.map(({ area, tables }) => {
               const openCount = tables.filter(
                 (t) =>
