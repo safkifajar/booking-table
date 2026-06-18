@@ -40,6 +40,7 @@ import {
   rejectJoinRequest,
   inviteUsersToSession,
   cancelInvite,
+  requestJoinSession,
 } from "@/lib/actions";
 import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
@@ -403,6 +404,19 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
   const canStaffAddGuest =
     props.isStaff && !!props.openedByStaff && slotsAvailable > 0;
 
+  // Viewer non-host & non-staff yg melihat sesi PUBLIC yg sedang open boleh
+  // minta gabung (host approve). Status member viewer saat ini:
+  const myStatus =
+    props.members.find((m) => m.profile.id === props.myProfileId)?.status ??
+    null;
+  const canRequestJoin =
+    !props.isHost &&
+    !props.isStaff &&
+    !props.isMember &&
+    myStatus !== "kicked" &&
+    props.session.status === "open" &&
+    props.session.visibility === "public";
+
   return (
     <div className="space-y-4">
       {/* Vibe tags */}
@@ -568,6 +582,16 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
                 </div>
               </div>
             ))}
+
+          {/* Non-host & non-member: minta gabung ke meja public (host approve). */}
+          {canRequestJoin && (
+            <RequestJoinButton
+              sessionId={props.session.id}
+              hostName={props.host.display_name}
+              full={slotsAvailable <= 0}
+              alreadyPending={myStatus === "pending"}
+            />
+          )}
         </div>
       </Card>
 
@@ -1334,6 +1358,86 @@ function InvitedPending({
         ))}
       </div>
     </Card>
+  );
+}
+
+// Tombol "Minta gabung" untuk non-host/non-member di meja public open.
+function RequestJoinButton({
+  sessionId,
+  hostName,
+  full,
+  alreadyPending,
+}: {
+  sessionId: string;
+  hostName: string;
+  full: boolean;
+  alreadyPending: boolean;
+}) {
+  const router = useRouter();
+  const [loading, setLoading] = React.useState(false);
+  const [pending, setPending] = React.useState(alreadyPending);
+
+  async function handleRequest() {
+    setLoading(true);
+    try {
+      const res = await requestJoinSession({ sessionId });
+      if (res.status === "pending") {
+        setPending(true);
+        toast.success(`Request dikirim ke ${hostName}`);
+      } else if (res.status === "joined") {
+        toast.success("Kamu sudah jadi member meja ini");
+        router.refresh();
+      }
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (pending) {
+    return (
+      <div className="flex items-center gap-3 pt-3 mt-1 border-t border-border">
+        <div className="h-10 w-10 rounded-full border-2 border-dashed border-amber-500/40 flex items-center justify-center shrink-0 text-amber-400">
+          <Clock className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-amber-400">
+            Menunggu approval host
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Kamu masuk meja begitu {hostName} approve.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleRequest}
+      disabled={loading || full}
+      className="w-full flex items-center gap-3 pt-3 mt-1 border-t border-border text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <div className="h-10 w-10 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition shrink-0 text-primary">
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <UserPlus className="h-4 w-4" />
+        )}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-primary">
+          {full ? "Meja penuh" : "Minta gabung meja ini"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {full
+            ? "Tunggu kursi kosong dulu"
+            : `Kirim request ke ${hostName}, masuk setelah di-approve`}
+        </p>
+      </div>
+    </button>
   );
 }
 
