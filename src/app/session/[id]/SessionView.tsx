@@ -213,12 +213,16 @@ export function SessionView(props: SessionViewProps) {
                 )
               }
             />
-            <TabButton
-              icon={<Utensils className="h-4 w-4" />}
-              label="Menu"
-              active={tab === "menu"}
-              onClick={() => setTab("menu")}
-            />
+            {/* Menu hanya untuk member/staff (yg bisa pesan). Non-member yg
+                cuma lihat meja tidak perlu tab Menu. */}
+            {canInteract && (
+              <TabButton
+                icon={<Utensils className="h-4 w-4" />}
+                label="Menu"
+                active={tab === "menu"}
+                onClick={() => setTab("menu")}
+              />
+            )}
             <TabButton
               icon={<Receipt className="h-4 w-4" />}
               label="Bill"
@@ -243,7 +247,7 @@ export function SessionView(props: SessionViewProps) {
       {/* Tab content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {tab === "vibe" && <VibeTab {...props} isStaff={isStaff} />}
-        {tab === "menu" && (
+        {tab === "menu" && canInteract && (
           <MenuTab
             menu={props.menu}
             sessionId={props.session.id}
