@@ -1,5 +1,8 @@
+"use client";
+
+import * as React from "react";
 import Image from "next/image";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import type { MenuCategory, MenuItem } from "@/types/db";
 
@@ -8,9 +11,11 @@ type MenuCategoryWithItems = MenuCategory & { items: MenuItem[] };
 /**
  * Daftar menu READ-ONLY (lihat saja, tanpa cart/pesan) — dipakai di tab Menu
  * halaman denah. Untuk pesan beneran ada MenuPicker di dalam session.
- * Item habis (is_available=false) ditandai redup + label.
+ * Item habis (is_available=false) ditandai redup + label. Ada search by nama.
  */
 export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
+  const [query, setQuery] = React.useState("");
+
   const hasItems = menu.some((c) => c.items.length > 0);
   if (!hasItems) {
     return (
@@ -24,9 +29,39 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
     );
   }
 
+  // Filter by nama menu (case-insensitive). Kategori tanpa hasil disembunyikan.
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? menu.map((cat) => ({
+        ...cat,
+        items: cat.items.filter((i) => i.name.toLowerCase().includes(q)),
+      }))
+    : menu;
+  const anyMatch = filtered.some((c) => c.items.length > 0);
+
   return (
-    <div className="space-y-6">
-      {menu.map((cat) =>
+    <div className="space-y-4">
+      {/* Search by nama menu */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari menu…"
+          className="w-full h-10 pl-9 pr-3 rounded-lg bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </div>
+
+      {!anyMatch ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            Tidak ada menu cocok dengan &ldquo;{query}&rdquo;.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+      {filtered.map((cat) =>
         cat.items.length === 0 ? null : (
           <section key={cat.id}>
             <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
@@ -79,6 +114,8 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
             </div>
           </section>
         )
+      )}
+        </div>
       )}
     </div>
   );
