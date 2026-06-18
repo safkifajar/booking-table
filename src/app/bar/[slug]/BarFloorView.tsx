@@ -680,13 +680,17 @@ function TableSheet({
             <h2 className="text-lg sm:text-xl font-semibold">
               {isOpen ? "Meja sedang digunakan" : "Jadwal meja"}
             </h2>
-            {isOpen && session && (
+            {isOpen && session ? (
               <p className="text-sm text-muted-foreground mt-0.5">
                 Saat ini dipakai oleh host{" "}
                 <span className="text-foreground font-medium">
                   {session.host_name}
                 </span>
                 .
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Pilih jam buat nongkrong di meja ini ✨
               </p>
             )}
             {table.min_spend && table.min_spend > 0 && (
