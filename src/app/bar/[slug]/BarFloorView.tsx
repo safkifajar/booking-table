@@ -314,7 +314,6 @@ export function BarFloorView({
         <BookingSchedule
           reservationsByTable={reservationsByTable}
           bookingWindowDays={bookingWindowDays}
-          onViewTable={(tableId) => setSelectedTableId(tableId)}
         />
       </div>
 
@@ -369,11 +368,9 @@ function LegendDot({
 function BookingSchedule({
   reservationsByTable,
   bookingWindowDays = 7,
-  onViewTable,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
   bookingWindowDays?: number;
-  onViewTable: (tableId: string) => void;
 }) {
   const [nowMs] = React.useState(() => Date.now());
 
@@ -464,10 +461,9 @@ function BookingSchedule({
                 ? "text-emerald-400"
                 : "text-blue-400";
             return (
-              <button
+              <Link
                 key={r.id}
-                type="button"
-                onClick={() => onViewTable(r.table_id)}
+                href={`/session/${r.id}`}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition hover:bg-muted/40"
               >
                 <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
@@ -486,7 +482,7 @@ function BookingSchedule({
                 <span className={cn("text-[11px] shrink-0", statusColor)}>
                   {statusLabel}
                 </span>
-              </button>
+              </Link>
             );
           })}
         </Card>
