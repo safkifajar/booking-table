@@ -457,7 +457,7 @@ export async function promoteDueReservations(barId: string): Promise<number> {
       .where(
         and(
           eq(tableSessions.tableId, r.tableId),
-          inArray(tableSessions.status, ["open", "locked", "overdue"])
+          inArray(tableSessions.status, ["open", "locked"])
         )
       );
     if (busy) continue;
@@ -472,6 +472,60 @@ export async function promoteDueReservations(barId: string): Promise<number> {
     }
   }
   return promoted;
+}
+
+/**
+ * Promote SATU sesi reservasi spesifik kalau waktunya sudah tiba (reserved &
+ * reservation_at <= now < reservation_end_at) & mejanya belum dipakai sesi
+ * open/locked/overdue lain. Dipakai saat buka /session/[id] supaya status fresh
+ * (denah & tombol gabung bergantung status 'open') tanpa harus reload denah.
+ * Return true kalau ter-promote.
+ */
+export async function promoteSessionIfDue(sessionId: string): Promise<boolean> {
+  const now = new Date();
+  const [s] = await db
+    .select({
+      id: tableSessions.id,
+      tableId: tableSessions.tableId,
+      status: tableSessions.status,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
+    })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
+  if (
+    !s ||
+    s.status !== "reserved" ||
+    !s.reservationAt ||
+    !s.reservationEndAt ||
+    s.reservationAt.getTime() > now.getTime() ||
+    s.reservationEndAt.getTime() <= now.getTime()
+  ) {
+    return false;
+  }
+  // Meja dipakai sesi aktif lain (open/locked)? jangan promote (cegah konflik
+  // index). 'overdue' TIDAK menghalangi — itu hutang lama, bukan okupansi fisik.
+  const [busy] = await db
+    .select({ id: tableSessions.id })
+    .from(tableSessions)
+    .where(
+      and(
+        eq(tableSessions.tableId, s.tableId),
+        inArray(tableSessions.status, ["open", "locked"])
+      )
+    );
+  if (busy) return false;
+  try {
+    await db
+      .update(tableSessions)
+      .set({ status: "open", startedAt: now })
+      .where(
+        and(eq(tableSessions.id, sessionId), eq(tableSessions.status, "reserved"))
+      );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ============================================================

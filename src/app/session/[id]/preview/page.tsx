@@ -11,7 +11,7 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { orders, orderItems } from "@/lib/db/schema/orders";
 import { menuItems, menuCategories } from "@/lib/db/schema/menu";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getUserRatingsBatch } from "@/lib/queries";
+import { getUserRatingsBatch, promoteSessionIfDue } from "@/lib/queries";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,10 @@ interface PageProps {
 export default async function SessionPreviewPage({ params }: PageProps) {
   const { id } = await params;
   const profile = await getCurrentProfile();
+
+  // Promote reservasi yg jamnya tiba → 'open' supaya status fresh (request-join
+  // butuh status open).
+  await promoteSessionIfDue(id);
 
   // 1. Session + table + area + bar + host (single join)
   const [sessionRow] = await db

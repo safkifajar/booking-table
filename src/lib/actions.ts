@@ -255,7 +255,9 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       .where(
         and(
           eq(tableSessions.tableId, data.tableId),
-          inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
+          // overdue tak ikut — rentangnya di masa lalu (kefilter endAt>now) &
+          // bukan okupansi fisik.
+          inArray(tableSessions.status, ["reserved", "open", "locked"])
         )
       );
     const existing: BookedRange[] = existingRows

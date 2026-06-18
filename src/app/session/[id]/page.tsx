@@ -12,7 +12,11 @@ import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getMenuByBar, getUserRatingsBatch } from "@/lib/queries";
+import {
+  getMenuByBar,
+  getUserRatingsBatch,
+  promoteSessionIfDue,
+} from "@/lib/queries";
 import {
   defaultDashboardFor,
   type StaffRoleName,
@@ -29,6 +33,10 @@ export default async function SessionPage({ params }: PageProps) {
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
   }
+
+  // Promote reservasi yg jamnya sudah tiba → 'open' (lazy, supaya status fresh
+  // saat buka session — denah & tombol gabung bergantung status open).
+  await promoteSessionIfDue(id);
 
   // 1. Session + table + area + bar + host (single join)
   const [sessionRow] = await db
