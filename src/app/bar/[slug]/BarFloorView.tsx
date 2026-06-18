@@ -693,9 +693,9 @@ function TableSheet({
                 Pilih jam buat nongkrong di meja ini ✨
               </p>
             )}
-            {table.min_spend && table.min_spend > 0 && (
+            {(table.min_spend ?? 0) > 0 && (
               <p className="text-xs text-primary mt-1">
-                Min spend: {formatIDR(table.min_spend)}
+                Min spend: {formatIDR(table.min_spend!)}
               </p>
             )}
           </div>
