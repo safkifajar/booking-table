@@ -41,8 +41,19 @@ export function useSessionRealtime(sessionId: string) {
       }
     };
 
+    // Fallback polling: jaring pengaman kalau SSE telat/putus (mis. koneksi
+    // listener basi, proxy buffering). Refresh tiap 12 dtk hanya saat tab
+    // terlihat — supaya perubahan (request join, approve, reject, order) tetap
+    // muncul tanpa user refresh manual. Murah: router.refresh dedupe oleh Next.
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 12000);
+
     return () => {
       es.close();
+      clearInterval(poll);
     };
   }, [sessionId, router]);
 }
