@@ -37,6 +37,7 @@ export function BannerManager({ barId, initialBanners }: Props) {
   const [banners, setBanners] = React.useState(initialBanners);
   const [editing, setEditing] = React.useState<AdminBanner | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const confirm = useConfirm();
 
   async function handleDelete(banner: AdminBanner) {
@@ -49,12 +50,15 @@ export function BannerManager({ barId, initialBanners }: Props) {
     });
     if (!ok) return;
 
+    setDeletingId(banner.id);
     try {
       await deleteBanner(banner.id);
       setBanners((arr) => arr.filter((b) => b.id !== banner.id));
       toast.success("Banner dihapus");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal hapus banner"));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -102,6 +106,7 @@ export function BannerManager({ barId, initialBanners }: Props) {
                   <BannerRow
                     key={b.id}
                     banner={b}
+                    deleting={deletingId === b.id}
                     onEdit={() => setEditing(b)}
                     onDelete={() => handleDelete(b)}
                   />
@@ -155,10 +160,12 @@ export function BannerManager({ barId, initialBanners }: Props) {
 
 function BannerRow({
   banner,
+  deleting,
   onEdit,
   onDelete,
 }: {
   banner: AdminBanner;
+  deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -237,9 +244,14 @@ function BannerRow({
             variant="ghost"
             size="sm"
             onClick={onDelete}
+            disabled={deleting}
             className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
       </td>

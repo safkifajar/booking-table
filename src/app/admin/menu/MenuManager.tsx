@@ -85,6 +85,7 @@ export function MenuManager({
   const [importingMode, setImportingMode] = React.useState<
     "categories" | "items" | null
   >(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const confirm = useConfirm();
   const router = useRouter();
 
@@ -155,14 +156,18 @@ export function MenuManager({
               variant: "danger",
             });
             if (!ok) return;
+            setDeletingId(item.id);
             try {
               await deleteMenuItem(item.id);
               setItems((arr) => arr.filter((i) => i.id !== item.id));
               toast.success("Item dihapus");
             } catch (err) {
               toast.error(getActionErrorMessage(err, "Gagal hapus item"));
+            } finally {
+              setDeletingId(null);
             }
           }}
+          deletingId={deletingId}
           onToggleAvail={async (item) => {
             const next = !item.isAvailable;
             // Optimistic update
@@ -199,14 +204,18 @@ export function MenuManager({
               variant: "danger",
             });
             if (!ok) return;
+            setDeletingId(cat.id);
             try {
               await deleteCategory(cat.id);
               setCategories((arr) => arr.filter((c) => c.id !== cat.id));
               toast.success("Kategori dihapus");
             } catch (err) {
               toast.error(getActionErrorMessage(err, "Gagal hapus kategori"));
+            } finally {
+              setDeletingId(null);
             }
           }}
+          deletingId={deletingId}
         />
       )}
 
@@ -292,6 +301,7 @@ function ItemsTab({
   onImport,
   onEdit,
   onDelete,
+  deletingId,
   onToggleAvail,
 }: {
   items: AdminMenuItem[];
@@ -309,6 +319,7 @@ function ItemsTab({
   onImport: () => void;
   onEdit: (item: AdminMenuItem) => void;
   onDelete: (item: AdminMenuItem) => void | Promise<void>;
+  deletingId: string | null;
   onToggleAvail: (item: AdminMenuItem) => void | Promise<void>;
 }) {
   const startIndex = page * pageSize;
@@ -480,9 +491,14 @@ function ItemsTab({
                             variant="ghost"
                             size="sm"
                             onClick={() => onDelete(item)}
+                            disabled={deletingId === item.id}
                             className="text-red-400 hover:text-red-300"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingId === item.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
                           </Button>
                         </div>
                       </td>
@@ -557,9 +573,14 @@ function ItemsTab({
                           variant="ghost"
                           size="sm"
                           onClick={() => onDelete(item)}
+                          disabled={deletingId === item.id}
                           className="text-red-400"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          {deletingId === item.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -715,12 +736,14 @@ function CategoriesTab({
   onImport,
   onEdit,
   onDelete,
+  deletingId,
 }: {
   categories: AdminMenuCategory[];
   onCreate: () => void;
   onImport: () => void;
   onEdit: (c: AdminMenuCategory) => void;
   onDelete: (c: AdminMenuCategory) => void | Promise<void>;
+  deletingId: string | null;
 }) {
   return (
     <>
@@ -797,14 +820,18 @@ function CategoriesTab({
                         size="sm"
                         onClick={() => onDelete(c)}
                         className="text-red-400 hover:text-red-300"
-                        disabled={c.itemCount > 0}
+                        disabled={c.itemCount > 0 || deletingId === c.id}
                         title={
                           c.itemCount > 0
                             ? "Pindahkan item dulu sebelum hapus kategori"
                             : "Hapus kategori"
                         }
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        {deletingId === c.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     </div>
                   </td>

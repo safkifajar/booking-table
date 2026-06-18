@@ -83,6 +83,8 @@ export function StaffManager({ barId, initialStaff }: Props) {
   const [staff, setStaff] = React.useState(initialStaff);
   const [inviting, setInviting] = React.useState(false);
   const [resending, setResending] = React.useState<string | null>(null);
+  const [togglingId, setTogglingId] = React.useState<string | null>(null);
+  const [changingRoleId, setChangingRoleId] = React.useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] =
     React.useState<InviteSuccessInfo | null>(null);
   const confirm = useConfirm();
@@ -102,6 +104,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
     });
     if (!ok) return;
 
+    setTogglingId(row.id);
     try {
       await toggleStaffActive(row.id, newActive);
       setStaff((arr) =>
@@ -110,11 +113,14 @@ export function StaffManager({ barId, initialStaff }: Props) {
       toast.success(newActive ? "Staff diaktifkan" : "Staff dinonaktifkan");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal update status"));
+    } finally {
+      setTogglingId(null);
     }
   }
 
   async function handleRoleChange(row: AdminStaffRow, newRole: Role) {
     if (row.role === newRole) return;
+    setChangingRoleId(row.id);
     try {
       await updateStaffRole({ staffRoleId: row.id, role: newRole });
       setStaff((arr) =>
@@ -123,6 +129,8 @@ export function StaffManager({ barId, initialStaff }: Props) {
       toast.success(`Role ${row.displayName} → ${ROLE_META[newRole].label}`);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal ubah role"));
+    } finally {
+      setChangingRoleId(null);
     }
   }
 
@@ -220,6 +228,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
                       <RoleSelect
                         currentRole={row.role}
                         onChange={(newRole) => handleRoleChange(row, newRole)}
+                        disabled={changingRoleId === row.id}
                       />
                     </td>
 
@@ -254,6 +263,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggle(row)}
+                          disabled={togglingId === row.id}
                           className={cn(
                             row.isActive
                               ? "text-emerald-400 hover:text-emerald-300"
@@ -261,7 +271,9 @@ export function StaffManager({ barId, initialStaff }: Props) {
                           )}
                           title={row.isActive ? "Nonaktifkan" : "Aktifkan"}
                         >
-                          {row.isActive ? (
+                          {togglingId === row.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : row.isActive ? (
                             <ToggleRight className="h-4 w-4" />
                           ) : (
                             <ToggleLeft className="h-4 w-4" />
@@ -486,16 +498,19 @@ function InviteSuccessModal({
 function RoleSelect({
   currentRole,
   onChange,
+  disabled,
 }: {
   currentRole: Role;
   onChange: (r: Role) => void;
+  disabled?: boolean;
 }) {
   return (
     <select
       value={currentRole}
       onChange={(e) => onChange(e.target.value as Role)}
+      disabled={disabled}
       className={cn(
-        "text-xs h-8 px-2 rounded-md border bg-input focus:outline-none focus:border-primary/60 cursor-pointer",
+        "text-xs h-8 px-2 rounded-md border bg-input focus:outline-none focus:border-primary/60 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
         ROLE_META[currentRole].color
       )}
     >
