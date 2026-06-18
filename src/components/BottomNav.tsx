@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, UserSearch, Camera, Map, User } from "lucide-react";
+import { Home, UserSearch, Camera, Calendar, User } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn, initials } from "@/lib/utils";
 
@@ -75,8 +75,8 @@ export function BottomNav({
 
         <NavItem
           href="/bar/soho-purwokerto"
-          icon={<Map />}
-          label="Map"
+          icon={<Calendar />}
+          label="Booking"
           active={isActive("/bar")}
         />
 
