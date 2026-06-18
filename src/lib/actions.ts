@@ -652,6 +652,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
       status: tableSessions.status,
       host_id: tableSessions.hostId,
       capacity: tables.capacity,
+      table_label: tables.label,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -704,6 +705,17 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
     });
   }
 
+  // Notif ke host: ada yang minta gabung (perlu approve). Pakai type 'general'
+  // (bukan table_invite) — host approve di halaman session, bukan dari tombol
+  // Terima/Tolak di bell. Klik notif → buka session.
+  await createNotification({
+    profileId: row.host_id,
+    type: "general",
+    title: `${profile.displayName} ingin gabung ke meja ${row.table_label}`,
+    body: "Buka meja untuk approve atau tolak permintaan.",
+    link: `/session/${sessionId}`,
+  });
+
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
   revalidatePath(`/session/${sessionId}/preview`);
@@ -718,6 +730,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     .select({
       host_id: tableSessions.hostId,
       capacity: tables.capacity,
+      table_label: tables.label,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -737,6 +750,18 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     throw new Error("Meja sudah penuh, request tidak bisa di-approve");
   }
 
+  // Ambil profileId requester (untuk notif) sebelum update.
+  const [member] = await db
+    .select({ profileId: sessionMembers.profileId })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending")
+      )
+    );
+
   // Set pending → joined
   await db
     .update(sessionMembers)
@@ -749,6 +774,17 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
       )
     );
 
+  // Notif ke requester: permintaan gabung diterima.
+  if (member) {
+    await createNotification({
+      profileId: member.profileId,
+      type: "table_joined",
+      title: `Kamu diterima gabung ke meja ${row.table_label}`,
+      body: "Host menyetujui permintaanmu. Selamat bergabung!",
+      link: `/session/${sessionId}`,
+    });
+  }
+
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
 }
@@ -757,13 +793,29 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
   const profile = await requireProfile();
 
   const [session] = await db
-    .select({ host_id: tableSessions.hostId })
+    .select({
+      host_id: tableSessions.hostId,
+      table_label: tables.label,
+    })
     .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
   if (!session) throw new Error("Session tidak ditemukan");
   if (session.host_id !== profile.id) {
     throw new Error("Hanya host yang bisa reject");
   }
+
+  // Profil requester (untuk notif) sebelum delete.
+  const [member] = await db
+    .select({ profileId: sessionMembers.profileId })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.id, memberId),
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending")
+      )
+    );
 
   await db
     .delete(sessionMembers)
@@ -774,6 +826,17 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
         eq(sessionMembers.status, "pending")
       )
     );
+
+  // Notif ke requester: permintaan ditolak.
+  if (member) {
+    await createNotification({
+      profileId: member.profileId,
+      type: "general",
+      title: `Permintaan gabung ke meja ${session.table_label} ditolak`,
+      body: "Host belum bisa menerima permintaanmu kali ini.",
+      link: null,
+    });
+  }
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
