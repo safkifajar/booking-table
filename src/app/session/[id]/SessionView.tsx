@@ -964,6 +964,8 @@ function BillTab({
   sessionId: string;
   subtotal: number;
 }) {
+  const [removingId, setRemovingId] = React.useState<string | null>(null);
+
   if (items.length === 0) {
     return (
       <Card className="p-6 text-center border-dashed">
@@ -1040,18 +1042,26 @@ function BillTab({
                   <span className="text-xs">{formatIDR(i.quantity * i.unit_price)}</span>
                   {(profileId === myProfileId || isHost) && i.status !== "served" && (
                     <button
+                      disabled={removingId === i.id}
                       onClick={async () => {
+                        setRemovingId(i.id);
                         try {
                           await removeOrderItem(i.id, sessionId);
                           toast.success("Item dihapus");
                         } catch (err) {
                           toast.error(getActionErrorMessage(err, "Gagal"));
+                        } finally {
+                          setRemovingId(null);
                         }
                       }}
-                      className="text-muted-foreground hover:text-red-400"
+                      className="text-muted-foreground hover:text-red-400 disabled:opacity-50"
                       aria-label="Hapus"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      {removingId === i.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <X className="h-3.5 w-3.5" />
+                      )}
                     </button>
                   )}
                 </div>
@@ -1343,6 +1353,7 @@ function SessionFooter({
   sessionId: string;
 }) {
   const confirm = useConfirm();
+  const [acting, setActing] = React.useState(false);
   const isLunas = subtotal > 0 && remaining === 0;
   // Host & staff bisa tutup meja; member biasa bisa keluar.
   const canClose = isHost || isStaff;
@@ -1358,10 +1369,13 @@ function SessionFooter({
       variant: "danger",
     });
     if (!ok) return;
+    setActing(true);
     try {
       await closeSession(sessionId);
+      // sukses → redirect (rate/dashboard); biarkan tetap loading.
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal"));
+      setActing(false);
     }
   }
 
@@ -1375,11 +1389,13 @@ function SessionFooter({
       variant: "destructive",
     });
     if (!ok) return;
+    setActing(true);
     try {
       await leaveSession(sessionId);
       toast.success("Kamu meninggalkan meja");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal"));
+      setActing(false);
     }
   }
 
@@ -1406,14 +1422,18 @@ function SessionFooter({
               size="sm"
               onClick={handleClose}
               // Staff: hanya boleh tutup kalau lunas (sama spt guard sebelumnya).
-              disabled={isStaff && !isLunas}
+              disabled={acting || (isStaff && !isLunas)}
               title={
                 isStaff && !isLunas
                   ? "Meja belum lunas — arahkan tamu ke kasir"
                   : undefined
               }
             >
-              <Lock className="h-4 w-4" />
+              {acting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Lock className="h-4 w-4" />
+              )}
               Tutup meja{isStaff && !isLunas ? " (belum lunas)" : ""}
             </Button>
           ) : (
@@ -1421,9 +1441,14 @@ function SessionFooter({
               variant="outline"
               size="sm"
               onClick={handleLeave}
+              disabled={acting}
               className="text-red-400"
             >
-              <LogOut className="h-4 w-4" />
+              {acting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
               Keluar
             </Button>
           ))}

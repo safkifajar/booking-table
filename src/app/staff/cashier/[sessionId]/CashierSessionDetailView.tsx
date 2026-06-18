@@ -83,6 +83,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
   const confirm = useConfirm();
   const [paymentModalOpen, setPaymentModalOpen] = React.useState(false);
   const [cancelling, setCancelling] = React.useState<string | null>(null);
+  const [markingPaid, setMarkingPaid] = React.useState<string | null>(null);
   const [closing, setClosing] = React.useState(false);
 
   // Realtime
@@ -102,11 +103,14 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
   const isClosed = detail.status === "closed";
 
   async function handleMarkPaid(paymentId: string) {
+    setMarkingPaid(paymentId);
     try {
       await cashierMarkPaymentPaid(paymentId);
       toast.success("Pembayaran dikonfirmasi");
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal konfirmasi"));
+    } finally {
+      setMarkingPaid(null);
     }
   }
 
@@ -343,18 +347,27 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleMarkPaid(p.id)}
+                        disabled={markingPaid === p.id || cancelling === p.id}
                         className="h-7 text-[10px] text-emerald-400 hover:text-emerald-300 px-2"
                       >
-                        Tandai Lunas
+                        {markingPaid === p.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Tandai Lunas"
+                        )}
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleCancelPayment(p.id)}
-                        disabled={cancelling === p.id}
+                        disabled={cancelling === p.id || markingPaid === p.id}
                         className="h-7 text-[10px] text-red-400 hover:text-red-300 px-2"
                       >
-                        Batal
+                        {cancelling === p.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Batal"
+                        )}
                       </Button>
                     </div>
                   )}
@@ -565,12 +578,14 @@ function PaymentModal({
 
   async function handleQrCancel() {
     if (!qrPaymentId) return;
+    setLoading(true);
     try {
       await cashierCancelPayment(qrPaymentId);
       toast.success("QRIS dibatalkan");
       onSuccess();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal batalkan"));
+      setLoading(false);
     }
   }
 
@@ -795,7 +810,11 @@ function PaymentModal({
                 onClick={handleQrCancel}
                 disabled={loading}
               >
-                Batalkan QRIS
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Batalkan QRIS"
+                )}
               </Button>
             </div>
           )}

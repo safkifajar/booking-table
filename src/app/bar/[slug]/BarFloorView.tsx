@@ -8,7 +8,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -521,6 +521,8 @@ function TableSheet({
   bookingWindowDays?: number;
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const [navigating, setNavigating] = React.useState(false);
   const session = table.active_session;
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
@@ -865,12 +867,26 @@ function TableSheet({
             <p className="text-xs text-muted-foreground mb-2 text-center">
               Terpilih: {formatTime(selStart)}–{formatTime(effEnd)}
             </p>
-            <Button variant="gold" size="lg" className="w-full" asChild>
-              <Link
-                href={`/open-table?tableId=${table.id}&start=${encodeURIComponent(selStart)}&end=${encodeURIComponent(effEnd)}`}
-              >
-                Booking jam ini
-              </Link>
+            <Button
+              variant="gold"
+              size="lg"
+              className="w-full"
+              disabled={navigating}
+              onClick={() => {
+                setNavigating(true);
+                router.push(
+                  `/open-table?tableId=${table.id}&start=${encodeURIComponent(selStart)}&end=${encodeURIComponent(effEnd)}`
+                );
+              }}
+            >
+              {navigating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Membuka...
+                </>
+              ) : (
+                "Booking jam ini"
+              )}
             </Button>
           </div>
         )}
