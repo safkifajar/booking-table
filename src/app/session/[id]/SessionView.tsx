@@ -226,12 +226,16 @@ export function SessionView(props: SessionViewProps) {
               onClick={() => setTab("bill")}
               badge={props.orderItems.length || undefined}
             />
-            <TabButton
-              icon={<Wallet className="h-4 w-4" />}
-              label="Bayar"
-              active={tab === "pay"}
-              onClick={() => setTab("pay")}
-            />
+            {/* Bayar hanya untuk member/staff — non-member yg cuma lihat meja
+                tidak perlu tab bayar. */}
+            {canInteract && (
+              <TabButton
+                icon={<Wallet className="h-4 w-4" />}
+                label="Bayar"
+                active={tab === "pay"}
+                onClick={() => setTab("pay")}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -259,7 +263,7 @@ export function SessionView(props: SessionViewProps) {
             subtotal={subtotal}
           />
         )}
-        {tab === "pay" && (
+        {tab === "pay" && canInteract && (
           <SplitTab
             sessionId={props.session.id}
             items={props.orderItems}
