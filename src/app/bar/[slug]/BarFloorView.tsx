@@ -8,7 +8,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Loader2 } from "lucide-react";
+import { Clock, Loader2, UserPlus } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -717,9 +717,35 @@ function TableSheet({
           {session?.status !== "locked" ? (
             <>
               {isOpen && (
-                <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-                  Meja ini sedang dipakai sekarang (host {session?.host_name}).
-                  Kamu tetap bisa booking untuk jam lain.
+                <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs text-primary space-y-2">
+                  <p>
+                    Meja ini sedang dipakai sekarang (host {session?.host_name}).
+                    Kamu tetap bisa booking untuk jam lain.
+                  </p>
+                  {session?.visibility === "public" && (
+                    <Button
+                      variant="gold"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setNavigating(true);
+                        router.push(`/session/${session.id}/preview`);
+                      }}
+                      disabled={navigating}
+                    >
+                      {navigating ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Membuka...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-4 w-4" />
+                          Gabung meja ini
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
               {/* Strip tanggal */}
