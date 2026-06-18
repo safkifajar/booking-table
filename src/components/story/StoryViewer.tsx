@@ -135,6 +135,32 @@ export function StoryViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showViewers]);
 
+  // Bedakan tap cepat (navigasi) vs tahan (pause). Tekan ≥ LONG_PRESS_MS =
+  // long-press → pause selama ditahan, lepas → lanjut TANPA navigasi.
+  const LONG_PRESS_MS = 200;
+  const pressStart = React.useRef<number>(0);
+  const pressTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onPressStart() {
+    pressStart.current = Date.now();
+    // Pause baru aktif kalau ditahan ≥ threshold (biar tap cepat tidak kedip).
+    pressTimer.current = setTimeout(() => setPaused(true), LONG_PRESS_MS);
+  }
+
+  function onPressEnd(dir: "prev" | "next") {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    const held = Date.now() - pressStart.current;
+    setPaused(false);
+    // Tahan lama = pause (sudah resume di atas), JANGAN navigasi.
+    if (held < LONG_PRESS_MS) {
+      if (dir === "prev") goPrev();
+      else goNext();
+    }
+  }
+
   function goNext() {
     if (currentIndex < stories.length - 1) {
       setCurrentIndex((i) => i + 1);
@@ -232,15 +258,13 @@ export function StoryViewer({
           priority
         />
 
-        {/* Tap zones (kiri/kanan) */}
+        {/* Tap zones (kiri/kanan). Tap cepat → prev/next; tahan → pause. */}
         <button
           type="button"
-          onClick={goPrev}
-          onMouseDown={() => setPaused(true)}
-          onMouseUp={() => setPaused(false)}
-          onTouchStart={() => setPaused(true)}
-          onTouchEnd={() => setPaused(false)}
-          className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2"
+          onPointerDown={onPressStart}
+          onPointerUp={() => onPressEnd("prev")}
+          onPointerLeave={() => onPressEnd("prev")}
+          className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2 touch-none select-none"
           aria-label="Story sebelumnya"
         >
           <span className="opacity-0 group-hover:opacity-60 transition">
@@ -249,18 +273,25 @@ export function StoryViewer({
         </button>
         <button
           type="button"
-          onClick={goNext}
-          onMouseDown={() => setPaused(true)}
-          onMouseUp={() => setPaused(false)}
-          onTouchStart={() => setPaused(true)}
-          onTouchEnd={() => setPaused(false)}
-          className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2"
+          onPointerDown={onPressStart}
+          onPointerUp={() => onPressEnd("next")}
+          onPointerLeave={() => onPressEnd("next")}
+          className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2 touch-none select-none"
           aria-label="Story berikutnya"
         >
           <span className="opacity-0 group-hover:opacity-60 transition">
             <ChevronRight className="h-6 w-6 text-white" />
           </span>
         </button>
+        {/* Zona tengah: tahan untuk pause (tap cepat tidak navigasi). */}
+        <button
+          type="button"
+          onPointerDown={() => setPaused(true)}
+          onPointerUp={() => setPaused(false)}
+          onPointerLeave={() => setPaused(false)}
+          className="absolute inset-y-0 left-1/3 w-1/3 touch-none select-none"
+          aria-label="Tahan untuk jeda"
+        />
 
         {/* Progress bars */}
         <div className="absolute top-0 inset-x-0 px-2 pt-2 flex gap-1 pointer-events-none">
