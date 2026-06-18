@@ -140,7 +140,9 @@ export default async function BarPage({ params }: PageProps) {
         // open hasil promote) + history reservasi closed. Walk-in murni
         // (reservation_at null) tidak masuk jadwal.
         const reservations = [
-          ...forTable.filter((s) => s.reservation_at),
+          // overdue (belum lunas) dikecualikan dari jadwal denah — tagihan
+          // ditangani di home, bukan di sini.
+          ...forTable.filter((s) => s.reservation_at && s.status !== "overdue"),
           ...(historyByTable[t.id] ?? []),
         ].sort((a, b) =>
           (a.reservation_at ?? "").localeCompare(b.reservation_at ?? "")
@@ -151,13 +153,15 @@ export default async function BarPage({ params }: PageProps) {
         // active_session untuk denah: prioritaskan session open/locked (meja
         // sedang dipakai), kalau tidak ada pakai reservasi AKTIF terdekat
         // (bukan history closed — biar meja yg reservasinya selesai = available).
-        const activeReservations = forTable.filter((s) => s.reservation_at);
+        // 'overdue' (belum lunas) SENGAJA tidak ditampilkan di denah — meja
+        // tampil available; tagihan ditangani via banner home. Backend overdue
+        // (tetap tertagih, tak auto-close) tidak terpengaruh.
+        const activeReservations = forTable.filter(
+          (s) => s.reservation_at && s.status !== "overdue"
+        );
         const active =
           forTable.find(
-            (s) =>
-              s.status === "open" ||
-              s.status === "locked" ||
-              s.status === "overdue"
+            (s) => s.status === "open" || s.status === "locked"
           ) ??
           activeReservations[0] ??
           null;
