@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { and, eq, gte, lte } from "drizzle-orm";
-import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions } from "@/lib/queries";
+import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, getMenuByBar } from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars, tables, floorAreas } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
@@ -171,7 +171,10 @@ export default async function BarPage({ params }: PageProps) {
     })
   );
 
-  const profile = await getCurrentProfile();
+  const [profile, menu] = await Promise.all([
+    getCurrentProfile(),
+    getMenuByBar(bar.id),
+  ]);
 
   return (
     <>
@@ -183,6 +186,7 @@ export default async function BarPage({ params }: PageProps) {
         slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
         bookingWindowDays={reservationConfig.bookingWindowDays}
         userId={profile?.id ?? null}
+        menu={menu}
       />
       <HomeBottomNav
         barId={bar.id}

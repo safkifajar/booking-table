@@ -8,9 +8,16 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Loader2 } from "lucide-react";
+import { Clock, Loader2, Map as MapIcon, UtensilsCrossed } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
-import type { Bar, FloorArea, ActiveSessionView } from "@/types/db";
+import { MenuList } from "@/components/menu/MenuList";
+import type {
+  Bar,
+  FloorArea,
+  ActiveSessionView,
+  MenuCategory,
+  MenuItem,
+} from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
 
 
@@ -185,6 +192,8 @@ interface Props {
   bookingWindowDays?: number;
   /** Profile id user login (untuk bell notifikasi). null = anon. */
   userId?: string | null;
+  /** Menu bar (per kategori + items) untuk tab Menu. */
+  menu?: Array<MenuCategory & { items: MenuItem[] }>;
 }
 
 export function BarFloorView({
@@ -195,8 +204,10 @@ export function BarFloorView({
   slotIntervalMinutes = 60,
   bookingWindowDays = 7,
   userId = null,
+  menu = [],
 }: Props) {
   const router = useRouter();
+  const [mainTab, setMainTab] = React.useState<"floor" | "menu">("floor");
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     areasWithTables[0]?.area.slug ?? ""
   );
@@ -256,6 +267,26 @@ export function BarFloorView({
       </header>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+        {/* Tab switcher: Denah vs Menu */}
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit mb-4">
+          <MainTabButton
+            icon={<MapIcon className="h-3.5 w-3.5" />}
+            label="Denah"
+            active={mainTab === "floor"}
+            onClick={() => setMainTab("floor")}
+          />
+          <MainTabButton
+            icon={<UtensilsCrossed className="h-3.5 w-3.5" />}
+            label="Menu"
+            active={mainTab === "menu"}
+            onClick={() => setMainTab("menu")}
+          />
+        </div>
+
+        {mainTab === "menu" ? (
+          <MenuList menu={menu} />
+        ) : (
+          <>
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
@@ -315,6 +346,8 @@ export function BarFloorView({
           reservationsByTable={reservationsByTable}
           bookingWindowDays={bookingWindowDays}
         />
+          </>
+        )}
       </div>
 
       {/* Bottom sheet: selected table — backdrop click closes */}
@@ -336,6 +369,34 @@ export function BarFloorView({
         </>
       )}
     </main>
+  );
+}
+
+function MainTabButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition",
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

@@ -1,0 +1,85 @@
+import Image from "next/image";
+import { UtensilsCrossed } from "lucide-react";
+import { formatIDR } from "@/lib/utils";
+import type { MenuCategory, MenuItem } from "@/types/db";
+
+type MenuCategoryWithItems = MenuCategory & { items: MenuItem[] };
+
+/**
+ * Daftar menu READ-ONLY (lihat saja, tanpa cart/pesan) — dipakai di tab Menu
+ * halaman denah. Untuk pesan beneran ada MenuPicker di dalam session.
+ * Item habis (is_available=false) ditandai redup + label.
+ */
+export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
+  const hasItems = menu.some((c) => c.items.length > 0);
+  if (!hasItems) {
+    return (
+      <div className="rounded-xl border border-dashed border-border p-8 text-center">
+        <UtensilsCrossed className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium mb-1">Menu belum tersedia</p>
+        <p className="text-xs text-muted-foreground">
+          Belum ada item menu untuk ditampilkan.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {menu.map((cat) =>
+        cat.items.length === 0 ? null : (
+          <section key={cat.id}>
+            <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
+              {cat.name}
+            </h2>
+            <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+              {cat.items.map((item) => {
+                const habis = !item.is_available;
+                return (
+                  <div
+                    key={item.id}
+                    className={
+                      "flex items-center gap-3 p-3" + (habis ? " opacity-50" : "")
+                    }
+                  >
+                    <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                      {item.image_url ? (
+                        <Image
+                          src={item.image_url}
+                          alt={item.name}
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <UtensilsCrossed className="h-5 w-5 text-muted-foreground/50" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{item.name}</p>
+                        {habis && (
+                          <span className="text-[10px] text-red-400 border border-red-500/40 rounded px-1 shrink-0">
+                            Habis
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-sm font-semibold text-primary tabular-nums shrink-0">
+                      {formatIDR(item.price)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )
+      )}
+    </div>
+  );
+}
