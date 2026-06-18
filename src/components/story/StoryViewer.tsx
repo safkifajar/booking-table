@@ -14,7 +14,7 @@ import {
   type StoryDetail,
   type StoryViewer as ViewerEntry,
 } from "@/lib/story-actions";
-import { getActionErrorMessage, cn, initials } from "@/lib/utils";
+import { getActionErrorMessage, initials } from "@/lib/utils";
 
 interface Props {
   barId: string;
@@ -104,6 +104,28 @@ export function StoryViewer({
     return () => clearTimeout(t);
   }, [currentStory, isOwner]);
 
+  // Navigasi prev/next — dideklarasi SEBELUM effect yg memakainya (auto-advance
+  // & keyboard) supaya tidak "used before declared".
+  const goNext = React.useCallback(() => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      setProgress(0);
+    } else if (hasNextUser) {
+      setCurrentUserId(orderedUserIds[userIndex + 1]);
+    } else {
+      onClose();
+    }
+  }, [currentIndex, stories.length, hasNextUser, orderedUserIds, userIndex, onClose]);
+
+  const goPrev = React.useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1);
+      setProgress(0);
+    } else if (hasPrevUser) {
+      setCurrentUserId(orderedUserIds[userIndex - 1]);
+    }
+  }, [currentIndex, hasPrevUser, orderedUserIds, userIndex]);
+
   // Auto-advance progress
   React.useEffect(() => {
     if (phase !== "viewing" || paused || showViewers) return;
@@ -161,26 +183,6 @@ export function StoryViewer({
     }
   }
 
-  function goNext() {
-    if (currentIndex < stories.length - 1) {
-      setCurrentIndex((i) => i + 1);
-      setProgress(0);
-    } else if (hasNextUser) {
-      setCurrentUserId(orderedUserIds[userIndex + 1]);
-    } else {
-      onClose();
-    }
-  }
-
-  function goPrev() {
-    if (currentIndex > 0) {
-      setCurrentIndex((i) => i - 1);
-      setProgress(0);
-    } else if (hasPrevUser) {
-      setCurrentUserId(orderedUserIds[userIndex - 1]);
-    }
-  }
-
   async function handleDelete() {
     if (!currentStory) return;
     const ok = await confirm({
@@ -235,15 +237,7 @@ export function StoryViewer({
     return null;
   }
 
-  const elapsedMinutes = Math.floor(
-    (Date.now() - currentStory.createdAt.getTime()) / 60_000
-  );
-  const timeAgo =
-    elapsedMinutes < 1
-      ? "baru"
-      : elapsedMinutes < 60
-        ? `${elapsedMinutes}m`
-        : `${Math.floor(elapsedMinutes / 60)}j`;
+  const timeAgo = formatStoryAge(currentStory.createdAt);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -353,7 +347,9 @@ export function StoryViewer({
                   className="flex items-center gap-1.5 text-xs text-white/90 hover:text-white transition"
                 >
                   <Eye className="h-4 w-4" />
-                  Lihat viewers
+                  {currentStory.viewCount > 0
+                    ? `${currentStory.viewCount} viewers`
+                    : "Lihat viewers"}
                 </button>
                 <button
                   type="button"
@@ -439,6 +435,14 @@ function ViewersPanel({
       </div>
     </div>
   );
+}
+
+/** Umur story singkat (baru / Nm / Nj). Module-scope: Date.now di luar render. */
+function formatStoryAge(createdAt: Date): string {
+  const m = Math.floor((Date.now() - createdAt.getTime()) / 60_000);
+  if (m < 1) return "baru";
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}j`;
 }
 
 function timeAgoShort(date: Date): string {

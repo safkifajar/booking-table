@@ -345,6 +345,7 @@ export interface StoryDetail {
   table_label: string | null;
   area_name: string | null;
   viewedByMe: boolean;
+  viewCount: number;
 }
 
 export async function getStoriesForUser(
@@ -366,6 +367,10 @@ export async function getStoriesForUser(
       viewedByMe: sql<boolean>`EXISTS (
         SELECT 1 FROM ${storyViews} sv
         WHERE sv.story_id = ${stories.id} AND sv.viewer_id = ${viewerId}
+      )`,
+      viewCount: sql<number>`(
+        SELECT COUNT(*)::int FROM ${storyViews} sv
+        WHERE sv.story_id = ${stories.id}
       )`,
     })
     .from(stories)
