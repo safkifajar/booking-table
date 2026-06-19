@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
 import { ArrowLeft, MapPin, ChevronRight } from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
+import { ProfileAvatar } from "@/components/network/ProfileAvatar";
+import { TableHistoryList } from "@/components/network/TableHistoryList";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getPublicProfile } from "@/lib/queries";
-import { initials } from "@/lib/utils";
+import { getPublicProfile, getUserTableHistory } from "@/lib/queries";
+import { hasActiveStory } from "@/lib/story-actions";
+import { db } from "@/lib/db/client";
+import { bars } from "@/lib/db/schema/venue";
 import type { SessionVisibility } from "@/types/db";
 
 export const dynamic = "force-dynamic";
@@ -23,14 +27,22 @@ function visibilityLabel(v: SessionVisibility): string {
 
 export default async function NetworkProfilePage({ params }: PageProps) {
   const { userId } = await params;
-  const [me, profile] = await Promise.all([
+  const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
+  const [me, profile, [bar]] = await Promise.all([
     getCurrentProfile(),
     getPublicProfile(userId),
+    db.select({ id: bars.id }).from(bars).where(eq(bars.slug, barSlug)),
   ]);
   if (!profile) notFound();
 
   const isMe = me?.id === profile.id;
   const active = profile.active_session;
+
+  // Story aktif + riwayat meja (paralel).
+  const [hasStory, history] = await Promise.all([
+    bar ? hasActiveStory(profile.id, bar.id) : Promise.resolve(false),
+    getUserTableHistory(profile.id, 20),
+  ]);
 
   return (
     <main className="flex-1 pb-24">
@@ -50,12 +62,14 @@ export default async function NetworkProfilePage({ params }: PageProps) {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
         {/* Identitas */}
         <section className="flex flex-col items-center text-center">
-          <Avatar className="h-24 w-24">
-            {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
-            <AvatarFallback className="text-2xl">
-              {initials(profile.display_name)}
-            </AvatarFallback>
-          </Avatar>
+          <ProfileAvatar
+            userId={profile.id}
+            displayName={profile.display_name}
+            avatarUrl={profile.avatar_url}
+            hasStory={hasStory}
+            barId={bar?.id ?? ""}
+            viewerId={me?.id ?? null}
+          />
           <h1 className="text-xl font-bold tracking-tight mt-3">
             {profile.display_name}
             {isMe && (
@@ -126,6 +140,14 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             <HobbyBadges hobbies={profile.rating.top_tags} max={10} />
           </section>
         )}
+
+        {/* Riwayat meja */}
+        <section>
+          <h2 className="text-sm font-semibold text-muted-foreground mb-2">
+            Riwayat nongkrong
+          </h2>
+          <TableHistoryList entries={history} />
+        </section>
       </div>
     </main>
   );

@@ -32,6 +32,7 @@ import type {
   UserRatingSummary,
   ActiveNetworkUser,
   PublicProfile,
+  UserTableHistoryEntry,
 } from "@/types/db";
 
 // ============================================================
@@ -831,4 +832,59 @@ export async function getPublicProfile(
         }
       : null,
   };
+}
+
+/**
+ * Riwayat meja user: sesi yg sudah SELESAI (closed/cancelled/overdue) di mana
+ * user host ATAU member (bukan pending). Untuk profil publik /network/[userId].
+ * Urut terbaru, dibatasi `limit`.
+ */
+export async function getUserTableHistory(
+  profileId: string,
+  limit = 20
+): Promise<UserTableHistoryEntry[]> {
+  const rows = await db
+    .select({
+      session_id: tableSessions.id,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      visibility: tableSessions.visibility,
+      status: tableSessions.status,
+      started_at: tableSessions.startedAt,
+      is_host: sql<boolean>`${tableSessions.hostId} = ${profileId}`,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .leftJoin(
+      sessionMembers,
+      and(
+        eq(sessionMembers.sessionId, tableSessions.id),
+        eq(sessionMembers.profileId, profileId)
+      )
+    )
+    .where(
+      and(
+        inArray(tableSessions.status, ["closed", "cancelled", "overdue"]),
+        or(
+          eq(tableSessions.hostId, profileId),
+          and(
+            eq(sessionMembers.profileId, profileId),
+            ne(sessionMembers.status, "pending")
+          )
+        )
+      )
+    )
+    .orderBy(desc(tableSessions.startedAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    session_id: r.session_id,
+    table_label: r.table_label,
+    area_name: r.area_name,
+    visibility: r.visibility as UserTableHistoryEntry["visibility"],
+    status: r.status as UserTableHistoryEntry["status"],
+    started_at: r.started_at.toISOString(),
+    is_host: r.is_host,
+  }));
 }

@@ -389,6 +389,25 @@ export async function getStoriesForUser(
   return rows;
 }
 
+/** True kalau user punya minimal 1 story aktif (belum expired) di bar. Ringan. */
+export async function hasActiveStory(
+  userId: string,
+  barId: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: stories.id })
+    .from(stories)
+    .where(
+      and(
+        eq(stories.userId, userId),
+        eq(stories.barId, barId),
+        gte(stories.expiresAt, new Date())
+      )
+    )
+    .limit(1);
+  return !!row;
+}
+
 /**
  * List viewer untuk story tertentu (cuma owner yg boleh lihat).
  */

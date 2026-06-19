@@ -238,6 +238,17 @@ export interface NetworkMembersPage {
   next_cursor: string | null;
 }
 
+/** Satu entri riwayat meja user (untuk profil publik). */
+export interface UserTableHistoryEntry {
+  session_id: string;
+  table_label: string;
+  area_name: string;
+  visibility: SessionVisibility;
+  status: "closed" | "cancelled" | "overdue";
+  started_at: string;
+  is_host: boolean;
+}
+
 /** Detail profil publik user lain (/network/[userId]). */
 export interface PublicProfile {
   id: string;
