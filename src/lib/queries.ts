@@ -679,6 +679,25 @@ export async function getUserRatingsBatch(
 // ============================================================
 
 /**
+ * Hobi yg paling banyak dipakai member (non-guest), urut frekuensi. Untuk chip
+ * filter di tab "Semua member" /network. Unnest array hobbies lalu hitung.
+ */
+export async function getPopularHobbies(limit = 12): Promise<string[]> {
+  const rows = await db
+    .select({
+      hobby: sql<string>`hobby`,
+      cnt: sql<number>`COUNT(*)::int`,
+    })
+    .from(
+      sql`(SELECT unnest(${profiles.hobbies}) AS hobby FROM ${profiles} WHERE ${profiles.isGuest} = false) AS h`
+    )
+    .groupBy(sql`hobby`)
+    .orderBy(sql`COUNT(*) DESC`, sql`hobby ASC`)
+    .limit(limit);
+  return rows.map((r) => r.hobby).filter(Boolean);
+}
+
+/**
  * Daftar user yg sedang nongkrong di meja AKTIF (open/locked) di bar. Termasuk
  * host (role host) & member joined. Exclude guest placeholder (walk-in tanpa
  * akun). Untuk halaman /network section "Lagi di SOHO".

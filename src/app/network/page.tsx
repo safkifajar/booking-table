@@ -3,7 +3,11 @@ import { Users } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getBarBySlug, getActiveUsersAtBar } from "@/lib/queries";
+import {
+  getBarBySlug,
+  getActiveUsersAtBar,
+  getPopularHobbies,
+} from "@/lib/queries";
 import { NetworkView } from "./NetworkView";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +27,10 @@ export default async function NetworkPage() {
     );
   }
 
-  const activeUsers = await getActiveUsersAtBar(bar.id);
+  const [activeUsers, popularHobbies] = await Promise.all([
+    getActiveUsersAtBar(bar.id),
+    getPopularHobbies(12),
+  ]);
   const isAnon = !profile;
 
   return (
@@ -52,7 +59,11 @@ export default async function NetworkPage() {
           nongkrong.
         </p>
 
-        <NetworkView activeUsers={activeUsers} myProfileId={profile?.id ?? null} />
+        <NetworkView
+          activeUsers={activeUsers}
+          myProfileId={profile?.id ?? null}
+          popularHobbies={popularHobbies}
+        />
       </div>
 
       <HomeBottomNav

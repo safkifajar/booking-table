@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search, Loader2, Crown } from "lucide-react";
+import { Search, Loader2, Crown, SlidersHorizontal, X } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
+import { HobbyFilterSheet } from "@/components/network/HobbyFilterSheet";
 import { listAllMembers } from "@/lib/customer-actions";
 import { cn, initials } from "@/lib/utils";
 import type {
@@ -25,9 +26,11 @@ type Tab = "here" | "all";
 export function NetworkView({
   activeUsers,
   myProfileId,
+  popularHobbies,
 }: {
   activeUsers: ActiveNetworkUser[];
   myProfileId: string | null;
+  popularHobbies: string[];
 }) {
   const [tab, setTab] = React.useState<Tab>("here");
 
@@ -51,7 +54,10 @@ export function NetworkView({
       {tab === "here" ? (
         <HereTab activeUsers={activeUsers} myProfileId={myProfileId} />
       ) : (
-        <AllMembersTab myProfileId={myProfileId} />
+        <AllMembersTab
+          myProfileId={myProfileId}
+          popularHobbies={popularHobbies}
+        />
       )}
     </div>
   );
@@ -115,9 +121,17 @@ function HereTab({
   );
 }
 
-/** Tab "Semua member" — search + infinite scroll (batch 15). */
-function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
+/** Tab "Semua member" — search + filter hobi + infinite scroll (batch 15). */
+function AllMembersTab({
+  myProfileId,
+  popularHobbies,
+}: {
+  myProfileId: string | null;
+  popularHobbies: string[];
+}) {
   const [query, setQuery] = React.useState("");
+  const [selectedHobbies, setSelectedHobbies] = React.useState<string[]>([]);
+  const [filterOpen, setFilterOpen] = React.useState(false);
   const [items, setItems] = React.useState<NetworkSearchUser[]>([]);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [hasMore, setHasMore] = React.useState(true);
@@ -125,19 +139,30 @@ function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
   const [initialLoaded, setInitialLoaded] = React.useState(false);
 
   const trimmed = query.trim();
+  // Key stabil utk effect: hobi terpilih (urut) sbg string.
+  const hobbyKey = [...selectedHobbies].sort().join("\n");
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
-  // requestId menjaga supaya respons lama (query berbeda) tidak menimpa hasil baru.
+  // requestId menjaga supaya respons lama (filter berbeda) tidak menimpa hasil baru.
   const reqRef = React.useRef(0);
 
-  // Muat halaman pertama tiap kali query berubah (debounced 300ms).
+  function removeHobby(h: string) {
+    setSelectedHobbies((prev) => prev.filter((x) => x !== h));
+  }
+
+  // Muat halaman pertama tiap kali query / filter hobi berubah (debounced 300ms).
   React.useEffect(() => {
     const myReq = ++reqRef.current;
+    const hobbies = hobbyKey ? hobbyKey.split("\n") : [];
     const t = setTimeout(async () => {
       setInitialLoaded(false);
       setLoading(true);
       try {
-        const page = await listAllMembers({ query: trimmed, cursor: null });
-        if (reqRef.current !== myReq) return; // query sudah ganti
+        const page = await listAllMembers({
+          query: trimmed,
+          cursor: null,
+          hobbies,
+        });
+        if (reqRef.current !== myReq) return; // filter sudah ganti
         setItems(page.users);
         setCursor(page.next_cursor);
         setHasMore(page.next_cursor !== null);
@@ -149,14 +174,15 @@ function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [trimmed]);
+  }, [trimmed, hobbyKey]);
 
   const loadMore = React.useCallback(async () => {
     if (loading || !hasMore || !cursor) return;
     const myReq = reqRef.current;
+    const hobbies = hobbyKey ? hobbyKey.split("\n") : [];
     setLoading(true);
     try {
-      const page = await listAllMembers({ query: trimmed, cursor });
+      const page = await listAllMembers({ query: trimmed, cursor, hobbies });
       if (reqRef.current !== myReq) return;
       setItems((prev) => [...prev, ...page.users]);
       setCursor(page.next_cursor);
@@ -164,7 +190,7 @@ function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
     } finally {
       if (reqRef.current === myReq) setLoading(false);
     }
-  }, [loading, hasMore, cursor, trimmed]);
+  }, [loading, hasMore, cursor, trimmed, hobbyKey]);
 
   // Infinite scroll: load saat sentinel masuk viewport.
   React.useEffect(() => {
@@ -182,21 +208,83 @@ function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
 
   return (
     <div>
-      <div className="relative mb-3">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari member berdasarkan nama…"
-          className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-9 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-        />
+      {/* Search + tombol Filter */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Cari member berdasarkan nama…"
+            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+          />
+        </div>
+        {popularHobbies.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            className={cn(
+              "shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm transition",
+              selectedHobbies.length > 0
+                ? "border-primary bg-primary/15 text-primary font-medium"
+                : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+            )}
+            aria-label="Filter hobi"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span>Filter</span>
+            {selectedHobbies.length > 0 && (
+              <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 leading-none">
+                {selectedHobbies.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
+
+      {/* Chip hobi terpilih (bisa dilepas) */}
+      {selectedHobbies.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          {selectedHobbies.map((h) => (
+            <span
+              key={h}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary"
+            >
+              {h}
+              <button
+                type="button"
+                onClick={() => removeHobby(h)}
+                aria-label={`Hapus filter ${h}`}
+                className="hover:text-primary/70"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSelectedHobbies([])}
+            className="text-xs text-muted-foreground hover:text-foreground ml-1"
+          >
+            Hapus semua
+          </button>
+        </div>
+      )}
+
+      <HobbyFilterSheet
+        key={filterOpen ? "open" : "closed"}
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        hobbies={popularHobbies}
+        selected={selectedHobbies}
+        onApply={setSelectedHobbies}
+      />
 
       {initialLoaded && items.length === 0 && !loading && (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          {trimmed.length > 0
-            ? "Tidak ada member dengan nama itu."
+          {trimmed.length > 0 || selectedHobbies.length > 0
+            ? "Tidak ada member yang cocok dengan filter."
             : "Belum ada member."}
         </p>
       )}

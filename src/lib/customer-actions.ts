@@ -346,11 +346,13 @@ const MEMBERS_PAGE_SIZE = 15;
 export async function listAllMembers(opts?: {
   query?: string;
   cursor?: string | null;
+  hobbies?: string[];
 }): Promise<NetworkMembersPage> {
   const me = await getCurrentProfile();
   if (!me) return { users: [], next_cursor: null };
 
   const q = (opts?.query ?? "").trim();
+  const hobbies = (opts?.hobbies ?? []).filter((h) => h.trim().length > 0);
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
 
   const conditions = [
@@ -362,6 +364,15 @@ export async function listAllMembers(opts?: {
     conditions.push(
       or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
     );
+  }
+  // Filter hobi: user punya MINIMAL SATU dari hobi terpilih (array overlap &&).
+  // Bangun ARRAY['a','b',...]::text[] dgn tiap nilai sbg parameter terpisah.
+  if (hobbies.length > 0) {
+    const elems = sql.join(
+      hobbies.map((h) => sql`${h}`),
+      sql`, `
+    );
+    conditions.push(sql`${profiles.hobbies} && ARRAY[${elems}]::text[]`);
   }
   // Keyset: ambil baris SETELAH cursor (displayName, id) terakhir. Pemisah
   // cursor = "\n" — display_name bisa berisi spasi, jadi spasi tak bisa jadi
