@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, ChevronRight } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
@@ -76,7 +76,10 @@ export default async function NetworkProfilePage({ params }: PageProps) {
 
         {/* Lagi di meja (kalau ada) */}
         {active && (
-          <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <Link
+            href={`/session/${active.session_id}`}
+            className="block rounded-xl border border-primary/30 bg-primary/5 p-4 transition hover:bg-primary/10"
+          >
             <div className="flex items-center gap-2 text-sm">
               <MapPin className="h-4 w-4 text-primary shrink-0" />
               <span className="flex-1">
@@ -85,15 +88,13 @@ export default async function NetworkProfilePage({ params }: PageProps) {
                 {visibilityLabel(active.visibility)}
               </span>
               {!isMe && active.visibility === "public" && (
-                <Link
-                  href={`/session/${active.session_id}`}
-                  className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                >
+                <span className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
                   Gabung
-                </Link>
+                </span>
               )}
+              <ChevronRight className="h-4 w-4 text-primary/70 shrink-0" />
             </div>
-          </section>
+          </Link>
         )}
 
         {/* Bio */}
