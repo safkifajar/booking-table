@@ -841,7 +841,7 @@ function TableSheet({
                           ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
                           : "Lewat"
                         : h.booked
-                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}${visLabel ? ` · ${visLabel}` : ""}`
+                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
                           : "Tersedia";
                     const timeColor = picked
                       ? "text-primary"
@@ -862,15 +862,22 @@ function TableSheet({
                       <div className="flex items-center justify-between gap-3">
                         <span
                           className={cn(
-                            "inline-flex items-center gap-1.5 text-sm tabular-nums",
+                            "inline-flex items-center gap-1.5 text-sm tabular-nums shrink-0",
                             timeColor
                           )}
                         >
                           <Clock className="h-3.5 w-3.5 shrink-0" />
                           {h.label}
                         </span>
-                        <span className={cn("text-xs truncate", statusColor)}>
-                          {status}
+                        <span className="flex flex-col items-end min-w-0">
+                          <span className={cn("text-xs truncate max-w-full", statusColor)}>
+                            {status}
+                          </span>
+                          {h.booked && visLabel && (
+                            <span className="text-[10px] text-muted-foreground/70">
+                              {visLabel}
+                            </span>
+                          )}
                         </span>
                       </div>
                     );
