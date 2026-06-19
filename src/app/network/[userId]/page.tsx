@@ -77,7 +77,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
         {/* Lagi di meja (kalau ada) */}
         {active && (
           <Link
-            href={`/session/${active.session_id}`}
+            href={`/session/${active.session_id}?from=${encodeURIComponent(`/network/${profile.id}`)}`}
             className="block rounded-xl border border-primary/30 bg-primary/5 p-4 transition hover:bg-primary/10"
           >
             <div className="flex items-center gap-2 text-sm">

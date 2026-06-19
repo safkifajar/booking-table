@@ -395,7 +395,7 @@ function ActiveUserRow({
       {/* Gabung hanya untuk meja public & bukan sesi diri sendiri */}
       {!isMe && user.visibility === "public" && (
         <Link
-          href={`/session/${user.session_id}`}
+          href={`/session/${user.session_id}?from=${encodeURIComponent("/network")}`}
           className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
         >
           Gabung

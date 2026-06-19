@@ -25,10 +25,19 @@ import { SessionView } from "./SessionView";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }
 
-export default async function SessionPage({ params }: PageProps) {
+/** Path internal aman utk back (cegah open-redirect): harus "/x", bukan "//x". */
+function safeInternalPath(p: string | undefined): string | null {
+  if (!p) return null;
+  if (!p.startsWith("/") || p.startsWith("//")) return null;
+  return p;
+}
+
+export default async function SessionPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { from } = await searchParams;
   const profile = await getCurrentProfile();
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
@@ -189,11 +198,16 @@ export default async function SessionPage({ params }: PageProps) {
     );
   const staffRole = staffRow ? (staffRow.role as StaffRoleName) : null;
   // Untuk waiter, default ke tab "Meja Aktif" (lebih relevan setelah dari session)
-  const backHref = staffRole
+  const defaultBack = staffRole
     ? staffRole === "waiter"
       ? "/staff/waiter?tab=sessions"
       : defaultDashboardFor(staffRole)
     : `/bar/${sessionRow.bar_slug}`;
+  // ?from= override (mis. datang dari profil network) — hanya path internal aman.
+  // Staff tetap ke dashboard masing-masing (abaikan from).
+  const backHref = staffRole
+    ? defaultBack
+    : safeInternalPath(from) ?? defaultBack;
 
   // Rating batch untuk semua members
   const memberProfileIds = membersRaw.map((m) => m.profile_id);
