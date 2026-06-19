@@ -58,9 +58,9 @@ export function BottomNav({
     >
       <div className="max-w-md mx-auto px-2 grid grid-cols-5 items-stretch h-16">
         <NavItem href="/" icon={<Home />} label="Home" active={isActive("/")} />
-        {/* Network — cari/terhubung dgn customer lain (halaman menyusul) */}
+        {/* Network — cari/terhubung dgn customer lain + siapa yg lagi di SOHO */}
         <NavItem
-          href="/"
+          href="/network"
           icon={<UserSearch />}
           label="Network"
           active={isActive("/network")}

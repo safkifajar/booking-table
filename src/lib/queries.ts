@@ -30,6 +30,8 @@ import type {
   MenuItem,
   RatableMember,
   UserRatingSummary,
+  ActiveNetworkUser,
+  PublicProfile,
 } from "@/types/db";
 
 // ============================================================
@@ -670,4 +672,144 @@ export async function getUserRatingsBatch(
     })
   );
   return result;
+}
+
+// ============================================================
+// NETWORK (siapa yg lagi di SOHO + profil publik user)
+// ============================================================
+
+/**
+ * Daftar user yg sedang nongkrong di meja AKTIF (open/locked) di bar. Termasuk
+ * host (role host) & member joined. Exclude guest placeholder (walk-in tanpa
+ * akun). Untuk halaman /network section "Lagi di SOHO".
+ *
+ * 'overdue' SENGAJA dikecualikan: itu hutang lewat-waktu, bukan jaminan orang
+ * masih fisik di meja (bisa sudah pulang) — konsisten dgn denah yg juga
+ * menyembunyikan overdue.
+ *
+ * Satu user bisa muncul di >1 sesi (jarang) — di-dedupe per profil, ambil
+ * sesi pertama (yg join paling awal).
+ */
+export async function getActiveUsersAtBar(
+  barId: string
+): Promise<ActiveNetworkUser[]> {
+  const rows = await db
+    .select({
+      profile_id: profiles.id,
+      display_name: profiles.displayName,
+      avatar_url: profiles.avatarUrl,
+      session_id: tableSessions.id,
+      table_label: tables.label,
+      visibility: tableSessions.visibility,
+      host_id: tableSessions.hostId,
+      joined_at: sessionMembers.joinedAt,
+    })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        inArray(tableSessions.status, ["open", "locked"]),
+        eq(sessionMembers.status, "joined"),
+        eq(profiles.isGuest, false)
+      )
+    )
+    .orderBy(asc(sessionMembers.joinedAt));
+
+  const seen = new Set<string>();
+  const out: ActiveNetworkUser[] = [];
+  for (const r of rows) {
+    if (seen.has(r.profile_id)) continue;
+    seen.add(r.profile_id);
+    out.push({
+      profile_id: r.profile_id,
+      display_name: r.display_name,
+      avatar_url: r.avatar_url,
+      session_id: r.session_id,
+      table_label: r.table_label,
+      visibility: r.visibility as ActiveNetworkUser["visibility"],
+      is_host: r.host_id === r.profile_id,
+    });
+  }
+  return out;
+}
+
+/** Berapa kali user pernah jadi member meja (joined/left) = jumlah kunjungan. */
+async function getVisitCount(profileId: string): Promise<number> {
+  const [agg] = await db
+    .select({ c: sql<number>`COUNT(DISTINCT ${sessionMembers.sessionId})::int` })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.profileId, profileId),
+        inArray(sessionMembers.status, ["joined", "left"])
+      )
+    );
+  return agg?.c ?? 0;
+}
+
+/**
+ * Detail profil publik user lain (untuk /network/[userId]): profil + rating +
+ * jumlah kunjungan + sesi aktif sekarang (kalau lagi nongkrong). Exclude staff
+ * via caller (atau biarkan — profil tetap publik). Null kalau user guest/not found.
+ */
+export async function getPublicProfile(
+  userId: string
+): Promise<PublicProfile | null> {
+  const [p] = await db
+    .select({
+      id: profiles.id,
+      display_name: profiles.displayName,
+      avatar_url: profiles.avatarUrl,
+      bio: profiles.bio,
+      hobbies: profiles.hobbies,
+      is_guest: profiles.isGuest,
+    })
+    .from(profiles)
+    .where(eq(profiles.id, userId));
+  if (!p || p.is_guest) return null;
+
+  const [rating, visit_count, active] = await Promise.all([
+    getUserRating(userId),
+    getVisitCount(userId),
+    db
+      .select({
+        session_id: tableSessions.id,
+        table_label: tables.label,
+        visibility: tableSessions.visibility,
+      })
+      .from(sessionMembers)
+      .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .where(
+        and(
+          eq(sessionMembers.profileId, userId),
+          eq(sessionMembers.status, "joined"),
+          // open/locked saja — lihat catatan di getActiveUsersAtBar.
+          inArray(tableSessions.status, ["open", "locked"])
+        )
+      )
+      .orderBy(asc(sessionMembers.joinedAt))
+      .limit(1),
+  ]);
+
+  return {
+    id: p.id,
+    display_name: p.display_name,
+    avatar_url: p.avatar_url,
+    bio: p.bio,
+    hobbies: p.hobbies,
+    rating,
+    visit_count,
+    active_session: active[0]
+      ? {
+          session_id: active[0].session_id,
+          table_label: active[0].table_label,
+          visibility: active[0].visibility as ActiveNetworkUser["visibility"],
+        }
+      : null,
+  };
 }

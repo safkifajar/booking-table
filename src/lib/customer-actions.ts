@@ -25,6 +25,8 @@ import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getUserRatingsBatch } from "@/lib/queries";
+import type { NetworkSearchUser } from "@/types/db";
 
 // ============================================================
 // LIST
@@ -326,4 +328,53 @@ export async function searchInviteCandidates(
     .limit(10);
 
   return rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+}
+
+// ============================================================
+// SEARCH USER NETWORK (cari customer lain di halaman /network)
+// ============================================================
+
+/**
+ * Cari user untuk halaman /network: customer non-staff, non-guest, bukan diri
+ * sendiri. Sama filter dgn searchInviteCandidates, tapi return field profil
+ * lengkap (avatar, hobi) + rating untuk kartu network. Wajib query min 1 char.
+ */
+export async function searchNetworkUsers(
+  queryRaw: string
+): Promise<NetworkSearchUser[]> {
+  const me = await getCurrentProfile();
+  if (!me) return [];
+  const q = (queryRaw ?? "").trim();
+  if (q.length < 1) return [];
+
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const rows = await db
+    .select({
+      id: users.id,
+      display_name: profiles.displayName,
+      avatar_url: profiles.avatarUrl,
+      hobbies: profiles.hobbies,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .where(
+      and(
+        sql`${users.id} <> ${me.id}`,
+        sql`${users.id} NOT IN (${staffIds})`,
+        eq(profiles.isGuest, false),
+        or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))
+      )
+    )
+    .orderBy(profiles.displayName)
+    .limit(20);
+
+  const ratings = await getUserRatingsBatch(rows.map((r) => r.id));
+  return rows.map((r) => ({
+    id: r.id,
+    display_name: r.display_name,
+    avatar_url: r.avatar_url,
+    hobbies: r.hobbies,
+    rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
+  }));
 }

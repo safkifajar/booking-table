@@ -210,6 +210,44 @@ export interface UserRatingSummary {
   top_tags: string[] | null;
 }
 
+/** User yg sedang nongkrong di meja aktif (untuk /network "Lagi di SOHO"). */
+export interface ActiveNetworkUser {
+  profile_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  /** Konteks sesi tempat dia nongkrong. */
+  session_id: string;
+  table_label: string;
+  visibility: SessionVisibility;
+  is_host: boolean;
+}
+
+/** Hasil search user di /network. */
+export interface NetworkSearchUser {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  hobbies: string[];
+  rating: UserRatingSummary;
+}
+
+/** Detail profil publik user lain (/network/[userId]). */
+export interface PublicProfile {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  hobbies: string[];
+  rating: UserRatingSummary;
+  visit_count: number;
+  /** Sesi aktif tempat user sedang nongkrong sekarang (kalau ada). */
+  active_session: {
+    session_id: string;
+    table_label: string;
+    visibility: SessionVisibility;
+  } | null;
+}
+
 export interface RatableMember {
   member_id: string;
   profile_id: string;
