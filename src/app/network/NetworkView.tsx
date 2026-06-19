@@ -6,8 +6,8 @@ import { Search, Loader2, Crown } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
-import { searchNetworkUsers } from "@/lib/customer-actions";
-import { initials } from "@/lib/utils";
+import { listAllMembers } from "@/lib/customer-actions";
+import { cn, initials } from "@/lib/utils";
 import type {
   ActiveNetworkUser,
   NetworkSearchUser,
@@ -20,6 +20,8 @@ function visibilityLabel(v: SessionVisibility): string {
   return "Undangan";
 }
 
+type Tab = "here" | "all";
+
 export function NetworkView({
   activeUsers,
   myProfileId,
@@ -27,119 +29,209 @@ export function NetworkView({
   activeUsers: ActiveNetworkUser[];
   myProfileId: string | null;
 }) {
-  const [query, setQuery] = React.useState("");
-  const [results, setResults] = React.useState<NetworkSearchUser[]>([]);
-  const [searching, setSearching] = React.useState(false);
-  const [searched, setSearched] = React.useState(false);
-
-  const trimmed = query.trim();
-
-  // Debounced search (300ms). Reset state dilakukan di handler onChange (bukan
-  // sinkron di effect) supaya tidak memicu cascading render.
-  React.useEffect(() => {
-    if (trimmed.length < 1) return;
-    const t = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const res = await searchNetworkUsers(trimmed);
-        setResults(res);
-      } finally {
-        setSearching(false);
-        setSearched(true);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [trimmed]);
-
-  function handleChange(value: string) {
-    setQuery(value);
-    if (value.trim().length < 1) {
-      setResults([]);
-      setSearched(false);
-      setSearching(false);
-    }
-  }
+  const [tab, setTab] = React.useState<Tab>("here");
 
   return (
-    <div className="space-y-6">
-      {/* SEARCH */}
-      <section>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => handleChange(e.target.value)}
-            placeholder="Cari user berdasarkan nama…"
-            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-9 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-          />
-          {searching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+    <div>
+      {/* Tab switcher */}
+      <div className="flex gap-1 rounded-lg bg-muted/40 p-1 mb-4">
+        <TabButton active={tab === "here"} onClick={() => setTab("here")}>
+          Lagi di SOHO
+          {activeUsers.length > 0 && (
+            <span className="ml-1.5 text-xs opacity-70">
+              {activeUsers.length}
+            </span>
           )}
-        </div>
+        </TabButton>
+        <TabButton active={tab === "all"} onClick={() => setTab("all")}>
+          Semua member
+        </TabButton>
+      </div>
 
-        {/* Hasil search */}
-        {trimmed.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {searched && results.length === 0 && !searching && (
-              <p className="text-sm text-muted-foreground py-4 text-center">
-                Tidak ada user dengan nama itu.
-              </p>
-            )}
-            {results.map((u) => (
-              <UserRow
-                key={u.id}
-                id={u.id}
-                name={u.display_name}
-                avatarUrl={u.avatar_url}
-                hobbies={u.hobbies}
-                rating={u.rating}
-                isMe={u.id === myProfileId}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* LAGI DI SOHO — sembunyikan saat sedang search supaya fokus */}
-      {trimmed.length === 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-muted-foreground mb-2">
-            Lagi di SOHO sekarang
-            {activeUsers.length > 0 && (
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground/70">
-                · {activeUsers.length} orang
-              </span>
-            )}
-          </h2>
-
-          {activeUsers.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border py-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                Belum ada yang nongkrong sekarang.
-              </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
-                Cek lagi nanti atau cari user di atas.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {activeUsers.map((u) => (
-                <ActiveUserRow
-                  key={u.profile_id + u.session_id}
-                  user={u}
-                  isMe={u.profile_id === myProfileId}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+      {tab === "here" ? (
+        <HereTab activeUsers={activeUsers} myProfileId={myProfileId} />
+      ) : (
+        <AllMembersTab myProfileId={myProfileId} />
       )}
     </div>
   );
 }
 
-/** Baris hasil search — klik ke detail profil. */
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Tab "Lagi di SOHO" — user yg sedang nongkrong di meja open/locked. */
+function HereTab({
+  activeUsers,
+  myProfileId,
+}: {
+  activeUsers: ActiveNetworkUser[];
+  myProfileId: string | null;
+}) {
+  if (activeUsers.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border py-10 text-center">
+        <p className="text-sm text-muted-foreground">
+          Belum ada yang nongkrong sekarang.
+        </p>
+        <p className="text-xs text-muted-foreground/70 mt-1">
+          Cek tab Semua member untuk lihat siapa yang bisa diajak.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {activeUsers.map((u) => (
+        <ActiveUserRow
+          key={u.profile_id + u.session_id}
+          user={u}
+          isMe={u.profile_id === myProfileId}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Tab "Semua member" — search + infinite scroll (batch 15). */
+function AllMembersTab({ myProfileId }: { myProfileId: string | null }) {
+  const [query, setQuery] = React.useState("");
+  const [items, setItems] = React.useState<NetworkSearchUser[]>([]);
+  const [cursor, setCursor] = React.useState<string | null>(null);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [loading, setLoading] = React.useState(false);
+  const [initialLoaded, setInitialLoaded] = React.useState(false);
+
+  const trimmed = query.trim();
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  // requestId menjaga supaya respons lama (query berbeda) tidak menimpa hasil baru.
+  const reqRef = React.useRef(0);
+
+  // Muat halaman pertama tiap kali query berubah (debounced 300ms).
+  React.useEffect(() => {
+    const myReq = ++reqRef.current;
+    const t = setTimeout(async () => {
+      setInitialLoaded(false);
+      setLoading(true);
+      try {
+        const page = await listAllMembers({ query: trimmed, cursor: null });
+        if (reqRef.current !== myReq) return; // query sudah ganti
+        setItems(page.users);
+        setCursor(page.next_cursor);
+        setHasMore(page.next_cursor !== null);
+      } finally {
+        if (reqRef.current === myReq) {
+          setLoading(false);
+          setInitialLoaded(true);
+        }
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [trimmed]);
+
+  const loadMore = React.useCallback(async () => {
+    if (loading || !hasMore || !cursor) return;
+    const myReq = reqRef.current;
+    setLoading(true);
+    try {
+      const page = await listAllMembers({ query: trimmed, cursor });
+      if (reqRef.current !== myReq) return;
+      setItems((prev) => [...prev, ...page.users]);
+      setCursor(page.next_cursor);
+      setHasMore(page.next_cursor !== null);
+    } finally {
+      if (reqRef.current === myReq) setLoading(false);
+    }
+  }, [loading, hasMore, cursor, trimmed]);
+
+  // Infinite scroll: load saat sentinel masuk viewport.
+  React.useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "200px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loadMore]);
+
+  return (
+    <div>
+      <div className="relative mb-3">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari member berdasarkan nama…"
+          className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-9 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+        />
+      </div>
+
+      {initialLoaded && items.length === 0 && !loading && (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          {trimmed.length > 0
+            ? "Tidak ada member dengan nama itu."
+            : "Belum ada member."}
+        </p>
+      )}
+
+      <div className="space-y-2">
+        {items.map((u) => (
+          <UserRow
+            key={u.id}
+            id={u.id}
+            name={u.display_name}
+            avatarUrl={u.avatar_url}
+            hobbies={u.hobbies}
+            rating={u.rating}
+            isMe={u.id === myProfileId}
+          />
+        ))}
+      </div>
+
+      {/* Sentinel + loader */}
+      <div ref={sentinelRef} className="h-1" />
+      {loading && (
+        <div className="flex justify-center py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {!hasMore && items.length > 0 && (
+        <p className="text-center text-xs text-muted-foreground/60 py-4">
+          Semua member sudah tampil.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Baris member (tab semua / hasil search) — klik ke detail profil. */
 function UserRow({
   id,
   name,

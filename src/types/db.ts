@@ -231,6 +231,13 @@ export interface NetworkSearchUser {
   rating: UserRatingSummary;
 }
 
+/** Satu halaman hasil "Semua member" (infinite scroll). */
+export interface NetworkMembersPage {
+  users: NetworkSearchUser[];
+  /** Cursor untuk halaman berikutnya (null = sudah habis). */
+  next_cursor: string | null;
+}
+
 /** Detail profil publik user lain (/network/[userId]). */
 export interface PublicProfile {
   id: string;

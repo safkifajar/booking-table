@@ -26,7 +26,7 @@ import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getUserRatingsBatch } from "@/lib/queries";
-import type { NetworkSearchUser } from "@/types/db";
+import type { NetworkMembersPage } from "@/types/db";
 
 // ============================================================
 // LIST
@@ -331,23 +331,51 @@ export async function searchInviteCandidates(
 }
 
 // ============================================================
-// SEARCH USER NETWORK (cari customer lain di halaman /network)
+// MEMBER NETWORK (daftar semua member + search, di halaman /network)
 // ============================================================
 
-/**
- * Cari user untuk halaman /network: customer non-staff, non-guest, bukan diri
- * sendiri. Sama filter dgn searchInviteCandidates, tapi return field profil
- * lengkap (avatar, hobi) + rating untuk kartu network. Wajib query min 1 char.
- */
-export async function searchNetworkUsers(
-  queryRaw: string
-): Promise<NetworkSearchUser[]> {
-  const me = await getCurrentProfile();
-  if (!me) return [];
-  const q = (queryRaw ?? "").trim();
-  if (q.length < 1) return [];
+const MEMBERS_PAGE_SIZE = 15;
 
+/**
+ * Daftar SEMUA member SOHO (customer non-staff, non-guest, kecuali diri sendiri)
+ * untuk tab "Semua member" di /network. Paginated keyset (infinite scroll):
+ * urut displayName ASC, id ASC sebagai tie-break. Cursor = "<displayName>
+<id>"
+ * dari baris terakhir halaman sebelumnya. Optional filter by nama/email.
+ */
+export async function listAllMembers(opts?: {
+  query?: string;
+  cursor?: string | null;
+}): Promise<NetworkMembersPage> {
+  const me = await getCurrentProfile();
+  if (!me) return { users: [], next_cursor: null };
+
+  const q = (opts?.query ?? "").trim();
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const conditions = [
+    sql`${users.id} <> ${me.id}`,
+    sql`${users.id} NOT IN (${staffIds})`,
+    eq(profiles.isGuest, false),
+  ];
+  if (q.length >= 1) {
+    conditions.push(
+      or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
+    );
+  }
+  // Keyset: ambil baris SETELAH cursor (displayName, id) terakhir. Pemisah
+  // cursor = "\n" — display_name bisa berisi spasi, jadi spasi tak bisa jadi
+  // pemisah; id (uuid) tak mengandung newline.
+  if (opts?.cursor) {
+    const sep = opts.cursor.indexOf("\n");
+    if (sep >= 0) {
+      const cName = opts.cursor.slice(0, sep);
+      const cId = opts.cursor.slice(sep + 1);
+      conditions.push(
+        sql`(${profiles.displayName}, ${users.id}) > (${cName}, ${cId})`
+      );
+    }
+  }
 
   const rows = await db
     .select({
@@ -358,23 +386,25 @@ export async function searchNetworkUsers(
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
-    .where(
-      and(
-        sql`${users.id} <> ${me.id}`,
-        sql`${users.id} NOT IN (${staffIds})`,
-        eq(profiles.isGuest, false),
-        or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))
-      )
-    )
-    .orderBy(profiles.displayName)
-    .limit(20);
+    .where(and(...conditions))
+    .orderBy(profiles.displayName, users.id)
+    .limit(MEMBERS_PAGE_SIZE + 1);
 
-  const ratings = await getUserRatingsBatch(rows.map((r) => r.id));
-  return rows.map((r) => ({
-    id: r.id,
-    display_name: r.display_name,
-    avatar_url: r.avatar_url,
-    hobbies: r.hobbies,
-    rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
-  }));
+  // Ambil 1 lebih untuk tahu apakah masih ada halaman berikutnya.
+  const hasMore = rows.length > MEMBERS_PAGE_SIZE;
+  const pageRows = hasMore ? rows.slice(0, MEMBERS_PAGE_SIZE) : rows;
+
+  const ratings = await getUserRatingsBatch(pageRows.map((r) => r.id));
+  const last = pageRows[pageRows.length - 1];
+  return {
+    users: pageRows.map((r) => ({
+      id: r.id,
+      display_name: r.display_name,
+      avatar_url: r.avatar_url,
+      hobbies: r.hobbies,
+      rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
+    })),
+    next_cursor:
+      hasMore && last ? `${last.display_name}\n${last.id}` : null,
+  };
 }

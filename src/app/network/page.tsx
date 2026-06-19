@@ -48,7 +48,8 @@ export default async function NetworkPage() {
           <h1 className="text-xl font-bold tracking-tight">Network</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Lihat siapa yang lagi di SOHO & cari teman nongkrong baru.
+          Lihat siapa yang lagi di SOHO & jelajahi member lain buat diajak
+          nongkrong.
         </p>
 
         <NetworkView activeUsers={activeUsers} myProfileId={profile?.id ?? null} />
