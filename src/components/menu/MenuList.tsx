@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { UtensilsCrossed, Search } from "lucide-react";
-import { formatIDR } from "@/lib/utils";
+import { formatIDR, initials } from "@/lib/utils";
 import type { MenuCategory, MenuItem } from "@/types/db";
 
 type MenuCategoryWithItems = MenuCategory & { items: MenuItem[] };
@@ -77,17 +77,21 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
                       "flex items-center gap-3 p-3" + (habis ? " opacity-50" : "")
                     }
                   >
-                    <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-                      {item.image_url ? (
+                    <div className="relative h-14 w-14 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                      {/* Inisial nama selalu di belakang — jadi placeholder
+                          saat tak ada gambar ATAU sementara gambar loading. */}
+                      <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-muted-foreground/70 select-none">
+                        {initials(item.name)}
+                      </span>
+                      {item.image_url && (
                         <Image
                           src={item.image_url}
                           alt={item.name}
                           width={56}
                           height={56}
-                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          className="relative h-full w-full object-cover"
                         />
-                      ) : (
-                        <UtensilsCrossed className="h-5 w-5 text-muted-foreground/50" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
