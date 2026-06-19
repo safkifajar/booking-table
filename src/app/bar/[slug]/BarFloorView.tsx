@@ -17,6 +17,7 @@ import type {
   ActiveSessionView,
   MenuCategory,
   MenuItem,
+  SessionVisibility,
 } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
 
@@ -81,6 +82,14 @@ function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
   return { dayLabel: HARI_SHORT[d.getDay()], dateNum: d.getDate() };
 }
 
+/** Label tipe meja (visibility) untuk slot booking. */
+function visibilityLabel(v?: SessionVisibility): string {
+  if (v === "public") return "Publik";
+  if (v === "friends") return "Teman";
+  if (v === "invite_only") return "Undangan";
+  return "";
+}
+
 
 const DAY_KEYS_FLOOR = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 
@@ -97,6 +106,8 @@ interface HourRow {
   host?: string;
   /** session id booking yg nge-hit slot ini (untuk Lihat Meja). */
   sessionId?: string;
+  /** visibility booking yg nge-hit slot ini (public/friends/invite_only). */
+  visibility?: SessionVisibility;
 }
 
 /**
@@ -121,6 +132,7 @@ function buildHourRows(
         booked: true,
         host: r.host_name,
         sessionId: r.id,
+        visibility: r.visibility,
       }));
   }
 
@@ -152,6 +164,7 @@ function buildHourRows(
       host: r.host_name,
       inUse: r.status === "open" || r.status === "locked",
       sessionId: r.id,
+      visibility: r.visibility,
     }));
 
   // Iterasi per slot dalam HARI KALENDER yg sama (00:00 s/d <24:00). Slot dini
@@ -174,6 +187,7 @@ function buildHourRows(
       past: slotEnd.getTime() <= nowMs,
       host: hit?.host,
       sessionId: hit?.sessionId,
+      visibility: hit?.visibility,
     });
   }
   return rows;
@@ -819,6 +833,7 @@ function TableSheet({
                     // - kosong & belum lewat → "Tersedia" (hijau)
                     const selectable = isSelectable(h);
                     const picked = selRange.has(h.startIso);
+                    const visLabel = visibilityLabel(h.visibility);
                     const status = picked
                       ? "Dipilih ✓"
                       : h.past
@@ -826,7 +841,7 @@ function TableSheet({
                           ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
                           : "Lewat"
                         : h.booked
-                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
+                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}${visLabel ? ` · ${visLabel}` : ""}`
                           : "Tersedia";
                     const timeColor = picked
                       ? "text-primary"
