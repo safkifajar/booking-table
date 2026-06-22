@@ -29,8 +29,13 @@ const { auth: authMiddleware } = NextAuth(authConfig);
  * - admin.local (custom dev)
  */
 function isAdminSubdomain(request: NextRequest): boolean {
+  // Next 16: rewrite internal me-RUN ULANG middleware dgn `host` yg sudah
+  // dinormalkan ke host server (subdomain "admin." hilang). Tapi
+  // `x-forwarded-host` tetap membawa host asli. Cek keduanya supaya request
+  // hasil rewrite (mis. /login → /admin-login) tetap dikenali sbg admin.
   const host = request.headers.get("host") ?? "";
-  return host.startsWith("admin.");
+  const fwd = request.headers.get("x-forwarded-host") ?? "";
+  return host.startsWith("admin.") || fwd.startsWith("admin.");
 }
 
 export default authMiddleware(async (req) => {
@@ -43,16 +48,28 @@ export default authMiddleware(async (req) => {
   if (isAdmin) {
     const isLoggedIn = !!req.auth?.user?.id;
 
+    // Path login admin (hasil rewrite /login → /admin-login). Saat Next 16
+    // me-run-ulang middleware untuk request rewrite, path-nya jadi
+    // "/admin-login" — perlakukan sbg halaman login & langsung tampilkan
+    // (jangan rewrite lagi / jangan redirect).
+    if (path === "/admin-login") {
+      return NextResponse.next();
+    }
+
     // Public paths admin (tidak butuh login):
     // - /login          (admin sign in)
     // - /setup-password (karyawan baru klik dari email)
     const isPublicAdminPath =
       path === "/login" || path === "/setup-password";
 
-    // Belum login & bukan public path → redirect ke /login
+    // Belum login & bukan public path → redirect ke /login (pertahankan host
+    // admin asli; nextUrl.host bisa sudah dinormalkan ke host server).
     if (!isLoggedIn && !isPublicAdminPath && !path.startsWith("/api/")) {
-      const loginUrl = req.nextUrl.clone();
-      loginUrl.pathname = "/login";
+      const host =
+        req.headers.get("x-forwarded-host") ??
+        req.headers.get("host") ??
+        req.nextUrl.host;
+      const loginUrl = new URL(`${req.nextUrl.protocol}//${host}/login`);
       if (path !== "/") {
         loginUrl.searchParams.set("next", path);
       }

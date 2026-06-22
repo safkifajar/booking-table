@@ -111,16 +111,37 @@ const NAV: NavItem[] = [
   },
 ];
 
+/**
+ * Active highlight bergantung pada usePathname() yg di subdomain admin
+ * (admin.localhost, path browser "/" tapi konten di-rewrite ke "/admin")
+ * BERBEDA antara server (path rewrite) & client (path browser asli) → hydration
+ * mismatch. Gate active state ke setelah mount: server + first client render
+ * identik (tanpa highlight), highlight muncul setelah hydrate.
+ */
+const emptySubscribe = () => () => {};
+function useMounted(): boolean {
+  // useSyncExternalStore: getServerSnapshot=false (SSR & first client render),
+  // getSnapshot=true (setelah hydrate). Cara lint-clean deteksi mounted tanpa
+  // setState-in-effect.
+  return React.useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 export function AdminSidebarNav() {
   const pathname = usePathname();
+  const mounted = useMounted();
+  const activePath = mounted ? pathname : "";
 
   return (
     <nav className="space-y-1">
       {NAV.map((item) =>
         item.type === "leaf" ? (
-          <SidebarLeaf key={item.href} item={item} pathname={pathname} />
+          <SidebarLeaf key={item.href} item={item} pathname={activePath} />
         ) : (
-          <SidebarGroup key={item.label} group={item} pathname={pathname} />
+          <SidebarGroup key={item.label} group={item} pathname={activePath} />
         )
       )}
     </nav>
@@ -212,7 +233,9 @@ function isActive(pathname: string, href: string): boolean {
  * Untuk mobile kita skip group concept karena ruangnya terbatas.
  */
 export function AdminMobileNav() {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const mounted = useMounted();
+  const pathname = mounted ? rawPathname : "";
   const items: NavLeaf[] = [
     {
       type: "leaf",
