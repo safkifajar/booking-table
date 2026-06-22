@@ -15,7 +15,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { and, eq, sql, gte, lte, desc } from "drizzle-orm";
+import { and, eq, sql, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -414,8 +414,10 @@ export async function getPayments(
     .where(
       and(
         eq(floorAreas.barId, barId),
-        gte(atExpr, new Date(from)),
-        lte(atExpr, new Date(to))
+        // Cast eksplisit ke timestamptz — `from`/`to` adalah ISO string.
+        // Tanpa cast, Date object dikirim sbg toString() yg invalid utk timestamp.
+        sql`${atExpr} >= ${from}::timestamptz`,
+        sql`${atExpr} <= ${to}::timestamptz`
       )
     )
     .orderBy(desc(atExpr))
