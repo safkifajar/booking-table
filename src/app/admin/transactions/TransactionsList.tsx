@@ -14,6 +14,13 @@ function txId(sessionId: string): string {
   return sessionId.slice(0, 8).toUpperCase();
 }
 
+type StatusFilter = "all" | "paid" | "unpaid";
+
+/** Lunas = tak ada tagihan ATAU sudah terbayar penuh. */
+function isPaid(t: AdminTransaction): boolean {
+  return t.subtotal === 0 || t.paid_total >= t.subtotal;
+}
+
 export function TransactionsList({
   transactions,
 }: {
@@ -23,18 +30,22 @@ export function TransactionsList({
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
   const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState<StatusFilter>("all");
 
-  // Filter by ID transaksi (8 char), label meja, atau nama host.
+  // Filter by ID transaksi (8 char), label meja, atau nama host + status lunas.
   const q = search.trim().toLowerCase();
   const filtered = React.useMemo(() => {
-    if (!q) return transactions;
-    return transactions.filter(
-      (t) =>
+    return transactions.filter((t) => {
+      if (status === "paid" && !isPaid(t)) return false;
+      if (status === "unpaid" && isPaid(t)) return false;
+      if (!q) return true;
+      return (
         txId(t.session_id).toLowerCase().includes(q) ||
         t.table_label.toLowerCase().includes(q) ||
         t.host_name.toLowerCase().includes(q)
-    );
-  }, [transactions, q]);
+      );
+    });
+  }, [transactions, q, status]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   // Clamp page kalau data berubah (mis. ganti filter/search) jadi lebih sedikit.
@@ -48,19 +59,34 @@ export function TransactionsList({
 
   return (
     <>
-      {/* Search by ID / meja / host */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={search}
+      {/* Search by ID / meja / host + filter status */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Cari ID transaksi, meja, atau nama host…"
+            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+          />
+        </div>
+        <select
+          value={status}
           onChange={(e) => {
-            setSearch(e.target.value);
+            setStatus(e.target.value as StatusFilter);
             setPage(0);
           }}
-          placeholder="Cari ID transaksi, meja, atau nama host…"
-          className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-        />
+          className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
+          aria-label="Filter status"
+        >
+          <option value="all">Semua status</option>
+          <option value="paid">Lunas</option>
+          <option value="unpaid">Belum lunas</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (

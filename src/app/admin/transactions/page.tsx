@@ -49,6 +49,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           <ExportButton
             filename={`transactions-${range.preset}-${new Date().toISOString().split("T")[0]}.csv`}
             rows={transactions.map((t) => ({
+              id: t.session_id.slice(0, 8).toUpperCase(),
               date: new Date(t.closed_at).toLocaleString("id-ID"),
               table: t.table_label,
               area: t.area_name,
@@ -61,6 +62,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
               paid_total: t.paid_total,
             }))}
             headers={[
+              "ID Transaksi",
               "Tanggal",
               "Meja",
               "Area",
