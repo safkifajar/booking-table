@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { UserMenu } from "@/components/UserMenu";
 
 interface Props {
   title: string;
@@ -13,7 +12,6 @@ interface Props {
  * Shared header untuk semua sub-pages di /profile/*.
  * - Tombol back → /profile (list menu)
  * - Title + eyebrow konsisten
- * - UserMenu di kanan
  */
 export function ProfileSubpageHeader({ title, eyebrow }: Props) {
   return (
@@ -32,7 +30,6 @@ export function ProfileSubpageHeader({ title, eyebrow }: Props) {
           )}
           <h1 className="text-base sm:text-lg font-semibold truncate">{title}</h1>
         </div>
-        <UserMenu />
       </div>
     </header>
   );
