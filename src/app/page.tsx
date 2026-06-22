@@ -40,11 +40,19 @@ export default async function HomePage() {
   }
 
   // Fetch data feed (parallel)
-  const [activeSessions, banners, unpaidSessions] = await Promise.all([
+  const [allSessions, banners, unpaidSessions] = await Promise.all([
     getActiveSessionsByBar(bar.id),
     getActiveBanners(bar.id),
     profile ? getUnpaidSessionsForProfile(profile.id) : Promise.resolve([]),
   ]);
+
+  // "LIVE NOW" = meja yg BENAR-BENAR sedang dipakai sekarang → hanya open/locked.
+  // Exclude 'reserved' (booking belum mulai) & 'overdue' (booking lewat-waktu yg
+  // belum lunas — bisa sudah pulang, bukan okupansi fisik; ditangani via banner
+  // tagihan, bukan feed live).
+  const activeSessions = allSessions.filter(
+    (s) => s.status === "open" || s.status === "locked"
+  );
 
   const isAnon = !profile;
   // Sapaan (Server Component — aman akses Date di server). WIB.
