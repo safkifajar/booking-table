@@ -82,8 +82,12 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
       .where(
         and(
           eq(tableSessions.tableId, row.table_id),
-          // reserved + open/locked/overdue (semua menempati slot waktu)
-          inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
+          // Hanya status yg BENAR-BENAR menempati slot: reserved (booking blm
+          // mulai) + open/locked (sedang dipakai). 'overdue' DIKECUALIKAN —
+          // meja sudah ditutup (booking selesai, sisa hutang ditagih terpisah),
+          // jadi slot-nya bebas dipesan lagi. Konsisten dgn migration 0028
+          // (overdue bukan okupansi) & overlap-check di openTable.
+          inArray(tableSessions.status, ["reserved", "open", "locked"])
         )
       );
     const existing: BookedRange[] = existingRows
