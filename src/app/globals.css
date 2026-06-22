@@ -163,28 +163,28 @@ button:disabled,
   from { opacity: 1; }
   to { opacity: 0; }
 }
-/* Dialog (modal tengah): fade + scale DI TEMPAT. translate(-50%,-50%) KONSTAN
-   dari awal-akhir → tidak ada pergeseran posisi, jadi tidak pernah terlihat
-   meluncur dari sisi. transform-origin center supaya scale mengembang dari
-   tengah. CATATAN: JANGAN tambahkan [data-radix-popper-content-wrapper] ke
-   selector di bawah — popper (Select/Dropdown/Popover) diposisikan Radix via
-   transform inline; keyframe translate-center akan menimpanya & bikin popper
-   melompat/meluncur dari posisi anchor. */
+/* Dialog (modal tengah): fade + scale MURNI (TANPA translate).
+   DialogContent di-center pakai FLEX wrapper (lihat ui/dialog.tsx), jadi
+   keyframe TIDAK BOLEH pakai translate — kalau pakai translate(-50%,-50%) di
+   atas elemen yg sudah di-center flex, elemen malah tergeser setengah lebar ke
+   kiri-atas (inilah bug "popup geser ke kiri"). Cukup scale + fade.
+   CATATAN: JANGAN sasarkan [data-radix-popper-content-wrapper] di sini —
+   popper (Select/Dropdown/Popover) diposisikan Radix via transform inline. */
 @keyframes dialog-content-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes dialog-content-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
 }
 
 [role="dialog"][data-state="open"] {
-  animation: dialog-content-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: dialog-content-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: center center;
 }
 [role="dialog"][data-state="closed"] {
-  animation: dialog-content-out 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: dialog-content-out 130ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: center center;
 }
 [data-state="open"][data-radix-dialog-overlay] {
@@ -192,27 +192,6 @@ button:disabled,
 }
 [data-state="closed"][data-radix-dialog-overlay] {
   animation: dialog-overlay-out 160ms ease-out;
-}
-
-/* ConfirmDialog (hapus story, dll): kunci animasi fade+scale DARI TENGAH.
-   Beberapa konteks (mis. dibuka di atas StoryViewer fullscreen) membuat dialog
-   ter-anchor & keyframe translate terlihat meluncur dari sisi. Selector ini
-   lebih spesifik → menang, transform dikunci ke center. */
-@keyframes confirm-dialog-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-@keyframes confirm-dialog-out {
-  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
-}
-[role="dialog"][data-confirm-dialog][data-state="open"] {
-  animation: confirm-dialog-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  transform-origin: center center;
-}
-[role="dialog"][data-confirm-dialog][data-state="closed"] {
-  animation: confirm-dialog-out 130ms cubic-bezier(0.4, 0, 0.6, 1);
-  transform-origin: center center;
 }
 
 /* Print mode: only drawer content visible, everything else hidden */
