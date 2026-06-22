@@ -186,6 +186,27 @@ button:disabled,
   animation: dialog-overlay-out 160ms ease-out;
 }
 
+/* ConfirmDialog (hapus story, dll): kunci animasi fade+scale DARI TENGAH.
+   Beberapa konteks (mis. dibuka di atas StoryViewer fullscreen) membuat dialog
+   ter-anchor & keyframe translate terlihat meluncur dari sisi. Selector ini
+   lebih spesifik → menang, transform dikunci ke center. */
+@keyframes confirm-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes confirm-dialog-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+}
+[role="dialog"][data-confirm-dialog][data-state="open"] {
+  animation: confirm-dialog-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center center;
+}
+[role="dialog"][data-confirm-dialog][data-state="closed"] {
+  animation: confirm-dialog-out 130ms cubic-bezier(0.4, 0, 0.6, 1);
+  transform-origin: center center;
+}
+
 /* Print mode: only drawer content visible, everything else hidden */
 @media print {
   /* Hide app shell ketika drawer terbuka */

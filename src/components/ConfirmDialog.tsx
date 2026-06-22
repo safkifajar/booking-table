@@ -77,7 +77,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           if (!open) handle(false);
         }}
       >
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent data-confirm-dialog className="sm:max-w-[420px]">
           <DialogHeader>
             <div className="flex items-start gap-3">
               <IconBadge variant={pending?.variant ?? "default"} icon={pending?.icon} />
