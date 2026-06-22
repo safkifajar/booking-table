@@ -47,9 +47,15 @@ function TableCard({
   session: ActiveSessionView;
   isAnon?: boolean;
 }) {
+  // Meja public → langsung tampilan penuh (/session): ada tab + "Minta gabung".
+  // Meja friends/invite_only → preview saja (bukan untuk umum).
+  const target =
+    session.visibility === "public"
+      ? `/session/${session.id}`
+      : `/session/${session.id}/preview`;
   const href = isAnon
-    ? `/auth?next=${encodeURIComponent(`/session/${session.id}/preview`)}`
-    : `/session/${session.id}/preview`;
+    ? `/auth?next=${encodeURIComponent(target)}`
+    : target;
 
   const isLocked = session.status === "locked";
 
