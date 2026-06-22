@@ -57,8 +57,15 @@ export function TransactionDetailDrawer({ sessionId, onClose }: Props) {
         <DrawerHeader>
           <div className="flex items-center gap-3 pr-10">
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest text-primary/70 mb-0.5">
-                Invoice Detail
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="text-[10px] uppercase tracking-widest text-primary/70">
+                  Invoice Detail
+                </span>
+                {sessionId && (
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    #{sessionId.slice(0, 8).toUpperCase()}
+                  </span>
+                )}
               </div>
               <DrawerTitle className="truncate">
                 {data ? (data.title ?? "Open Table") : loading ? "Memuat..." : "Detail Transaksi"}

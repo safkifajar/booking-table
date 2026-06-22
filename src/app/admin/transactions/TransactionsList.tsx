@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Users, Clock } from "lucide-react";
+import { ArrowRight, Users, Clock, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { TransactionDetailDrawer } from "./TransactionDetailDrawer";
 import { Pagination } from "@/components/admin/Pagination";
@@ -22,11 +22,24 @@ export function TransactionsList({
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
+  const [search, setSearch] = React.useState("");
 
-  const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
-  // Clamp page kalau data berubah (mis. ganti filter) jadi lebih sedikit.
+  // Filter by ID transaksi (8 char), label meja, atau nama host.
+  const q = search.trim().toLowerCase();
+  const filtered = React.useMemo(() => {
+    if (!q) return transactions;
+    return transactions.filter(
+      (t) =>
+        txId(t.session_id).toLowerCase().includes(q) ||
+        t.table_label.toLowerCase().includes(q) ||
+        t.host_name.toLowerCase().includes(q)
+    );
+  }, [transactions, q]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  // Clamp page kalau data berubah (mis. ganti filter/search) jadi lebih sedikit.
   const safePage = Math.min(page, totalPages - 1);
-  const pageItems = transactions.slice(
+  const pageItems = filtered.slice(
     safePage * pageSize,
     safePage * pageSize + pageSize
   );
@@ -35,6 +48,29 @@ export function TransactionsList({
 
   return (
     <>
+      {/* Search by ID / meja / host */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(0);
+          }}
+          placeholder="Cari ID transaksi, meja, atau nama host…"
+          className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <p className="text-sm">Tidak ada transaksi yang cocok.</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Coba kata kunci lain (ID, meja, atau host).
+          </p>
+        </Card>
+      ) : (
       <Card className="overflow-hidden p-0">
         {/* Header row (desktop) */}
         <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
@@ -186,33 +222,36 @@ export function TransactionsList({
           ))}
         </div>
       </Card>
+      )}
 
       {/* Pagination — gaya seragam dgn admin lain */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Per halaman:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setPage(0);
-            }}
-            className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </label>
-        {totalPages > 1 && (
-          <Pagination
-            page={safePage}
-            totalPages={totalPages}
-            onChange={setPage}
-          />
-        )}
-      </div>
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Per halaman:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </label>
+          {totalPages > 1 && (
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              onChange={setPage}
+            />
+          )}
+        </div>
+      )}
 
       <TransactionDetailDrawer
         sessionId={selectedId}
