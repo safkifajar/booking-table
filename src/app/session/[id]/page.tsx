@@ -113,11 +113,14 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
     .where(eq(sessionMembers.sessionId, id))
     .orderBy(asc(sessionMembers.joinedAt));
 
-  // 3. Open order (single per session)
+  // 3. Order sesi (single per session). JANGAN buang yg status 'closed':
+  // saat meja ditutup, order ikut jadi closed — tapi bill-nya HARUS tetap
+  // tampil (mis. overdue/belum lunas perlu lihat & lunasi tagihan). Tanpa ini
+  // subtotal jadi 0 setelah tutup meja.
   const [order] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, id), ne(orders.status, "closed")));
+    .where(eq(orders.sessionId, id));
 
   // 4. Order items (kalau ada order) — with menu_item + member profile
   const orderItemsRaw = order
