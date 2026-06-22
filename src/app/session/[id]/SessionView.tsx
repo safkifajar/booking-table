@@ -62,6 +62,14 @@ import type {
 
 type Tab = "vibe" | "menu" | "bill" | "pay";
 
+/** Jam "HH:MM" dari ISO string (waktu lokal). */
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+}
+
 interface SessionViewProps {
   session: {
     id: string;
@@ -70,6 +78,8 @@ interface SessionViewProps {
     visibility: SessionVisibility;
     vibe_tags: string[];
     started_at: string;
+    reservation_at: string | null;
+    reservation_end_at: string | null;
     host_id: string;
   };
   table: { label: string; capacity: number; shape: TableShape };
@@ -146,6 +156,10 @@ export function SessionView(props: SessionViewProps) {
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
+  // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
+  // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
+  const isEnded =
+    props.session.status === "closed" || props.session.status === "overdue";
   // Default target member untuk staff input order = host meja
   const joinedMembers = React.useMemo(
     () => props.members.filter((m) => m.status === "joined"),
@@ -261,9 +275,28 @@ export function SessionView(props: SessionViewProps) {
         </div>
       </div>
 
+      {/* Notice meja sudah ditutup (closed/overdue) */}
+      {isEnded && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
+            <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium">Meja sudah ditutup</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {props.session.status === "overdue"
+                  ? "Pesanan dikunci. Selesaikan pembayaran yang tersisa di tab Bill."
+                  : "Pesanan dikunci. Terima kasih sudah nongkrong di SOHO."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
-        {tab === "vibe" && <VibeTab {...props} isStaff={isStaff} />}
+        {tab === "vibe" && (
+          <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
+        )}
         {tab === "menu" && canInteract && (
           <MenuTab
             menu={props.menu}
@@ -304,6 +337,7 @@ export function SessionView(props: SessionViewProps) {
         isHost={props.isHost}
         isMember={canInteract}
         isStaff={isStaff}
+        isEnded={isEnded}
         sessionId={props.session.id}
       />
     </main>
@@ -405,7 +439,9 @@ function TabButton({
 }
 
 // VIBE / MEMBERS TAB
-function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
+function VibeTab(
+  props: SessionViewProps & { isStaff: boolean; isEnded: boolean }
+) {
   const joined = props.members.filter((m) => m.status === "joined");
   // "Request masuk" = orang yang minta join sendiri (host yg approve) →
   // invited_by NULL. Yang DIUNDANG host (invited_by terisi) bukan request,
@@ -471,12 +507,24 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
 
       {/* Members */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-1">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Di Meja ({joined.length}/{props.table.capacity})
           </h2>
           <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground" />
         </div>
+        {/* Jam booking (kalau reservasi, bukan walk-in) */}
+        {props.session.reservation_at && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Booking {formatTime(props.session.reservation_at)}
+              {props.session.reservation_end_at &&
+                `–${formatTime(props.session.reservation_end_at)}`}
+            </span>
+          </div>
+        )}
+        {!props.session.reservation_at && <div className="mb-2" />}
         <div className="space-y-3">
           {joined.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
@@ -538,7 +586,8 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
               </div>
             </div>
           ))}
-          {slotsAvailable > 0 &&
+          {!props.isEnded &&
+            slotsAvailable > 0 &&
             (canStaffAddGuest ? (
               <button
                 type="button"
@@ -572,8 +621,9 @@ function VibeTab(props: SessionViewProps & { isStaff: boolean }) {
             ))}
 
           {/* Ajak/Undang user (host only) — 2 mode seperti open table.
-              Sembunyikan kalau meja penuh; tampilkan info "penuh" sbg gantinya. */}
+              Sembunyikan kalau meja penuh / sudah ditutup. */}
           {props.isHost &&
+            !props.isEnded &&
             (inviteSlotsAvailable > 0 ? (
               <button
                 type="button"
@@ -1472,6 +1522,7 @@ function SessionFooter({
   isHost,
   isMember,
   isStaff,
+  isEnded,
   sessionId,
 }: {
   subtotal: number;
@@ -1479,13 +1530,16 @@ function SessionFooter({
   isHost: boolean;
   isMember: boolean;
   isStaff: boolean;
+  isEnded: boolean;
   sessionId: string;
 }) {
   const confirm = useConfirm();
   const [acting, setActing] = React.useState(false);
   const isLunas = subtotal > 0 && remaining === 0;
-  // Host & staff bisa tutup meja; member biasa bisa keluar.
-  const canClose = isHost || isStaff;
+  // Host & staff bisa tutup meja; member biasa bisa keluar. Saat sudah ditutup
+  // (ended), tak ada aksi tutup/keluar — meja sudah selesai.
+  const canClose = (isHost || isStaff) && !isEnded;
+  const showAction = isMember && !isEnded;
 
   async function handleClose() {
     const ok = await confirm({
@@ -1544,7 +1598,7 @@ function SessionFooter({
             )}
           </div>
         </div>
-        {isMember &&
+        {showAction &&
           (canClose ? (
             <Button
               variant="outline"

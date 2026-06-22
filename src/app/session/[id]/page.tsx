@@ -56,6 +56,8 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       visibility: tableSessions.visibility,
       vibe_tags: tableSessions.vibeTags,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       host_id: tableSessions.hostId,
       opened_by_staff_id: tableSessions.openedByStaffId,
       // table
@@ -222,6 +224,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         visibility: sessionRow.visibility,
         vibe_tags: sessionRow.vibe_tags ?? [],
         started_at: sessionRow.started_at.toISOString(),
+        reservation_at: sessionRow.reservation_at?.toISOString() ?? null,
+        reservation_end_at:
+          sessionRow.reservation_end_at?.toISOString() ?? null,
         host_id: sessionRow.host_id,
       }}
       table={{
