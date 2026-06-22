@@ -15,7 +15,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, gte, lte, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -357,6 +357,81 @@ export async function getTransactions(
     subtotal: Number(r.subtotal),
     paid_total: Number(r.paid_total),
     session_title: r.session_title,
+  }));
+}
+
+// ============================================================
+// PAYMENTS — daftar tiap transaksi pembayaran (pure Drizzle)
+// ============================================================
+
+/** Satu baris transaksi pembayaran (untuk /admin/payments). */
+export interface AdminPayment {
+  id: string;
+  session_id: string;
+  amount: number;
+  method: string;
+  status: string;
+  split_mode: string;
+  /** Waktu proses bayar (paidAt kalau ada, fallback createdAt). */
+  at: string;
+  paid_by_name: string;
+  table_label: string;
+  area_name: string;
+}
+
+/**
+ * Daftar SEMUA pembayaran di bar pada rentang waktu. Difilter pakai
+ * COALESCE(paidAt, createdAt) supaya pending (paidAt null) tetap masuk
+ * berdasar waktu dibuat. Urut terbaru.
+ */
+export async function getPayments(
+  barId: string,
+  from: string,
+  to: string,
+  limit = 500
+): Promise<AdminPayment[]> {
+  const atExpr = sql<Date>`COALESCE(${payments.paidAt}, ${payments.createdAt})`;
+  const rows = await db
+    .select({
+      id: payments.id,
+      session_id: tableSessions.id,
+      amount: payments.amount,
+      method: payments.method,
+      status: payments.status,
+      split_mode: payments.splitMode,
+      at: atExpr,
+      paid_by_name: profiles.displayName,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        gte(atExpr, new Date(from)),
+        lte(atExpr, new Date(to))
+      )
+    )
+    .orderBy(desc(atExpr))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    session_id: r.session_id,
+    amount: Number(r.amount),
+    method: r.method,
+    status: r.status,
+    split_mode: r.split_mode,
+    at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
+    paid_by_name: r.paid_by_name,
+    table_label: r.table_label,
+    area_name: r.area_name,
   }));
 }
 

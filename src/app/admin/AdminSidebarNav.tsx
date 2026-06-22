@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Receipt,
+  CreditCard,
   Utensils,
   ChartBar,
   ChevronDown,
@@ -50,6 +51,12 @@ const NAV: NavItem[] = [
         href: "/admin/transactions",
         label: "Transaksi",
         icon: <Receipt className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/payments",
+        label: "Pembayaran",
+        icon: <CreditCard className="h-4 w-4" />,
       },
       {
         type: "leaf",
