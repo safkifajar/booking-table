@@ -185,6 +185,8 @@ export function StoryViewer({
 
   async function handleDelete() {
     if (!currentStory) return;
+    // Pause story (auto-advance + progress) selama dialog konfirmasi terbuka.
+    setPaused(true);
     const ok = await confirm({
       title: "Hapus story ini?",
       description: "Story akan hilang dari semua viewer dan tidak bisa di-restore.",
@@ -192,7 +194,11 @@ export function StoryViewer({
       cancelText: "Batal",
       variant: "danger",
     });
-    if (!ok) return;
+    if (!ok) {
+      // Batal → lanjutkan story dari posisi semula.
+      setPaused(false);
+      return;
+    }
 
     try {
       await deleteStory(currentStory.id);
@@ -206,8 +212,12 @@ export function StoryViewer({
       } else if (currentIndex >= stories.length - 1) {
         setCurrentIndex((i) => Math.max(0, i - 1));
       }
+      // Lanjutkan auto-advance utk story berikutnya.
+      setPaused(false);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal hapus story"));
+      // Gagal hapus → story tetap ada, lanjutkan.
+      setPaused(false);
     }
   }
 
