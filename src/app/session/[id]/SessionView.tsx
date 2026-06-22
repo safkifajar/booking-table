@@ -169,8 +169,12 @@ export function SessionView(props: SessionViewProps) {
     }
   }, [isStaff, hostMember, joinedMembers, staffTargetMemberId]);
 
+  // Subtotal HARUS sama dgn getOutstandingMap (server): item void TIDAK dihitung.
+  // Kalau beda, keputusan lunas/nunggak di sini bisa berbeda dgn RatePage →
+  // redirect pingpong /session ⇄ /rate (blink terus saat tutup meja).
   const subtotal = props.orderItems.reduce(
-    (acc, item) => acc + item.quantity * item.unit_price,
+    (acc, item) =>
+      item.status === "void" ? acc : acc + item.quantity * item.unit_price,
     0
   );
   const totalPaid = props.payments
@@ -182,8 +186,17 @@ export function SessionView(props: SessionViewProps) {
   // Auto-redirect member ke halaman rate saat host menutup session — TAPI hanya
   // kalau sudah lunas. Kalau closed tapi masih nunggak (force-close / data lama),
   // tetap di sini supaya bisa LUNASI dulu (jangan paksa ke rating).
+  // Guard `redirectedToRate`: cegah pingpong /session ⇄ /rate kalau perhitungan
+  // lunas di sini & di RatePage sempat tidak sepakat (redirect cuma sekali).
+  const redirectedToRate = React.useRef(false);
   React.useEffect(() => {
-    if (props.session.status === "closed" && props.isMember && remaining <= 0) {
+    if (
+      props.session.status === "closed" &&
+      props.isMember &&
+      remaining <= 0 &&
+      !redirectedToRate.current
+    ) {
+      redirectedToRate.current = true;
       router.replace(`/session/${props.session.id}/rate`);
     }
   }, [props.session.status, props.session.id, router, props.isMember, remaining]);
