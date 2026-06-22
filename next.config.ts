@@ -17,8 +17,24 @@ const nextConfig: NextConfig = {
      */
     serverActions: {
       bodySizeLimit: "12mb",
+      /**
+       * Izinkan Server Actions dipanggil saat app dibuka dari device lain di
+       * LAN (mis. tes dari HP via http://192.168.x.x:3000). Tanpa ini Next.js
+       * memblokir action krn origin ≠ server origin → tombol sign in/signup/
+       * magic link "tidak ada action". Dev-only; produksi pakai domain HTTPS.
+       */
+      allowedOrigins: [
+        "localhost:3000",
+        "192.168.1.3:3000",
+        "*.local:3000",
+      ],
     },
   },
+  /**
+   * Izinkan dev resources (HMR) diakses dari device LAN saat tes mobile.
+   * Dev-only.
+   */
+  allowedDevOrigins: ["192.168.1.3"],
   images: {
     /**
      * File upload lokal (/uploads/**) dipakai <Image> dengan query string
