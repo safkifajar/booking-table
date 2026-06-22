@@ -3,10 +3,17 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Users, Clock } from "lucide-react";
+import { ArrowRight, Users, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { TransactionDetailDrawer } from "./TransactionDetailDrawer";
 import type { AdminTransaction } from "@/lib/admin";
+
+const PAGE_SIZE = 20;
+
+/** ID transaksi ringkas dari session_id (8 char pertama, uppercase). */
+function txId(sessionId: string): string {
+  return sessionId.slice(0, 8).toUpperCase();
+}
 
 export function TransactionsList({
   transactions,
@@ -14,6 +21,15 @@ export function TransactionsList({
   transactions: AdminTransaction[];
 }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(0);
+
+  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
+  // Clamp page kalau data berubah (mis. ganti filter) jadi lebih sedikit.
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const pageItems = transactions.slice(
+    safePage * PAGE_SIZE,
+    safePage * PAGE_SIZE + PAGE_SIZE
+  );
 
   if (transactions.length === 0) return null;
 
@@ -21,7 +37,8 @@ export function TransactionsList({
     <>
       <Card className="overflow-hidden p-0">
         {/* Header row (desktop) */}
-        <div className="hidden md:grid grid-cols-[100px_1fr_120px_140px_130px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
+        <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
+          <span>ID</span>
           <span>Meja</span>
           <span>Detail</span>
           <span className="text-center">Pengunjung</span>
@@ -31,7 +48,7 @@ export function TransactionsList({
         </div>
 
         <div className="divide-y divide-border">
-          {transactions.map((t) => (
+          {pageItems.map((t) => (
             <button
               key={t.session_id}
               type="button"
@@ -39,7 +56,10 @@ export function TransactionsList({
               className="w-full text-left group hover:bg-muted/30 transition"
             >
               {/* Desktop row */}
-              <div className="hidden md:grid grid-cols-[100px_1fr_120px_140px_130px_30px] gap-3 px-4 py-3 items-center text-sm">
+              <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-3 items-center text-sm">
+                <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                  #{txId(t.session_id)}
+                </span>
                 <div className="flex items-center gap-1.5 min-w-0">
                   <Badge variant="default" className="text-[10px]">
                     {t.table_label}
@@ -116,12 +136,17 @@ export function TransactionsList({
                       {t.area_name}
                     </span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                    {new Date(t.closed_at).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                    })}
-                  </span>
+                  <div className="text-right shrink-0">
+                    <span className="block font-mono text-[10px] text-muted-foreground">
+                      #{txId(t.session_id)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                      {new Date(t.closed_at).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <p className="font-medium text-sm truncate">
@@ -161,6 +186,38 @@ export function TransactionsList({
           ))}
         </div>
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <span className="text-xs text-muted-foreground">
+            Hal. {safePage + 1} / {totalPages} ·{" "}
+            {safePage * PAGE_SIZE + 1}–
+            {Math.min((safePage + 1) * PAGE_SIZE, transactions.length)} dari{" "}
+            {transactions.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={safePage === 0}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs transition hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Sebelumnya
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={safePage >= totalPages - 1}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs transition hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Berikutnya
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <TransactionDetailDrawer
         sessionId={selectedId}

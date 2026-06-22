@@ -74,11 +74,18 @@ function presetToDates(preset: Preset): { from: string; to: string } {
   }
 }
 
-export function DateRangeFilter({ currentLabel }: { currentLabel: string }) {
+export function DateRangeFilter({
+  currentLabel,
+  defaultPreset = "today",
+}: {
+  currentLabel: string;
+  /** Preset default halaman (untuk highlight yg benar saat ?range belum di-set). */
+  defaultPreset?: Preset;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const current = (searchParams.get("range") as Preset) ?? "today";
+  const current = (searchParams.get("range") as Preset) ?? defaultPreset;
   const customFrom = searchParams.get("from") ?? "";
   const customTo = searchParams.get("to") ?? "";
 

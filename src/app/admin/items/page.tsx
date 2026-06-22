@@ -34,7 +34,7 @@ export default async function ItemsPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <DateRangeFilter currentLabel={range.label} />
+      <DateRangeFilter currentLabel={range.label} defaultPreset="last30" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Header */}

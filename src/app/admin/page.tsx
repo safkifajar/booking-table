@@ -86,7 +86,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <DateRangeFilter currentLabel={range.label} />
+      <DateRangeFilter currentLabel={range.label} defaultPreset="this_month" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Hero Net Sales card */}

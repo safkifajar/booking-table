@@ -18,8 +18,9 @@ interface PageProps {
 export default async function TransactionsPage({ searchParams }: PageProps) {
   const bar = await requireAdmin();
   const params = await searchParams;
+  // Default: bulan aktif sekarang (this_month).
   const range = resolveDateRange(
-    (params.range as DateRangePreset) ?? "last7",
+    (params.range as DateRangePreset) ?? "this_month",
     params.from,
     params.to
   );
@@ -31,7 +32,7 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <DateRangeFilter currentLabel={range.label} />
+      <DateRangeFilter currentLabel={range.label} defaultPreset="this_month" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Header */}
