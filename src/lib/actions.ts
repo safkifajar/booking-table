@@ -1306,12 +1306,18 @@ export async function closeSession(sessionId: string) {
     }
   }
 
-  // Close session + orders (parallel)
+  // Tentukan outstanding saat tutup. Kalau masih nunggak → status 'overdue'
+  // (tagihan tetap tertagih via banner home), JANGAN 'closed' & JANGAN arahkan
+  // host ke /rate — itu bikin pingpong /session ⇄ /rate (RatePage tolak krn
+  // outstanding>0). Lunas → 'closed' + rating.
+  const outstanding = (await getOutstandingMap([sessionId])).get(sessionId) ?? 0;
+  const lunas = outstanding <= 0;
+
   const now = new Date();
   await Promise.all([
     db
       .update(tableSessions)
-      .set({ status: "closed", closedAt: now })
+      .set({ status: lunas ? "closed" : "overdue", closedAt: now })
       .where(eq(tableSessions.id, sessionId)),
     db
       .update(orders)
@@ -1324,10 +1330,10 @@ export async function closeSession(sessionId: string) {
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
 
-  // Customer host → redirect ke rate page. Staff → redirect ke dashboard
-  // role-nya supaya bisa lanjut handle meja lain.
+  // Customer host: lunas → /rate; belum lunas → tetap di /session (bisa lunasi).
+  // Staff → dashboard role-nya supaya bisa lanjut handle meja lain.
   if (isHost) {
-    redirect(`/session/${sessionId}/rate`);
+    redirect(lunas ? `/session/${sessionId}/rate` : `/session/${sessionId}`);
   }
   if (staffRoleName === "waiter") redirect("/staff/waiter?tab=sessions");
   if (staffRoleName === "cashier") redirect("/staff/cashier");

@@ -190,16 +190,20 @@ export function SessionView(props: SessionViewProps) {
   // lunas di sini & di RatePage sempat tidak sepakat (redirect cuma sekali).
   const redirectedToRate = React.useRef(false);
   React.useEffect(() => {
+    // HANYA redirect ke /rate kalau benar-benar LUNAS (isLunas = subtotal>0 &
+    // remaining==0). Pakai `remaining <= 0` SALAH: saat belum lunas tapi subtotal
+    // 0, atau hitung beda dgn RatePage, jadi true → pingpong /session ⇄ /rate.
+    // RatePage juga menolak (redirect balik) kalau outstanding>0 — samakan syarat.
     if (
       props.session.status === "closed" &&
       props.isMember &&
-      remaining <= 0 &&
+      isLunas &&
       !redirectedToRate.current
     ) {
       redirectedToRate.current = true;
       router.replace(`/session/${props.session.id}/rate`);
     }
-  }, [props.session.status, props.session.id, router, props.isMember, remaining]);
+  }, [props.session.status, props.session.id, router, props.isMember, isLunas]);
 
   return (
     <main className="flex-1 pb-32">
