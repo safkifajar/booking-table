@@ -203,15 +203,33 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             </h3>
             <div className="space-y-1.5 text-xs">
               {payments.map((p) => (
-                <div key={p.id} className="flex justify-between">
-                  <span>
-                    {p.paid_by_name}
-                    <span className="text-muted-foreground print:text-black/60">
-                      {" "}
-                      · {p.method.toUpperCase()} · {p.split_mode}
-                    </span>
-                  </span>
-                  <span className="tabular-nums">
+                <div key={p.id} className="flex justify-between gap-3">
+                  <div className="min-w-0">
+                    <div>
+                      {p.paid_by_name}
+                      <span className="text-muted-foreground print:text-black/60">
+                        {" "}
+                        · {p.method.toUpperCase()} · {p.split_mode}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground print:text-black/50 mt-0.5 flex flex-wrap items-center gap-x-2">
+                      <span className="font-mono">
+                        #{p.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <span>
+                        {p.paid_at
+                          ? new Date(p.paid_at).toLocaleString("id-ID", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Belum dibayar"}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="tabular-nums shrink-0">
                     {formatIDR(p.amount)}
                     {p.status !== "paid" && (
                       <span className="ml-1 text-[10px] text-amber-400">
