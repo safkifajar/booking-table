@@ -3,12 +3,11 @@
 import * as React from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Users, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, Users, Clock } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { TransactionDetailDrawer } from "./TransactionDetailDrawer";
+import { Pagination } from "@/components/admin/Pagination";
 import type { AdminTransaction } from "@/lib/admin";
-
-const PAGE_SIZE = 20;
 
 /** ID transaksi ringkas dari session_id (8 char pertama, uppercase). */
 function txId(sessionId: string): string {
@@ -22,13 +21,14 @@ export function TransactionsList({
 }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(10);
 
-  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
   // Clamp page kalau data berubah (mis. ganti filter) jadi lebih sedikit.
-  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const safePage = Math.min(page, totalPages - 1);
   const pageItems = transactions.slice(
-    safePage * PAGE_SIZE,
-    safePage * PAGE_SIZE + PAGE_SIZE
+    safePage * pageSize,
+    safePage * pageSize + pageSize
   );
 
   if (transactions.length === 0) return null;
@@ -187,37 +187,32 @@ export function TransactionsList({
         </div>
       </Card>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 px-1">
-          <span className="text-xs text-muted-foreground">
-            Hal. {safePage + 1} / {totalPages} ·{" "}
-            {safePage * PAGE_SIZE + 1}–
-            {Math.min((safePage + 1) * PAGE_SIZE, transactions.length)} dari{" "}
-            {transactions.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={safePage === 0}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs transition hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Sebelumnya
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={safePage >= totalPages - 1}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs transition hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Berikutnya
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Pagination — gaya seragam dgn admin lain */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Per halaman:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(0);
+            }}
+            className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
+        {totalPages > 1 && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            onChange={setPage}
+          />
+        )}
+      </div>
 
       <TransactionDetailDrawer
         sessionId={selectedId}

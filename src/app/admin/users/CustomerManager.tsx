@@ -21,10 +21,9 @@ import {
   Pencil,
   Trash2,
   Download,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
 } from "lucide-react";
+import { Pagination } from "@/components/admin/Pagination";
 import { initials, getActionErrorMessage } from "@/lib/utils";
 import {
   createCustomer,
@@ -195,30 +194,17 @@ export function CustomerManager({ initialRows, total, page, query }: Props) {
         </Card>
       )}
 
-      {/* Pagination */}
+      {/* Pagination — gaya seragam dgn admin lain (komponen page 0-based) */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
+          <span className="text-xs text-muted-foreground">
             {total} customer · hal {page}/{totalPages}
           </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => pushParams({ page: page - 1 })}
-            >
-              <ChevronLeft className="h-4 w-4" /> Sebelumnya
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => pushParams({ page: page + 1 })}
-            >
-              Berikutnya <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <Pagination
+            page={page - 1}
+            totalPages={totalPages}
+            onChange={(p) => pushParams({ page: p + 1 })}
+          />
         </div>
       )}
 

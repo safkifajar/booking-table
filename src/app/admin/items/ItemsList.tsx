@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TopItemsList } from "../components/TopItemsList";
+import { Search } from "lucide-react";
+import { Pagination } from "@/components/admin/Pagination";
 import { cn } from "@/lib/utils";
 import type { TopItem } from "@/lib/admin";
 
@@ -119,15 +118,16 @@ export function ItemsList({ items, totalRevenue }: Props) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          onChange={(p) => {
-            setPage(p);
-            // Scroll up ke top of list
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-        />
+        <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            onChange={(p) => {
+              setPage(p);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          />
+        </div>
       )}
     </div>
   );
@@ -269,86 +269,4 @@ function CategoryChip({
       </span>
     </button>
   );
-}
-
-function Pagination({
-  page,
-  totalPages,
-  onChange,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (p: number) => void;
-}) {
-  // Build page number list yang ditampilkan: first, prev neighbours, current, next neighbours, last
-  const pages = getPageNumbers(page, totalPages);
-
-  return (
-    <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={page === 0}
-        onClick={() => onChange(page - 1)}
-      >
-        <ChevronLeft className="h-4 w-4" />
-        <span className="hidden sm:inline">Sebelumnya</span>
-      </Button>
-
-      <div className="flex items-center gap-1">
-        {pages.map((p, i) =>
-          p === "..." ? (
-            <span
-              key={`gap-${i}`}
-              className="px-2 text-xs text-muted-foreground"
-            >
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              onClick={() => onChange(p)}
-              className={cn(
-                "min-w-[32px] h-8 px-2 rounded-md text-xs font-medium border transition tabular-nums",
-                p === page
-                  ? "bg-primary/15 border-primary/40 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {p + 1}
-            </button>
-          )
-        )}
-      </div>
-
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={page >= totalPages - 1}
-        onClick={() => onChange(page + 1)}
-      >
-        <span className="hidden sm:inline">Berikutnya</span>
-        <ChevronRight className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-}
-
-function getPageNumbers(current: number, total: number): (number | "...")[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i);
-  }
-  const pages: (number | "...")[] = [];
-  // Always show: 0, total-1, current-1, current, current+1
-  const around = new Set<number>([0, total - 1, current - 1, current, current + 1]);
-  const sorted = Array.from(around)
-    .filter((n) => n >= 0 && n < total)
-    .sort((a, b) => a - b);
-  let prev = -1;
-  for (const n of sorted) {
-    if (prev !== -1 && n - prev > 1) pages.push("...");
-    pages.push(n);
-    prev = n;
-  }
-  return pages;
 }
