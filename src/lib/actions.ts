@@ -1453,15 +1453,32 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
   if (!item) throw new Error("Item tidak ditemukan");
 
   const [session] = await db
-    .select({ host_id: tableSessions.hostId })
+    .select({ host_id: tableSessions.hostId, bar_id: floorAreas.barId })
     .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
 
-  if (
-    item.added_by_profile_id !== profile.id &&
-    session?.host_id !== profile.id
-  ) {
-    throw new Error("Hanya yang pesan atau host yang bisa hapus item");
+  // Boleh hapus: pemesan item, host meja, ATAU staff aktif di bar (waiter dkk
+  // bantu kelola pesanan).
+  let allowed =
+    item.added_by_profile_id === profile.id ||
+    session?.host_id === profile.id;
+  if (!allowed && session) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, session.bar_id),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    allowed = !!staff;
+  }
+  if (!allowed) {
+    throw new Error("Hanya yang pesan, host, atau staff yang bisa hapus item");
   }
 
   await db

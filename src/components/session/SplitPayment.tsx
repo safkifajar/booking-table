@@ -46,6 +46,8 @@ interface Props {
   myMemberId: string | null;
   subtotal: number;
   remaining: number;
+  /** Waiter/staff: hanya boleh BAYAR PENUH (sembunyikan patungan & pesanan saya). */
+  payFullOnly?: boolean;
   onPay: (input: {
     amount: number;
     method: PaymentMethod;
@@ -55,7 +57,10 @@ interface Props {
 }
 
 export function SplitPayment(props: Props) {
-  const [mode, setMode] = React.useState<SplitMode>("equal");
+  // payFullOnly (staff) → default & terkunci ke "custom" (bayar penuh sisa).
+  const [mode, setMode] = React.useState<SplitMode>(
+    props.payFullOnly ? "custom" : "equal"
+  );
   const [method, setMethod] = React.useState<PaymentMethod>("qris");
   const [loading, setLoading] = React.useState(false);
 
@@ -153,8 +158,8 @@ export function SplitPayment(props: Props) {
         </Card>
       )}
 
-      {/* Mode selector — hide kalau sudah lunas */}
-      {!isFullyPaid && (
+      {/* Mode selector — hide kalau sudah lunas / waiter (payFullOnly) */}
+      {!isFullyPaid && !props.payFullOnly && (
       <div>
         <h3 className="text-sm font-semibold mb-2">Cara bayar</h3>
         <div className="grid grid-cols-3 gap-2">
@@ -233,15 +238,17 @@ export function SplitPayment(props: Props) {
         <Card className="p-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
             <Sparkles className="h-4 w-4 text-primary" />
-            Kamu yang traktir
+            {props.payFullOnly ? "Bayar penuh" : "Kamu yang traktir"}
           </h3>
           {treatAmount > 0 ? (
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">
-                Sisa tagihan akan kamu bayar penuh. Anggota lain tidak perlu bayar.
+                {props.payFullOnly
+                  ? "Seluruh sisa tagihan meja akan dibayar penuh."
+                  : "Sisa tagihan akan kamu bayar penuh. Anggota lain tidak perlu bayar."}
               </p>
               <div className="flex justify-between font-semibold pt-2 border-t border-border">
-                <span>Yang kamu bayar</span>
+                <span>Total bayar</span>
                 <span className="text-primary text-base">{formatIDR(treatAmount)}</span>
               </div>
             </div>

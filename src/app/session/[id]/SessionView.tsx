@@ -45,6 +45,7 @@ import {
 import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicker";
+import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import type { InviteCandidate } from "@/lib/customer-actions";
@@ -313,6 +314,7 @@ export function SessionView(props: SessionViewProps) {
             items={props.orderItems}
             myProfileId={props.myProfileId}
             isHost={props.isHost}
+            isStaff={isStaff}
             sessionId={props.session.id}
             subtotal={subtotal}
           />
@@ -326,6 +328,7 @@ export function SessionView(props: SessionViewProps) {
             myMemberId={props.myMemberId}
             subtotal={subtotal}
             remaining={remaining}
+            payFullOnly={isStaff}
           />
         )}
       </div>
@@ -966,29 +969,41 @@ function MenuTab({
           onChange={setStaffTargetMemberId}
         />
       )}
-      <MenuPicker
-        menu={menu}
-        onAdd={async (menuItemId, quantity, notes) => {
-          if (isStaff && !staffTargetMemberId) {
-            toast.error("Pilih tamu tujuan order dulu");
-            return;
-          }
-          try {
-            await addOrderItem({
-              sessionId,
-              menuItemId,
-              quantity,
-              notes,
-              onBehalfOfMemberId: isStaff
-                ? staffTargetMemberId ?? undefined
-                : undefined,
-            });
-            toast.success("Pesanan ditambahkan");
-          } catch (err) {
-            toast.error(getActionErrorMessage(err, "Gagal menambah"));
-          }
-        }}
-      />
+      {isStaff ? (
+        // Waiter/staff: grid menu dgn stepper +/- langsung (tanpa bottom sheet).
+        <StaffMenuGrid
+          menu={menu}
+          onAdd={async (menuItemId, quantity) => {
+            if (!staffTargetMemberId) {
+              toast.error("Pilih tamu tujuan order dulu");
+              return;
+            }
+            try {
+              await addOrderItem({
+                sessionId,
+                menuItemId,
+                quantity,
+                onBehalfOfMemberId: staffTargetMemberId,
+              });
+              toast.success("Pesanan ditambahkan");
+            } catch (err) {
+              toast.error(getActionErrorMessage(err, "Gagal menambah"));
+            }
+          }}
+        />
+      ) : (
+        <MenuPicker
+          menu={menu}
+          onAdd={async (menuItemId, quantity, notes) => {
+            try {
+              await addOrderItem({ sessionId, menuItemId, quantity, notes });
+              toast.success("Pesanan ditambahkan");
+            } catch (err) {
+              toast.error(getActionErrorMessage(err, "Gagal menambah"));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1054,12 +1069,14 @@ function BillTab({
   items,
   myProfileId,
   isHost,
+  isStaff,
   sessionId,
   subtotal,
 }: {
   items: SessionViewProps["orderItems"];
   myProfileId: string;
   isHost: boolean;
+  isStaff: boolean;
   sessionId: string;
   subtotal: number;
 }) {
@@ -1139,7 +1156,7 @@ function BillTab({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs">{formatIDR(i.quantity * i.unit_price)}</span>
-                  {(profileId === myProfileId || isHost) && i.status !== "served" && (
+                  {(profileId === myProfileId || isHost || isStaff) && i.status !== "served" && (
                     <button
                       disabled={removingId === i.id}
                       onClick={async () => {
@@ -1190,6 +1207,7 @@ function SplitTab({
   myMemberId,
   subtotal,
   remaining,
+  payFullOnly,
 }: {
   sessionId: string;
   items: SessionViewProps["orderItems"];
@@ -1198,6 +1216,7 @@ function SplitTab({
   myMemberId: string | null;
   subtotal: number;
   remaining: number;
+  payFullOnly?: boolean;
 }) {
   return (
     <SplitPayment
@@ -1208,6 +1227,7 @@ function SplitTab({
       myMemberId={myMemberId}
       subtotal={subtotal}
       remaining={remaining}
+      payFullOnly={payFullOnly}
       onPay={async (input) => {
         try {
           const result = await payShare({ sessionId, ...input });
