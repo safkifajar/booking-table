@@ -710,8 +710,7 @@ function OpenTableModal({
     null
   );
   const [submitting, setSubmitting] = React.useState(false);
-  // Mode waktu: walk-in (langsung) atau jadwalkan (pilih slot jam).
-  const [scheduled, setScheduled] = React.useState(false);
+  // Jam booking (wajib dipilih saat buka meja).
   const [slotStart, setSlotStart] = React.useState("");
   const [slotEnd, setSlotEnd] = React.useState("");
 
@@ -770,13 +769,14 @@ function OpenTableModal({
     selectedTableId !== null &&
     validNamesCount > 0 &&
     tables.length > 0 &&
-    (!scheduled || !!slotStart); // kalau jadwalkan, wajib pilih jam
+    // Wajib pilih jam KALAU reservasi aktif; kalau bar matikan reservasi → walk-in.
+    (!reservationEnabled || !!slotStart);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !selectedTableId) return;
-    if (scheduled && !slotStart) {
-      toast.error("Pilih jam dulu");
+    if (reservationEnabled && !slotStart) {
+      toast.error("Pilih jam booking dulu");
       return;
     }
 
@@ -785,8 +785,8 @@ function OpenTableModal({
       await staffOpenTableForCustomer(
         selectedTableId,
         guestNames,
-        scheduled ? slotStart : null,
-        scheduled ? effectiveEnd : null
+        slotStart || null,
+        slotStart ? effectiveEnd : null
       );
       // Redirect handled by server action — no toast needed
     } catch (err) {
@@ -877,54 +877,26 @@ function OpenTableModal({
               )}
             </div>
 
-            {/* Pilih waktu: walk-in (sekarang) atau jadwalkan jam */}
+            {/* Pilih jam booking (wajib) */}
             {reservationEnabled && selectedTableId && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  2. Waktu
+                  2. Pilih jam booking
                 </label>
-                <div className="flex gap-1 rounded-lg bg-muted/40 p-1 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setScheduled(false)}
-                    className={cn(
-                      "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
-                      !scheduled
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    Walk-in (sekarang)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScheduled(true)}
-                    className={cn(
-                      "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
-                      scheduled
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground"
-                    )}
-                  >
-                    Jadwalkan jam
-                  </button>
-                </div>
-                {scheduled && (
-                  <SlotRangePicker
-                    slots={reservationData.slots}
-                    bookedSlotIsos={
-                      reservationData.bookedByTable[selectedTableId] ?? []
-                    }
-                    slotIntervalMinutes={reservationData.slotIntervalMinutes}
-                    bookingWindowDays={reservationData.bookingWindowDays}
-                    startIso={slotStart}
-                    endIso={slotEnd}
-                    onChange={(start, end) => {
-                      setSlotStart(start);
-                      setSlotEnd(end);
-                    }}
-                  />
-                )}
+                <SlotRangePicker
+                  slots={reservationData.slots}
+                  bookedSlotIsos={
+                    reservationData.bookedByTable[selectedTableId] ?? []
+                  }
+                  slotIntervalMinutes={reservationData.slotIntervalMinutes}
+                  bookingWindowDays={reservationData.bookingWindowDays}
+                  startIso={slotStart}
+                  endIso={slotEnd}
+                  onChange={(start, end) => {
+                    setSlotStart(start);
+                    setSlotEnd(end);
+                  }}
+                />
               </div>
             )}
 
