@@ -386,13 +386,16 @@ const updateStaffSchema = z.object({
   displayName: z.string().min(1, "Nama wajib diisi").max(80),
   email: z.string().email("Email tidak valid").max(120),
   role: z.enum(["waiter", "cashier", "manager", "admin"]),
+  isActive: z.boolean(),
+  /** Reset password opsional — kosong = tidak diubah. */
+  password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
 });
 
 /**
- * Edit data staff: nama, email, dan role sekaligus. Nama disimpan ganda
- * (users.name + profiles.displayName) konsisten dgn inviteStaff. Email unik
- * (kecuali milik sendiri). Role diri sendiri tidak boleh diubah (cegah admin
- * mengunci diri).
+ * Edit data staff: nama, email, role, status aktif, & reset password (opsional)
+ * sekaligus. Nama disimpan ganda (users.name + profiles.displayName) konsisten
+ * dgn inviteStaff. Email unik (kecuali milik sendiri). Untuk DIRI SENDIRI: role
+ * tidak boleh diubah & tidak boleh dinonaktifkan (cegah admin mengunci diri).
  */
 export async function updateStaff(
   input: z.infer<typeof updateStaffSchema>
@@ -403,7 +406,11 @@ export async function updateStaff(
   const displayName = data.displayName.trim();
 
   const [existing] = await db
-    .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
+    .select({
+      barId: staffRoles.barId,
+      profileId: staffRoles.profileId,
+      role: staffRoles.role,
+    })
     .from(staffRoles)
     .where(eq(staffRoles.id, data.staffRoleId));
   if (!existing) throw new Error("Staff role tidak ditemukan");
@@ -411,14 +418,12 @@ export async function updateStaff(
     throw new Error("Tidak ada akses ke staff role di bar lain");
   }
   const isSelf = existing.profileId === ctx.profileId;
-  if (isSelf && data.role !== undefined) {
-    // Role diri sendiri tidak boleh diubah; nama/email tetap boleh.
-    const [me] = await db
-      .select({ role: staffRoles.role })
-      .from(staffRoles)
-      .where(eq(staffRoles.id, data.staffRoleId));
-    if (me && me.role !== data.role) {
+  if (isSelf) {
+    if (data.role !== existing.role) {
       throw new Error("Tidak bisa ubah role diri sendiri");
+    }
+    if (!data.isActive) {
+      throw new Error("Tidak bisa menonaktifkan diri sendiri");
     }
   }
 
@@ -429,21 +434,26 @@ export async function updateStaff(
     .where(and(eq(users.email, email), sql`${users.id} <> ${existing.profileId}`));
   if (dupe) throw new Error("Email sudah dipakai akun lain");
 
+  // Hash password kalau di-reset.
+  let passwordHash: string | null = null;
+  if (data.password) {
+    const { hashPassword } = await import("@/lib/auth-v2/password");
+    passwordHash = await hashPassword(data.password);
+  }
+
   await db.transaction(async (tx) => {
     await tx
       .update(users)
-      .set({ email, name: displayName })
+      .set({ email, name: displayName, ...(passwordHash ? { passwordHash } : {}) })
       .where(eq(users.id, existing.profileId));
     await tx
       .update(profiles)
       .set({ displayName })
       .where(eq(profiles.id, existing.profileId));
-    if (!isSelf) {
-      await tx
-        .update(staffRoles)
-        .set({ role: data.role })
-        .where(eq(staffRoles.id, data.staffRoleId));
-    }
+    await tx
+      .update(staffRoles)
+      .set({ role: data.role, isActive: data.isActive })
+      .where(eq(staffRoles.id, data.staffRoleId));
   });
 
   revalidatePath("/admin/staff");

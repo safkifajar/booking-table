@@ -32,12 +32,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { useConfirm } from "@/components/ConfirmDialog";
 import {
   inviteStaff,
-  updateStaffRole,
   updateStaff,
-  toggleStaffActive,
   resendInvite,
   type AdminStaffRow,
 } from "@/lib/staff-actions";
@@ -92,57 +89,9 @@ export function StaffManager({ barId, initialStaff }: Props) {
   const [staff, setStaff] = React.useState(initialStaff);
   const [inviting, setInviting] = React.useState(false);
   const [resending, setResending] = React.useState<string | null>(null);
-  const [togglingId, setTogglingId] = React.useState<string | null>(null);
-  const [changingRoleId, setChangingRoleId] = React.useState<string | null>(null);
   const [editTarget, setEditTarget] = React.useState<AdminStaffRow | null>(null);
   const [inviteSuccess, setInviteSuccess] =
     React.useState<InviteSuccessInfo | null>(null);
-  const confirm = useConfirm();
-
-  async function handleToggle(row: AdminStaffRow) {
-    const newActive = !row.isActive;
-    const ok = await confirm({
-      title: newActive
-        ? `Aktifkan ${row.displayName}?`
-        : `Nonaktifkan ${row.displayName}?`,
-      description: newActive
-        ? "User akan bisa akses dashboard staff lagi."
-        : "User tidak bisa akses dashboard staff sampai diaktifkan lagi.",
-      confirmText: newActive ? "Aktifkan" : "Nonaktifkan",
-      cancelText: "Batal",
-      variant: newActive ? "default" : "danger",
-    });
-    if (!ok) return;
-
-    setTogglingId(row.id);
-    try {
-      await toggleStaffActive(row.id, newActive);
-      setStaff((arr) =>
-        arr.map((s) => (s.id === row.id ? { ...s, isActive: newActive } : s))
-      );
-      toast.success(newActive ? "Staff diaktifkan" : "Staff dinonaktifkan");
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal update status"));
-    } finally {
-      setTogglingId(null);
-    }
-  }
-
-  async function handleRoleChange(row: AdminStaffRow, newRole: Role) {
-    if (row.role === newRole) return;
-    setChangingRoleId(row.id);
-    try {
-      await updateStaffRole({ staffRoleId: row.id, role: newRole });
-      setStaff((arr) =>
-        arr.map((s) => (s.id === row.id ? { ...s, role: newRole } : s))
-      );
-      toast.success(`Role ${row.displayName} → ${ROLE_META[newRole].label}`);
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal ubah role"));
-    } finally {
-      setChangingRoleId(null);
-    }
-  }
 
   async function handleResend(row: AdminStaffRow) {
     setResending(row.id);
@@ -235,11 +184,15 @@ export function StaffManager({ barId, initialStaff }: Props) {
                     </td>
 
                     <td className="px-4 py-2.5">
-                      <RoleSelect
-                        currentRole={row.role}
-                        onChange={(newRole) => handleRoleChange(row, newRole)}
-                        disabled={changingRoleId === row.id}
-                      />
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium",
+                          ROLE_META[row.role as Role].color
+                        )}
+                      >
+                        {ROLE_META[row.role as Role].icon}
+                        {ROLE_META[row.role as Role].label}
+                      </span>
                     </td>
 
                     <td className="px-4 py-2.5">
@@ -277,26 +230,6 @@ export function StaffManager({ barId, initialStaff }: Props) {
                             )}
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggle(row)}
-                          disabled={togglingId === row.id}
-                          className={cn(
-                            row.isActive
-                              ? "text-emerald-400 hover:text-emerald-300"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                          title={row.isActive ? "Nonaktifkan" : "Aktifkan"}
-                        >
-                          {togglingId === row.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : row.isActive ? (
-                            <ToggleRight className="h-4 w-4" />
-                          ) : (
-                            <ToggleLeft className="h-4 w-4" />
-                          )}
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -526,34 +459,6 @@ function InviteSuccessModal({
   );
 }
 
-function RoleSelect({
-  currentRole,
-  onChange,
-  disabled,
-}: {
-  currentRole: Role;
-  onChange: (r: Role) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <select
-      value={currentRole}
-      onChange={(e) => onChange(e.target.value as Role)}
-      disabled={disabled}
-      className={cn(
-        "text-xs h-8 px-2 rounded-md border bg-input focus:outline-none focus:border-primary/60 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
-        ROLE_META[currentRole].color
-      )}
-    >
-      {(["waiter", "cashier", "manager", "admin"] as Role[]).map((r) => (
-        <option key={r} value={r} className="bg-background text-foreground">
-          {ROLE_META[r].label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 // ============================================================
 // INVITE MODAL
 // ============================================================
@@ -777,10 +682,24 @@ function EditStaffModal({
   const [displayName, setDisplayName] = React.useState(row.displayName);
   const [email, setEmail] = React.useState(row.email);
   const [role, setRole] = React.useState<Role>(row.role as Role);
+  const [isActive, setIsActive] = React.useState(row.isActive);
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Validasi reset password (kalau diisi).
+    if (password || confirmPassword) {
+      if (password.length < 6) {
+        toast.error("Password minimal 6 karakter");
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast.error("Konfirmasi password tidak cocok");
+        return;
+      }
+    }
     setSaving(true);
     try {
       await updateStaff({
@@ -788,9 +707,19 @@ function EditStaffModal({
         displayName: displayName.trim(),
         email: email.trim(),
         role,
+        isActive,
+        password: password || undefined,
       });
       toast.success("Data staff diperbarui");
-      onSaved({ ...row, displayName: displayName.trim(), email: email.trim(), role });
+      onSaved({
+        ...row,
+        displayName: displayName.trim(),
+        email: email.trim(),
+        role,
+        isActive,
+        // Password baru → user dianggap sudah punya password.
+        hasPassword: password ? true : row.hasPassword,
+      });
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal memperbarui staff"));
       setSaving(false);
@@ -855,6 +784,58 @@ function EditStaffModal({
             <p className="text-[11px] text-muted-foreground mt-1.5">
               {ROLE_META[role].description}
             </p>
+          </div>
+
+          {/* Status aktif */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-2 block">
+              Status
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsActive((v) => !v)}
+              className={cn(
+                "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-sm transition",
+                isActive
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                  : "border-border text-muted-foreground hover:bg-muted/50"
+              )}
+            >
+              <span>{isActive ? "Aktif" : "Nonaktif"}</span>
+              {isActive ? (
+                <ToggleRight className="h-5 w-5" />
+              ) : (
+                <ToggleLeft className="h-5 w-5" />
+              )}
+            </button>
+          </div>
+
+          {/* Reset password (opsional) */}
+          <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+            <p className="text-xs font-medium">Reset password (opsional)</p>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              Kosongkan kalau tidak ingin mengubah password.
+            </p>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password baru"
+              minLength={6}
+              maxLength={100}
+              autoComplete="new-password"
+              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Konfirmasi password baru"
+              minLength={6}
+              maxLength={100}
+              autoComplete="new-password"
+              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
