@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Users, Clock, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
-import { TransactionDetailDrawer } from "./TransactionDetailDrawer";
 import { Pagination } from "@/components/admin/Pagination";
 import type { AdminTransaction } from "@/lib/admin";
 
@@ -26,7 +26,6 @@ export function TransactionsList({
 }: {
   transactions: AdminTransaction[];
 }) {
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
   const [search, setSearch] = React.useState("");
@@ -111,11 +110,10 @@ export function TransactionsList({
 
         <div className="divide-y divide-border">
           {pageItems.map((t) => (
-            <button
+            <Link
               key={t.session_id}
-              type="button"
-              onClick={() => setSelectedId(t.session_id)}
-              className="w-full text-left group hover:bg-muted/30 transition"
+              href={`/admin/transactions/${t.session_id}`}
+              className="block group hover:bg-muted/30 transition"
             >
               {/* Desktop row */}
               <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-3 items-center text-sm">
@@ -244,7 +242,7 @@ export function TransactionsList({
                   </div>
                 </div>
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </Card>
@@ -278,11 +276,6 @@ export function TransactionsList({
           )}
         </div>
       )}
-
-      <TransactionDetailDrawer
-        sessionId={selectedId}
-        onClose={() => setSelectedId(null)}
-      />
     </>
   );
 }
