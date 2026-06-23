@@ -306,9 +306,7 @@ export function SplitPayment(props: Props) {
           {loading
             ? "Memproses..."
             : myAmount > 0
-              ? mode === "custom"
-                ? `Traktir ${formatIDR(myAmount)}`
-                : `Bayar ${formatIDR(myAmount)}`
+              ? `Bayar ${formatIDR(myAmount)}`
               : "Tidak ada yang dibayar"}
         </Button>
       )}

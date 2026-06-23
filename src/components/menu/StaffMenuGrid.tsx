@@ -1,23 +1,31 @@
 "use client";
 
 import * as React from "react";
-import { Search, Minus, Plus, Loader2 } from "lucide-react";
-import { formatIDR, cn } from "@/lib/utils";
+import { Search, Minus, Plus, Loader2, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
 
+export interface CartLine {
+  menuItemId: string;
+  quantity: number;
+}
+
 /**
- * Grid menu untuk WAITER — tiap item punya stepper qty (+/-) langsung di list,
- * tanpa bottom sheet. Atur qty lalu klik "Tambah" untuk kirim 1 pesanan.
- * onAdd dipanggil dgn (menuItemId, quantity). Setelah sukses, qty di-reset ke 1.
+ * Menu WAITER berbasis KERANJANG. Tiap item cuma +/- (tanpa tombol Tambah
+ * per baris): + menambah ke keranjang, - mengurangi. Ringkasan keranjang +
+ * tombol "Simpan Pesanan" sticky di bawah → semua masuk bill sekali simpan.
  */
 export function StaffMenuGrid({
   menu,
-  onAdd,
+  onSave,
 }: {
   menu: MenuPickerCategory[];
-  onAdd: (menuItemId: string, quantity: number) => Promise<void>;
+  onSave: (cart: CartLine[]) => Promise<void>;
 }) {
   const [query, setQuery] = React.useState("");
+  const [cart, setCart] = React.useState<Record<string, number>>({});
+  const [saving, setSaving] = React.useState(false);
 
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
@@ -30,8 +38,52 @@ export function StaffMenuGrid({
       .filter((c) => c.items.length > 0);
   }, [menu, q]);
 
+  // Lookup harga/nama untuk ringkasan keranjang.
+  const itemMap = React.useMemo(() => {
+    const m = new Map<string, { name: string; price: number }>();
+    menu.forEach((c) =>
+      c.items.forEach((i) => m.set(i.id, { name: i.name, price: i.price }))
+    );
+    return m;
+  }, [menu]);
+
+  function inc(id: string) {
+    setCart((c) => ({ ...c, [id]: Math.min(20, (c[id] ?? 0) + 1) }));
+  }
+  function dec(id: string) {
+    setCart((c) => {
+      const next = (c[id] ?? 0) - 1;
+      const copy = { ...c };
+      if (next <= 0) delete copy[id];
+      else copy[id] = next;
+      return copy;
+    });
+  }
+
+  const cartLines: CartLine[] = Object.entries(cart).map(
+    ([menuItemId, quantity]) => ({ menuItemId, quantity })
+  );
+  const totalQty = cartLines.reduce((a, l) => a + l.quantity, 0);
+  const totalPrice = cartLines.reduce(
+    (a, l) => a + l.quantity * (itemMap.get(l.menuItemId)?.price ?? 0),
+    0
+  );
+
+  async function handleSave() {
+    if (cartLines.length === 0) return;
+    setSaving(true);
+    try {
+      await onSave(cartLines);
+      setCart({}); // kosongkan keranjang setelah tersimpan
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal simpan pesanan"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-28">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
@@ -55,89 +107,81 @@ export function StaffMenuGrid({
             {cat.name}
           </h3>
           <div className="space-y-2">
-            {cat.items.map((item) => (
-              <MenuRow key={item.id} item={item} onAdd={onAdd} />
-            ))}
+            {cat.items.map((item) => {
+              const qty = cart[item.id] ?? 0;
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg border p-3 transition",
+                    qty > 0
+                      ? "border-primary/40 bg-primary/[0.04]"
+                      : "border-border bg-card/40",
+                    !item.is_available && "opacity-50"
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-primary tabular-nums">
+                      {formatIDR(item.price)}
+                      {!item.is_available && (
+                        <span className="ml-1.5 text-muted-foreground">
+                          · Habis
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {item.is_available && (
+                    <div className="flex items-center rounded-md border border-border shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => dec(item.id)}
+                        disabled={qty === 0}
+                        className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        aria-label="Kurangi"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-7 text-center text-sm tabular-nums">
+                        {qty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => inc(item.id)}
+                        disabled={qty >= 20}
+                        className="h-8 w-8 flex items-center justify-center text-primary hover:text-primary/80 disabled:opacity-30"
+                        aria-label="Tambah"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
-    </div>
-  );
-}
 
-function MenuRow({
-  item,
-  onAdd,
-}: {
-  item: MenuPickerCategory["items"][number];
-  onAdd: (menuItemId: string, quantity: number) => Promise<void>;
-}) {
-  const [qty, setQty] = React.useState(1);
-  const [adding, setAdding] = React.useState(false);
-
-  async function handleAdd() {
-    setAdding(true);
-    try {
-      await onAdd(item.id, qty);
-      setQty(1); // reset setelah sukses
-    } finally {
-      setAdding(false);
-    }
-  }
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-lg border border-border bg-card/40 p-3",
-        !item.is_available && "opacity-50"
-      )}
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{item.name}</p>
-        <p className="text-xs text-primary tabular-nums">
-          {formatIDR(item.price)}
-          {!item.is_available && (
-            <span className="ml-1.5 text-muted-foreground">· Habis</span>
-          )}
-        </p>
-      </div>
-
-      {item.is_available && (
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Stepper qty */}
-          <div className="flex items-center rounded-md border border-border">
+      {/* Bar keranjang sticky — Simpan Pesanan */}
+      {totalQty > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
             <button
               type="button"
-              onClick={() => setQty((v) => Math.max(1, v - 1))}
-              disabled={qty <= 1}
-              className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-              aria-label="Kurangi"
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
             >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            <span className="w-7 text-center text-sm tabular-nums">{qty}</span>
-            <button
-              type="button"
-              onClick={() => setQty((v) => Math.min(20, v + 1))}
-              disabled={qty >= 20}
-              className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-              aria-label="Tambah"
-            >
-              <Plus className="h-3.5 w-3.5" />
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShoppingCart className="h-4 w-4" />
+              )}
+              Simpan Pesanan · {totalQty} item · {formatIDR(totalPrice)}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={adding}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-          >
-            {adding ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              "Tambah"
-            )}
-          </button>
         </div>
       )}
     </div>

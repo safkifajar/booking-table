@@ -170,20 +170,6 @@ export function SessionView(props: SessionViewProps) {
     () => joinedMembers.find((m) => m.role === "host") ?? joinedMembers[0],
     [joinedMembers]
   );
-  const [staffTargetMemberId, setStaffTargetMemberId] = React.useState<
-    string | null
-  >(hostMember?.id ?? null);
-  // Sync target kalau member list berubah (mis. host pindah)
-  React.useEffect(() => {
-    if (
-      isStaff &&
-      hostMember &&
-      !joinedMembers.find((m) => m.id === staffTargetMemberId)
-    ) {
-      setStaffTargetMemberId(hostMember.id);
-    }
-  }, [isStaff, hostMember, joinedMembers, staffTargetMemberId]);
-
   // Subtotal HARUS sama dgn getOutstandingMap (server): item void TIDAK dihitung.
   // Kalau beda, keputusan lunas/nunggak di sini bisa berbeda dgn RatePage →
   // redirect pingpong /session ⇄ /rate (blink terus saat tutup meja).
@@ -304,9 +290,7 @@ export function SessionView(props: SessionViewProps) {
             sessionId={props.session.id}
             canInteract={canInteract}
             isStaff={isStaff}
-            joinedMembers={joinedMembers}
-            staffTargetMemberId={staffTargetMemberId}
-            setStaffTargetMemberId={setStaffTargetMemberId}
+            hostMemberId={hostMember?.id ?? null}
           />
         )}
         {tab === "bill" && (
@@ -941,17 +925,14 @@ function MenuTab({
   sessionId,
   canInteract,
   isStaff,
-  joinedMembers,
-  staffTargetMemberId,
-  setStaffTargetMemberId,
+  hostMemberId,
 }: {
   menu: MenuPickerCategory[];
   sessionId: string;
   canInteract: boolean;
   isStaff: boolean;
-  joinedMembers: SessionViewProps["members"];
-  staffTargetMemberId: string | null;
-  setStaffTargetMemberId: (id: string) => void;
+  /** Member tujuan atribusi order waiter (default host meja). */
+  hostMemberId: string | null;
 }) {
   if (!canInteract) {
     return (
@@ -962,33 +943,25 @@ function MenuTab({
   }
   return (
     <div className="space-y-3">
-      {isStaff && (
-        <StaffOrderTargetPicker
-          joinedMembers={joinedMembers}
-          targetMemberId={staffTargetMemberId}
-          onChange={setStaffTargetMemberId}
-        />
-      )}
       {isStaff ? (
-        // Waiter/staff: grid menu dgn stepper +/- langsung (tanpa bottom sheet).
+        // Waiter/staff: keranjang — +/- per item, simpan sekali ke meja.
         <StaffMenuGrid
           menu={menu}
-          onAdd={async (menuItemId, quantity) => {
-            if (!staffTargetMemberId) {
-              toast.error("Pilih tamu tujuan order dulu");
+          onSave={async (cart) => {
+            if (!hostMemberId) {
+              toast.error("Meja belum punya host — tak bisa simpan pesanan");
               return;
             }
-            try {
+            // Pesanan waiter masuk ke meja (atribusi ke host), bukan per-orang.
+            for (const line of cart) {
               await addOrderItem({
                 sessionId,
-                menuItemId,
-                quantity,
-                onBehalfOfMemberId: staffTargetMemberId,
+                menuItemId: line.menuItemId,
+                quantity: line.quantity,
+                onBehalfOfMemberId: hostMemberId,
               });
-              toast.success("Pesanan ditambahkan");
-            } catch (err) {
-              toast.error(getActionErrorMessage(err, "Gagal menambah"));
             }
+            toast.success("Pesanan disimpan ke meja");
           }}
         />
       ) : (
@@ -1005,62 +978,6 @@ function MenuTab({
         />
       )}
     </div>
-  );
-}
-
-/**
- * Picker untuk staff: pilih member meja yang jadi target order.
- * Default = host. Display avatar + nama.
- */
-function StaffOrderTargetPicker({
-  joinedMembers,
-  targetMemberId,
-  onChange,
-}: {
-  joinedMembers: SessionViewProps["members"];
-  targetMemberId: string | null;
-  onChange: (id: string) => void;
-}) {
-  if (joinedMembers.length === 0) {
-    return (
-      <Card className="p-3 text-center text-xs text-muted-foreground border-dashed">
-        Belum ada tamu di meja. Tambah tamu dulu.
-      </Card>
-    );
-  }
-  return (
-    <Card className="p-3 border-primary/30 bg-primary/5">
-      <div className="text-[10px] uppercase tracking-wide text-primary mb-2">
-        Pesan untuk
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {joinedMembers.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onChange(m.id)}
-            className={cn(
-              "shrink-0 flex flex-col items-center gap-1 px-3 py-2 rounded-md border transition min-w-[64px]",
-              targetMemberId === m.id
-                ? "border-primary bg-primary/15"
-                : "border-border bg-muted/30 hover:border-primary/50"
-            )}
-          >
-            <Avatar className="h-7 w-7">
-              {m.profile.avatar_url && (
-                <AvatarImage src={m.profile.avatar_url} />
-              )}
-              <AvatarFallback className="text-[10px]">
-                {initials(m.profile.display_name)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-[10px] font-medium truncate max-w-[60px]">
-              {m.profile.display_name}
-            </span>
-          </button>
-        ))}
-      </div>
-    </Card>
   );
 }
 
