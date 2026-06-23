@@ -129,6 +129,8 @@ export interface WaiterSessionItem {
   member_count: number;
   table_capacity: number;
   started_at: string;
+  reservation_at: string | null;
+  reservation_end_at: string | null;
   subtotal: number;
   paid_total: number;
   outstanding: number;
@@ -150,6 +152,8 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       table_capacity: tables.capacity,
     })
     .from(tableSessions)
@@ -229,6 +233,10 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
       member_count: memberMap.get(s.id) ?? 0,
       table_capacity: s.table_capacity,
       started_at: s.started_at.toISOString(),
+      reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
+      reservation_end_at: s.reservation_end_at
+        ? s.reservation_end_at.toISOString()
+        : null,
       subtotal,
       paid_total: paid,
       outstanding: Math.max(0, subtotal - paid),

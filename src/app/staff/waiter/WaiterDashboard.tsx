@@ -45,6 +45,32 @@ type Tab = "queue" | "sessions";
 
 const AUDIO_PREF_KEY = "waiter_audio_enabled";
 
+/** "22 Jun" — tanggal ringkas. */
+function fmtDate(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(iso));
+}
+/** "21:00" — jam:menit. */
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+}
+/**
+ * Label waktu sesi: kalau dari reservasi → "22 Jun · 21:00–23:00".
+ * Walk-in (tanpa reservation) → "22 Jun · 20:36" dari started_at.
+ */
+function sessionWhen(s: WaiterSessionItem): string {
+  if (s.reservation_at) {
+    const end = s.reservation_end_at ? `–${fmtTime(s.reservation_end_at)}` : "";
+    return `${fmtDate(s.reservation_at)} · ${fmtTime(s.reservation_at)}${end}`;
+  }
+  return `${fmtDate(s.started_at)} · ${fmtTime(s.started_at)}`;
+}
+
 export function WaiterDashboard({
   initialQueue,
   initialSessions,
@@ -387,6 +413,14 @@ function QueueItemCard({
 // TAB: SESSIONS (Bantu Pesan)
 // ============================================================
 
+/** Kunci tanggal sesi (reservation_at kalau ada, else started_at) → "YYYY-MM-DD". */
+function sessionDateKey(s: WaiterSessionItem): string {
+  const d = new Date(s.reservation_at ?? s.started_at);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
 function SessionsView({
   sessions,
   onAssist,
@@ -396,6 +430,19 @@ function SessionsView({
   onAssist: (id: string) => Promise<void>;
   joiningSession: string | null;
 }) {
+  const [dateFilter, setDateFilter] = React.useState<string>("all");
+
+  // Tanggal unik (urut) dari sesi, untuk tab filter.
+  const dates = React.useMemo(() => {
+    const set = new Set(sessions.map(sessionDateKey));
+    return Array.from(set).sort();
+  }, [sessions]);
+
+  const filtered =
+    dateFilter === "all"
+      ? sessions
+      : sessions.filter((s) => sessionDateKey(s) === dateFilter);
+
   if (sessions.length === 0) {
     return (
       <Card className="p-12 text-center border-dashed">
@@ -409,16 +456,70 @@ function SessionsView({
   }
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {sessions.map((s) => (
-        <SessionCard
-          key={s.session_id}
-          session={s}
-          onAssist={onAssist}
-          isJoining={joiningSession === s.session_id}
-        />
-      ))}
+    <div className="space-y-3">
+      {/* Tab tanggal — filter sesi per tanggal booking */}
+      {dates.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <DateChip
+            label="Semua"
+            active={dateFilter === "all"}
+            onClick={() => setDateFilter("all")}
+          />
+          {dates.map((d) => (
+            <DateChip
+              key={d}
+              label={fmtDate(d)}
+              active={dateFilter === d}
+              onClick={() => setDateFilter(d)}
+            />
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <p className="text-sm text-muted-foreground">
+            Tidak ada meja di tanggal ini.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {filtered.map((s) => (
+            <SessionCard
+              key={s.session_id}
+              session={s}
+              onAssist={onAssist}
+              isJoining={joiningSession === s.session_id}
+            />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function DateChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition whitespace-nowrap",
+        active
+          ? "border-primary bg-primary/15 text-primary"
+          : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -465,10 +566,10 @@ function SessionCard({
               {session.member_count}/{session.table_capacity}
             </span>
           </div>
-          <RelativeTime
-            date={session.started_at}
-            className="text-[10px] text-muted-foreground mt-0.5 block"
-          />
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+            <Clock className="h-2.5 w-2.5 shrink-0" />
+            <span>{sessionWhen(session)}</span>
+          </div>
         </div>
       </div>
 
