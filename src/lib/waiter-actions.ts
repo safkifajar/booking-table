@@ -30,7 +30,7 @@ import {
   sessionMembers,
   sessionInvites,
 } from "@/lib/db/schema/sessions";
-import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
@@ -39,6 +39,18 @@ import { requirePermission } from "@/lib/auth-v2/permissions";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { generateInviteCode } from "@/lib/utils";
+import {
+  DEFAULT_OPERATING_HOURS,
+  DEFAULT_RESERVATION_CONFIG,
+  type OperatingHours,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
+import {
+  generateAvailableSlots,
+  getBookedSlotIsos,
+  type AvailableSlot,
+  type BookedRange,
+} from "@/lib/reservation-helpers";
 import crypto from "node:crypto";
 
 // ============================================================
@@ -407,6 +419,84 @@ export async function getAvailableTablesForWaiter(): Promise<AvailableTable[]> {
     }));
 }
 
+export interface WaiterReservationData {
+  slots: AvailableSlot[];
+  slotIntervalMinutes: number;
+  bookingWindowDays: number;
+  enabled: boolean;
+  /** ISO slot ter-booking per tableId (utk picker per meja). */
+  bookedByTable: Record<string, string[]>;
+}
+
+/**
+ * Data slot reservasi untuk waiter open table: slot bar + booked per meja.
+ * Picker waiter pilih meja → pakai bookedByTable[tableId].
+ */
+export async function getReservationDataForWaiter(): Promise<WaiterReservationData> {
+  const ctx = await requirePermission("open_table_for_customer", "/staff/waiter");
+
+  const [barRow] = await db
+    .select({
+      opening_hours: bars.openingHours,
+      reservation_config: bars.reservationConfig,
+    })
+    .from(bars)
+    .where(eq(bars.id, ctx.barId));
+
+  const opHours: OperatingHours = {
+    ...DEFAULT_OPERATING_HOURS,
+    ...((barRow?.opening_hours as OperatingHours) ?? {}),
+  };
+  const resConfig: ReservationConfig = {
+    ...DEFAULT_RESERVATION_CONFIG,
+    ...((barRow?.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
+
+  const now = new Date();
+  const slots = resConfig.enabled
+    ? generateAvailableSlots(now, resConfig, opHours)
+    : [];
+
+  const bookedByTable: Record<string, string[]> = {};
+  if (resConfig.enabled && slots.length > 0) {
+    // Reservasi aktif (reserved/open/locked) seluruh meja di bar.
+    const rows = await db
+      .select({
+        tableId: tableSessions.tableId,
+        startAt: tableSessions.reservationAt,
+        endAt: tableSessions.reservationEndAt,
+      })
+      .from(tableSessions)
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+      .where(
+        and(
+          eq(floorAreas.barId, ctx.barId),
+          inArray(tableSessions.status, ["reserved", "open", "locked"])
+        )
+      );
+    const rangesByTable: Record<string, BookedRange[]> = {};
+    for (const r of rows) {
+      if (!r.startAt || !r.endAt || r.endAt.getTime() <= now.getTime()) continue;
+      (rangesByTable[r.tableId] ??= []).push({
+        startMs: r.startAt.getTime(),
+        endMs: r.endAt.getTime(),
+      });
+    }
+    for (const [tableId, ranges] of Object.entries(rangesByTable)) {
+      bookedByTable[tableId] = Array.from(getBookedSlotIsos(slots, ranges));
+    }
+  }
+
+  return {
+    slots,
+    slotIntervalMinutes: resConfig.slotIntervalMinutes,
+    bookingWindowDays: resConfig.bookingWindowDays,
+    enabled: resConfig.enabled,
+    bookedByTable,
+  };
+}
+
 /**
  * Waiter buka meja untuk customer walk-in (yang tidak bawa HP).
  *
@@ -431,12 +521,22 @@ export async function getAvailableTablesForWaiter(): Promise<AvailableTable[]> {
  */
 export async function staffOpenTableForCustomer(
   tableId: string,
-  guestNames: string[]
+  guestNames: string[],
+  reservationAt?: string | null,
+  reservationEndAt?: string | null
 ): Promise<void> {
   const ctx = await requirePermission(
     "open_table_for_customer",
     "/staff/waiter"
   );
+
+  // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
+  const resAt = reservationAt ? new Date(reservationAt) : null;
+  const resEnd = reservationEndAt ? new Date(reservationEndAt) : null;
+  if (resAt && resEnd && resEnd.getTime() <= resAt.getTime()) {
+    throw new Error("Jam selesai harus setelah jam mulai");
+  }
+  const isReservation = !!resAt;
 
   // Clean & filter empty names
   const cleanNames = guestNames
@@ -505,12 +605,15 @@ export async function staffOpenTableForCustomer(
         .values({
           tableId,
           hostId: newProfile.id, // Guest = host (yang punya bill)
-          status: "open",
+          // Reservasi (jam ke depan) → "reserved"; walk-in → "open".
+          status: isReservation ? "reserved" : "open",
           visibility: "invite_only",
           title: mainGuest,
           maxGuests: table.capacity,
           openedByStaffId: ctx.profileId, // Audit: waiter yang buka
           guestNames: cleanNames,
+          reservationAt: resAt,
+          reservationEndAt: resEnd,
         })
         .returning({ id: tableSessions.id });
 

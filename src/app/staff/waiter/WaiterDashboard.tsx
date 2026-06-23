@@ -31,13 +31,16 @@ import {
   type WaiterQueueItem,
   type WaiterSessionItem,
   type AvailableTable,
+  type WaiterReservationData,
 } from "@/lib/waiter-actions";
+import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
   initialQueue: WaiterQueueItem[];
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
+  reservationData: WaiterReservationData;
   barId: string;
 }
 
@@ -75,6 +78,7 @@ export function WaiterDashboard({
   initialQueue,
   initialSessions,
   initialAvailableTables,
+  reservationData,
   barId,
 }: Props) {
   const router = useRouter();
@@ -256,6 +260,7 @@ export function WaiterDashboard({
       {openTableModal && (
         <OpenTableModal
           tables={initialAvailableTables}
+          reservationData={reservationData}
           onClose={() => setOpenTableModal(false)}
         />
       )}
@@ -693,9 +698,11 @@ function TabButton({
 
 function OpenTableModal({
   tables,
+  reservationData,
   onClose,
 }: {
   tables: AvailableTable[];
+  reservationData: WaiterReservationData;
   onClose: () => void;
 }) {
   const [guestNames, setGuestNames] = React.useState<string[]>([""]);
@@ -703,6 +710,12 @@ function OpenTableModal({
     null
   );
   const [submitting, setSubmitting] = React.useState(false);
+  // Mode waktu: walk-in (langsung) atau jadwalkan (pilih slot jam).
+  const [scheduled, setScheduled] = React.useState(false);
+  const [slotStart, setSlotStart] = React.useState("");
+  const [slotEnd, setSlotEnd] = React.useState("");
+
+  const reservationEnabled = reservationData.enabled && reservationData.slots.length > 0;
 
   const selectedTable = React.useMemo(
     () => tables.find((t) => t.id === selectedTableId) ?? null,
@@ -748,19 +761,33 @@ function OpenTableModal({
   }
 
   const validNamesCount = guestNames.filter((n) => n.trim().length > 0).length;
+  // Selesai efektif (1 slot kalau baru pilih mulai) — utk kirim reservationEndAt.
+  const slotMs = reservationData.slotIntervalMinutes * 60 * 1000;
+  const effectiveEnd =
+    slotEnd || (slotStart ? new Date(new Date(slotStart).getTime() + slotMs).toISOString() : "");
   const canSubmit =
     !submitting &&
     selectedTableId !== null &&
     validNamesCount > 0 &&
-    tables.length > 0;
+    tables.length > 0 &&
+    (!scheduled || !!slotStart); // kalau jadwalkan, wajib pilih jam
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit || !selectedTableId) return;
+    if (scheduled && !slotStart) {
+      toast.error("Pilih jam dulu");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await staffOpenTableForCustomer(selectedTableId, guestNames);
+      await staffOpenTableForCustomer(
+        selectedTableId,
+        guestNames,
+        scheduled ? slotStart : null,
+        scheduled ? effectiveEnd : null
+      );
       // Redirect handled by server action — no toast needed
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
@@ -850,11 +877,62 @@ function OpenTableModal({
               )}
             </div>
 
+            {/* Pilih waktu: walk-in (sekarang) atau jadwalkan jam */}
+            {reservationEnabled && selectedTableId && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  2. Waktu
+                </label>
+                <div className="flex gap-1 rounded-lg bg-muted/40 p-1 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setScheduled(false)}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                      !scheduled
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    Walk-in (sekarang)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScheduled(true)}
+                    className={cn(
+                      "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                      scheduled
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    Jadwalkan jam
+                  </button>
+                </div>
+                {scheduled && (
+                  <SlotRangePicker
+                    slots={reservationData.slots}
+                    bookedSlotIsos={
+                      reservationData.bookedByTable[selectedTableId] ?? []
+                    }
+                    slotIntervalMinutes={reservationData.slotIntervalMinutes}
+                    bookingWindowDays={reservationData.bookingWindowDays}
+                    startIso={slotStart}
+                    endIso={slotEnd}
+                    onChange={(start, end) => {
+                      setSlotStart(start);
+                      setSlotEnd(end);
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
             {/* Daftar nama tamu — disabled kalau belum pilih meja */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  2. Nama tamu di meja
+                  3. Nama tamu di meja
                 </label>
                 {selectedTable && (
                   <span className="text-[10px] text-muted-foreground">

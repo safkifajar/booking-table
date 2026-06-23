@@ -1547,8 +1547,8 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   const profile = await requireProfile();
   const data = paySchema.parse(input);
 
-  // 1. Member + profile lookup (butuh display_name untuk receipt gateway)
-  const [member] = await db
+  // 1. Member + profile lookup (butuh display_name untuk receipt gateway).
+  let [member] = await db
     .select({ id: sessionMembers.id, displayName: profiles.displayName })
     .from(sessionMembers)
     .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
@@ -1558,7 +1558,44 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
         eq(sessionMembers.profileId, profile.id)
       )
     );
-  if (!member) throw new Error("Bukan member meja ini");
+
+  // Payer bukan member → boleh kalau STAFF aktif di bar sesi (waiter terima
+  // pembayaran atas nama meja). Pembayaran diatribusikan ke HOST member.
+  if (!member) {
+    const [sess] = await db
+      .select({ host_id: tableSessions.hostId, bar_id: floorAreas.barId })
+      .from(tableSessions)
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+      .where(eq(tableSessions.id, data.sessionId));
+    if (!sess) throw new Error("Meja tidak ditemukan");
+
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, sess.bar_id),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    if (!staff) throw new Error("Bukan member meja ini");
+
+    // Atribusi ke host member meja.
+    const [hostMember] = await db
+      .select({ id: sessionMembers.id, displayName: profiles.displayName })
+      .from(sessionMembers)
+      .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+      .where(
+        and(
+          eq(sessionMembers.sessionId, data.sessionId),
+          eq(sessionMembers.profileId, sess.host_id)
+        )
+      );
+    if (!hostMember) throw new Error("Host meja tidak ditemukan");
+    member = hostMember;
+  }
 
   // 2. Order untuk dibayar. Normal = order open. Tapi sesi yang sudah closed
   // (force-close / overdue / data lama) order-nya juga closed — tetap boleh
