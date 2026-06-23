@@ -37,8 +37,8 @@ export const tableSessions = pgTable(
     title: text("title"),
     vibeTags: text("vibe_tags").array().notNull().default([]),
     maxGuests: integer("max_guests"),
-    startedAt: timestamp("started_at", { mode: "date" }).notNull().defaultNow(),
-    closedAt: timestamp("closed_at", { mode: "date" }),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
     notes: text("notes"),
     /**
      * Staff yang buka meja ini (untuk walk-in customer tanpa HP).
@@ -57,17 +57,17 @@ export const tableSessions = pgTable(
      * Reservation: kapan booking dimulai. NULL = walk-in immediate.
      * Set + status='reserved' = future booking. Set + status='open' = aktif.
      */
-    reservationAt: timestamp("reservation_at", { mode: "date" }),
+    reservationAt: timestamp("reservation_at", { withTimezone: true, mode: "date" }),
     /**
      * Reservation: kapan booking berakhir. NULL = walk-in. Set bersama
      * reservationAt untuk rentang waktu (mis. 14:00–17:00).
      */
-    reservationEndAt: timestamp("reservation_end_at", { mode: "date" }),
+    reservationEndAt: timestamp("reservation_end_at", { withTimezone: true, mode: "date" }),
     /**
      * Timestamp DP terverify. NULL = no DP required atau belum bayar.
      */
-    dpPaidAt: timestamp("dp_paid_at", { mode: "date" }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    dpPaidAt: timestamp("dp_paid_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     // Hanya 1 session AKTIF (open/locked) per table. Reservasi (reserved) boleh
@@ -113,8 +113,8 @@ export const sessionMembers = pgTable(
     invitedBy: uuid("invited_by").references(() => profiles.id, {
       onDelete: "set null",
     }),
-    joinedAt: timestamp("joined_at", { mode: "date" }).notNull().defaultNow(),
-    leftAt: timestamp("left_at", { mode: "date" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    leftAt: timestamp("left_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
     unique("uq_session_members_session_profile").on(t.sessionId, t.profileId),
@@ -137,12 +137,12 @@ export const sessionInvites = pgTable(
     createdBy: uuid("created_by")
       .notNull()
       .references(() => profiles.id, { onDelete: "restrict" }),
-    expiresAt: timestamp("expires_at", { mode: "date" })
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
       .notNull()
       .default(sql`now() + interval '2 hours'`),
     maxUses: integer("max_uses"),
     useCount: integer("use_count").notNull().default(0),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("idx_invites_session").on(t.sessionId)]
 );

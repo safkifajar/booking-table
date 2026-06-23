@@ -40,8 +40,8 @@ export const stories = pgTable(
     ),
     imageUrl: text("image_url").notNull(),
     caption: text("caption"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    expiresAt: timestamp("expires_at", { mode: "date" })
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
       .notNull()
       .default(sql`now() + interval '24 hours'`),
   },
@@ -68,7 +68,7 @@ export const storyViews = pgTable(
     viewerId: uuid("viewer_id")
       .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),
-    viewedAt: timestamp("viewed_at", { mode: "date" }).notNull().defaultNow(),
+    viewedAt: timestamp("viewed_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.storyId, t.viewerId] }),

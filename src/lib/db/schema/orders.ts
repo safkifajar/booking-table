@@ -32,8 +32,8 @@ export const orders = pgTable(
       .notNull()
       .references(() => tableSessions.id, { onDelete: "cascade" }),
     status: orderStatusEnum("status").notNull().default("open"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    closedAt: timestamp("closed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
     uniqueIndex("uq_open_order_per_session")
@@ -72,8 +72,8 @@ export const orderItems = pgTable(
     notes: text("notes"),
     status: orderItemStatusEnum("status").notNull().default("draft"),
     queueNumber: integer("queue_number"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-    servedAt: timestamp("served_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    servedAt: timestamp("served_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
     check("ck_order_items_quantity_positive", sql`${t.quantity} > 0`),
@@ -104,9 +104,9 @@ export const payments = pgTable(
     status: paymentStatusEnum("status").notNull().default("pending"),
     splitMode: splitModeEnum("split_mode").notNull().default("equal"),
     splitMeta: jsonb("split_meta").default({}).notNull(),
-    paidAt: timestamp("paid_at", { mode: "date" }),
+    paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
     externalRef: text("external_ref"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
     check("ck_payments_amount_positive", sql`${t.amount} > 0`),
