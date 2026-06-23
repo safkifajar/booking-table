@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Search, Minus, Plus, Loader2, ShoppingCart } from "lucide-react";
+import {
+  Search,
+  Minus,
+  Plus,
+  Loader2,
+  ShoppingCart,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
@@ -26,6 +34,7 @@ export function StaffMenuGrid({
   const [query, setQuery] = React.useState("");
   const [cart, setCart] = React.useState<Record<string, number>>({});
   const [saving, setSaving] = React.useState(false);
+  const [cartOpen, setCartOpen] = React.useState(false);
 
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
@@ -75,6 +84,7 @@ export function StaffMenuGrid({
     try {
       await onSave(cartLines);
       setCart({}); // kosongkan keranjang setelah tersimpan
+      setCartOpen(false);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal simpan pesanan"));
     } finally {
@@ -164,10 +174,59 @@ export function StaffMenuGrid({
         </div>
       ))}
 
-      {/* Bar keranjang sticky — Simpan Pesanan */}
+      {/* Bar keranjang sticky — Lihat pesanan (expand) + Simpan Pesanan */}
       {totalQty > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 space-y-2">
+            {/* Tombol toggle lihat ordernan */}
+            <button
+              type="button"
+              onClick={() => setCartOpen((v) => !v)}
+              className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition"
+            >
+              <span className="font-medium">
+                {cartOpen ? "Sembunyikan" : "Lihat"} pesanan ({totalQty} item)
+              </span>
+              {cartOpen ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </button>
+
+            {/* Panel ringkasan keranjang (expand) */}
+            {cartOpen && (
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-card/60 divide-y divide-border">
+                {cartLines.map((l) => {
+                  const info = itemMap.get(l.menuItemId);
+                  return (
+                    <div
+                      key={l.menuItemId}
+                      className="flex items-center gap-2 px-3 py-2 text-sm"
+                    >
+                      <span className="w-6 text-center text-xs font-semibold text-primary tabular-nums shrink-0">
+                        {l.quantity}×
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">
+                        {info?.name ?? "—"}
+                      </span>
+                      <span className="text-xs tabular-nums text-muted-foreground shrink-0">
+                        {formatIDR(l.quantity * (info?.price ?? 0))}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => dec(l.menuItemId)}
+                        className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0"
+                        aria-label="Kurangi"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleSave}
