@@ -177,7 +177,7 @@ export function WaiterDashboard({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       {/* Tab strip + audio toggle */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border">
@@ -217,24 +217,6 @@ export function WaiterDashboard({
         </Button>
       </div>
 
-      {/* Tombol "Buka Meja Baru" — prominent action untuk walk-in customer */}
-      <Button
-        type="button"
-        variant="gold"
-        size="lg"
-        className="w-full"
-        onClick={() => setOpenTableModal(true)}
-        disabled={initialAvailableTables.length === 0}
-      >
-        <UserPlus className="h-4 w-4" />
-        Buka Meja Baru untuk Tamu
-        {initialAvailableTables.length > 0 && (
-          <span className="ml-1 text-xs opacity-70">
-            ({initialAvailableTables.length} meja kosong)
-          </span>
-        )}
-      </Button>
-
       {tab === "queue" ? (
         <QueueView
           items={visibleQueue}
@@ -248,6 +230,28 @@ export function WaiterDashboard({
           joiningSession={joiningSession}
         />
       )}
+
+      {/* Tombol "Buka Meja Baru" — sticky di bawah */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
+          <Button
+            type="button"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            onClick={() => setOpenTableModal(true)}
+            disabled={initialAvailableTables.length === 0}
+          >
+            <UserPlus className="h-4 w-4" />
+            Buka Meja Baru untuk Tamu
+            {initialAvailableTables.length > 0 && (
+              <span className="ml-1 text-xs opacity-70">
+                ({initialAvailableTables.length} meja kosong)
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
 
       {openTableModal && (
         <OpenTableModal
