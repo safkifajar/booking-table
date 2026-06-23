@@ -378,6 +378,78 @@ export async function updateStaffRole(
 }
 
 // ============================================================
+// UPDATE STAFF (nama + email + role) — dialog Edit Staff
+// ============================================================
+
+const updateStaffSchema = z.object({
+  staffRoleId: z.string().uuid(),
+  displayName: z.string().min(1, "Nama wajib diisi").max(80),
+  email: z.string().email("Email tidak valid").max(120),
+  role: z.enum(["waiter", "cashier", "manager", "admin"]),
+});
+
+/**
+ * Edit data staff: nama, email, dan role sekaligus. Nama disimpan ganda
+ * (users.name + profiles.displayName) konsisten dgn inviteStaff. Email unik
+ * (kecuali milik sendiri). Role diri sendiri tidak boleh diubah (cegah admin
+ * mengunci diri).
+ */
+export async function updateStaff(
+  input: z.infer<typeof updateStaffSchema>
+): Promise<void> {
+  const ctx = await requirePermission("manage_staff", "/admin/staff");
+  const data = updateStaffSchema.parse(input);
+  const email = data.email.trim().toLowerCase();
+  const displayName = data.displayName.trim();
+
+  const [existing] = await db
+    .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
+    .from(staffRoles)
+    .where(eq(staffRoles.id, data.staffRoleId));
+  if (!existing) throw new Error("Staff role tidak ditemukan");
+  if (existing.barId !== ctx.barId) {
+    throw new Error("Tidak ada akses ke staff role di bar lain");
+  }
+  const isSelf = existing.profileId === ctx.profileId;
+  if (isSelf && data.role !== undefined) {
+    // Role diri sendiri tidak boleh diubah; nama/email tetap boleh.
+    const [me] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(eq(staffRoles.id, data.staffRoleId));
+    if (me && me.role !== data.role) {
+      throw new Error("Tidak bisa ubah role diri sendiri");
+    }
+  }
+
+  // Email unik kecuali milik user ini sendiri.
+  const [dupe] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, email), sql`${users.id} <> ${existing.profileId}`));
+  if (dupe) throw new Error("Email sudah dipakai akun lain");
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({ email, name: displayName })
+      .where(eq(users.id, existing.profileId));
+    await tx
+      .update(profiles)
+      .set({ displayName })
+      .where(eq(profiles.id, existing.profileId));
+    if (!isSelf) {
+      await tx
+        .update(staffRoles)
+        .set({ role: data.role })
+        .where(eq(staffRoles.id, data.staffRoleId));
+    }
+  });
+
+  revalidatePath("/admin/staff");
+}
+
+// ============================================================
 // TOGGLE ACTIVE
 // ============================================================
 

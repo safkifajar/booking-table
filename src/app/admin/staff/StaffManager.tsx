@@ -19,15 +19,24 @@ import {
   CheckCircle2,
   MessageCircle,
   Link as LinkIcon,
+  Pencil,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   inviteStaff,
   updateStaffRole,
+  updateStaff,
   toggleStaffActive,
   resendInvite,
   type AdminStaffRow,
@@ -85,6 +94,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
   const [resending, setResending] = React.useState<string | null>(null);
   const [togglingId, setTogglingId] = React.useState<string | null>(null);
   const [changingRoleId, setChangingRoleId] = React.useState<string | null>(null);
+  const [editTarget, setEditTarget] = React.useState<AdminStaffRow | null>(null);
   const [inviteSuccess, setInviteSuccess] =
     React.useState<InviteSuccessInfo | null>(null);
   const confirm = useConfirm();
@@ -243,6 +253,14 @@ export function StaffManager({ barId, initialStaff }: Props) {
 
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditTarget(row)}
+                          title="Edit staff"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
                         {!row.hasPassword && (
                           <Button
                             variant="ghost"
@@ -330,6 +348,19 @@ export function StaffManager({ barId, initialStaff }: Props) {
         <InviteSuccessModal
           info={inviteSuccess}
           onClose={() => setInviteSuccess(null)}
+        />
+      )}
+
+      {editTarget && (
+        <EditStaffModal
+          row={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={(updated) => {
+            setStaff((arr) =>
+              arr.map((s) => (s.id === updated.id ? updated : s))
+            );
+            setEditTarget(null);
+          }}
         />
       )}
     </>
@@ -727,5 +758,115 @@ function InviteStaffModal({
         </form>
       </Card>
     </div>
+  );
+}
+
+// ============================================================
+// EDIT STAFF MODAL — ubah nama, email, role (pola dialog Customer)
+// ============================================================
+
+function EditStaffModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: AdminStaffRow;
+  onClose: () => void;
+  onSaved: (updated: AdminStaffRow) => void;
+}) {
+  const [displayName, setDisplayName] = React.useState(row.displayName);
+  const [email, setEmail] = React.useState(row.email);
+  const [role, setRole] = React.useState<Role>(row.role as Role);
+  const [saving, setSaving] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateStaff({
+        staffRoleId: row.id,
+        displayName: displayName.trim(),
+        email: email.trim(),
+        role,
+      });
+      toast.success("Data staff diperbarui");
+      onSaved({ ...row, displayName: displayName.trim(), email: email.trim(), role });
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal memperbarui staff"));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Staff</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Nama
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              maxLength={80}
+              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              maxLength={120}
+              className="w-full rounded-lg border border-border bg-input px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-2 block">
+              Role
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["waiter", "cashier", "manager", "admin"] as Role[]).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-left transition",
+                    role === r
+                      ? ROLE_META[r].color
+                      : "border-border text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {ROLE_META[r].icon}
+                  {ROLE_META[r].label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5">
+              {ROLE_META[role].description}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
