@@ -11,12 +11,11 @@ interface Props {
   totalRevenue: number;
 }
 
-const PAGE_SIZE = 20;
-
 export function ItemsList({ items, totalRevenue }: Props) {
   const [query, setQuery] = React.useState("");
   const [activeCategory, setActiveCategory] = React.useState<string | "all">("all");
   const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // Unique categories dari data
   const categories = React.useMemo(() => {
@@ -39,10 +38,10 @@ export function ItemsList({ items, totalRevenue }: Props) {
     });
   }, [items, query, activeCategory]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
-  const start = safePage * PAGE_SIZE;
-  const pageItems = filtered.slice(start, start + PAGE_SIZE);
+  const start = safePage * pageSize;
+  const pageItems = filtered.slice(start, start + pageSize);
 
   // Hitung rank global biar konsisten (#1 = paling laris keseluruhan, bukan di page)
   // Items prop sudah pre-sorted by rank, jadi index global == rank-1.
@@ -52,10 +51,10 @@ export function ItemsList({ items, totalRevenue }: Props) {
     return m;
   }, [items]);
 
-  // Reset ke page 0 saat filter berubah
+  // Reset ke page 0 saat filter / pageSize berubah
   React.useEffect(() => {
     setPage(0);
-  }, [query, activeCategory]);
+  }, [query, activeCategory, pageSize]);
 
   return (
     <div className="space-y-3">
@@ -116,17 +115,32 @@ export function ItemsList({ items, totalRevenue }: Props) {
         rankMap={rankMap}
       />
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
-          <Pagination
-            page={safePage}
-            totalPages={totalPages}
-            onChange={(p) => {
-              setPage(p);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
+      {/* Pagination — gaya seragam dgn admin lain */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-3 border-t border-border">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Per halaman:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </label>
+          {totalPages > 1 && (
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              onChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          )}
         </div>
       )}
     </div>
