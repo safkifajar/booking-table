@@ -16,6 +16,7 @@
 
 import { redirect } from "next/navigation";
 import { and, eq, sql, desc } from "drizzle-orm";
+import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -435,6 +436,81 @@ export async function getPayments(
     table_label: r.table_label,
     area_name: r.area_name,
   }));
+}
+
+/** Detail satu pembayaran (halaman /admin/payments/[id]). */
+export interface AdminPaymentDetail {
+  id: string;
+  amount: number;
+  method: string;
+  status: string;
+  split_mode: string;
+  external_ref: string | null;
+  created_at: string;
+  paid_at: string | null;
+  paid_by_name: string;
+  /** Konteks transaksi meja terkait (untuk link ke detail transaksi). */
+  session_id: string;
+  session_title: string | null;
+  table_label: string;
+  area_name: string;
+  host_name: string;
+}
+
+/**
+ * Detail satu pembayaran by id (scoped ke bar). Null kalau tak ada / beda bar.
+ * Host di-join via alias profiles kedua (tableSessions.hostId).
+ */
+export async function getPaymentDetail(
+  barId: string,
+  paymentId: string
+): Promise<AdminPaymentDetail | null> {
+  const hostProfiles = aliasedTable(profiles, "host_profiles");
+  const [row] = await db
+    .select({
+      id: payments.id,
+      amount: payments.amount,
+      method: payments.method,
+      status: payments.status,
+      split_mode: payments.splitMode,
+      external_ref: payments.externalRef,
+      created_at: payments.createdAt,
+      paid_at: payments.paidAt,
+      paid_by_name: profiles.displayName,
+      session_id: tableSessions.id,
+      session_title: tableSessions.title,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      host_name: hostProfiles.displayName,
+      bar_id: floorAreas.barId,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .innerJoin(hostProfiles, eq(hostProfiles.id, tableSessions.hostId))
+    .where(and(eq(payments.id, paymentId), eq(floorAreas.barId, barId)));
+
+  if (!row) return null;
+  return {
+    id: row.id,
+    amount: Number(row.amount),
+    method: row.method,
+    status: row.status,
+    split_mode: row.split_mode,
+    external_ref: row.external_ref,
+    created_at: row.created_at.toISOString(),
+    paid_at: row.paid_at ? row.paid_at.toISOString() : null,
+    paid_by_name: row.paid_by_name,
+    session_id: row.session_id,
+    session_title: row.session_title,
+    table_label: row.table_label,
+    area_name: row.area_name,
+    host_name: row.host_name,
+  };
 }
 
 // ============================================================

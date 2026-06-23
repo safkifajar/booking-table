@@ -129,7 +129,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
             {pageItems.map((p) => (
               <Link
                 key={p.id}
-                href={`/admin/transactions/${p.session_id}`}
+                href={`/admin/payments/${p.id}`}
                 className="block group hover:bg-muted/30 transition"
               >
                 {/* Desktop row */}
