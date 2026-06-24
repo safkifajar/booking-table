@@ -427,7 +427,7 @@ function CustomerFormDialog({
                     : "border-red-500/30 bg-red-500/10 text-red-400"
                 )}
               >
-                <span>{isActive ? "Aktif" : "Nonaktif (tak bisa login)"}</span>
+                <span>{isActive ? "Aktif" : "Nonaktif"}</span>
                 <span className="text-xs opacity-70">
                   {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
                 </span>
