@@ -15,6 +15,7 @@ import {
   Users,
   UserCircle,
   LayoutGrid,
+  QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +89,12 @@ const NAV: NavItem[] = [
         href: "/admin/floor",
         label: "Kelola Denah",
         icon: <LayoutGrid className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/qr",
+        label: "QR Meja",
+        icon: <QrCode className="h-4 w-4" />,
       },
     ],
   },

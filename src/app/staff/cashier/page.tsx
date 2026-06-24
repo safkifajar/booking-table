@@ -12,7 +12,7 @@ import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import { eq } from "drizzle-orm";
-import { Wallet, QrCode, FileText } from "lucide-react";
+import { Wallet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { CashierSessionList } from "./CashierSessionList";
@@ -71,11 +71,6 @@ export default async function CashierPage() {
             </h1>
           </div>
 
-          <Button asChild variant="outline" size="sm" className="hidden sm:inline-flex">
-            <Link href="/staff/qr">
-              <QrCode className="h-4 w-4" /> QR
-            </Link>
-          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/staff/cashier/shift">
               <FileText className="h-4 w-4" />

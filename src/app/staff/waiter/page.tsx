@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
@@ -12,8 +11,7 @@ import {
   getReservationDataForWaiter,
   getBookingsForWaiter,
 } from "@/lib/waiter-actions";
-import { Button } from "@/components/ui/button";
-import { ChefHat, QrCode } from "lucide-react";
+import { ChefHat } from "lucide-react";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { WaiterDashboard } from "./WaiterDashboard";
 
@@ -74,16 +72,6 @@ export default async function StaffWaiterPage() {
               {bar.name}
             </h1>
           </div>
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="hidden sm:inline-flex"
-          >
-            <Link href="/staff/qr">
-              <QrCode className="h-4 w-4" /> QR
-            </Link>
-          </Button>
           {profile && (
             <AdminHeaderProfile
               displayName={profile.displayName}
