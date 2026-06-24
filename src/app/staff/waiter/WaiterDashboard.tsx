@@ -15,7 +15,6 @@ import {
   Plus,
   Clock,
   CalendarClock,
-  Sparkles,
   Loader2,
   UserPlus,
   X,
@@ -760,20 +759,13 @@ function SessionCard({
           </div>
         )}
 
-        {/* Petunjuk: kartu bisa diklik untuk bantu pesan (tanpa tombol) */}
-        <div className="flex items-center justify-center gap-1.5 text-xs text-primary pt-1">
-          {isJoining ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Membuka...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-3.5 w-3.5" />
-              Ketuk untuk bantu pesan
-            </>
-          )}
-        </div>
+        {/* Indikator loading saat membuka (kartu diklik = bantu pesan) */}
+        {isJoining && (
+          <div className="flex items-center justify-center gap-1.5 text-xs text-primary pt-1">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Membuka...
+          </div>
+        )}
       </div>
     </Card>
   );
