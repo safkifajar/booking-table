@@ -14,7 +14,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { q, page, size } = await searchParams;
   const pageNum = Math.max(1, Number(page) || 1);
-  const pageSize = [10, 25, 50, 100].includes(Number(size)) ? Number(size) : 20;
+  const pageSize = [10, 25, 50, 100].includes(Number(size)) ? Number(size) : 10;
   const { rows, total } = await listCustomers(q, pageNum, pageSize);
 
   return (

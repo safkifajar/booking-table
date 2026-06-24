@@ -33,6 +33,7 @@ import type {
   ActiveNetworkUser,
   PublicProfile,
   UserTableHistoryEntry,
+  UserReviewEntry,
 } from "@/types/db";
 
 // ============================================================
@@ -886,5 +887,38 @@ export async function getUserTableHistory(
     status: r.status as UserTableHistoryEntry["status"],
     started_at: r.started_at.toISOString(),
     is_host: r.is_host,
+  }));
+}
+
+/**
+ * Review yg DITERIMA user (rateeId) dari rater lain — stars + tags + siapa.
+ * Untuk detail customer admin & profil. Urut terbaru.
+ */
+export async function getReviewsForUser(
+  rateeId: string,
+  limit = 50
+): Promise<UserReviewEntry[]> {
+  const rows = await db
+    .select({
+      id: memberRatings.id,
+      stars: memberRatings.stars,
+      tags: memberRatings.tags,
+      created_at: memberRatings.createdAt,
+      rater_name: profiles.displayName,
+      rater_avatar: profiles.avatarUrl,
+    })
+    .from(memberRatings)
+    .innerJoin(profiles, eq(profiles.id, memberRatings.raterId))
+    .where(eq(memberRatings.rateeId, rateeId))
+    .orderBy(desc(memberRatings.createdAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    stars: r.stars,
+    tags: r.tags,
+    created_at: r.created_at.toISOString(),
+    rater_name: r.rater_name,
+    rater_avatar: r.rater_avatar,
   }));
 }

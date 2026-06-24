@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -69,7 +70,7 @@ export function CustomerManager({
     const s = next.size ?? pageSize;
     if (q.trim()) params.set("q", q.trim());
     if (p > 1) params.set("page", String(p));
-    if (s !== 20) params.set("size", String(s));
+    if (s !== 10) params.set("size", String(s));
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
@@ -154,25 +155,32 @@ export function CustomerManager({
         <Card className="divide-y divide-border">
           {initialRows.map((r) => (
             <div key={r.id} className="flex items-center gap-3 p-3 sm:p-4">
-              <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="text-xs">
-                  {initials(r.name)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{r.name}</span>
-                  {r.visit_count > 0 && (
-                    <Badge variant="secondary" className="text-[10px]">
-                      {r.visit_count}× kunjungan
-                    </Badge>
-                  )}
+              <Link
+                href={`/admin/users/${r.id}`}
+                className="flex items-center gap-3 flex-1 min-w-0 group"
+              >
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarFallback className="text-xs">
+                    {initials(r.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate group-hover:text-primary transition">
+                      {r.name}
+                    </span>
+                    {r.visit_count > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {r.visit_count}× kunjungan
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {r.email}
+                    {r.phone ? ` · ${r.phone}` : ""}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground truncate">
-                  {r.email}
-                  {r.phone ? ` · ${r.phone}` : ""}
-                </p>
-              </div>
+              </Link>
               <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"

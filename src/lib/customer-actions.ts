@@ -48,7 +48,7 @@ export interface ListCustomersResult {
   total: number;
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 /**
  * List customer (non-staff). Search by nama/email. Pagination.

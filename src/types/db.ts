@@ -238,6 +238,16 @@ export interface NetworkMembersPage {
   next_cursor: string | null;
 }
 
+/** Satu review yg DITERIMA user dari rater lain (untuk detail customer admin). */
+export interface UserReviewEntry {
+  id: string;
+  stars: number;
+  tags: string[];
+  created_at: string;
+  rater_name: string;
+  rater_avatar: string | null;
+}
+
 /** Satu entri riwayat meja user (untuk profil publik). */
 export interface UserTableHistoryEntry {
   session_id: string;
