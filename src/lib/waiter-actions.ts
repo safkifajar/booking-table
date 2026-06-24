@@ -474,35 +474,29 @@ export interface AvailableTable {
 export async function getAvailableTablesForWaiter(): Promise<AvailableTable[]> {
   const ctx = await requirePermission("open_table_for_customer", "/staff/waiter");
 
-  // Sub-query: meja yang sedang ada session aktif (open / locked)
-  const occupiedTableIds = await db
-    .select({ table_id: tableSessions.tableId })
-    .from(tableSessions)
-    .where(inArray(tableSessions.status, ["open", "locked", "overdue"]));
-
-  const occupiedSet = new Set(occupiedTableIds.map((r) => r.table_id));
-
+  // TAMPILKAN SEMUA meja aktif (tidak meng-exclude meja yg sedang dipakai).
+  // Satu meja bisa sedang punya sesi aktif TAPI masih punya slot jam lain yg
+  // bebas (mis. open 19:00–21:00, tapi 22:00 ke atas kosong). Slot mana yg
+  // booked ditentukan PER-JAM oleh picker (getReservationDataForWaiter →
+  // bookedByTable), bukan dgn menyembunyikan mejanya.
   const rows = await db
     .select({
       id: tables.id,
       label: tables.label,
       area_name: floorAreas.name,
       capacity: tables.capacity,
-      area_sort: floorAreas.sortOrder,
     })
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(and(eq(floorAreas.barId, ctx.barId), eq(tables.isActive, true)))
     .orderBy(asc(floorAreas.sortOrder), asc(tables.label));
 
-  return rows
-    .filter((r) => !occupiedSet.has(r.id))
-    .map((r) => ({
-      id: r.id,
-      label: r.label,
-      area_name: r.area_name,
-      capacity: r.capacity,
-    }));
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    area_name: r.area_name,
+    capacity: r.capacity,
+  }));
 }
 
 export interface WaiterReservationData {
