@@ -170,14 +170,17 @@ export function CustomerManager({
                     <span className="text-sm font-medium truncate group-hover:text-primary transition">
                       {r.name}
                     </span>
-                    {!r.is_active && (
-                      <Badge
-                        variant="secondary"
-                        className="text-[10px] bg-red-500/15 text-red-400 border-red-500/30"
-                      >
-                        Nonaktif
-                      </Badge>
-                    )}
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "text-[10px]",
+                        r.is_active
+                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                          : "bg-red-500/15 text-red-400 border-red-500/30"
+                      )}
+                    >
+                      {r.is_active ? "Aktif" : "Nonaktif"}
+                    </Badge>
                     {r.rating_count > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] text-primary">
                         <Star className="h-3 w-3 fill-primary" />
