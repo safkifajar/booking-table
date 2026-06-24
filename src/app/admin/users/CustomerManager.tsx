@@ -32,12 +32,11 @@ import {
   type AdminCustomerRow,
 } from "@/lib/customer-actions";
 
-const PAGE_SIZE = 20;
-
 interface Props {
   initialRows: AdminCustomerRow[];
   total: number;
   page: number;
+  pageSize: number;
   query: string;
 }
 
@@ -46,7 +45,13 @@ type EditTarget =
   | { mode: "edit"; row: AdminCustomerRow }
   | null;
 
-export function CustomerManager({ initialRows, total, page, query }: Props) {
+export function CustomerManager({
+  initialRows,
+  total,
+  page,
+  pageSize,
+  query,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const confirm = useConfirm();
@@ -55,14 +60,16 @@ export function CustomerManager({ initialRows, total, page, query }: Props) {
   const [editTarget, setEditTarget] = React.useState<EditTarget>(null);
   const [deleting, setDeleting] = React.useState<string | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  function pushParams(next: { q?: string; page?: number }) {
+  function pushParams(next: { q?: string; page?: number; size?: number }) {
     const params = new URLSearchParams();
     const q = next.q ?? search;
     const p = next.page ?? page;
+    const s = next.size ?? pageSize;
     if (q.trim()) params.set("q", q.trim());
     if (p > 1) params.set("page", String(p));
+    if (s !== 20) params.set("size", String(s));
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }
@@ -195,18 +202,29 @@ export function CustomerManager({ initialRows, total, page, query }: Props) {
       )}
 
       {/* Pagination — gaya seragam dgn admin lain (komponen page 0-based) */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
-          <span className="text-xs text-muted-foreground">
-            {total} customer · hal {page}/{totalPages}
-          </span>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Per halaman:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => pushParams({ size: Number(e.target.value), page: 1 })}
+            className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="ml-1 hidden sm:inline">· {total} customer</span>
+        </label>
+        {totalPages > 1 && (
           <Pagination
             page={page - 1}
             totalPages={totalPages}
             onChange={(p) => pushParams({ page: p + 1 })}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {editTarget && (
         <CustomerFormDialog

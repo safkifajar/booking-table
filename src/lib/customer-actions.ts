@@ -56,10 +56,13 @@ const PAGE_SIZE = 20;
  */
 export async function listCustomers(
   searchRaw?: string,
-  page = 1
+  page = 1,
+  pageSize = PAGE_SIZE
 ): Promise<ListCustomersResult> {
   await requireAdmin();
   const search = (searchRaw ?? "").trim();
+  // Clamp pageSize ke opsi valid (cegah abuse).
+  const size = [10, 25, 50, 100].includes(pageSize) ? pageSize : PAGE_SIZE;
 
   // Subquery: profileId yang punya staff_role (untuk di-exclude).
   const staffIds = db
@@ -103,8 +106,8 @@ export async function listCustomers(
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
       .where(whereClause)
       .orderBy(desc(profiles.createdAt))
-      .limit(PAGE_SIZE)
-      .offset((Math.max(1, page) - 1) * PAGE_SIZE),
+      .limit(size)
+      .offset((Math.max(1, page) - 1) * size),
     db
       .select({ total: count() })
       .from(users)

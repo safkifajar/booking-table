@@ -7,14 +7,15 @@ import { CustomerManager } from "./CustomerManager";
  * List + tambah + edit + hapus customer. Search + pagination.
  */
 interface PageProps {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; size?: string }>;
 }
 
 export default async function AdminUsersPage({ searchParams }: PageProps) {
   await requireAdmin();
-  const { q, page } = await searchParams;
+  const { q, page, size } = await searchParams;
   const pageNum = Math.max(1, Number(page) || 1);
-  const { rows, total } = await listCustomers(q, pageNum);
+  const pageSize = [10, 25, 50, 100].includes(Number(size)) ? Number(size) : 20;
+  const { rows, total } = await listCustomers(q, pageNum, pageSize);
 
   return (
     <div className="space-y-6">
@@ -30,6 +31,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
         initialRows={rows}
         total={total}
         page={pageNum}
+        pageSize={pageSize}
         query={q ?? ""}
       />
     </div>
