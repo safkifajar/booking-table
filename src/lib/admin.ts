@@ -22,6 +22,7 @@ import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
+import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { requireAdmin as requireAdminAuth } from "@/lib/auth-v2/current";
 import type { PaymentMethod } from "@/types/db";
@@ -545,6 +546,8 @@ export interface TransactionDetailMember {
   role: string;
   status: string;
   is_guest: boolean;
+  /** Punya akun user (bisa login) → punya halaman detail customer. */
+  has_account: boolean;
 }
 
 export interface TransactionDetail {
@@ -659,9 +662,11 @@ export async function getTransactionDetail(
       role: sessionMembers.role,
       status: sessionMembers.status,
       is_guest: profiles.isGuest,
+      has_account: sql<boolean>`${users.id} IS NOT NULL`,
     })
     .from(sessionMembers)
     .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .leftJoin(users, eq(users.id, profiles.id))
     .where(eq(sessionMembers.sessionId, sessionId));
 
   const members: TransactionDetailMember[] = membersRaw
@@ -672,6 +677,7 @@ export async function getTransactionDetail(
       role: m.role,
       status: m.status,
       is_guest: m.is_guest,
+      has_account: m.has_account,
     }))
     .sort((a, b) => {
       // Host paling atas, lalu joined sebelum left/kicked.

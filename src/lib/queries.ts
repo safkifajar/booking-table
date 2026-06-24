@@ -778,7 +778,9 @@ async function getVisitCount(profileId: string): Promise<number> {
  * via caller (atau biarkan — profil tetap publik). Null kalau user guest/not found.
  */
 export async function getPublicProfile(
-  userId: string
+  userId: string,
+  // Admin boleh lihat profil siapa pun (termasuk is_guest); /network tidak.
+  opts?: { allowGuest?: boolean }
 ): Promise<PublicProfile | null> {
   const [p] = await db
     .select({
@@ -793,7 +795,8 @@ export async function getPublicProfile(
     })
     .from(profiles)
     .where(eq(profiles.id, userId));
-  if (!p || p.is_guest) return null;
+  if (!p) return null;
+  if (p.is_guest && !opts?.allowGuest) return null;
 
   const [rating, visit_count, active] = await Promise.all([
     getUserRating(userId),

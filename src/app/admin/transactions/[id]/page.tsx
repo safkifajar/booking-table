@@ -175,15 +175,8 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     </div>
                   </>
                 );
-                // Guest tak punya akun customer → tak bisa di-link.
-                return m.is_guest ? (
-                  <div
-                    key={m.profile_id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5"
-                  >
-                    {inner}
-                  </div>
-                ) : (
+                // Hanya yg punya akun (bisa login) yg punya halaman detail customer.
+                return m.has_account ? (
                   <Link
                     key={m.profile_id}
                     href={`/admin/users/${m.profile_id}`}
@@ -192,6 +185,13 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     {inner}
                     <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
                   </Link>
+                ) : (
+                  <div
+                    key={m.profile_id}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5"
+                  >
+                    {inner}
+                  </div>
                 );
               })}
             </div>
