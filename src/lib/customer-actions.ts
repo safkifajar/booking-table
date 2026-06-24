@@ -20,7 +20,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
-import { staffRoles } from "@/lib/db/schema/extras";
+import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
@@ -38,9 +38,13 @@ export interface AdminCustomerRow {
   email: string;
   phone: string | null;
   is_guest: boolean;
+  is_active: boolean;
   created_at: string;
   /** Jumlah session sbg member (kunjungan). */
   visit_count: number;
+  /** Rata-rata rating diterima (0 = belum ada). */
+  rating_avg: number;
+  rating_count: number;
 }
 
 export interface ListCustomersResult {
@@ -90,6 +94,17 @@ export async function listCustomers(
     .groupBy(sessionMembers.profileId)
     .as("visits");
 
+  // Rating subquery (avg + count, dari review yg diterima).
+  const ratingSq = db
+    .select({
+      rateeId: memberRatings.rateeId,
+      avg: sql<number>`ROUND(AVG(${memberRatings.stars})::numeric, 1)`.as("avg"),
+      cnt: count(memberRatings.id).as("cnt"),
+    })
+    .from(memberRatings)
+    .groupBy(memberRatings.rateeId)
+    .as("ratings");
+
   const [rows, totalRow] = await Promise.all([
     db
       .select({
@@ -98,12 +113,16 @@ export async function listCustomers(
         email: users.email,
         phone: profiles.phone,
         is_guest: profiles.isGuest,
+        is_active: profiles.isActive,
         created_at: profiles.createdAt,
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
+        rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
+        rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
       })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.id))
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
+      .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
       .where(whereClause)
       .orderBy(desc(profiles.createdAt))
       .limit(size)
@@ -122,8 +141,11 @@ export async function listCustomers(
       email: r.email,
       phone: r.phone,
       is_guest: r.is_guest,
+      is_active: r.is_active,
       created_at: r.created_at.toISOString(),
       visit_count: Number(r.visit_count),
+      rating_avg: Number(r.rating_avg),
+      rating_count: Number(r.rating_count),
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };
@@ -184,6 +206,8 @@ const updateSchema = z.object({
   phone: z.string().max(20).optional(),
   /** Password baru (opsional) — kalau diisi, reset password customer. */
   password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
+  /** Status aktif. false = tak bisa login. */
+  isActive: z.boolean(),
 });
 
 export async function updateCustomer(input: z.infer<typeof updateSchema>) {
@@ -221,7 +245,11 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
       .where(eq(users.id, data.id));
     await tx
       .update(profiles)
-      .set({ displayName: data.name, phone: data.phone?.trim() || null })
+      .set({
+        displayName: data.name,
+        phone: data.phone?.trim() || null,
+        isActive: data.isActive,
+      })
       .where(eq(profiles.id, data.id));
   });
 

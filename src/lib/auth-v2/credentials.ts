@@ -20,6 +20,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
+import { profiles } from "@/lib/db/schema/profiles";
 import { verifyPassword } from "./password";
 
 const credentialsSchema = z.object({
@@ -67,6 +68,15 @@ export const credentialsProvider = CredentialsProvider({
     // Verify password
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) return null;
+
+    // Akun di-nonaktifkan admin → tolak login.
+    const profile = await db.query.profiles.findFirst({
+      where: eq(profiles.id, user.id),
+      columns: { isActive: true },
+    });
+    if (profile && !profile.isActive) {
+      throw new Error("Akun dinonaktifkan. Hubungi admin.");
+    }
 
     // Return user object — Auth.js akan inject ke JWT lewat callback
     return {

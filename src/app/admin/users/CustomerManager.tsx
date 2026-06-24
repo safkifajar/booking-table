@@ -23,9 +23,10 @@ import {
   Trash2,
   Download,
   Loader2,
+  Star,
 } from "lucide-react";
 import { Pagination } from "@/components/admin/Pagination";
-import { initials, getActionErrorMessage } from "@/lib/utils";
+import { initials, getActionErrorMessage, cn } from "@/lib/utils";
 import {
   createCustomer,
   updateCustomer,
@@ -165,10 +166,27 @@ export function CustomerManager({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium truncate group-hover:text-primary transition">
                       {r.name}
                     </span>
+                    {!r.is_active && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] bg-red-500/15 text-red-400 border-red-500/30"
+                      >
+                        Nonaktif
+                      </Badge>
+                    )}
+                    {r.rating_count > 0 && (
+                      <span className="inline-flex items-center gap-0.5 text-[11px] text-primary">
+                        <Star className="h-3 w-3 fill-primary" />
+                        {r.rating_avg}
+                        <span className="text-muted-foreground">
+                          ({r.rating_count})
+                        </span>
+                      </span>
+                    )}
                     {r.visit_count > 0 && (
                       <Badge variant="secondary" className="text-[10px]">
                         {r.visit_count}× kunjungan
@@ -265,6 +283,7 @@ function CustomerFormDialog({
   const [phone, setPhone] = React.useState(row?.phone ?? "");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [isActive, setIsActive] = React.useState(row?.is_active ?? true);
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -289,6 +308,7 @@ function CustomerFormDialog({
           email: email.trim(),
           phone: phone.trim() || undefined,
           password: password || undefined,
+          isActive,
         });
         toast.success(
           password ? "Customer & password diperbarui" : "Customer diperbarui"
@@ -390,6 +410,28 @@ function CustomerFormDialog({
               </Field>
             </div>
           )}
+
+          {/* Status aktif (edit) — nonaktif = tak bisa login */}
+          {isEdit && (
+            <Field label="Status akun">
+              <button
+                type="button"
+                onClick={() => setIsActive((v) => !v)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-md border px-3 h-10 text-sm transition",
+                  isActive
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-red-500/30 bg-red-500/10 text-red-400"
+                )}
+              >
+                <span>{isActive ? "Aktif" : "Nonaktif (tak bisa login)"}</span>
+                <span className="text-xs opacity-70">
+                  {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
+                </span>
+              </button>
+            </Field>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Batal

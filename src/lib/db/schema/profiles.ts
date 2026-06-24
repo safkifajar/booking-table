@@ -33,6 +33,8 @@ export const profiles = pgTable(
     bio: text("bio"),
     hobbies: text("hobbies").array().notNull().default([]),
     isGuest: boolean("is_guest").notNull().default(false),
+    /** Akun aktif. False = di-nonaktifkan admin → tidak bisa login. */
+    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("idx_profiles_hobbies").using("gin", t.hobbies)]

@@ -786,6 +786,8 @@ export async function getPublicProfile(
       display_name: profiles.displayName,
       avatar_url: profiles.avatarUrl,
       bio: profiles.bio,
+      phone: profiles.phone,
+      is_active: profiles.isActive,
       hobbies: profiles.hobbies,
       is_guest: profiles.isGuest,
     })
@@ -822,6 +824,8 @@ export async function getPublicProfile(
     display_name: p.display_name,
     avatar_url: p.avatar_url,
     bio: p.bio,
+    phone: p.phone,
+    is_active: p.is_active,
     hobbies: p.hobbies,
     rating,
     visit_count,
