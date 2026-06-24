@@ -171,13 +171,13 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       <span className="text-[11px] text-muted-foreground">
                         {roleLabel}
                         {statusLabel && ` · ${statusLabel}`}
-                        {!m.has_account && " · tanpa akun"}
+                        {!m.is_customer && " · tanpa akun"}
                       </span>
                     </div>
                   </>
                 );
-                // Hanya yg punya akun (bisa login) yg punya halaman detail customer.
-                return m.has_account ? (
+                // Hanya customer terdaftar (bukan guest/staff) yg punya halaman detail.
+                return m.is_customer ? (
                   <Link
                     key={m.profile_id}
                     href={`/admin/users/${m.profile_id}`}
