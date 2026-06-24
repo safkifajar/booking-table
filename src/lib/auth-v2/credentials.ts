@@ -16,12 +16,18 @@
  */
 
 import CredentialsProvider from "next-auth/providers/credentials";
+import { CredentialsSignin } from "next-auth";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { verifyPassword } from "./password";
+
+/** Akun di-nonaktifkan admin. `code` dibawa Auth.js ke error sign-in. */
+class AccountDisabledError extends CredentialsSignin {
+  code = "account_disabled";
+}
 
 const credentialsSchema = z.object({
   email: z.string().email("Email tidak valid"),
@@ -75,7 +81,7 @@ export const credentialsProvider = CredentialsProvider({
       columns: { isActive: true },
     });
     if (profile && !profile.isActive) {
-      throw new Error("Akun dinonaktifkan. Hubungi admin.");
+      throw new AccountDisabledError();
     }
 
     // Return user object — Auth.js akan inject ke JWT lewat callback

@@ -85,7 +85,19 @@ export async function signInAction(formData: {
   } catch (err) {
     if (isRedirectError(err)) throw err;
 
-    // Auth.js wrap credentials failure jadi AuthError dengan type CredentialsSignin
+    // Auth.js wrap credentials failure jadi AuthError dengan type CredentialsSignin.
+    // `code` dari subclass (mis. account_disabled) dibawa di err.code / err.cause.
+    const code =
+      (err as { code?: string })?.code ??
+      (err as { cause?: { err?: { code?: string } } })?.cause?.err?.code;
+    if (code === "account_disabled") {
+      return {
+        ok: false,
+        error:
+          "Status akun Anda tidak aktif. Silakan hubungi admin untuk mengaktifkan akun Anda.",
+      };
+    }
+
     const message = err instanceof Error ? err.message : "";
     if (message.includes("CredentialsSignin") || message.includes("credentials")) {
       return { ok: false, error: "Email atau password salah" };
