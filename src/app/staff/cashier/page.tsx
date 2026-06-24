@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireAnyRole } from "@/lib/auth-v2/permissions";
-import { getActiveSessionsForCashier } from "@/lib/cashier-actions";
+import {
+  getActiveSessionsForCashier,
+  getBookingsForCashier,
+} from "@/lib/cashier-actions";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
@@ -40,7 +43,10 @@ export default async function CashierPage() {
     );
   }
 
-  const sessions = await getActiveSessionsForCashier();
+  const [sessions, bookings] = await Promise.all([
+    getActiveSessionsForCashier(),
+    getBookingsForCashier(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -82,7 +88,11 @@ export default async function CashierPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <CashierSessionList sessions={sessions} barId={ctx.barId} />
+        <CashierSessionList
+          sessions={sessions}
+          bookings={bookings}
+          barId={ctx.barId}
+        />
       </div>
     </main>
   );

@@ -12,17 +12,38 @@ import {
   Crown,
   Wallet,
   Sparkles,
+  Layers,
+  CalendarClock,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { formatIDR, initials, cn } from "@/lib/utils";
-import type { CashierSessionItem } from "@/lib/cashier-actions";
+import type {
+  CashierSessionItem,
+  CashierBookingItem,
+} from "@/lib/cashier-actions";
 
 interface Props {
   sessions: CashierSessionItem[];
+  bookings: CashierBookingItem[];
   barId: string;
+}
+
+type Tab = "active" | "bookings";
+
+function fmtDate(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(iso));
+}
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
 }
 
 /**
@@ -32,9 +53,10 @@ interface Props {
  * `hidden md:block` pattern dengan table sebagai variant. Untuk MVP,
  * card layout cocok di semua screen size karena mobile-first.
  */
-export function CashierSessionList({ sessions, barId }: Props) {
+export function CashierSessionList({ sessions, bookings, barId }: Props) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
+  const [tab, setTab] = React.useState<Tab>("active");
 
   // Realtime: subscribe SSE staff channel
   React.useEffect(() => {
@@ -89,42 +111,215 @@ export function CashierSessionList({ sessions, barId }: Props) {
         />
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari nomor meja, host, atau title..."
-          className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+      {/* Tab: Meja Aktif / Booking */}
+      <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit">
+        <TabButton
+          icon={<Layers className="h-3.5 w-3.5" />}
+          label="Meja Aktif"
+          active={tab === "active"}
+          onClick={() => setTab("active")}
+          badge={sessions.length}
+        />
+        <TabButton
+          icon={<CalendarClock className="h-3.5 w-3.5" />}
+          label="Booking"
+          active={tab === "bookings"}
+          onClick={() => setTab("bookings")}
+          badge={bookings.length}
         />
       </div>
 
-      {/* Session list */}
-      {filtered.length === 0 ? (
-        <Card className="p-12 text-center border-dashed">
-          <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          {sessions.length === 0 ? (
-            <>
-              <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
-              <p className="text-xs text-muted-foreground">
-                Meja akan muncul di sini setelah customer buka session.
-              </p>
-            </>
+      {tab === "active" && (
+        <>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cari nomor meja, host, atau title..."
+              className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+            />
+          </div>
+
+          {/* Session list */}
+          {filtered.length === 0 ? (
+            <Card className="p-12 text-center border-dashed">
+              <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+              {sessions.length === 0 ? (
+                <>
+                  <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
+                  <p className="text-xs text-muted-foreground">
+                    Meja akan muncul di sini setelah customer buka session.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium mb-1">Tidak ada hasil</p>
+                  <p className="text-xs text-muted-foreground">
+                    Coba kata kunci lain.
+                  </p>
+                </>
+              )}
+            </Card>
           ) : (
-            <>
-              <p className="text-sm font-medium mb-1">Tidak ada hasil</p>
-              <p className="text-xs text-muted-foreground">
-                Coba kata kunci lain.
-              </p>
-            </>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {filtered.map((s) => (
+                <SessionCard key={s.session_id} session={s} />
+              ))}
+            </div>
           )}
+        </>
+      )}
+
+      {tab === "bookings" && <BookingsList bookings={bookings} />}
+    </div>
+  );
+}
+
+function TabButton({
+  icon,
+  label,
+  active,
+  onClick,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  badge?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition",
+        active
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 bg-muted text-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// Daftar reservasi terjadwal (status reserved) + filter tanggal.
+function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
+  const [dateFilter, setDateFilter] = React.useState<string>("all");
+
+  const dateKey = (b: CashierBookingItem) => {
+    const d = new Date(b.reservation_at);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  };
+  const dates = React.useMemo(() => {
+    const set = new Set(bookings.map(dateKey));
+    return Array.from(set).sort();
+  }, [bookings]);
+  const filtered =
+    dateFilter === "all"
+      ? bookings
+      : bookings.filter((b) => dateKey(b) === dateFilter);
+
+  if (bookings.length === 0) {
+    return (
+      <Card className="p-12 text-center border-dashed">
+        <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium mb-1">Belum ada booking terjadwal</p>
+        <p className="text-xs text-muted-foreground">
+          Reservasi yang jamnya belum tiba akan muncul di sini.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {dates.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {["all", ...dates].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDateFilter(d)}
+              className={cn(
+                "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition whitespace-nowrap",
+                dateFilter === d
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+              )}
+            >
+              {d === "all" ? "Semua" : fmtDate(d)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <p className="text-sm text-muted-foreground">
+            Tidak ada booking di tanggal ini.
+          </p>
         </Card>
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
-          {filtered.map((s) => (
-            <SessionCard key={s.session_id} session={s} />
+          {filtered.map((b) => (
+            <Link key={b.session_id} href={`/staff/cashier/${b.session_id}`}>
+              <Card className="p-4 hover:border-primary/40 transition">
+                <div className="flex items-start gap-2 mb-2">
+                  <Avatar className="h-9 w-9 shrink-0">
+                    {b.host_avatar && (
+                      <AvatarImage src={b.host_avatar} alt={b.host_name} />
+                    )}
+                    <AvatarFallback className="text-[10px]">
+                      {initials(b.host_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Badge variant="default" className="text-[10px] px-1.5">
+                        {b.table_label}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {b.area_name}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium truncate">
+                      {b.title ?? b.host_name}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                      <span className="inline-flex items-center gap-0.5">
+                        <Crown className="h-2.5 w-2.5" />
+                        {b.host_name}
+                      </span>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Users className="h-2.5 w-2.5" />
+                        {b.member_count}/{b.table_capacity}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-xs text-primary">
+                  <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">
+                    {fmtDate(b.reservation_at)} · {fmtTime(b.reservation_at)}
+                    {b.reservation_end_at && `–${fmtTime(b.reservation_end_at)}`}
+                  </span>
+                </div>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
