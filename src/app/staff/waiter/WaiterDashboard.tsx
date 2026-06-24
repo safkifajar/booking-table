@@ -680,7 +680,13 @@ function SessionCard({
   isJoining: boolean;
 }) {
   return (
-    <Card className="p-4">
+    <Card
+      onClick={() => !isJoining && onAssist(session.session_id)}
+      className={cn(
+        "p-4 cursor-pointer transition hover:border-primary/40 hover:bg-primary/[0.03]",
+        isJoining && "opacity-60 pointer-events-none"
+      )}
+    >
       <div className="flex items-start gap-2 mb-3">
         <Avatar className="h-9 w-9 shrink-0">
           {session.host_avatar && (
@@ -754,14 +760,8 @@ function SessionCard({
           </div>
         )}
 
-        <Button
-          type="button"
-          variant="gold"
-          size="sm"
-          className="w-full"
-          onClick={() => onAssist(session.session_id)}
-          disabled={isJoining}
-        >
+        {/* Petunjuk: kartu bisa diklik untuk bantu pesan (tanpa tombol) */}
+        <div className="flex items-center justify-center gap-1.5 text-xs text-primary pt-1">
           {isJoining ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -770,10 +770,10 @@ function SessionCard({
           ) : (
             <>
               <Sparkles className="h-3.5 w-3.5" />
-              Bantu Pesan
+              Ketuk untuk bantu pesan
             </>
           )}
-        </Button>
+        </div>
       </div>
     </Card>
   );
