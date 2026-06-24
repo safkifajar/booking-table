@@ -203,7 +203,7 @@ export function CashierSessionList({
             disabled={availableTables.length === 0}
           >
             <UserPlus className="h-4 w-4" />
-            Buka Meja Baru untuk Tamu
+            Buka Meja
             {availableTables.length > 0 && (
               <span className="ml-1 text-xs opacity-70">
                 ({availableTables.length} meja kosong)
