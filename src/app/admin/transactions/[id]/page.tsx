@@ -171,6 +171,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       <span className="text-[11px] text-muted-foreground">
                         {roleLabel}
                         {statusLabel && ` · ${statusLabel}`}
+                        {!m.has_account && " · tanpa akun"}
                       </span>
                     </div>
                   </>
@@ -188,7 +189,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 ) : (
                   <div
                     key={m.profile_id}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5"
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5 cursor-default opacity-80"
                   >
                     {inner}
                   </div>
