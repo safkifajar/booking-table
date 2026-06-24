@@ -10,6 +10,7 @@ import {
   getActiveSessionsForWaiter,
   getAvailableTablesForWaiter,
   getReservationDataForWaiter,
+  getBookingsForWaiter,
 } from "@/lib/waiter-actions";
 import { Button } from "@/components/ui/button";
 import { ChefHat, QrCode } from "lucide-react";
@@ -26,20 +27,29 @@ export default async function StaffWaiterPage() {
     "/staff/waiter"
   );
 
-  const [bar, user, profile, queue, sessions, availableTables, reservationData] =
-    await Promise.all([
-      db
-        .select({ id: bars.id, name: bars.name })
-        .from(bars)
-        .where(eq(bars.id, ctx.barId))
-        .then((r) => r[0]),
-      getCurrentUser(),
-      getCurrentProfile(),
-      getOrderQueueForWaiter(),
-      getActiveSessionsForWaiter(),
-      getAvailableTablesForWaiter(),
-      getReservationDataForWaiter(),
-    ]);
+  const [
+    bar,
+    user,
+    profile,
+    queue,
+    sessions,
+    availableTables,
+    reservationData,
+    bookings,
+  ] = await Promise.all([
+    db
+      .select({ id: bars.id, name: bars.name })
+      .from(bars)
+      .where(eq(bars.id, ctx.barId))
+      .then((r) => r[0]),
+    getCurrentUser(),
+    getCurrentProfile(),
+    getOrderQueueForWaiter(),
+    getActiveSessionsForWaiter(),
+    getAvailableTablesForWaiter(),
+    getReservationDataForWaiter(),
+    getBookingsForWaiter(),
+  ]);
 
   if (!bar) {
     return (
@@ -92,6 +102,7 @@ export default async function StaffWaiterPage() {
             initialSessions={sessions}
             initialAvailableTables={availableTables}
             reservationData={reservationData}
+            initialBookings={bookings}
             barId={bar.id}
           />
         </Suspense>

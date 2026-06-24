@@ -14,6 +14,7 @@ import {
   Users,
   Plus,
   Clock,
+  CalendarClock,
   Sparkles,
   Loader2,
   UserPlus,
@@ -32,6 +33,7 @@ import {
   type WaiterSessionItem,
   type AvailableTable,
   type WaiterReservationData,
+  type WaiterBookingItem,
 } from "@/lib/waiter-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
@@ -41,10 +43,11 @@ interface Props {
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
   reservationData: WaiterReservationData;
+  initialBookings: WaiterBookingItem[];
   barId: string;
 }
 
-type Tab = "queue" | "sessions";
+type Tab = "queue" | "sessions" | "bookings";
 
 const AUDIO_PREF_KEY = "waiter_audio_enabled";
 
@@ -79,11 +82,18 @@ export function WaiterDashboard({
   initialSessions,
   initialAvailableTables,
   reservationData,
+  initialBookings,
   barId,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab: Tab = searchParams.get("tab") === "sessions" ? "sessions" : "queue";
+  const tabParam = searchParams.get("tab");
+  const initialTab: Tab =
+    tabParam === "sessions"
+      ? "sessions"
+      : tabParam === "bookings"
+        ? "bookings"
+        : "queue";
   const [tab, setTab] = React.useState<Tab>(initialTab);
   const [audioEnabled, setAudioEnabled] = React.useState(true);
   const [optimistic, setOptimistic] = React.useState<Set<string>>(new Set());
@@ -200,6 +210,13 @@ export function WaiterDashboard({
             onClick={() => setTab("sessions")}
             badge={initialSessions.length}
           />
+          <TabButton
+            icon={<CalendarClock className="h-3.5 w-3.5" />}
+            label="Booking"
+            active={tab === "bookings"}
+            onClick={() => setTab("bookings")}
+            badge={initialBookings.length}
+          />
         </div>
 
         <Button
@@ -221,19 +238,21 @@ export function WaiterDashboard({
         </Button>
       </div>
 
-      {tab === "queue" ? (
+      {tab === "queue" && (
         <QueueView
           items={visibleQueue}
           onMarkServed={handleMarkServed}
           optimisticIds={optimistic}
         />
-      ) : (
+      )}
+      {tab === "sessions" && (
         <SessionsView
           sessions={initialSessions}
           onAssist={handleAssistOrder}
           joiningSession={joiningSession}
         />
       )}
+      {tab === "bookings" && <BookingsView bookings={initialBookings} />}
 
       {/* Tombol "Buka Meja Baru" — sticky di bawah */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
@@ -529,6 +548,126 @@ function DateChip({
     >
       {label}
     </button>
+  );
+}
+
+/** Kunci tanggal booking → "YYYY-MM-DD". */
+function bookingDateKey(b: WaiterBookingItem): string {
+  const d = new Date(b.reservation_at);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+// TAB: BOOKING (reservasi terjadwal)
+function BookingsView({ bookings }: { bookings: WaiterBookingItem[] }) {
+  const [dateFilter, setDateFilter] = React.useState<string>("all");
+
+  const dates = React.useMemo(() => {
+    const set = new Set(bookings.map(bookingDateKey));
+    return Array.from(set).sort();
+  }, [bookings]);
+
+  const filtered =
+    dateFilter === "all"
+      ? bookings
+      : bookings.filter((b) => bookingDateKey(b) === dateFilter);
+
+  if (bookings.length === 0) {
+    return (
+      <Card className="p-12 text-center border-dashed">
+        <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium mb-1">Belum ada booking terjadwal</p>
+        <p className="text-xs text-muted-foreground">
+          Reservasi yang jamnya belum tiba akan muncul di sini.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {dates.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <DateChip
+            label="Semua"
+            active={dateFilter === "all"}
+            onClick={() => setDateFilter("all")}
+          />
+          {dates.map((d) => (
+            <DateChip
+              key={d}
+              label={fmtDate(d)}
+              active={dateFilter === d}
+              onClick={() => setDateFilter(d)}
+            />
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <p className="text-sm text-muted-foreground">
+            Tidak ada booking di tanggal ini.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {filtered.map((b) => (
+            <Link
+              key={b.session_id}
+              href={`/session/${b.session_id}`}
+              className="block"
+            >
+              <Card className="p-4 hover:border-primary/40 transition">
+                <div className="flex items-start gap-2 mb-2">
+                  <Avatar className="h-9 w-9 shrink-0">
+                    {b.host_avatar && (
+                      <AvatarImage src={b.host_avatar} alt={b.host_name} />
+                    )}
+                    <AvatarFallback className="text-[10px]">
+                      {initials(b.host_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Badge variant="default" className="text-[10px] px-1.5">
+                        {b.table_label}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        {b.area_name}
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium truncate">
+                      {b.title ?? b.host_name}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                      <span className="inline-flex items-center gap-0.5">
+                        <Crown className="h-2.5 w-2.5" />
+                        {b.host_name}
+                      </span>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-0.5">
+                        <Users className="h-2.5 w-2.5" />
+                        {b.member_count}/{b.table_capacity}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-xs text-primary">
+                  <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-medium">
+                    {fmtDate(b.reservation_at)} · {fmtTime(b.reservation_at)}
+                    {b.reservation_end_at &&
+                      `–${fmtTime(b.reservation_end_at)}`}
+                  </span>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

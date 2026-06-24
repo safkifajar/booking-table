@@ -259,6 +259,92 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
 }
 
 // ============================================================
+// BOOKINGS (untuk tab "Booking" — reservasi terjadwal, blm mulai)
+// ============================================================
+
+export interface WaiterBookingItem {
+  session_id: string;
+  table_label: string;
+  area_name: string;
+  title: string | null;
+  host_name: string;
+  host_avatar: string | null;
+  member_count: number;
+  table_capacity: number;
+  reservation_at: string;
+  reservation_end_at: string | null;
+}
+
+/**
+ * Daftar reservasi TERJADWAL (status 'reserved', jamnya belum tiba) di bar.
+ * Untuk tab "Booking" waiter — supaya tahu meja apa di-booking jam berapa.
+ * Urut by reservation_at (terdekat dulu).
+ */
+export async function getBookingsForWaiter(): Promise<WaiterBookingItem[]> {
+  const ctx = await requirePermission("view_queue", "/staff/waiter");
+
+  const rows = await db
+    .select({
+      id: tableSessions.id,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      title: tableSessions.title,
+      host_name: profiles.displayName,
+      host_avatar: profiles.avatarUrl,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
+      table_capacity: tables.capacity,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(
+      and(
+        eq(floorAreas.barId, ctx.barId),
+        eq(tableSessions.status, "reserved")
+      )
+    )
+    .orderBy(asc(tableSessions.reservationAt));
+
+  if (rows.length === 0) return [];
+
+  // Member count joined per sesi.
+  const ids = rows.map((r) => r.id);
+  const memberRows = await db
+    .select({
+      session_id: sessionMembers.sessionId,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(sessionMembers)
+    .where(
+      and(
+        inArray(sessionMembers.sessionId, ids),
+        eq(sessionMembers.status, "joined")
+      )
+    )
+    .groupBy(sessionMembers.sessionId);
+  const memberMap = new Map(memberRows.map((m) => [m.session_id, Number(m.count)]));
+
+  return rows.map((r) => ({
+    session_id: r.id,
+    table_label: r.table_label,
+    area_name: r.area_name,
+    title: r.title,
+    host_name: r.host_name,
+    host_avatar: r.host_avatar,
+    member_count: memberMap.get(r.id) ?? 0,
+    table_capacity: r.table_capacity,
+    reservation_at: r.reservation_at
+      ? r.reservation_at.toISOString()
+      : new Date().toISOString(),
+    reservation_end_at: r.reservation_end_at
+      ? r.reservation_end_at.toISOString()
+      : null,
+  }));
+}
+
+// ============================================================
 // MARK SERVED
 // ============================================================
 
