@@ -4,8 +4,9 @@ import { requireAdmin, getTransactionDetail } from "@/lib/admin";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Users } from "lucide-react";
-import { formatIDR } from "@/lib/utils";
+import { ArrowLeft, MapPin, Clock, Users, ChevronRight } from "lucide-react";
+import { formatIDR, initials } from "@/lib/utils";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { InvoicePrintButton } from "./InvoicePrintButton";
 
 interface PageProps {
@@ -31,6 +32,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const host = { display_name: detail.host_name };
   const items = detail.items;
   const payments = detail.payments;
+  const members = detail.members;
   const memberCount = detail.member_count;
   const subtotal = detail.subtotal;
   const totalPaid = detail.total_paid;
@@ -117,6 +119,83 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Daftar anggota meja — klik untuk lihat detail customer (sembunyi saat print) */}
+        <div className="border-t border-border pt-4 print:hidden">
+          <div className="flex items-center gap-1.5 text-sm font-semibold mb-3">
+            <Users className="h-4 w-4" /> Anggota Meja
+            <span className="font-normal text-muted-foreground">
+              ({members.length})
+            </span>
+          </div>
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Belum ada anggota.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {members.map((m) => {
+                const roleLabel =
+                  m.role === "host" ? "Host" : m.is_guest ? "Tamu" : "Member";
+                const statusLabel =
+                  m.status === "joined"
+                    ? null
+                    : m.status === "left"
+                      ? "keluar"
+                      : m.status === "kicked"
+                        ? "dikeluarkan"
+                        : m.status === "pending"
+                          ? "pending"
+                          : m.status;
+                const inner = (
+                  <>
+                    <Avatar className="h-9 w-9 shrink-0">
+                      {m.avatar && <AvatarImage src={m.avatar} />}
+                      <AvatarFallback className="text-xs">
+                        {initials(m.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium truncate">
+                          {m.name}
+                        </span>
+                        {m.role === "host" && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[9px] px-1.5 bg-primary/15 text-primary border-primary/30"
+                          >
+                            Host
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        {roleLabel}
+                        {statusLabel && ` · ${statusLabel}`}
+                      </span>
+                    </div>
+                  </>
+                );
+                // Guest tak punya akun customer → tak bisa di-link.
+                return m.is_guest ? (
+                  <div
+                    key={m.profile_id}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5"
+                  >
+                    {inner}
+                  </div>
+                ) : (
+                  <Link
+                    key={m.profile_id}
+                    href={`/admin/users/${m.profile_id}`}
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-2.5 transition hover:bg-muted/40 group"
+                  >
+                    {inner}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Items table */}

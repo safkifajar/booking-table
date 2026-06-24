@@ -539,6 +539,7 @@ export interface TransactionDetailPayment {
 }
 
 export interface TransactionDetailMember {
+  profile_id: string;
   name: string;
   avatar: string | null;
   role: string;
@@ -652,6 +653,7 @@ export async function getTransactionDetail(
   // 4. Members — daftar lengkap (host dulu, lalu member; yang joined dulu)
   const membersRaw = await db
     .select({
+      profile_id: profiles.id,
       name: profiles.displayName,
       avatar: profiles.avatarUrl,
       role: sessionMembers.role,
@@ -664,6 +666,7 @@ export async function getTransactionDetail(
 
   const members: TransactionDetailMember[] = membersRaw
     .map((m) => ({
+      profile_id: m.profile_id,
       name: m.name,
       avatar: m.avatar,
       role: m.role,
