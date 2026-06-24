@@ -16,18 +16,27 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
+import { UserPlus } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
+import { OpenTableModal } from "@/components/staff/OpenTableModal";
 import type {
   CashierSessionItem,
   CashierBookingItem,
 } from "@/lib/cashier-actions";
+import type {
+  AvailableTable,
+  WaiterReservationData,
+} from "@/lib/waiter-actions";
 
 interface Props {
   sessions: CashierSessionItem[];
   bookings: CashierBookingItem[];
+  availableTables: AvailableTable[];
+  reservationData: WaiterReservationData;
   barId: string;
 }
 
@@ -53,10 +62,17 @@ function fmtTime(iso: string): string {
  * `hidden md:block` pattern dengan table sebagai variant. Untuk MVP,
  * card layout cocok di semua screen size karena mobile-first.
  */
-export function CashierSessionList({ sessions, bookings, barId }: Props) {
+export function CashierSessionList({
+  sessions,
+  bookings,
+  availableTables,
+  reservationData,
+  barId,
+}: Props) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [tab, setTab] = React.useState<Tab>("active");
+  const [openTableModal, setOpenTableModal] = React.useState(false);
 
   // Realtime: subscribe SSE staff channel
   React.useEffect(() => {
@@ -89,7 +105,7 @@ export function CashierSessionList({ sessions, bookings, barId }: Props) {
   const totalPaidPartial = sessions.reduce((s, x) => s + x.paid_total, 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-2">
         <StatCard
@@ -174,6 +190,36 @@ export function CashierSessionList({ sessions, bookings, barId }: Props) {
       )}
 
       {tab === "bookings" && <BookingsList bookings={bookings} />}
+
+      {/* Tombol "Buka Meja Baru" — sticky di bawah */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
+          <Button
+            type="button"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            onClick={() => setOpenTableModal(true)}
+            disabled={availableTables.length === 0}
+          >
+            <UserPlus className="h-4 w-4" />
+            Buka Meja Baru untuk Tamu
+            {availableTables.length > 0 && (
+              <span className="ml-1 text-xs opacity-70">
+                ({availableTables.length} meja kosong)
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {openTableModal && (
+        <OpenTableModal
+          tables={availableTables}
+          reservationData={reservationData}
+          onClose={() => setOpenTableModal(false)}
+        />
+      )}
     </div>
   );
 }
