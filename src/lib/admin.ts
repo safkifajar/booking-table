@@ -119,7 +119,8 @@ export interface PaymentStatusBreakdown {
 
 export interface AdminTransaction {
   session_id: string;
-  closed_at: string;
+  /** null = sesi overdue (belum ditutup). */
+  closed_at: string | null;
   started_at: string;
   duration_minutes: number;
   table_label: string;
@@ -369,7 +370,7 @@ export async function getTransactions(
 ): Promise<AdminTransaction[]> {
   const rows = await callRpc<{
     session_id: string;
-    closed_at: Date | string;
+    closed_at: Date | string | null;
     started_at: Date | string;
     duration_minutes: number;
     table_label: string;
@@ -384,7 +385,13 @@ export async function getTransactions(
 
   return rows.map((r) => ({
     session_id: r.session_id,
-    closed_at: typeof r.closed_at === "string" ? r.closed_at : r.closed_at.toISOString(),
+    // overdue belum ditutup → closed_at null
+    closed_at:
+      r.closed_at == null
+        ? null
+        : typeof r.closed_at === "string"
+          ? r.closed_at
+          : r.closed_at.toISOString(),
     started_at: typeof r.started_at === "string" ? r.started_at : r.started_at.toISOString(),
     duration_minutes: Number(r.duration_minutes),
     table_label: r.table_label,

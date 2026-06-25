@@ -148,13 +148,13 @@ export function TransactionsList({
                 </div>
 
                 <div className="text-[11px] text-muted-foreground tabular-nums">
-                  {new Date(t.closed_at).toLocaleDateString("id-ID", {
+                  {new Date(t.closed_at ?? t.started_at).toLocaleDateString("id-ID", {
                     day: "numeric",
                     month: "short",
                     year: "numeric",
                   })}
                   <span className="block opacity-70">
-                    {new Date(t.closed_at).toLocaleTimeString("id-ID", {
+                    {new Date(t.closed_at ?? t.started_at).toLocaleTimeString("id-ID", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -201,7 +201,7 @@ export function TransactionsList({
                       #{txId(t.session_id)}
                     </span>
                     <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {new Date(t.closed_at).toLocaleDateString("id-ID", {
+                      {new Date(t.closed_at ?? t.started_at).toLocaleDateString("id-ID", {
                         day: "numeric",
                         month: "short",
                       })}
