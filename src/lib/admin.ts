@@ -108,10 +108,13 @@ export interface PaymentMethodSummary {
 /** Status pembayaran transaksi (lunas vs belum lunas) — sesi closed + overdue. */
 export interface PaymentStatusBreakdown {
   paid_count: number;
+  /** Nilai tagihan transaksi lunas (subtotal). */
   paid_revenue: number;
   unpaid_count: number;
-  /** Sisa tagihan yg belum tertagih (subtotal - paid). */
-  unpaid_amount: number;
+  /** Nilai tagihan penuh transaksi belum lunas (subtotal). paid_revenue + unpaid_billed = total tagihan. */
+  unpaid_billed: number;
+  /** Sisa yg belum dibayar (subtotal - paid) — angka untuk nagih. */
+  unpaid_outstanding: number;
 }
 
 export interface AdminTransaction {
@@ -342,7 +345,8 @@ export async function getPaymentStatusBreakdown(
     paid_count: number;
     paid_revenue: string | number;
     unpaid_count: number;
-    unpaid_amount: string | number;
+    unpaid_billed: string | number;
+    unpaid_outstanding: string | number;
   }>(
     sql`SELECT * FROM admin_payment_status(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`
   );
@@ -351,7 +355,8 @@ export async function getPaymentStatusBreakdown(
     paid_count: Number(r?.paid_count ?? 0),
     paid_revenue: Number(r?.paid_revenue ?? 0),
     unpaid_count: Number(r?.unpaid_count ?? 0),
-    unpaid_amount: Number(r?.unpaid_amount ?? 0),
+    unpaid_billed: Number(r?.unpaid_billed ?? 0),
+    unpaid_outstanding: Number(r?.unpaid_outstanding ?? 0),
   };
 }
 

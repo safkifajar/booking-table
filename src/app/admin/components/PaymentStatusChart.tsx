@@ -34,7 +34,7 @@ export function PaymentStatusChart({ data }: { data: PaymentStatusBreakdown }) {
       color: "#ef4444",
       count: data.unpaid_count,
       pct: unpaidPct,
-      amount: data.unpaid_amount,
+      amount: data.unpaid_billed,
     },
   ];
 
@@ -68,13 +68,13 @@ export function PaymentStatusChart({ data }: { data: PaymentStatusBreakdown }) {
         ))}
       </div>
 
-      {/* Sisa tagihan belum tertagih */}
+      {/* Sisa yg belum dibayar (utk nagih) — beda dgn nilai tagihan di atas */}
       <div className="pt-3 border-t border-border flex justify-between items-center">
         <span className="text-xs text-muted-foreground uppercase tracking-wider">
           Belum tertagih
         </span>
         <span className="font-semibold text-red-400">
-          {formatIDR(data.unpaid_amount)}
+          {formatIDR(data.unpaid_outstanding)}
         </span>
       </div>
     </div>

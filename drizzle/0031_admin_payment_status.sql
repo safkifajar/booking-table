@@ -2,9 +2,14 @@
 -- Cakupan: sesi 'closed' + 'overdue' dalam periode.
 --   - closed → pakai closed_at sbg waktu transaksi
 --   - overdue → belum ditutup, pakai started_at sbg waktu (supaya tetap masuk periode)
--- Lunas       = paid_total >= subtotal (termasuk subtotal 0 = tak ada tagihan)
--- Belum lunas = paid_total <  subtotal
--- Nilai belum = subtotal - paid_total (sisa tagihan yg belum tertagih)
+-- Lunas        = paid_total >= subtotal (termasuk subtotal 0 = tak ada tagihan)
+-- Belum lunas  = paid_total <  subtotal
+-- paid_revenue = NILAI TAGIHAN transaksi lunas (subtotal). Basis konsisten:
+--                paid_revenue + unpaid_billed = total tagihan semua transaksi.
+-- unpaid_billed = NILAI TAGIHAN penuh transaksi belum lunas (subtotal).
+-- unpaid_outstanding = sisa yg belum dibayar (subtotal - paid_total) — utk nagih.
+-- DROP dulu: return columns berubah, CREATE OR REPLACE tak bisa ganti signature.
+DROP FUNCTION IF EXISTS public.admin_payment_status(uuid, timestamptz, timestamptz);
 CREATE OR REPLACE FUNCTION public.admin_payment_status(
   p_bar_id uuid,
   p_from timestamptz,
@@ -14,7 +19,8 @@ RETURNS TABLE(
   paid_count integer,
   paid_revenue bigint,
   unpaid_count integer,
-  unpaid_amount bigint
+  unpaid_billed bigint,
+  unpaid_outstanding bigint
 )
 LANGUAGE sql
 STABLE
@@ -41,8 +47,9 @@ AS $function$
   )
   select
     count(*) filter (where paid_total >= subtotal)::int                       as paid_count,
-    coalesce(sum(paid_total) filter (where paid_total >= subtotal), 0)::bigint as paid_revenue,
+    coalesce(sum(subtotal) filter (where paid_total >= subtotal), 0)::bigint   as paid_revenue,
     count(*) filter (where paid_total <  subtotal)::int                       as unpaid_count,
-    coalesce(sum(subtotal - paid_total) filter (where paid_total < subtotal), 0)::bigint as unpaid_amount
+    coalesce(sum(subtotal) filter (where paid_total < subtotal), 0)::bigint    as unpaid_billed,
+    coalesce(sum(subtotal - paid_total) filter (where paid_total < subtotal), 0)::bigint as unpaid_outstanding
   from sess;
 $function$;

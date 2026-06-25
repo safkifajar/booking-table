@@ -138,13 +138,13 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Sudah Lunas"
               value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
-              sub={formatIDR(payStatus.paid_revenue)}
+              sub={`tagihan ${formatIDR(payStatus.paid_revenue)}`}
             />
             <StatCard
               icon={<AlertCircle className="h-4 w-4" />}
               label="Belum Lunas"
               value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
-              sub={`sisa tagihan ${formatIDR(payStatus.unpaid_amount)}`}
+              sub={`tagihan ${formatIDR(payStatus.unpaid_billed)} · belum tertagih ${formatIDR(payStatus.unpaid_outstanding)}`}
             />
           </div>
         </section>
@@ -172,7 +172,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
               <div>
                 <h2 className="text-sm font-semibold">Metode bayar</h2>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Distribusi pembayaran
+                  Uang diterima per metode
                 </p>
               </div>
               <Wallet className="h-4 w-4 text-primary/50" />
