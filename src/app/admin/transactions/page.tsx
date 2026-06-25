@@ -1,12 +1,14 @@
 import {
   requireAdmin,
   getTransactions,
+  getPaymentStatusBreakdown,
   resolveDateRange,
   type DateRangePreset,
 } from "@/lib/admin";
 import { DateRangeFilter } from "../DateRangeFilter";
 import { Card } from "@/components/ui/card";
-import { Receipt } from "lucide-react";
+import { StatCard } from "../components/StatCard";
+import { Receipt, CheckCircle2, AlertCircle } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { ExportButton } from "../components/ExportButton";
 import { TransactionsList } from "./TransactionsList";
@@ -25,7 +27,10 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
     params.to
   );
 
-  const transactions = await getTransactions(bar.id, range.from, range.to, 200);
+  const [transactions, payStatus] = await Promise.all([
+    getTransactions(bar.id, range.from, range.to, 200),
+    getPaymentStatusBreakdown(bar.id, range.from, range.to),
+  ]);
 
   // Total summary
   const totalRevenue = transactions.reduce((sum, t) => sum + t.subtotal, 0);
@@ -74,6 +79,22 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
               "Subtotal",
               "Total Bayar",
             ]}
+          />
+        </div>
+
+        {/* Status pembayaran — monitoring lunas vs belum lunas */}
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            label="Sudah Lunas"
+            value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
+            sub={formatIDR(payStatus.paid_revenue)}
+          />
+          <StatCard
+            icon={<AlertCircle className="h-4 w-4" />}
+            label="Belum Lunas"
+            value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
+            sub={`belum tertagih ${formatIDR(payStatus.unpaid_outstanding)}`}
           />
         </div>
 

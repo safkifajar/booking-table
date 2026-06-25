@@ -24,7 +24,6 @@ import {
   Utensils,
   Minus,
   CheckCircle2,
-  AlertCircle,
 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
@@ -133,18 +132,6 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
                   ? `${summary.avg_items_per_transaction} per transaksi`
                   : undefined
               }
-            />
-            <StatCard
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              label="Sudah Lunas"
-              value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
-              sub={formatIDR(payStatus.paid_revenue)}
-            />
-            <StatCard
-              icon={<AlertCircle className="h-4 w-4" />}
-              label="Belum Lunas"
-              value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
-              sub={`belum tertagih ${formatIDR(payStatus.unpaid_outstanding)}`}
             />
           </div>
         </section>
