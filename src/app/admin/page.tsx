@@ -5,6 +5,7 @@ import {
   getSalesByHour,
   getSalesByDay,
   getPaymentMethods,
+  getPaymentStatusBreakdown,
   resolveDateRange,
   type DateRangePreset,
 } from "@/lib/admin";
@@ -13,6 +14,7 @@ import { StatCard } from "./components/StatCard";
 import { SalesChart } from "./components/SalesChart";
 import { TopItemsList } from "./components/TopItemsList";
 import { PaymentMethodChart } from "./components/PaymentMethodChart";
+import { PaymentStatusChart } from "./components/PaymentStatusChart";
 import {
   Receipt,
   TrendingUp,
@@ -21,6 +23,8 @@ import {
   Wallet,
   Utensils,
   Minus,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
@@ -37,13 +41,15 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
     params.to
   );
 
-  const [summary, topItems, byHour, byDay, paymentMethods] = await Promise.all([
-    getSummaryWithDelta(bar.id, range.from, range.to),
-    getTopItems(bar.id, range.from, range.to, 10),
-    getSalesByHour(bar.id, range.from, range.to),
-    getSalesByDay(bar.id, range.from, range.to),
-    getPaymentMethods(bar.id, range.from, range.to),
-  ]);
+  const [summary, topItems, byHour, byDay, paymentMethods, payStatus] =
+    await Promise.all([
+      getSummaryWithDelta(bar.id, range.from, range.to),
+      getTopItems(bar.id, range.from, range.to, 10),
+      getSalesByHour(bar.id, range.from, range.to),
+      getSalesByDay(bar.id, range.from, range.to),
+      getPaymentMethods(bar.id, range.from, range.to),
+      getPaymentStatusBreakdown(bar.id, range.from, range.to),
+    ]);
 
   // Pilih chart yang lebih cocok: kalau 1 hari → by hour, kalau multi-day → by day
   const isMultiDay =
@@ -128,6 +134,18 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
                   : undefined
               }
             />
+            <StatCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="Sudah Lunas"
+              value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
+              sub={formatIDR(payStatus.paid_revenue)}
+            />
+            <StatCard
+              icon={<AlertCircle className="h-4 w-4" />}
+              label="Belum Lunas"
+              value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
+              sub={`sisa tagihan ${formatIDR(payStatus.unpaid_amount)}`}
+            />
           </div>
         </section>
 
@@ -161,6 +179,20 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
             </div>
             <PaymentMethodChart data={paymentMethods} />
           </div>
+        </section>
+
+        {/* Status pembayaran — lunas vs belum lunas */}
+        <section className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold">Status pembayaran</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Transaksi lunas vs belum lunas (termasuk meja nunggak)
+              </p>
+            </div>
+            <CheckCircle2 className="h-4 w-4 text-primary/50" />
+          </div>
+          <PaymentStatusChart data={payStatus} />
         </section>
 
         {/* Top sellers */}

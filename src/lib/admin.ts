@@ -105,6 +105,15 @@ export interface PaymentMethodSummary {
   pct_share: number;
 }
 
+/** Status pembayaran transaksi (lunas vs belum lunas) — sesi closed + overdue. */
+export interface PaymentStatusBreakdown {
+  paid_count: number;
+  paid_revenue: number;
+  unpaid_count: number;
+  /** Sisa tagihan yg belum tertagih (subtotal - paid). */
+  unpaid_amount: number;
+}
+
 export interface AdminTransaction {
   session_id: string;
   closed_at: string;
@@ -322,6 +331,28 @@ export async function getPaymentMethods(
     payment_count: Number(r.payment_count),
     pct_share: Number(r.pct_share),
   }));
+}
+
+export async function getPaymentStatusBreakdown(
+  barId: string,
+  from: string,
+  to: string
+): Promise<PaymentStatusBreakdown> {
+  const rows = await callRpc<{
+    paid_count: number;
+    paid_revenue: string | number;
+    unpaid_count: number;
+    unpaid_amount: string | number;
+  }>(
+    sql`SELECT * FROM admin_payment_status(${barId}::uuid, ${from}::timestamptz, ${to}::timestamptz)`
+  );
+  const r = rows[0];
+  return {
+    paid_count: Number(r?.paid_count ?? 0),
+    paid_revenue: Number(r?.paid_revenue ?? 0),
+    unpaid_count: Number(r?.unpaid_count ?? 0),
+    unpaid_amount: Number(r?.unpaid_amount ?? 0),
+  };
 }
 
 export async function getTransactions(
