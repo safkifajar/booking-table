@@ -138,13 +138,13 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Sudah Lunas"
               value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
-              sub={`tagihan ${formatIDR(payStatus.paid_revenue)}`}
+              sub={formatIDR(payStatus.paid_revenue)}
             />
             <StatCard
               icon={<AlertCircle className="h-4 w-4" />}
               label="Belum Lunas"
               value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
-              sub={`tagihan ${formatIDR(payStatus.unpaid_billed)} · belum tertagih ${formatIDR(payStatus.unpaid_outstanding)}`}
+              sub={`belum tertagih ${formatIDR(payStatus.unpaid_outstanding)}`}
             />
           </div>
         </section>
