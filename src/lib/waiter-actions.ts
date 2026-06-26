@@ -757,6 +757,12 @@ export async function staffOpenTableForCustomer(
     if (message.includes("uq_active_session_per_table")) {
       throw new Error("Meja ini sudah ada session aktif");
     }
+    // Race condition: slot waktu meja ini baru saja dibooking lebih dulu.
+    if (message.includes("no_overlapping_reservation")) {
+      throw new Error(
+        "Slot waktu meja ini baru saja dibooking. Pilih waktu atau meja lain."
+      );
+    }
     throw new Error(message || "Gagal membuka meja");
   }
 

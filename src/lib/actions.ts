@@ -503,6 +503,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     if (message.includes("uq_active_session_per_table")) {
       throw new Error("Meja ini sudah ada session/reservasi aktif");
     }
+    // Race condition: orang lain membooking slot waktu yg sama lebih dulu.
+    if (message.includes("no_overlapping_reservation")) {
+      throw new Error(
+        "Maaf, slot waktu meja ini baru saja dibooking orang lain. Pilih waktu atau meja lain."
+      );
+    }
     throw new Error(message || "Gagal membuka meja");
   }
 
