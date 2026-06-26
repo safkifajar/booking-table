@@ -66,12 +66,11 @@ export default async function HomePage() {
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[9px] font-extrabold tracking-tight"
+              className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shadow-md"
               style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
             >
               SO.HO
             </span>
-            <span className="text-base font-bold tracking-tight">SOHO</span>
             <span className="text-[10px] uppercase tracking-widest text-primary/70 hidden sm:inline">
               Social House
             </span>
