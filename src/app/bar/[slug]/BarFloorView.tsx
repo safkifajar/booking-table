@@ -270,6 +270,12 @@ export function BarFloorView({
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <span
+            className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shadow-md shrink-0"
+            style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
+          >
+            SO.HO
+          </span>
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-primary/70">
               {bar.tagline}
