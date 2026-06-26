@@ -4,7 +4,17 @@ import * as React from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { X, Plus, Sparkles, Mail, Phone, Cake, FileText } from "lucide-react";
+import {
+  X,
+  Plus,
+  Sparkles,
+  Mail,
+  Phone,
+  Cake,
+  FileText,
+  Users,
+  Heart,
+} from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 
@@ -32,12 +42,17 @@ const HOBBY_SUGGESTIONS = [
   "music production",
 ];
 
+type Gender = "" | "male" | "female";
+type InterestedIn = "" | "male" | "female" | "both";
+
 interface Props {
   email: string;
   initialDisplayName: string;
   initialPhone: string;
   initialBirthDate: string;
   initialBio: string;
+  initialGender: Gender;
+  initialInterestedIn: InterestedIn;
   initialHobbies: string[];
 }
 
@@ -47,12 +62,17 @@ export function ProfileForm({
   initialPhone,
   initialBirthDate,
   initialBio,
+  initialGender,
+  initialInterestedIn,
   initialHobbies,
 }: Props) {
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [phone, setPhone] = React.useState(initialPhone);
   const [birthDate, setBirthDate] = React.useState(initialBirthDate);
   const [bio, setBio] = React.useState(initialBio);
+  const [gender, setGender] = React.useState<Gender>(initialGender);
+  const [interestedIn, setInterestedIn] =
+    React.useState<InterestedIn>(initialInterestedIn);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
   const [customInput, setCustomInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -97,6 +117,8 @@ export function ProfileForm({
         phone: phone.trim(),
         birthDate: birthDate,
         bio: bio.trim(),
+        gender: gender || undefined,
+        interestedIn: interestedIn || undefined,
         hobbies,
       });
       toast.success("Profil tersimpan");
@@ -178,6 +200,71 @@ export function ProfileForm({
               max={new Date().toISOString().slice(0, 10)}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
+          </div>
+
+          {/* Jenis kelamin */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Users className="h-3 w-3" /> Jenis kelamin
+            </label>
+            <div className="flex gap-2">
+              {([
+                { value: "male", label: "Pria" },
+                { value: "female", label: "Wanita" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setGender((g) => (g === opt.value ? "" : opt.value))
+                  }
+                  className={cn(
+                    "flex-1 h-11 rounded-md border text-sm font-medium transition",
+                    gender === opt.value
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-input border-border hover:border-primary/30"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Opsional. Ketuk lagi untuk batal pilih.
+            </p>
+          </div>
+
+          {/* Tertarik pada */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Heart className="h-3 w-3" /> Tertarik pada
+            </label>
+            <div className="flex gap-2">
+              {([
+                { value: "male", label: "Pria" },
+                { value: "female", label: "Wanita" },
+                { value: "both", label: "Keduanya" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setInterestedIn((v) => (v === opt.value ? "" : opt.value))
+                  }
+                  className={cn(
+                    "flex-1 h-11 rounded-md border text-sm font-medium transition",
+                    interestedIn === opt.value
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-input border-border hover:border-primary/30"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Opsional. Ketuk lagi untuk batal pilih.
+            </p>
           </div>
 
           {/* Bio */}

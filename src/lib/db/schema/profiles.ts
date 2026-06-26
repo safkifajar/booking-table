@@ -31,6 +31,10 @@ export const profiles = pgTable(
     phone: text("phone"),
     birthDate: date("birth_date"),
     bio: text("bio"),
+    /** Jenis kelamin: 'male' | 'female' | null (opsional). */
+    gender: text("gender"),
+    /** Tertarik pada: 'male' | 'female' | 'both' | null (opsional). */
+    interestedIn: text("interested_in"),
     hobbies: text("hobbies").array().notNull().default([]),
     isGuest: boolean("is_guest").notNull().default(false),
     /** Akun aktif. False = di-nonaktifkan admin → tidak bisa login. */

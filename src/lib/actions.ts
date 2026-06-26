@@ -1776,7 +1776,7 @@ const updateProfileSchema = z.object({
   phone: z
     .string()
     .max(20)
-    .regex(/^[\d\s+\-()]*$/, "Format nomor HP tidak valid")
+    .regex(/^[\d\s+\-()]*$/, "Format nomor WA tidak valid")
     .optional()
     .or(z.literal("")),
   birthDate: z
@@ -1785,6 +1785,8 @@ const updateProfileSchema = z.object({
     .optional()
     .or(z.literal("")),
   bio: z.string().max(280, "Bio maksimal 280 karakter").optional().or(z.literal("")),
+  gender: z.enum(["male", "female"]).optional().or(z.literal("")),
+  interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
 });
 
@@ -1805,6 +1807,8 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       phone: data.phone?.trim() || null,
       birthDate: data.birthDate || null,
       bio: data.bio?.trim() || null,
+      gender: data.gender || null,
+      interestedIn: data.interestedIn || null,
       hobbies,
     })
     .where(eq(profiles.id, profile.id));

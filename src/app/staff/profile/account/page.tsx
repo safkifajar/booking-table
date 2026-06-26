@@ -35,6 +35,10 @@ export default async function StaffProfileAccountPage() {
           initialPhone={profile.phone ?? ""}
           initialBirthDate={profile.birthDate ?? ""}
           initialBio={profile.bio ?? ""}
+          initialGender={(profile.gender as "" | "male" | "female") ?? ""}
+          initialInterestedIn={
+            (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
+          }
           initialHobbies={profile.hobbies ?? []}
         />
       </div>

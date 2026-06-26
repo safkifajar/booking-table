@@ -46,6 +46,8 @@ export interface Profile {
   phone: string | null;
   birthDate: string | null; // ISO date "YYYY-MM-DD"
   bio: string | null;
+  gender: string | null;
+  interestedIn: string | null;
   hobbies: string[];
   createdAt: Date;
 }
@@ -98,6 +100,8 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     phone: row.phone,
     birthDate: row.birthDate,
     bio: row.bio,
+    gender: row.gender,
+    interestedIn: row.interestedIn,
     hobbies: row.hobbies,
     createdAt: row.createdAt,
   };
