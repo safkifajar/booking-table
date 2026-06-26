@@ -28,6 +28,18 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function genderLabel(g: string | null): string | null {
+  if (g === "male") return "Pria";
+  if (g === "female") return "Wanita";
+  return null;
+}
+function interestLabel(v: string | null): string | null {
+  if (v === "male") return "Pria";
+  if (v === "female") return "Wanita";
+  if (v === "both") return "Keduanya";
+  return null;
+}
+
 export default async function AdminCustomerDetailPage({ params }: PageProps) {
   await requireAdmin();
   const { id } = await params;
@@ -112,6 +124,28 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             </div>
           </div>
 
+          {(genderLabel(profile.gender) || interestLabel(profile.interested_in)) && (
+            <div className="flex flex-wrap gap-x-8 gap-y-2 mt-4 pt-4 border-t border-border text-sm">
+              {genderLabel(profile.gender) && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-0.5">
+                    Jenis kelamin
+                  </div>
+                  <div className="font-medium">{genderLabel(profile.gender)}</div>
+                </div>
+              )}
+              {interestLabel(profile.interested_in) && (
+                <div>
+                  <div className="text-xs text-muted-foreground mb-0.5">
+                    Tertarik pada
+                  </div>
+                  <div className="font-medium">
+                    {interestLabel(profile.interested_in)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {profile.bio && (
             <p className="text-sm whitespace-pre-line mt-4 pt-4 border-t border-border">
               {profile.bio}

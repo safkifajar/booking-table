@@ -267,6 +267,8 @@ export interface PublicProfile {
   bio: string | null;
   phone: string | null;
   is_active: boolean;
+  gender: string | null;
+  interested_in: string | null;
   hobbies: string[];
   rating: UserRatingSummary;
   visit_count: number;

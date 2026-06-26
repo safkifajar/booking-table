@@ -287,6 +287,12 @@ function CustomerFormDialog({
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [isActive, setIsActive] = React.useState(row?.is_active ?? true);
+  const [gender, setGender] = React.useState<"" | "male" | "female">(
+    (row?.gender as "" | "male" | "female") ?? ""
+  );
+  const [interestedIn, setInterestedIn] = React.useState<
+    "" | "male" | "female" | "both"
+  >((row?.interested_in as "" | "male" | "female" | "both") ?? "");
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -312,6 +318,8 @@ function CustomerFormDialog({
           phone: phone.trim() || undefined,
           password: password || undefined,
           isActive,
+          gender: gender || undefined,
+          interestedIn: interestedIn || undefined,
         });
         toast.success(
           password ? "Customer & password diperbarui" : "Customer diperbarui"
@@ -434,6 +442,59 @@ function CustomerFormDialog({
               </button>
             </Field>
           )}
+
+          {/* Jenis kelamin (opsional) */}
+          <Field label="Jenis kelamin (opsional)">
+            <div className="flex gap-2">
+              {([
+                { value: "male", label: "Pria" },
+                { value: "female", label: "Wanita" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setGender((g) => (g === opt.value ? "" : opt.value))
+                  }
+                  className={cn(
+                    "flex-1 h-10 rounded-md border text-sm transition",
+                    gender === opt.value
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-input border-border hover:border-primary/30"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          {/* Tertarik pada (opsional) */}
+          <Field label="Tertarik pada (opsional)">
+            <div className="flex gap-2">
+              {([
+                { value: "male", label: "Pria" },
+                { value: "female", label: "Wanita" },
+                { value: "both", label: "Keduanya" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() =>
+                    setInterestedIn((v) => (v === opt.value ? "" : opt.value))
+                  }
+                  className={cn(
+                    "flex-1 h-10 rounded-md border text-sm transition",
+                    interestedIn === opt.value
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "bg-input border-border hover:border-primary/30"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </Field>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>

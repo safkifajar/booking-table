@@ -37,6 +37,8 @@ export interface AdminCustomerRow {
   name: string;
   email: string;
   phone: string | null;
+  gender: string | null;
+  interested_in: string | null;
   is_guest: boolean;
   is_active: boolean;
   created_at: string;
@@ -112,6 +114,8 @@ export async function listCustomers(
         name: profiles.displayName,
         email: users.email,
         phone: profiles.phone,
+        gender: profiles.gender,
+        interested_in: profiles.interestedIn,
         is_guest: profiles.isGuest,
         is_active: profiles.isActive,
         created_at: profiles.createdAt,
@@ -140,6 +144,8 @@ export async function listCustomers(
       name: r.name,
       email: r.email,
       phone: r.phone,
+      gender: r.gender,
+      interested_in: r.interested_in,
       is_guest: r.is_guest,
       is_active: r.is_active,
       created_at: r.created_at.toISOString(),
@@ -208,6 +214,8 @@ const updateSchema = z.object({
   password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
   /** Status aktif. false = tak bisa login. */
   isActive: z.boolean(),
+  gender: z.enum(["male", "female"]).optional().or(z.literal("")),
+  interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
 });
 
 export async function updateCustomer(input: z.infer<typeof updateSchema>) {
@@ -249,6 +257,8 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
         displayName: data.name,
         phone: data.phone?.trim() || null,
         isActive: data.isActive,
+        gender: data.gender || null,
+        interestedIn: data.interestedIn || null,
       })
       .where(eq(profiles.id, data.id));
   });
