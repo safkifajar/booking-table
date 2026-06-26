@@ -103,7 +103,7 @@ export function CustomerManager({
   }
 
   function exportCsv() {
-    const header = ["Nama", "Email", "Telepon", "Kunjungan", "Daftar"];
+    const header = ["Nama", "Email", "Nomor WA", "Kunjungan", "Daftar"];
     const lines = initialRows.map((r) =>
       [
         r.name,
@@ -361,7 +361,7 @@ function CustomerFormDialog({
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
-          <Field label="Telepon (opsional)">
+          <Field label="Nomor WA (opsional)">
             <input
               type="tel"
               value={phone}

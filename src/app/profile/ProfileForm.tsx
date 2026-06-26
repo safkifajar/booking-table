@@ -154,7 +154,7 @@ export function ProfileForm({
           {/* Phone */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Phone className="h-3 w-3" /> Nomor HP
+              <Phone className="h-3 w-3" /> Nomor WA
             </label>
             <input
               type="tel"

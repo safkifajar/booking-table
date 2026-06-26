@@ -72,7 +72,7 @@ export default async function AdminProfilePage() {
           href="/admin/profile/account"
           icon={<User className="h-4 w-4" />}
           label="Account"
-          description="Nama, nomor HP, tanggal lahir, bio, hobi"
+          description="Nama, nomor WA, tanggal lahir, bio, hobi"
         />
         <MenuItem
           href="/admin/profile/password"
