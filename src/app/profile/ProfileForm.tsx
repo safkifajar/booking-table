@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,7 @@ export function ProfileForm({
   initialInterestedIn,
   initialHobbies,
 }: Props) {
+  const router = useRouter();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
   const [phone, setPhone] = React.useState(initialPhone);
   const [birthDate, setBirthDate] = React.useState(initialBirthDate);
@@ -168,9 +170,11 @@ export function ProfileForm({
         hobbies,
       });
       toast.success("Profil tersimpan");
+      // Langsung balik ke halaman profil (data terbaru).
+      router.push("/profile");
+      router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal simpan"));
-    } finally {
       setLoading(false);
     }
   }
