@@ -18,28 +18,74 @@ import {
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 
-const HOBBY_SUGGESTIONS = [
-  "coffee",
-  "live music",
-  "wine",
-  "cocktails",
-  "photography",
-  "travel",
-  "running",
-  "yoga",
-  "movies",
-  "books",
-  "cooking",
-  "gaming",
-  "football",
-  "basketball",
-  "dancing",
-  "fashion",
-  "tech",
-  "startup",
-  "art",
-  "design",
-  "music production",
+/**
+ * Preset minat dikelompokkan per kategori, relevan dgn vibe SOHO (social house/
+ * bar). User boleh tetap menambah custom. Semua lowercase utk konsistensi.
+ */
+const HOBBY_CATEGORIES: { label: string; items: string[] }[] = [
+  {
+    label: "Musik & Hiburan",
+    items: [
+      "live music",
+      "dj set",
+      "karaoke",
+      "rock",
+      "jazz",
+      "hip-hop",
+      "edm",
+      "indie",
+      "vinyl",
+      "music production",
+    ],
+  },
+  {
+    label: "Minuman & Kuliner",
+    items: [
+      "cocktails",
+      "wine",
+      "craft beer",
+      "whiskey",
+      "coffee",
+      "mixology",
+      "foodie",
+      "shisha",
+    ],
+  },
+  {
+    label: "Aktivitas Sosial",
+    items: [
+      "billiard",
+      "board game",
+      "darts",
+      "nobar",
+      "stand-up comedy",
+      "open mic",
+    ],
+  },
+  {
+    label: "Vibe & Gaya",
+    items: [
+      "nongkrong santai",
+      "networking",
+      "cari teman baru",
+      "party",
+      "fashion",
+      "photography",
+    ],
+  },
+  {
+    label: "Lifestyle",
+    items: [
+      "travel",
+      "gym",
+      "football",
+      "basketball",
+      "movies",
+      "gaming",
+      "art",
+      "books",
+    ],
+  },
 ];
 
 type Gender = "" | "male" | "female";
@@ -129,7 +175,11 @@ export function ProfileForm({
     }
   }
 
-  const unsuggested = HOBBY_SUGGESTIONS.filter((h) => !hobbies.includes(h));
+  // Saran per kategori, sembunyikan yg sudah dipilih.
+  const suggestionGroups = HOBBY_CATEGORIES.map((cat) => ({
+    label: cat.label,
+    items: cat.items.filter((h) => !hobbies.includes(h)),
+  })).filter((cat) => cat.items.length > 0);
   const bioLength = bio.length;
 
   return (
@@ -364,28 +414,32 @@ export function ProfileForm({
             </div>
           </div>
 
-          {unsuggested.length > 0 && (
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                Saran
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {unsuggested.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => toggleHobby(h)}
-                    disabled={hobbies.length >= 15}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium border transition",
-                      "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
-                      "disabled:opacity-40 disabled:cursor-not-allowed"
-                    )}
-                  >
-                    + {h}
-                  </button>
-                ))}
-              </div>
+          {suggestionGroups.length > 0 && (
+            <div className="space-y-3">
+              {suggestionGroups.map((cat) => (
+                <div key={cat.label}>
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                    {cat.label}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cat.items.map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => toggleHobby(h)}
+                        disabled={hobbies.length >= 15}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium border transition",
+                          "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
+                          "disabled:opacity-40 disabled:cursor-not-allowed"
+                        )}
+                      >
+                        + {h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
