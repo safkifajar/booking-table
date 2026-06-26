@@ -61,7 +61,7 @@ export function CustomerDetailTabs({
   return (
     <div className="space-y-4">
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-border overflow-x-auto">
+      <div className="flex flex-wrap gap-1 border-b border-border">
         {TABS.map((t) => (
           <button
             key={t.key}
