@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { TopProgressBar } from "@/components/TopProgressBar";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
+import { SplashScreen } from "@/components/SplashScreen";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -63,6 +64,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <SplashScreen />
         <Suspense fallback={null}>
           <TopProgressBar />
         </Suspense>
