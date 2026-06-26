@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -24,13 +23,12 @@ export function AuthForm() {
 
   return (
     <div className="auth-shell w-full max-w-sm mx-auto flex flex-col items-center text-center">
-      {/* Logo brand SOHO (sudah termasuk "SOCIAL HOUSE") */}
-      <Image
+      {/* Logo brand SOHO (sudah termasuk "SOCIAL HOUSE"). Aset statis → <img>
+          biasa, tak perlu optimasi next/image. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/logo-soho.jpeg"
         alt="SOHO Social House"
-        width={300}
-        height={300}
-        priority
         className="w-48 sm:w-56 h-auto select-none pointer-events-none mb-6"
       />
 
