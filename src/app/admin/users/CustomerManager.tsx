@@ -422,27 +422,6 @@ function CustomerFormDialog({
             </div>
           )}
 
-          {/* Status aktif (edit) — nonaktif = tak bisa login */}
-          {isEdit && (
-            <Field label="Status akun">
-              <button
-                type="button"
-                onClick={() => setIsActive((v) => !v)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-md border px-3 h-10 text-sm transition",
-                  isActive
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    : "border-red-500/30 bg-red-500/10 text-red-400"
-                )}
-              >
-                <span>{isActive ? "Aktif" : "Nonaktif"}</span>
-                <span className="text-xs opacity-70">
-                  {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
-                </span>
-              </button>
-            </Field>
-          )}
-
           {/* Jenis kelamin (opsional) */}
           <Field label="Jenis kelamin (opsional)">
             <div className="flex gap-2">
@@ -495,6 +474,27 @@ function CustomerFormDialog({
               ))}
             </div>
           </Field>
+
+          {/* Status aktif (edit) — paling bawah; nonaktif = tak bisa login */}
+          {isEdit && (
+            <Field label="Status akun">
+              <button
+                type="button"
+                onClick={() => setIsActive((v) => !v)}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-md border px-3 h-10 text-sm transition",
+                  isActive
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                    : "border-red-500/30 bg-red-500/10 text-red-400"
+                )}
+              >
+                <span>{isActive ? "Aktif" : "Nonaktif"}</span>
+                <span className="text-xs opacity-70">
+                  {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
+                </span>
+              </button>
+            </Field>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
