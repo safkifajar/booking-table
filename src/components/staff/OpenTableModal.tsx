@@ -111,10 +111,16 @@ export function OpenTableModal({
       );
       // Redirect handled by server action — no toast needed
     } catch (err) {
-      const message = err instanceof Error ? err.message : "";
-      if (message.includes("NEXT_REDIRECT")) throw err;
-      toast.error(getActionErrorMessage(err, "Gagal buka meja"));
+      const raw = err instanceof Error ? err.message : "";
+      if (raw.includes("NEXT_REDIRECT")) throw err;
+      const message = getActionErrorMessage(err, "Gagal buka meja");
+      toast.error(message);
       setSubmitting(false);
+      // Slot keburu dibooking (race) → tutup modal, kembali ke daftar meja
+      // terkini supaya staff bisa pilih meja/jam lain.
+      if (message.includes("dibooking")) {
+        onClose();
+      }
     }
   }
 

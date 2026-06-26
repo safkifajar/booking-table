@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Card,
@@ -89,6 +90,7 @@ export function OpenTableForm({
   initialEnd,
   menu,
 }: Props) {
+  const router = useRouter();
   const [title, setTitle] = React.useState("");
   const [visibility, setVisibility] =
     React.useState<SessionVisibility>("public");
@@ -236,7 +238,14 @@ export function OpenTableForm({
       });
       // openTable redirects on success
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal membuka meja"));
+      const message = getActionErrorMessage(err, "Gagal membuka meja");
+      toast.error(message);
+      // Slot keburu dibooking orang lain (race) → balik ke denah biar user
+      // bisa pilih meja/jam lain dgn data terbaru.
+      if (message.includes("dibooking")) {
+        router.push(`/bar/${barSlug}`);
+        return;
+      }
       setLoading(false);
     }
   }
