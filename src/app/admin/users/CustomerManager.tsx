@@ -19,7 +19,6 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import {
   Search,
   UserPlus,
-  Pencil,
   Trash2,
   Download,
   Loader2,
@@ -203,14 +202,6 @@ export function CustomerManager({
                 </div>
               </Link>
               <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Edit"
-                  onClick={() => setEditTarget({ mode: "edit", row: r })}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

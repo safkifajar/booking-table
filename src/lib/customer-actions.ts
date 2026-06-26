@@ -267,6 +267,37 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
 }
 
 // ============================================================
+// SET PASSWORD (admin reset password customer)
+// ============================================================
+
+const setPasswordSchema = z.object({
+  id: z.string().uuid(),
+  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+});
+
+export async function setCustomerPassword(
+  input: z.infer<typeof setPasswordSchema>
+) {
+  await requireAdmin();
+  const data = setPasswordSchema.parse(input);
+
+  // Pastikan target bukan staff.
+  const [staff] = await db
+    .select({ id: staffRoles.profileId })
+    .from(staffRoles)
+    .where(eq(staffRoles.profileId, data.id));
+  if (staff) throw new Error("User ini staff — kelola di Manage Staff");
+
+  const passwordHash = await hashPassword(data.password);
+  await db
+    .update(users)
+    .set({ passwordHash })
+    .where(eq(users.id, data.id));
+
+  revalidatePath("/admin/users");
+}
+
+// ============================================================
 // DELETE
 // ============================================================
 
