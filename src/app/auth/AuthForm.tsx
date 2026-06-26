@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -10,13 +11,6 @@ import {
   magicLinkAction,
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Mail, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,30 +23,21 @@ export function AuthForm() {
   const [mode, setMode] = React.useState<Mode>(checkEmail ? "magic" : "choose");
 
   return (
-    <Card className="auth-card w-full max-w-md">
-      <CardHeader className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="text-muted-foreground hover:text-foreground transition"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <span
-            className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shrink-0 shadow-md"
-            style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
-          >
-            SO.HO
-          </span>
-          <span className="text-xs tracking-[0.3em] uppercase text-primary/70 font-medium">
-            SOHO Social House
-          </span>
-        </div>
-        <CardTitle className="text-2xl">{titleFor(mode)}</CardTitle>
-        <CardDescription>{descFor(mode)}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="auth-shell w-full max-w-sm mx-auto flex flex-col items-center text-center">
+      {/* Logo brand SOHO (sudah termasuk "SOCIAL HOUSE") */}
+      <Image
+        src="/logo-soho.jpeg"
+        alt="SOHO Social House"
+        width={300}
+        height={300}
+        priority
+        className="w-48 sm:w-56 h-auto select-none pointer-events-none mb-6"
+      />
+
+      <h1 className="text-xl font-semibold text-[#f0e6d2]">{titleFor(mode)}</h1>
+      <p className="text-sm text-[#f0e6d2]/70 mt-1 mb-6">{descFor(mode)}</p>
+
+      <div className="w-full space-y-3 text-left">
         {mode === "choose" && <ChooseMode setMode={setMode} />}
         {mode === "signin" && (
           <PasswordForm
@@ -77,8 +62,15 @@ export function AuthForm() {
             onBack={() => setMode("choose")}
           />
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      <Link
+        href="/"
+        className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#f0e6d2]/60 hover:text-[#f0e6d2] transition"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Kembali ke beranda
+      </Link>
+    </div>
   );
 }
 

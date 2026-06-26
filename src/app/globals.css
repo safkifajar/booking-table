@@ -114,30 +114,40 @@ button:disabled,
   animation: splashPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Halaman login: latar marun kaya + glow tengah supaya card "mengambang". */
-.auth-bg {
-  background:
-    radial-gradient(
-      circle at 50% 32%,
-      rgba(155, 42, 42, 0.55) 0%,
-      rgba(122, 31, 31, 0.35) 38%,
-      transparent 70%
-    ),
-    radial-gradient(
-      circle at 50% 30%,
-      rgba(240, 230, 210, 0.08) 0%,
-      transparent 45%
-    ),
-    linear-gradient(160deg, #3a1414 0%, #1a0c0c 55%, #0a0606 100%);
+/* Halaman login full-marun: input & tombol bergaya krem di atas marun,
+   scoped ke .auth-shell supaya tak mengubah form lain di app. */
+.auth-shell input {
+  background: rgba(240, 230, 210, 0.08) !important;
+  border-color: rgba(240, 230, 210, 0.35) !important;
+  color: #f5ecdb !important;
 }
-/* Card login: lebih terang & hangat + border emas tipis → kontras tegas
-   di atas latar marun. */
-.auth-card {
-  background: #1f1916 !important;
-  border-color: rgba(201, 169, 97, 0.35) !important;
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(201, 169, 97, 0.06) !important;
+.auth-shell input::placeholder {
+  color: rgba(240, 230, 210, 0.5) !important;
+}
+.auth-shell input:focus {
+  border-color: rgba(240, 230, 210, 0.8) !important;
+}
+/* Tombol gold (gradient) → krem solid teks marun. */
+.auth-shell button[class*="bg-gradient"],
+.auth-shell button[class*="bg-primary"] {
+  background: #f0e6d2 !important;
+  background-image: none !important;
+  color: #7a1f1f !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+}
+.auth-shell button[class*="bg-gradient"]:hover,
+.auth-shell button[class*="bg-primary"]:hover {
+  filter: brightness(0.96);
+}
+/* Tombol outline → border krem. */
+.auth-shell button[class*="border-border"] {
+  border-color: rgba(240, 230, 210, 0.4) !important;
+  color: #f0e6d2 !important;
+  background: transparent !important;
+}
+/* ikon mata show/hide password */
+.auth-shell button[aria-label*="password" i] {
+  color: rgba(240, 230, 210, 0.7) !important;
 }
 
 /* Table "breathing" animation — for open sessions on floor map.
