@@ -98,10 +98,36 @@ button:disabled,
   -webkit-text-fill-color: transparent;
 }
 
-/* Utility: brand (maroon) gradient — untuk hero/header/login. Lapisan brand,
+/* Utility: brand (maroon) gradient — untuk hero/header. Lapisan brand,
    bukan elemen aksi. */
 .bg-brand-gradient {
   background: linear-gradient(135deg, #7a1f1f 0%, #4a1212 60%, #2a0d0d 100%);
+}
+
+/* Halaman login: latar marun kaya + glow tengah supaya card "mengambang". */
+.auth-bg {
+  background:
+    radial-gradient(
+      circle at 50% 32%,
+      rgba(155, 42, 42, 0.55) 0%,
+      rgba(122, 31, 31, 0.35) 38%,
+      transparent 70%
+    ),
+    radial-gradient(
+      circle at 50% 30%,
+      rgba(240, 230, 210, 0.08) 0%,
+      transparent 45%
+    ),
+    linear-gradient(160deg, #3a1414 0%, #1a0c0c 55%, #0a0606 100%);
+}
+/* Card login: lebih terang & hangat + border emas tipis → kontras tegas
+   di atas latar marun. */
+.auth-card {
+  background: #1f1916 !important;
+  border-color: rgba(201, 169, 97, 0.35) !important;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(201, 169, 97, 0.06) !important;
 }
 
 /* Table "breathing" animation — for open sessions on floor map.

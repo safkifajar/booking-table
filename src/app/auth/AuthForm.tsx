@@ -29,7 +29,7 @@ export function AuthForm() {
   const [mode, setMode] = React.useState<Mode>(checkEmail ? "magic" : "choose");
 
   return (
-    <Card className="w-full max-w-md">
+    <Card className="auth-card w-full max-w-md">
       <CardHeader className="space-y-3">
         <div className="flex items-center gap-2">
           <Link
@@ -40,7 +40,7 @@ export function AuthForm() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <span
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[9px] font-extrabold tracking-tight shrink-0"
+            className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shrink-0 shadow-md"
             style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
           >
             SO.HO
