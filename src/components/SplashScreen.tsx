@@ -3,39 +3,41 @@
 import * as React from "react";
 
 /**
- * Splash screen brand SOHO — layar marun + logo, muncul sebentar saat web
- * pertama dibuka di sesi tab ini, lalu fade-out ke konten. Pakai sessionStorage
- * supaya tak muncul lagi saat navigasi internal (cuma sekali per sesi).
+ * Splash screen brand SOHO — layar marun + logo, menutupi layar SEJAK paint
+ * pertama (di-render default, bukan setelah effect) supaya konten tak sempat
+ * "ngeflash" di koneksi lambat. JS lalu fade-out & melepasnya.
+ *
+ * sessionStorage: kalau sudah pernah tampil di sesi tab ini (mis. navigasi
+ * antar halaman), splash langsung dilepas tanpa animasi.
  */
 export function SplashScreen() {
-  // Mulai dari false (SSR) → tak ada mismatch. Diaktifkan di effect kalau belum
-  // pernah tampil di sesi ini.
-  const [show, setShow] = React.useState(false);
-  const [fading, setFading] = React.useState(false);
+  const [phase, setPhase] = React.useState<"visible" | "fading" | "gone">(
+    "visible"
+  );
 
   React.useEffect(() => {
-    if (sessionStorage.getItem("soho_splash_shown")) return;
+    // Sudah pernah tampil di sesi ini → lepas segera (tanpa nahan konten).
+    if (sessionStorage.getItem("soho_splash_shown")) {
+      const raf = requestAnimationFrame(() => setPhase("gone"));
+      return () => cancelAnimationFrame(raf);
+    }
     sessionStorage.setItem("soho_splash_shown", "1");
-    // rAF: hindari setState sinkron di body effect (cascading render).
-    const raf = requestAnimationFrame(() => setShow(true));
-    const fadeTimer = setTimeout(() => setFading(true), 1100);
-    const hideTimer = setTimeout(() => setShow(false), 1600);
+    const fadeTimer = setTimeout(() => setPhase("fading"), 1100);
+    const goneTimer = setTimeout(() => setPhase("gone"), 1600);
     return () => {
-      cancelAnimationFrame(raf);
       clearTimeout(fadeTimer);
-      clearTimeout(hideTimer);
+      clearTimeout(goneTimer);
     };
   }, []);
 
-  if (!show) return null;
+  if (phase === "gone") return null;
 
   return (
     <div
       aria-hidden
       className="fixed inset-0 z-[100] flex items-center justify-center bg-brand-gradient transition-opacity duration-500"
-      style={{ opacity: fading ? 0 : 1, pointerEvents: "none" }}
+      style={{ opacity: phase === "fading" ? 0 : 1, pointerEvents: "none" }}
     >
-      {/* glow halus */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(240,230,210,0.12),transparent_60%)]" />
       <div className="relative flex flex-col items-center gap-3 splash-pop">
         <span
