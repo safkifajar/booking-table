@@ -39,6 +39,12 @@ export function AuthForm() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
+          <span
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[9px] font-extrabold tracking-tight shrink-0"
+            style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
+          >
+            SO.HO
+          </span>
           <span className="text-xs tracking-[0.3em] uppercase text-primary/70 font-medium">
             SOHO Social House
           </span>
