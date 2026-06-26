@@ -68,6 +68,25 @@ export function isRedirectError(err: unknown): boolean {
 }
 
 /**
+ * Cek apakah error berasal dari pelanggaran constraint DB tertentu.
+ * Drizzle membungkus error postgres.js: `err.message` jadi generik
+ * ("Failed query: ..."), detail asli (code 23xxx, constraint_name) ada di
+ * `err.cause`. Helper ini memeriksa error DAN cause-nya.
+ */
+export function isDbConstraintError(err: unknown, constraintName: string): boolean {
+  const layers = [err, (err as { cause?: unknown })?.cause];
+  for (const layer of layers) {
+    if (!layer || typeof layer !== "object") continue;
+    const l = layer as { constraint_name?: string; message?: string };
+    if (l.constraint_name === constraintName) return true;
+    if (typeof l.message === "string" && l.message.includes(constraintName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Use inside `catch` of client-side Server Action calls. Re-throws Next's
  * internal redirect signal so it can complete navigation, otherwise returns
  * the user-facing message for `toast.error()`.

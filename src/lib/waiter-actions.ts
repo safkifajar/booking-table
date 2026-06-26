@@ -38,7 +38,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
-import { generateInviteCode } from "@/lib/utils";
+import { generateInviteCode, isDbConstraintError } from "@/lib/utils";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
@@ -753,16 +753,16 @@ export async function staffOpenTableForCustomer(
       return newSession.id;
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "";
-    if (message.includes("uq_active_session_per_table")) {
+    if (isDbConstraintError(err, "uq_active_session_per_table")) {
       throw new Error("Meja ini sudah ada session aktif");
     }
     // Race condition: slot waktu meja ini baru saja dibooking lebih dulu.
-    if (message.includes("no_overlapping_reservation")) {
+    if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
         "Slot waktu meja ini baru saja dibooking. Pilih waktu atau meja lain."
       );
     }
+    const message = err instanceof Error ? err.message : "";
     throw new Error(message || "Gagal membuka meja");
   }
 

@@ -33,7 +33,7 @@ import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
-import { generateInviteCode } from "@/lib/utils";
+import { generateInviteCode, isDbConstraintError } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import {
@@ -499,16 +499,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     sessionId = result.sessionId;
     dpPaymentId = result.dpPaymentId;
   } catch (err) {
-    const message = err instanceof Error ? err.message : "";
-    if (message.includes("uq_active_session_per_table")) {
+    if (isDbConstraintError(err, "uq_active_session_per_table")) {
       throw new Error("Meja ini sudah ada session/reservasi aktif");
     }
     // Race condition: orang lain membooking slot waktu yg sama lebih dulu.
-    if (message.includes("no_overlapping_reservation")) {
+    if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
         "Maaf, slot waktu meja ini baru saja dibooking orang lain. Pilih waktu atau meja lain."
       );
     }
+    const message = err instanceof Error ? err.message : "";
     throw new Error(message || "Gagal membuka meja");
   }
 
