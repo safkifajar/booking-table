@@ -35,24 +35,21 @@ export function SplashScreen() {
   return (
     <div
       aria-hidden
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-brand-gradient transition-opacity duration-500"
-      style={{ opacity: phase === "fading" ? 0 : 1, pointerEvents: "none" }}
+      className="fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-500"
+      style={{
+        background: "#8d1312",
+        opacity: phase === "fading" ? 0 : 1,
+        pointerEvents: "none",
+      }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(240,230,210,0.12),transparent_60%)]" />
-      <div className="relative flex flex-col items-center gap-3 splash-pop">
-        <span
-          className="inline-flex items-center justify-center rounded-2xl px-5 py-3 text-2xl font-extrabold tracking-tight shadow-2xl"
-          style={{ background: "var(--brand-cream)", color: "var(--brand)" }}
-        >
-          SO.HO
-        </span>
-        <span
-          className="text-[11px] uppercase tracking-[0.4em] font-medium"
-          style={{ color: "rgba(240,230,210,0.75)" }}
-        >
-          Social House
-        </span>
-      </div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(240,230,210,0.10),transparent_60%)]" />
+      {/* Logo asli SOHO (sama dgn login). bg JPEG = #8d1312 → menyatu. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-soho.jpeg"
+        alt="SOHO Social House"
+        className="relative w-56 sm:w-64 h-auto splash-pop select-none"
+      />
     </div>
   );
 }
