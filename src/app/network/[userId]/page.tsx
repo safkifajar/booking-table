@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, MapPin, ChevronRight } from "lucide-react";
+import { ArrowLeft, MapPin, ChevronRight, Cake, Link as LinkIcon } from "lucide-react";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { ProfileAvatar } from "@/components/network/ProfileAvatar";
@@ -23,6 +23,22 @@ function visibilityLabel(v: SessionVisibility): string {
   if (v === "public") return "Publik";
   if (v === "friends") return "Teman";
   return "Undangan";
+}
+
+function ageFrom(iso: string): number {
+  const b = new Date(iso);
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+
+function socialHref(v: string): string {
+  const s = v.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("@")) return `https://instagram.com/${s.slice(1)}`;
+  return `https://${s}`;
 }
 
 export default async function NetworkProfilePage({ params }: PageProps) {
@@ -86,6 +102,29 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               ? `${profile.visit_count}× nongkrong di SOHO`
               : "Belum pernah nongkrong"}
           </p>
+
+          {/* Umur + media sosial (kalau diisi) */}
+          {(profile.birth_date || profile.social_link) && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm">
+              {profile.birth_date && (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Cake className="h-3.5 w-3.5" />
+                  {ageFrom(profile.birth_date)} tahun
+                </span>
+              )}
+              {profile.social_link && (
+                <a
+                  href={socialHref(profile.social_link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-primary hover:underline min-w-0"
+                >
+                  <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{profile.social_link}</span>
+                </a>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Lagi di meja (kalau ada) */}
