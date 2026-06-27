@@ -494,13 +494,13 @@ function EditorCanvas({
           // Meja draft (baru, belum publish) → stroke biru putus-putus.
           const isDraft = !!t.is_draft;
           const stroke = selected
-            ? "#e6c478"
+            ? "#ff4d57"
             : isDraft
               ? "#60a5fa"
-              : "#c9a961";
+              : "#e11d2a";
           const fill = isDraft
             ? "rgba(96,165,250,0.12)"
-            : "rgba(201,169,97,0.18)";
+            : "rgba(225, 29, 42,0.18)";
           const dash = isDraft ? "6 4" : undefined;
           return (
             <g
@@ -540,7 +540,7 @@ function EditorCanvas({
                 textAnchor="middle"
                 fontSize="14"
                 fontWeight="600"
-                fill="#e6c478"
+                fill="#ff4d57"
                 style={{ pointerEvents: "none", userSelect: "none" }}
               >
                 {t.label}

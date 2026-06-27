@@ -266,13 +266,13 @@ export function FloorMap({
             <path
               d="M 40 0 L 0 0 0 40"
               fill="none"
-              stroke="rgba(201,169,97,0.04)"
+              stroke="rgba(225, 29, 42,0.04)"
               strokeWidth="1"
             />
           </pattern>
           <radialGradient id="open-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#c9a961" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#c9a961" stopOpacity="0" />
+            <stop offset="0%" stopColor="#e11d2a" stopOpacity="0.4" />
+            <stop offset="100%" stopColor="#e11d2a" stopOpacity="0" />
           </radialGradient>
         </defs>
 
@@ -361,7 +361,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isAvailable = !table.active_session;
 
   const fill = isOpen
-    ? "rgba(201, 169, 97, 0.25)"
+    ? "rgba(225, 29, 42, 0.25)"
     : isOverdue
       ? "rgba(249, 115, 22, 0.18)"
       : isLocked
@@ -371,9 +371,9 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
           : "rgba(28, 28, 28, 0.9)";
 
   const stroke = selected
-    ? "#e6c478"
+    ? "#ff4d57"
     : isOpen
-      ? "#c9a961"
+      ? "#e11d2a"
       : isOverdue
         ? "#f97316"
         : isLocked
@@ -450,7 +450,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         fontWeight="600"
         fill={
           isOpen
-            ? "#e6c478"
+            ? "#ff4d57"
             : isOverdue
               ? "#fb923c"
               : isReserved
@@ -481,7 +481,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
             cx={table.pos_x + table.width - 6}
             cy={table.pos_y + 6}
             r="10"
-            fill="#c9a961"
+            fill="#e11d2a"
           />
           <text
             x={table.pos_x + table.width - 6}

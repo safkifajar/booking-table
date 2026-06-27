@@ -14,9 +14,9 @@ const COLORS = {
   border: "#262626",
   text: "#f5f5f0",
   muted: "#a3a3a3",
-  primary: "#c9a961",
-  primaryLight: "#e6c478",
-  primaryDark: "#a8893f",
+  primary: "#e11d2a",
+  primaryLight: "#ff4d57",
+  primaryDark: "#b3141f",
 };
 
 interface MagicLinkInput {

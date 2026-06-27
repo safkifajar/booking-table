@@ -129,8 +129,8 @@ export function TopProgressBar() {
           height: "100%",
           width: `${progress}%`,
           background:
-            "linear-gradient(90deg, #e6c478 0%, #c9a961 50%, #a8893f 100%)",
-          boxShadow: "0 0 10px rgba(201, 169, 97, 0.6)",
+            "linear-gradient(90deg, #ff4d57 0%, #e11d2a 50%, #b3141f 100%)",
+          boxShadow: "0 0 10px rgba(225, 29, 42, 0.6)",
           transition: "width 200ms ease-out",
         }}
       />

@@ -310,7 +310,7 @@ export function BarFloorView({
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
-          <LegendDot color="rgba(201,169,97,0.4)" border="#c9a961" label="Open table" pulse />
+          <LegendDot color="rgba(225, 29, 42,0.4)" border="#e11d2a" label="Open table" pulse />
           <LegendDot color="rgba(59,130,246,0.2)" border="#3b82f6" label="Reserved" />
         </div>
 

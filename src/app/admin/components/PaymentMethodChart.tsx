@@ -2,7 +2,7 @@ import { formatIDR } from "@/lib/utils";
 import type { PaymentMethodSummary } from "@/lib/admin";
 
 const METHOD_COLORS: Record<string, string> = {
-  qris: "#c9a961",
+  qris: "#e11d2a",
   cash: "#10b981",
   card: "#3b82f6",
   gopay: "#06b6d4",

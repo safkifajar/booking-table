@@ -76,7 +76,7 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Subtle gold scrollbar */
+/* Subtle brand scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

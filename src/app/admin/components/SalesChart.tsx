@@ -58,9 +58,9 @@ export function SalesChart({ data }: { data: DataPoint[] }) {
                 style={{
                   height: `${Math.max(h, 0.5)}%`,
                   background:
-                    "linear-gradient(180deg, #e6c478 0%, #c9a961 60%, rgba(201,169,97,0.55) 100%)",
+                    "linear-gradient(180deg, #ff4d57 0%, #e11d2a 60%, rgba(225, 29, 42,0.55) 100%)",
                   boxShadow: isHovered
-                    ? "0 0 12px rgba(201,169,97,0.5)"
+                    ? "0 0 12px rgba(225, 29, 42,0.5)"
                     : "none",
                 }}
               />
