@@ -7,6 +7,7 @@ import {
   getBarBySlug,
   getActiveUsersAtBar,
   getPopularHobbies,
+  getMyActiveSessionIds,
 } from "@/lib/queries";
 import { NetworkView } from "./NetworkView";
 
@@ -27,9 +28,10 @@ export default async function NetworkPage() {
     );
   }
 
-  const [activeUsers, popularHobbies] = await Promise.all([
+  const [activeUsers, popularHobbies, myActiveSessionIds] = await Promise.all([
     getActiveUsersAtBar(bar.id),
     getPopularHobbies(12),
+    profile ? getMyActiveSessionIds(profile.id) : Promise.resolve([]),
   ]);
   const isAnon = !profile;
 
@@ -67,6 +69,7 @@ export default async function NetworkPage() {
         <NetworkView
           activeUsers={activeUsers}
           myProfileId={profile?.id ?? null}
+          myActiveSessionIds={myActiveSessionIds}
           popularHobbies={popularHobbies}
         />
       </div>

@@ -26,13 +26,19 @@ type Tab = "here" | "all";
 export function NetworkView({
   activeUsers,
   myProfileId,
+  myActiveSessionIds = [],
   popularHobbies,
 }: {
   activeUsers: ActiveNetworkUser[];
   myProfileId: string | null;
+  myActiveSessionIds?: string[];
   popularHobbies: string[];
 }) {
   const [tab, setTab] = React.useState<Tab>("here");
+  const mySessions = React.useMemo(
+    () => new Set(myActiveSessionIds),
+    [myActiveSessionIds]
+  );
 
   return (
     <div>
@@ -52,7 +58,11 @@ export function NetworkView({
       </div>
 
       {tab === "here" ? (
-        <HereTab activeUsers={activeUsers} myProfileId={myProfileId} />
+        <HereTab
+          activeUsers={activeUsers}
+          myProfileId={myProfileId}
+          mySessions={mySessions}
+        />
       ) : (
         <AllMembersTab
           myProfileId={myProfileId}
@@ -92,9 +102,11 @@ function TabButton({
 function HereTab({
   activeUsers,
   myProfileId,
+  mySessions,
 }: {
   activeUsers: ActiveNetworkUser[];
   myProfileId: string | null;
+  mySessions: Set<string>;
 }) {
   if (activeUsers.length === 0) {
     return (
@@ -115,6 +127,7 @@ function HereTab({
           key={u.profile_id + u.session_id}
           user={u}
           isMe={u.profile_id === myProfileId}
+          alreadyInSession={mySessions.has(u.session_id)}
         />
       ))}
     </div>
@@ -364,9 +377,11 @@ function UserRow({
 function ActiveUserRow({
   user,
   isMe,
+  alreadyInSession,
 }: {
   user: ActiveNetworkUser;
   isMe: boolean;
+  alreadyInSession: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card/40 p-3">
@@ -392,14 +407,22 @@ function ActiveUserRow({
           Meja {user.table_label} · {visibilityLabel(user.visibility)}
         </p>
       </Link>
-      {/* Gabung hanya untuk meja public & bukan sesi diri sendiri */}
-      {!isMe && user.visibility === "public" && (
-        <Link
-          href={`/session/${user.session_id}?from=${encodeURIComponent("/network")}`}
-          className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-        >
-          Gabung
-        </Link>
+      {/* Gabung: meja public, bukan diri sendiri, & viewer belum di meja itu.
+          Kalau viewer sudah di sesi yg sama → tampilkan "Semeja". */}
+      {!isMe && alreadyInSession ? (
+        <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
+          Semeja
+        </span>
+      ) : (
+        !isMe &&
+        user.visibility === "public" && (
+          <Link
+            href={`/session/${user.session_id}?from=${encodeURIComponent("/network")}`}
+            className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+          >
+            Gabung
+          </Link>
+        )
       )}
     </div>
   );

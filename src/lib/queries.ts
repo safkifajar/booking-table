@@ -758,6 +758,27 @@ export async function getActiveUsersAtBar(
   return out;
 }
 
+/**
+ * Set session_id (open/locked) yang viewer ini sedang ikuti (status joined).
+ * Untuk Network: sembunyikan tombol "Gabung" pada meja yg viewer sudah di situ.
+ */
+export async function getMyActiveSessionIds(
+  profileId: string
+): Promise<string[]> {
+  const rows = await db
+    .select({ session_id: sessionMembers.sessionId })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .where(
+      and(
+        eq(sessionMembers.profileId, profileId),
+        eq(sessionMembers.status, "joined"),
+        inArray(tableSessions.status, ["open", "locked"])
+      )
+    );
+  return rows.map((r) => r.session_id);
+}
+
 /** Berapa kali user pernah jadi member meja (joined/left) = jumlah kunjungan. */
 async function getVisitCount(profileId: string): Promise<number> {
   const [agg] = await db
