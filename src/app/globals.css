@@ -10,8 +10,10 @@
   --muted-foreground: #a3a3a3;
   --border: #262626;
   --input: #1c1c1c;
-  --primary: #c9a961;
-  --primary-foreground: #0a0a0a;
+  /* Warna aksi utama: merah cerah brand SOHO (referensi dark+red).
+     Background tetap gelap; merah dipakai utk tombol/link/highlight. */
+  --primary: #e11d2a;
+  --primary-foreground: #ffffff;
   --accent: #1a1a1a;
   --accent-foreground: #f5f5f0;
   --destructive: #dc2626;
@@ -92,7 +94,7 @@ button:disabled,
 
 /* Utility: gold gradient text */
 .text-gold-gradient {
-  background: linear-gradient(135deg, #e6c478 0%, #c9a961 50%, #a8893f 100%);
+  background: linear-gradient(135deg, #ff4d57 0%, #e11d2a 50%, #b3141f 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -166,10 +168,10 @@ button:disabled,
 }
 @keyframes table-breathe-shape {
   0%, 100% {
-    filter: drop-shadow(0 0 4px rgba(201, 169, 97, 0.3));
+    filter: drop-shadow(0 0 4px rgba(225, 29, 42, 0.3));
   }
   50% {
-    filter: drop-shadow(0 0 10px rgba(201, 169, 97, 0.65));
+    filter: drop-shadow(0 0 10px rgba(225, 29, 42, 0.65));
   }
 }
 .table-breathe-glow {
