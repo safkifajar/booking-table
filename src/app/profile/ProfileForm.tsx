@@ -98,13 +98,6 @@ const HOBBY_CATEGORIES: { label: string; items: string[] }[] = [
 type Gender = "" | "male" | "female";
 type InterestedIn = "" | "male" | "female" | "both";
 
-const AREA_OPTIONS = [
-  { value: "pwt_utara", label: "Purwokerto Utara" },
-  { value: "pwt_selatan", label: "Purwokerto Selatan" },
-  { value: "pwt_timur", label: "Purwokerto Timur" },
-  { value: "pwt_barat", label: "Purwokerto Barat" },
-  { value: "luar_pwt", label: "Luar Purwokerto" },
-];
 const LOOKING_FOR_OPTIONS = [
   { value: "relationship", label: "Relationship" },
   { value: "casual", label: "Casual Date" },
@@ -366,23 +359,19 @@ export function ProfileForm({
             </p>
           </div>
 
-          {/* Alamat (kecamatan) */}
+          {/* Alamat (ketik bebas) */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <MapPin className="h-3 w-3" /> Alamat
             </label>
-            <select
+            <input
+              type="text"
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            >
-              <option value="">Tidak disebut</option>
-              {AREA_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              placeholder="cth: Purwokerto Utara"
+              maxLength={120}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
           </div>
 
           {/* Looking for */}

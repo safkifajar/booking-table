@@ -1788,7 +1788,7 @@ const updateProfileSchema = z.object({
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
   socialLink: z.string().max(200).optional().or(z.literal("")),
-  area: z.string().max(50).optional().or(z.literal("")),
+  area: z.string().max(120).optional().or(z.literal("")),
   lookingFor: z
     .enum(["relationship", "casual", "friendship"])
     .optional()
