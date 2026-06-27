@@ -10,7 +10,7 @@ import {
   magicLinkAction,
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
-import { Mail, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
@@ -108,6 +108,7 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
       >
         Bikin Akun Baru
       </Button>
+      {/* Magic Link di-hide sementara. Aktifkan lagi kalau dibutuhkan:
       <div className="relative py-2">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border"></span>
@@ -124,6 +125,7 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
       >
         <Mail className="h-4 w-4" /> Magic Link
       </Button>
+      */}
     </>
   );
 }
