@@ -7,7 +7,11 @@ import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { ProfileAvatar } from "@/components/network/ProfileAvatar";
 import { TableHistoryList } from "@/components/network/TableHistoryList";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getPublicProfile, getUserTableHistory } from "@/lib/queries";
+import {
+  getPublicProfile,
+  getUserTableHistory,
+  getMyActiveSessionIds,
+} from "@/lib/queries";
 import { hasActiveStory } from "@/lib/story-actions";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
@@ -54,11 +58,14 @@ export default async function NetworkProfilePage({ params }: PageProps) {
   const isMe = me?.id === profile.id;
   const active = profile.active_session;
 
-  // Story aktif + riwayat meja (paralel).
-  const [hasStory, history] = await Promise.all([
+  // Story aktif + riwayat meja + sesi aktif viewer (paralel).
+  const [hasStory, history, myActiveSessionIds] = await Promise.all([
     bar ? hasActiveStory(profile.id, bar.id) : Promise.resolve(false),
     getUserTableHistory(profile.id, 20),
+    me ? getMyActiveSessionIds(me.id) : Promise.resolve([]),
   ]);
+  // Viewer sudah semeja dgn user ini?
+  const alreadySemeja = !!active && myActiveSessionIds.includes(active.session_id);
 
   return (
     <main className="flex-1 pb-24">
@@ -140,10 +147,17 @@ export default async function NetworkProfilePage({ params }: PageProps) {
                 <span className="font-semibold">{active.table_label}</span> ·{" "}
                 {visibilityLabel(active.visibility)}
               </span>
-              {!isMe && active.visibility === "public" && (
-                <span className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                  Gabung
+              {!isMe && alreadySemeja ? (
+                <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
+                  Semeja
                 </span>
+              ) : (
+                !isMe &&
+                active.visibility === "public" && (
+                  <span className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+                    Gabung
+                  </span>
+                )
               )}
               <ChevronRight className="h-4 w-4 text-primary/70 shrink-0" />
             </div>
