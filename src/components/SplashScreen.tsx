@@ -42,8 +42,8 @@ export function SplashScreen() {
         pointerEvents: "none",
       }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(240,230,210,0.10),transparent_60%)]" />
-      {/* Logo asli SOHO (sama dgn login). bg JPEG = #8d1312 → menyatu. */}
+      {/* Latar solid #8d1312 (tanpa gradasi) = persis bg JPEG → kotak logo
+          tak terlihat, menyatu sempurna. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-soho.jpeg"
