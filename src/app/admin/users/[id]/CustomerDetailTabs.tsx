@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Loader2, Pencil, Mail, Phone } from "lucide-react";
+import { Loader2, Pencil, Mail, Phone, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { CustomerReviews, CustomerHistory } from "./CustomerDetailSections";
@@ -22,6 +22,7 @@ interface CustomerData {
   birthDate: string | null;
   gender: Gender;
   interestedIn: InterestedIn;
+  socialLink: string | null;
   isActive: boolean;
   bio: string | null;
   hobbies: string[];
@@ -46,6 +47,14 @@ function ageFrom(iso: string): number {
   const m = now.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
   return age;
+}
+/** Jadikan href valid: kalau sudah http(s) pakai apa adanya; kalau username/
+ * domain tanpa skema, prefix https://. */
+function socialHref(v: string): string {
+  const s = v.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("@")) return `https://instagram.com/${s.slice(1)}`;
+  return `https://${s}`;
 }
 function birthDateLabel(iso: string | null): string {
   if (!iso) return "—";
@@ -159,6 +168,24 @@ function DetailTab({ customer }: { customer: CustomerData }) {
         />
         <Row label="Jenis kelamin" value={genderLabel(customer.gender)} />
         <Row label="Tertarik pada" value={interestLabel(customer.interestedIn)} />
+        <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-2">
+          <dt className="text-muted-foreground">Media sosial</dt>
+          <dd className="font-medium text-right min-w-0">
+            {customer.socialLink ? (
+              <a
+                href={socialHref(customer.socialLink)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1 truncate"
+              >
+                <LinkIcon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{customer.socialLink}</span>
+              </a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
       </dl>
       {customer.bio && (
         <div className="mt-4 pt-4 border-t border-border">
@@ -216,6 +243,7 @@ function EditForm({
   const [email, setEmail] = React.useState(customer.email);
   const [phone, setPhone] = React.useState(customer.phone ?? "");
   const [birthDate, setBirthDate] = React.useState(customer.birthDate ?? "");
+  const [socialLink, setSocialLink] = React.useState(customer.socialLink ?? "");
   const [gender, setGender] = React.useState<Gender>(customer.gender);
   const [interestedIn, setInterestedIn] = React.useState<InterestedIn>(
     customer.interestedIn
@@ -237,6 +265,7 @@ function EditForm({
         email: email.trim(),
         phone: phone.trim() || undefined,
         birthDate: birthDate || undefined,
+        socialLink: socialLink.trim() || undefined,
         isActive,
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
@@ -292,6 +321,16 @@ function EditForm({
           value={birthDate}
           onChange={(e) => setBirthDate(e.target.value)}
           max={new Date().toISOString().slice(0, 10)}
+          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </Field>
+      <Field label="Media sosial (opsional)">
+        <input
+          type="text"
+          value={socialLink}
+          onChange={(e) => setSocialLink(e.target.value)}
+          maxLength={200}
+          placeholder="cth: instagram.com/username atau @username"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>

@@ -221,6 +221,7 @@ const updateSchema = z.object({
   isActive: z.boolean(),
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
+  socialLink: z.string().max(200).optional().or(z.literal("")),
 });
 
 export async function updateCustomer(input: z.infer<typeof updateSchema>) {
@@ -265,6 +266,7 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
         isActive: data.isActive,
         gender: data.gender || null,
         interestedIn: data.interestedIn || null,
+        socialLink: data.socialLink?.trim() || null,
       })
       .where(eq(profiles.id, data.id));
   });

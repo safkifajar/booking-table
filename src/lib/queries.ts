@@ -791,6 +791,7 @@ export async function getPublicProfile(
       is_active: profiles.isActive,
       gender: profiles.gender,
       interested_in: profiles.interestedIn,
+      social_link: profiles.socialLink,
       hobbies: profiles.hobbies,
       is_guest: profiles.isGuest,
     })
@@ -832,6 +833,7 @@ export async function getPublicProfile(
     is_active: p.is_active,
     gender: p.gender,
     interested_in: p.interested_in,
+    social_link: p.social_link,
     hobbies: p.hobbies,
     rating,
     visit_count,

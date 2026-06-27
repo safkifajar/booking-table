@@ -122,6 +122,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             gender: (profile.gender as "" | "male" | "female") ?? "",
             interestedIn:
               (profile.interested_in as "" | "male" | "female" | "both") ?? "",
+            socialLink: profile.social_link,
             isActive: profile.is_active,
             bio: profile.bio,
             hobbies: profile.hobbies,

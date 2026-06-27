@@ -270,6 +270,7 @@ export interface PublicProfile {
   is_active: boolean;
   gender: string | null;
   interested_in: string | null;
+  social_link: string | null;
   hobbies: string[];
   rating: UserRatingSummary;
   visit_count: number;
