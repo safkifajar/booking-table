@@ -37,6 +37,16 @@ export const profiles = pgTable(
     interestedIn: text("interested_in"),
     /** Link media sosial bebas (IG/TikTok/linktree dll). Opsional. */
     socialLink: text("social_link"),
+    /** Alamat: kode kecamatan (mis. 'pwt_utara'). Opsional. */
+    area: text("area"),
+    /** Tujuan/mencari: 'relationship' | 'casual' | 'friendship' | null. */
+    lookingFor: text("looking_for"),
+    /** Preferensi musik (teks bebas). */
+    musicPref: text("music_pref"),
+    /** Makanan favorit (teks bebas). */
+    favFood: text("fav_food"),
+    /** Minuman favorit (teks bebas). */
+    favDrink: text("fav_drink"),
     /** Privacy: sembunyikan dari profil publik (true = disembunyikan). */
     hideHistory: boolean("hide_history").notNull().default(false),
     hideLocation: boolean("hide_location").notNull().default(false),

@@ -40,6 +40,11 @@ export default async function AdminProfileAccountPage() {
             (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
           }
           initialSocialLink={profile.socialLink ?? ""}
+          initialArea={profile.area ?? ""}
+          initialLookingFor={profile.lookingFor ?? ""}
+          initialMusicPref={profile.musicPref ?? ""}
+          initialFavFood={profile.favFood ?? ""}
+          initialFavDrink={profile.favDrink ?? ""}
           initialHideHistory={profile.hideHistory}
           initialHideLocation={profile.hideLocation}
           initialHideAge={profile.hideAge}

@@ -49,6 +49,11 @@ export interface Profile {
   gender: string | null;
   interestedIn: string | null;
   socialLink: string | null;
+  area: string | null;
+  lookingFor: string | null;
+  musicPref: string | null;
+  favFood: string | null;
+  favDrink: string | null;
   hideHistory: boolean;
   hideLocation: boolean;
   hideAge: boolean;
@@ -108,6 +113,11 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     gender: row.gender,
     interestedIn: row.interestedIn,
     socialLink: row.socialLink,
+    area: row.area,
+    lookingFor: row.lookingFor,
+    musicPref: row.musicPref,
+    favFood: row.favFood,
+    favDrink: row.favDrink,
     hideHistory: row.hideHistory,
     hideLocation: row.hideLocation,
     hideAge: row.hideAge,

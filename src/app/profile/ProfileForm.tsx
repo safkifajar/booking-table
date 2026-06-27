@@ -17,6 +17,10 @@ import {
   Heart,
   Link as LinkIcon,
   Lock,
+  MapPin,
+  Music,
+  Utensils,
+  Wine,
 } from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
@@ -94,6 +98,19 @@ const HOBBY_CATEGORIES: { label: string; items: string[] }[] = [
 type Gender = "" | "male" | "female";
 type InterestedIn = "" | "male" | "female" | "both";
 
+const AREA_OPTIONS = [
+  { value: "pwt_utara", label: "Purwokerto Utara" },
+  { value: "pwt_selatan", label: "Purwokerto Selatan" },
+  { value: "pwt_timur", label: "Purwokerto Timur" },
+  { value: "pwt_barat", label: "Purwokerto Barat" },
+  { value: "luar_pwt", label: "Luar Purwokerto" },
+];
+const LOOKING_FOR_OPTIONS = [
+  { value: "relationship", label: "Relationship" },
+  { value: "casual", label: "Casual Date" },
+  { value: "friendship", label: "Friendship" },
+];
+
 interface Props {
   email: string;
   initialDisplayName: string;
@@ -103,6 +120,11 @@ interface Props {
   initialGender: Gender;
   initialInterestedIn: InterestedIn;
   initialSocialLink: string;
+  initialArea: string;
+  initialLookingFor: string;
+  initialMusicPref: string;
+  initialFavFood: string;
+  initialFavDrink: string;
   initialHideHistory: boolean;
   initialHideLocation: boolean;
   initialHideAge: boolean;
@@ -119,6 +141,11 @@ export function ProfileForm({
   initialGender,
   initialInterestedIn,
   initialSocialLink,
+  initialArea,
+  initialLookingFor,
+  initialMusicPref,
+  initialFavFood,
+  initialFavDrink,
   initialHideHistory,
   initialHideLocation,
   initialHideAge,
@@ -134,6 +161,11 @@ export function ProfileForm({
   const [interestedIn, setInterestedIn] =
     React.useState<InterestedIn>(initialInterestedIn);
   const [socialLink, setSocialLink] = React.useState(initialSocialLink);
+  const [area, setArea] = React.useState(initialArea);
+  const [lookingFor, setLookingFor] = React.useState(initialLookingFor);
+  const [musicPref, setMusicPref] = React.useState(initialMusicPref);
+  const [favFood, setFavFood] = React.useState(initialFavFood);
+  const [favDrink, setFavDrink] = React.useState(initialFavDrink);
   const [hideHistory, setHideHistory] = React.useState(initialHideHistory);
   const [hideLocation, setHideLocation] = React.useState(initialHideLocation);
   const [hideAge, setHideAge] = React.useState(initialHideAge);
@@ -185,6 +217,11 @@ export function ProfileForm({
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
         socialLink: socialLink.trim() || undefined,
+        area: area || undefined,
+        lookingFor: (lookingFor as "relationship" | "casual" | "friendship" | "") || undefined,
+        musicPref: musicPref.trim() || undefined,
+        favFood: favFood.trim() || undefined,
+        favDrink: favDrink.trim() || undefined,
         hideHistory,
         hideLocation,
         hideAge,
@@ -327,6 +364,89 @@ export function ProfileForm({
             <p className="text-[10px] text-muted-foreground mt-1">
               Opsional — IG, TikTok, linktree, dll.
             </p>
+          </div>
+
+          {/* Alamat (kecamatan) */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <MapPin className="h-3 w-3" /> Alamat
+            </label>
+            <select
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+            >
+              <option value="">Tidak disebut</option>
+              {AREA_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Looking for */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Heart className="h-3 w-3" /> Mencari
+            </label>
+            <select
+              value={lookingFor}
+              onChange={(e) => setLookingFor(e.target.value)}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+            >
+              <option value="">Tidak disebut</option>
+              {LOOKING_FOR_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Music preference */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Music className="h-3 w-3" /> Preferensi musik
+            </label>
+            <input
+              type="text"
+              value={musicPref}
+              onChange={(e) => setMusicPref(e.target.value)}
+              placeholder="cth: pop, jazz, hip-hop"
+              maxLength={120}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
+          </div>
+
+          {/* Makanan & minuman favorit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Utensils className="h-3 w-3" /> Makanan favorit
+              </label>
+              <input
+                type="text"
+                value={favFood}
+                onChange={(e) => setFavFood(e.target.value)}
+                placeholder="cth: nasi goreng"
+                maxLength={120}
+                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Wine className="h-3 w-3" /> Minuman favorit
+              </label>
+              <input
+                type="text"
+                value={favDrink}
+                onChange={(e) => setFavDrink(e.target.value)}
+                placeholder="cth: kopi, mojito"
+                maxLength={120}
+                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+              />
+            </div>
           </div>
 
           {/* Bio */}

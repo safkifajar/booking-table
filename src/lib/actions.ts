@@ -1788,6 +1788,14 @@ const updateProfileSchema = z.object({
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
   socialLink: z.string().max(200).optional().or(z.literal("")),
+  area: z.string().max(50).optional().or(z.literal("")),
+  lookingFor: z
+    .enum(["relationship", "casual", "friendship"])
+    .optional()
+    .or(z.literal("")),
+  musicPref: z.string().max(120).optional().or(z.literal("")),
+  favFood: z.string().max(120).optional().or(z.literal("")),
+  favDrink: z.string().max(120).optional().or(z.literal("")),
   hideHistory: z.boolean().optional(),
   hideLocation: z.boolean().optional(),
   hideAge: z.boolean().optional(),
@@ -1815,6 +1823,11 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       gender: data.gender || null,
       interestedIn: data.interestedIn || null,
       socialLink: data.socialLink?.trim() || null,
+      area: data.area || null,
+      lookingFor: data.lookingFor || null,
+      musicPref: data.musicPref?.trim() || null,
+      favFood: data.favFood?.trim() || null,
+      favDrink: data.favDrink?.trim() || null,
       ...(data.hideHistory !== undefined ? { hideHistory: data.hideHistory } : {}),
       ...(data.hideLocation !== undefined ? { hideLocation: data.hideLocation } : {}),
       ...(data.hideAge !== undefined ? { hideAge: data.hideAge } : {}),
