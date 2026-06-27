@@ -266,6 +266,7 @@ export interface PublicProfile {
   avatar_url: string | null;
   bio: string | null;
   phone: string | null;
+  birth_date: string | null;
   is_active: boolean;
   gender: string | null;
   interested_in: string | null;

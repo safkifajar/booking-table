@@ -210,6 +210,11 @@ const updateSchema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email().max(120),
   phone: z.string().max(20).optional(),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .optional()
+    .or(z.literal("")),
   /** Password baru (opsional) — kalau diisi, reset password customer. */
   password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
   /** Status aktif. false = tak bisa login. */
@@ -256,6 +261,7 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
       .set({
         displayName: data.name,
         phone: data.phone?.trim() || null,
+        birthDate: data.birthDate || null,
         isActive: data.isActive,
         gender: data.gender || null,
         interestedIn: data.interestedIn || null,

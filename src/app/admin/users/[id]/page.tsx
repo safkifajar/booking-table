@@ -118,6 +118,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             name: profile.display_name,
             email,
             phone: profile.phone,
+            birthDate: profile.birth_date,
             gender: (profile.gender as "" | "male" | "female") ?? "",
             interestedIn:
               (profile.interested_in as "" | "male" | "female" | "both") ?? "",

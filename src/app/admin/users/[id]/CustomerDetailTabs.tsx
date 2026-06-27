@@ -19,6 +19,7 @@ interface CustomerData {
   name: string;
   email: string;
   phone: string | null;
+  birthDate: string | null;
   gender: Gender;
   interestedIn: InterestedIn;
   isActive: boolean;
@@ -137,6 +138,16 @@ function DetailTab({ customer }: { customer: CustomerData }) {
           icon={<Phone className="h-3.5 w-3.5" />}
         />
         <Row
+          label="Tanggal lahir"
+          value={
+            customer.birthDate
+              ? new Date(customer.birthDate).toLocaleDateString("id-ID", {
+                  dateStyle: "long",
+                })
+              : "—"
+          }
+        />
+        <Row
           label="Status"
           value={customer.isActive ? "Aktif" : "Nonaktif"}
           valueClass={customer.isActive ? "text-emerald-400" : "text-red-400"}
@@ -199,6 +210,7 @@ function EditForm({
   const [name, setName] = React.useState(customer.name);
   const [email, setEmail] = React.useState(customer.email);
   const [phone, setPhone] = React.useState(customer.phone ?? "");
+  const [birthDate, setBirthDate] = React.useState(customer.birthDate ?? "");
   const [gender, setGender] = React.useState<Gender>(customer.gender);
   const [interestedIn, setInterestedIn] = React.useState<InterestedIn>(
     customer.interestedIn
@@ -219,6 +231,7 @@ function EditForm({
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim() || undefined,
+        birthDate: birthDate || undefined,
         isActive,
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
@@ -265,6 +278,15 @@ function EditForm({
           onChange={(e) => setPhone(e.target.value)}
           maxLength={20}
           placeholder="mis. 081234567890"
+          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </Field>
+      <Field label="Tanggal lahir (opsional)">
+        <input
+          type="date"
+          value={birthDate}
+          onChange={(e) => setBirthDate(e.target.value)}
+          max={new Date().toISOString().slice(0, 10)}
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
