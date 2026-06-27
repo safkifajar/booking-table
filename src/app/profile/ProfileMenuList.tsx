@@ -13,6 +13,8 @@ import {
   BellRing,
   BellOff,
   Loader2,
+  Shield,
+  FileText,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { signOutAction } from "@/lib/auth-v2/actions";
@@ -210,6 +212,22 @@ export function ProfileMenuList() {
           </div>
         </MenuGroup>
       )}
+
+      {/* Group: Legal */}
+      <MenuGroup>
+        <MenuItem
+          href="/privacy"
+          icon={<Shield className="h-4 w-4" />}
+          label="Kebijakan Privasi"
+          description="Bagaimana kami mengelola data kamu"
+        />
+        <MenuItem
+          href="/terms"
+          icon={<FileText className="h-4 w-4" />}
+          label="Syarat & Ketentuan"
+          description="Ketentuan penggunaan layanan"
+        />
+      </MenuGroup>
 
       {/* Group 2: Logout (separate card, danger style) */}
       <MenuGroup>

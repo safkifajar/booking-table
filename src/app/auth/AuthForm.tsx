@@ -241,6 +241,20 @@ function PasswordForm({
             : "Sign In"}
       </Button>
 
+      {mode === "signup" && (
+        <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
+          Dengan mendaftar, kamu menyetujui{" "}
+          <Link href="/terms" target="_blank" className="text-primary hover:underline">
+            Syarat &amp; Ketentuan
+          </Link>{" "}
+          dan{" "}
+          <Link href="/privacy" target="_blank" className="text-primary hover:underline">
+            Kebijakan Privasi
+          </Link>{" "}
+          kami.
+        </p>
+      )}
+
       <div className="flex justify-between text-xs">
         <button
           type="button"
