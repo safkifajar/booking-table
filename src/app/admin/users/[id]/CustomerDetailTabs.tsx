@@ -38,6 +38,20 @@ type TabKey = (typeof TABS)[number]["key"];
 function genderLabel(g: string): string {
   return g === "male" ? "Pria" : g === "female" ? "Wanita" : "—";
 }
+/** Umur (tahun penuh) dari tanggal lahir ISO. */
+function ageFrom(iso: string): number {
+  const b = new Date(iso);
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  return age;
+}
+function birthDateLabel(iso: string | null): string {
+  if (!iso) return "—";
+  const tgl = new Date(iso).toLocaleDateString("id-ID", { dateStyle: "long" });
+  return `${tgl} · ${ageFrom(iso)} thn`;
+}
 function interestLabel(v: string): string {
   return v === "male"
     ? "Pria"
@@ -137,16 +151,7 @@ function DetailTab({ customer }: { customer: CustomerData }) {
           value={customer.phone || "—"}
           icon={<Phone className="h-3.5 w-3.5" />}
         />
-        <Row
-          label="Tanggal lahir"
-          value={
-            customer.birthDate
-              ? new Date(customer.birthDate).toLocaleDateString("id-ID", {
-                  dateStyle: "long",
-                })
-              : "—"
-          }
-        />
+        <Row label="Tanggal lahir" value={birthDateLabel(customer.birthDate)} />
         <Row
           label="Status"
           value={customer.isActive ? "Aktif" : "Nonaktif"}
