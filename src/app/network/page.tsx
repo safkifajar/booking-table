@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
@@ -19,6 +20,11 @@ export default async function NetworkPage() {
     getCurrentProfile(),
     getBarBySlug(barSlug),
   ]);
+
+  // Network khusus user login → anon diarahkan ke login/daftar.
+  if (!profile) {
+    redirect("/auth?next=/network");
+  }
 
   if (!bar) {
     return (
