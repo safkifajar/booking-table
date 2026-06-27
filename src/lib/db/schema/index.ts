@@ -20,4 +20,5 @@ export * from "./stories";
 export * from "./banners";
 export * from "./notifications";
 export * from "./push-subscriptions";
+export * from "./legal";
 
