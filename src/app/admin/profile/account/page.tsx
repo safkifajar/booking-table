@@ -40,6 +40,10 @@ export default async function AdminProfileAccountPage() {
             (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
           }
           initialSocialLink={profile.socialLink ?? ""}
+          initialHideHistory={profile.hideHistory}
+          initialHideLocation={profile.hideLocation}
+          initialHideAge={profile.hideAge}
+          initialHideSocial={profile.hideSocial}
           initialHobbies={profile.hobbies ?? []}
         />
       </div>

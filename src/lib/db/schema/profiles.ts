@@ -37,6 +37,11 @@ export const profiles = pgTable(
     interestedIn: text("interested_in"),
     /** Link media sosial bebas (IG/TikTok/linktree dll). Opsional. */
     socialLink: text("social_link"),
+    /** Privacy: sembunyikan dari profil publik (true = disembunyikan). */
+    hideHistory: boolean("hide_history").notNull().default(false),
+    hideLocation: boolean("hide_location").notNull().default(false),
+    hideAge: boolean("hide_age").notNull().default(false),
+    hideSocial: boolean("hide_social").notNull().default(false),
     hobbies: text("hobbies").array().notNull().default([]),
     isGuest: boolean("is_guest").notNull().default(false),
     /** Akun aktif. False = di-nonaktifkan admin → tidak bisa login. */

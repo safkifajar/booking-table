@@ -26,7 +26,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
   const { id } = await params;
 
   const [profile, history, reviews, userRow] = await Promise.all([
-    getPublicProfile(id),
+    getPublicProfile(id, { admin: true }),
     getUserTableHistory(id, 50),
     getReviewsForUser(id, 50),
     db

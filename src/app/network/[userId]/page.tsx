@@ -48,9 +48,9 @@ function socialHref(v: string): string {
 export default async function NetworkProfilePage({ params }: PageProps) {
   const { userId } = await params;
   const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
-  const [me, profile, [bar]] = await Promise.all([
-    getCurrentProfile(),
-    getPublicProfile(userId),
+  const me = await getCurrentProfile();
+  const [profile, [bar]] = await Promise.all([
+    getPublicProfile(userId, { viewerId: me?.id ?? null }),
     db.select({ id: bars.id }).from(bars).where(eq(bars.slug, barSlug)),
   ]);
   if (!profile) notFound();
@@ -194,13 +194,15 @@ export default async function NetworkProfilePage({ params }: PageProps) {
           </section>
         )}
 
-        {/* Riwayat meja */}
-        <section>
-          <h2 className="text-sm font-semibold text-muted-foreground mb-2">
-            Riwayat nongkrong
-          </h2>
-          <TableHistoryList entries={history} />
-        </section>
+        {/* Riwayat meja — disembunyikan kalau user set privat (kecuali dirinya) */}
+        {!profile.hide_history && (
+          <section>
+            <h2 className="text-sm font-semibold text-muted-foreground mb-2">
+              Riwayat nongkrong
+            </h2>
+            <TableHistoryList entries={history} />
+          </section>
+        )}
       </div>
     </main>
   );

@@ -1788,6 +1788,10 @@ const updateProfileSchema = z.object({
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
   socialLink: z.string().max(200).optional().or(z.literal("")),
+  hideHistory: z.boolean().optional(),
+  hideLocation: z.boolean().optional(),
+  hideAge: z.boolean().optional(),
+  hideSocial: z.boolean().optional(),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
 });
 
@@ -1811,6 +1815,10 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       gender: data.gender || null,
       interestedIn: data.interestedIn || null,
       socialLink: data.socialLink?.trim() || null,
+      ...(data.hideHistory !== undefined ? { hideHistory: data.hideHistory } : {}),
+      ...(data.hideLocation !== undefined ? { hideLocation: data.hideLocation } : {}),
+      ...(data.hideAge !== undefined ? { hideAge: data.hideAge } : {}),
+      ...(data.hideSocial !== undefined ? { hideSocial: data.hideSocial } : {}),
       hobbies,
     })
     .where(eq(profiles.id, profile.id));

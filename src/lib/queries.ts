@@ -735,7 +735,9 @@ export async function getActiveUsersAtBar(
         eq(floorAreas.barId, barId),
         inArray(tableSessions.status, ["open", "locked"]),
         eq(sessionMembers.status, "joined"),
-        eq(profiles.isGuest, false)
+        eq(profiles.isGuest, false),
+        // Privacy: user yg sembunyikan lokasi tak muncul di "Lagi di SOHO".
+        eq(profiles.hideLocation, false)
       )
     )
     .orderBy(asc(sessionMembers.joinedAt));
@@ -799,7 +801,10 @@ async function getVisitCount(profileId: string): Promise<number> {
  * via caller (atau biarkan — profil tetap publik). Null kalau user guest/not found.
  */
 export async function getPublicProfile(
-  userId: string
+  userId: string,
+  // viewerId = siapa yang melihat. Kalau = userId (pemilik) atau opts.admin,
+  // privacy diabaikan (lihat data lengkap). null/lain = terapkan privacy.
+  opts?: { viewerId?: string | null; admin?: boolean }
 ): Promise<PublicProfile | null> {
   const [p] = await db
     .select({
@@ -813,12 +818,23 @@ export async function getPublicProfile(
       gender: profiles.gender,
       interested_in: profiles.interestedIn,
       social_link: profiles.socialLink,
+      hide_history: profiles.hideHistory,
+      hide_location: profiles.hideLocation,
+      hide_age: profiles.hideAge,
+      hide_social: profiles.hideSocial,
       hobbies: profiles.hobbies,
       is_guest: profiles.isGuest,
     })
     .from(profiles)
     .where(eq(profiles.id, userId));
   if (!p || p.is_guest) return null;
+
+  // Pemilik & admin lihat semua; selain itu terapkan privacy.
+  const bypass = opts?.admin === true || opts?.viewerId === p.id;
+  const hideAge = !bypass && p.hide_age;
+  const hideSocial = !bypass && p.hide_social;
+  const hideLocation = !bypass && p.hide_location;
+  const hideHistory = !bypass && p.hide_history;
 
   const [rating, visit_count, active] = await Promise.all([
     getUserRating(userId),
@@ -850,21 +866,23 @@ export async function getPublicProfile(
     avatar_url: p.avatar_url,
     bio: p.bio,
     phone: p.phone,
-    birth_date: p.birth_date,
+    birth_date: hideAge ? null : p.birth_date,
     is_active: p.is_active,
     gender: p.gender,
     interested_in: p.interested_in,
-    social_link: p.social_link,
+    social_link: hideSocial ? null : p.social_link,
+    hide_history: hideHistory,
     hobbies: p.hobbies,
     rating,
     visit_count,
-    active_session: active[0]
-      ? {
-          session_id: active[0].session_id,
-          table_label: active[0].table_label,
-          visibility: active[0].visibility as ActiveNetworkUser["visibility"],
-        }
-      : null,
+    active_session:
+      hideLocation || !active[0]
+        ? null
+        : {
+            session_id: active[0].session_id,
+            table_label: active[0].table_label,
+            visibility: active[0].visibility as ActiveNetworkUser["visibility"],
+          },
   };
 }
 

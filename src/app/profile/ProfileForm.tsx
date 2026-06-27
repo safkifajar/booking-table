@@ -16,6 +16,7 @@ import {
   Users,
   Heart,
   Link as LinkIcon,
+  Lock,
 } from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
@@ -102,6 +103,10 @@ interface Props {
   initialGender: Gender;
   initialInterestedIn: InterestedIn;
   initialSocialLink: string;
+  initialHideHistory: boolean;
+  initialHideLocation: boolean;
+  initialHideAge: boolean;
+  initialHideSocial: boolean;
   initialHobbies: string[];
 }
 
@@ -114,6 +119,10 @@ export function ProfileForm({
   initialGender,
   initialInterestedIn,
   initialSocialLink,
+  initialHideHistory,
+  initialHideLocation,
+  initialHideAge,
+  initialHideSocial,
   initialHobbies,
 }: Props) {
   const router = useRouter();
@@ -125,6 +134,10 @@ export function ProfileForm({
   const [interestedIn, setInterestedIn] =
     React.useState<InterestedIn>(initialInterestedIn);
   const [socialLink, setSocialLink] = React.useState(initialSocialLink);
+  const [hideHistory, setHideHistory] = React.useState(initialHideHistory);
+  const [hideLocation, setHideLocation] = React.useState(initialHideLocation);
+  const [hideAge, setHideAge] = React.useState(initialHideAge);
+  const [hideSocial, setHideSocial] = React.useState(initialHideSocial);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
   const [customInput, setCustomInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -172,6 +185,10 @@ export function ProfileForm({
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
         socialLink: socialLink.trim() || undefined,
+        hideHistory,
+        hideLocation,
+        hideAge,
+        hideSocial,
         hobbies,
       });
       toast.success("Profil tersimpan");
@@ -440,6 +457,45 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
+      {/* PRIVASI */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-primary" />
+            Privasi
+          </CardTitle>
+          <CardDescription>
+            Atur apa yang boleh dilihat pengunjung lain di profilmu.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="divide-y divide-border">
+          <PrivacyToggle
+            label="Sembunyikan riwayat kunjungan"
+            desc="Daftar meja yang pernah kamu ikuti"
+            checked={hideHistory}
+            onChange={setHideHistory}
+          />
+          <PrivacyToggle
+            label="Sembunyikan lokasi saat ini"
+            desc="Status 'lagi di meja' & muncul di Lagi di SOHO"
+            checked={hideLocation}
+            onChange={setHideLocation}
+          />
+          <PrivacyToggle
+            label="Sembunyikan umur"
+            desc="Umur dari tanggal lahir"
+            checked={hideAge}
+            onChange={setHideAge}
+          />
+          <PrivacyToggle
+            label="Sembunyikan media sosial"
+            desc="Link IG/TikTok/dll"
+            checked={hideSocial}
+            onChange={setHideSocial}
+          />
+        </CardContent>
+      </Card>
+
       {/* Submit */}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" variant="gold" size="lg" disabled={loading}>
@@ -447,5 +503,43 @@ export function ProfileForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function PrivacyToggle({
+  label,
+  desc,
+  checked,
+  onChange,
+}: {
+  label: string;
+  desc: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">{desc}</div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+          checked ? "bg-primary" : "bg-muted border border-border"
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+            checked ? "translate-x-[22px]" : "translate-x-0.5"
+          )}
+        />
+      </button>
+    </div>
   );
 }
