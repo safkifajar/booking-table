@@ -48,6 +48,7 @@ export interface Profile {
   bio: string | null;
   gender: string | null;
   interestedIn: string | null;
+  socialLink: string | null;
   hobbies: string[];
   createdAt: Date;
 }
@@ -102,6 +103,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     bio: row.bio,
     gender: row.gender,
     interestedIn: row.interestedIn,
+    socialLink: row.socialLink,
     hobbies: row.hobbies,
     createdAt: row.createdAt,
   };

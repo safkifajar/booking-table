@@ -1787,6 +1787,7 @@ const updateProfileSchema = z.object({
   bio: z.string().max(280, "Bio maksimal 280 karakter").optional().or(z.literal("")),
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
+  socialLink: z.string().max(200).optional().or(z.literal("")),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
 });
 
@@ -1809,6 +1810,7 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       bio: data.bio?.trim() || null,
       gender: data.gender || null,
       interestedIn: data.interestedIn || null,
+      socialLink: data.socialLink?.trim() || null,
       hobbies,
     })
     .where(eq(profiles.id, profile.id));

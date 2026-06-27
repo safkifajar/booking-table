@@ -39,6 +39,7 @@ export default async function StaffProfileAccountPage() {
           initialInterestedIn={
             (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
           }
+          initialSocialLink={profile.socialLink ?? ""}
           initialHobbies={profile.hobbies ?? []}
         />
       </div>

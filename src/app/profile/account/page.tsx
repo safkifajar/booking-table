@@ -26,6 +26,7 @@ export default async function ProfileAccountPage() {
           initialInterestedIn={
             (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
           }
+          initialSocialLink={profile.socialLink ?? ""}
           initialHobbies={profile.hobbies ?? []}
         />
       </div>

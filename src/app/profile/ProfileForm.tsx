@@ -15,6 +15,7 @@ import {
   FileText,
   Users,
   Heart,
+  Link as LinkIcon,
 } from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
@@ -100,6 +101,7 @@ interface Props {
   initialBio: string;
   initialGender: Gender;
   initialInterestedIn: InterestedIn;
+  initialSocialLink: string;
   initialHobbies: string[];
 }
 
@@ -111,6 +113,7 @@ export function ProfileForm({
   initialBio,
   initialGender,
   initialInterestedIn,
+  initialSocialLink,
   initialHobbies,
 }: Props) {
   const router = useRouter();
@@ -121,6 +124,7 @@ export function ProfileForm({
   const [gender, setGender] = React.useState<Gender>(initialGender);
   const [interestedIn, setInterestedIn] =
     React.useState<InterestedIn>(initialInterestedIn);
+  const [socialLink, setSocialLink] = React.useState(initialSocialLink);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
   const [customInput, setCustomInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -167,6 +171,7 @@ export function ProfileForm({
         bio: bio.trim(),
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
+        socialLink: socialLink.trim() || undefined,
         hobbies,
       });
       toast.success("Profil tersimpan");
@@ -261,31 +266,15 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Users className="h-3 w-3" /> Jenis kelamin
             </label>
-            <div className="flex gap-2">
-              {([
-                { value: "male", label: "Pria" },
-                { value: "female", label: "Wanita" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() =>
-                    setGender((g) => (g === opt.value ? "" : opt.value))
-                  }
-                  className={cn(
-                    "flex-1 h-11 rounded-md border text-sm font-medium transition",
-                    gender === opt.value
-                      ? "bg-primary/15 border-primary/40 text-primary"
-                      : "bg-input border-border hover:border-primary/30"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Opsional. Ketuk lagi untuk batal pilih.
-            </p>
+            <select
+              value={gender}
+              onChange={(e) => setGender(e.target.value as Gender)}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+            >
+              <option value="">Tidak disebut</option>
+              <option value="male">Pria</option>
+              <option value="female">Wanita</option>
+            </select>
           </div>
 
           {/* Tertarik pada */}
@@ -293,31 +282,33 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Heart className="h-3 w-3" /> Tertarik pada
             </label>
-            <div className="flex gap-2">
-              {([
-                { value: "male", label: "Pria" },
-                { value: "female", label: "Wanita" },
-                { value: "both", label: "Keduanya" },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() =>
-                    setInterestedIn((v) => (v === opt.value ? "" : opt.value))
-                  }
-                  className={cn(
-                    "flex-1 h-11 rounded-md border text-sm font-medium transition",
-                    interestedIn === opt.value
-                      ? "bg-primary/15 border-primary/40 text-primary"
-                      : "bg-input border-border hover:border-primary/30"
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <select
+              value={interestedIn}
+              onChange={(e) => setInterestedIn(e.target.value as InterestedIn)}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+            >
+              <option value="">Tidak disebut</option>
+              <option value="male">Pria</option>
+              <option value="female">Wanita</option>
+              <option value="both">Keduanya</option>
+            </select>
+          </div>
+
+          {/* Media sosial */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <LinkIcon className="h-3 w-3" /> Media sosial
+            </label>
+            <input
+              type="text"
+              value={socialLink}
+              onChange={(e) => setSocialLink(e.target.value)}
+              placeholder="cth: instagram.com/username atau @username"
+              maxLength={200}
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Opsional. Ketuk lagi untuk batal pilih.
+              Opsional — IG, TikTok, linktree, dll.
             </p>
           </div>
 
