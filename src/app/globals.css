@@ -154,6 +154,13 @@ button:disabled,
 .auth-shell button[aria-label*="password" i] {
   color: rgba(240, 230, 210, 0.7) !important;
 }
+/* Link switch (Belum punya akun? / Pilihan lain) → putih, kontras di marun. */
+.auth-shell .text-primary {
+  color: #ffffff !important;
+}
+.auth-shell .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
 
 /* Table "breathing" animation — for open sessions on floor map.
  * Glow halo: scale dari center (transform-origin di-set inline di element
