@@ -10,14 +10,21 @@
   --muted-foreground: #a3a3a3;
   --border: #262626;
   --input: #1c1c1c;
-  --primary: #c9a961;
-  --primary-foreground: #0a0a0a;
+  /* Warna aksi utama: merah cerah brand SOHO (referensi dark+red).
+     Background tetap gelap; merah dipakai utk tombol/link/highlight. */
+  --primary: #e11d2a;
+  --primary-foreground: #ffffff;
   --accent: #1a1a1a;
   --accent-foreground: #f5f5f0;
   --destructive: #dc2626;
   --destructive-foreground: #fef2f2;
   --success: #10b981;
   --warning: #f59e0b;
+  /* Warna brand SOHO (dari logo) — utk lapisan brand: login/header/hero/aksen.
+     BUKAN warna aksi (tombol/link tetap pakai --primary emas). */
+  --brand: #7a1f1f;
+  --brand-light: #9b2a2a;
+  --brand-cream: #f0e6d2;
   --radius: 0.75rem;
 }
 
@@ -38,6 +45,9 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-light);
+  --color-brand-cream: var(--brand-cream);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -66,7 +76,7 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Subtle gold scrollbar */
+/* Subtle brand scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -84,10 +94,72 @@ button:disabled,
 
 /* Utility: gold gradient text */
 .text-gold-gradient {
-  background: linear-gradient(135deg, #e6c478 0%, #c9a961 50%, #a8893f 100%);
+  background: linear-gradient(135deg, #ff4d57 0%, #e11d2a 50%, #b3141f 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* Utility: brand (maroon) gradient — untuk hero/header. Lapisan brand,
+   bukan elemen aksi. */
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #7a1f1f 0%, #4a1212 60%, #2a0d0d 100%);
+}
+
+/* Splash screen logo pop-in */
+@keyframes splashPop {
+  0% { opacity: 0; transform: scale(0.85); }
+  60% { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.splash-pop {
+  animation: splashPop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Halaman login full-marun: input & tombol bergaya krem di atas marun,
+   scoped ke .auth-shell supaya tak mengubah form lain di app. */
+.auth-shell input {
+  background: rgba(240, 230, 210, 0.08) !important;
+  border-color: rgba(240, 230, 210, 0.35) !important;
+  color: #f5ecdb !important;
+}
+.auth-shell input::placeholder {
+  color: rgba(240, 230, 210, 0.5) !important;
+}
+.auth-shell input:focus {
+  border-color: rgba(240, 230, 210, 0.8) !important;
+}
+/* Tombol gold (gradient) → krem solid teks marun. */
+.auth-shell button[class*="bg-gradient"],
+.auth-shell button[class*="bg-primary"] {
+  background: #f0e6d2 !important;
+  background-image: none !important;
+  color: #7a1f1f !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+}
+.auth-shell button[class*="bg-gradient"]:hover,
+.auth-shell button[class*="bg-primary"]:hover {
+  filter: brightness(0.96);
+}
+/* Tombol outline (Bikin Akun) → border & teks PUTIH, kontras jelas di marun. */
+.auth-shell button[class*="border-border"] {
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  color: #ffffff !important;
+  background: transparent !important;
+}
+.auth-shell button[class*="border-border"]:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+/* ikon mata show/hide password */
+.auth-shell button[aria-label*="password" i] {
+  color: rgba(240, 230, 210, 0.7) !important;
+}
+/* Link switch (Belum punya akun? / Pilihan lain) → putih, kontras di marun. */
+.auth-shell .text-primary {
+  color: #ffffff !important;
+}
+.auth-shell .text-muted-foreground {
+  color: rgba(255, 255, 255, 0.7) !important;
 }
 
 /* Table "breathing" animation — for open sessions on floor map.
@@ -106,10 +178,10 @@ button:disabled,
 }
 @keyframes table-breathe-shape {
   0%, 100% {
-    filter: drop-shadow(0 0 4px rgba(201, 169, 97, 0.3));
+    filter: drop-shadow(0 0 4px rgba(225, 29, 42, 0.3));
   }
   50% {
-    filter: drop-shadow(0 0 10px rgba(201, 169, 97, 0.65));
+    filter: drop-shadow(0 0 10px rgba(225, 29, 42, 0.65));
   }
 }
 .table-breathe-glow {

@@ -392,7 +392,7 @@ export function OpenTableForm({
               <label className="block text-sm font-medium mb-2">
                 Order awal{" "}
                 {orderRequired ? (
-                  <span className="text-amber-400 font-normal text-xs">
+                  <span className="text-primary font-normal text-xs">
                     (wajib
                     {hasMinSpend && ` · min ${formatIDR(table.min_spend)}`})
                   </span>

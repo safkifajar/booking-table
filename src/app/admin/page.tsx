@@ -198,7 +198,7 @@ function NetSalesHero({
 }) {
   return (
     <section className="relative rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent p-6 sm:p-8 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(201,169,97,0.18),transparent_60%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(225, 29, 42,0.18),transparent_60%)] pointer-events-none" />
       <div className="relative">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-[10px] uppercase tracking-widest text-primary/80 font-semibold">

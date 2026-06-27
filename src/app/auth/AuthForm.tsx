@@ -10,14 +10,7 @@ import {
   magicLinkAction,
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Mail, ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
@@ -29,24 +22,20 @@ export function AuthForm() {
   const [mode, setMode] = React.useState<Mode>(checkEmail ? "magic" : "choose");
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="text-muted-foreground hover:text-foreground transition"
-            aria-label="Back to home"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <span className="text-xs tracking-[0.3em] uppercase text-primary/70 font-medium">
-            SOHO Social House
-          </span>
-        </div>
-        <CardTitle className="text-2xl">{titleFor(mode)}</CardTitle>
-        <CardDescription>{descFor(mode)}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <div className="auth-shell w-full max-w-sm mx-auto flex flex-col items-center text-center">
+      {/* Logo brand SOHO (sudah termasuk "SOCIAL HOUSE"). Aset statis → <img>
+          biasa, tak perlu optimasi next/image. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/logo-soho.jpeg"
+        alt="SOHO Social House"
+        className="w-48 sm:w-56 h-auto select-none pointer-events-none mb-6"
+      />
+
+      <h1 className="text-xl font-semibold text-[#f0e6d2]">{titleFor(mode)}</h1>
+      <p className="text-sm text-[#f0e6d2]/70 mt-1 mb-6">{descFor(mode)}</p>
+
+      <div className="w-full space-y-3 text-left">
         {mode === "choose" && <ChooseMode setMode={setMode} />}
         {mode === "signin" && (
           <PasswordForm
@@ -71,8 +60,15 @@ export function AuthForm() {
             onBack={() => setMode("choose")}
           />
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      <Link
+        href="/"
+        className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#f0e6d2]/60 hover:text-[#f0e6d2] transition"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Kembali ke beranda
+      </Link>
+    </div>
   );
 }
 
@@ -112,6 +108,7 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
       >
         Bikin Akun Baru
       </Button>
+      {/* Magic Link di-hide sementara. Aktifkan lagi kalau dibutuhkan:
       <div className="relative py-2">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border"></span>
@@ -128,6 +125,7 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
       >
         <Mail className="h-4 w-4" /> Magic Link
       </Button>
+      */}
     </>
   );
 }

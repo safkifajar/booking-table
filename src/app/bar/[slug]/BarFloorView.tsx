@@ -270,6 +270,12 @@ export function BarFloorView({
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <span
+            className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shadow-md shrink-0"
+            style={{ background: "var(--brand)", color: "var(--brand-cream)" }}
+          >
+            SO.HO
+          </span>
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-primary/70">
               {bar.tagline}
@@ -304,7 +310,7 @@ export function BarFloorView({
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
-          <LegendDot color="rgba(201,169,97,0.4)" border="#c9a961" label="Open table" pulse />
+          <LegendDot color="rgba(225, 29, 42,0.4)" border="#e11d2a" label="Open table" pulse />
           <LegendDot color="rgba(59,130,246,0.2)" border="#3b82f6" label="Reserved" />
         </div>
 

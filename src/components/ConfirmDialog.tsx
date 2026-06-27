@@ -132,7 +132,7 @@ function IconBadge({
 
   if (variant === "danger") {
     defaultIcon = <LogOut className="h-5 w-5" />;
-    bg = "bg-amber-500/15 text-amber-400 border-amber-500/30";
+    bg = "bg-primary/15 text-primary border-primary/30";
   } else if (variant === "destructive") {
     defaultIcon = <Trash2 className="h-5 w-5" />;
     bg = "bg-red-500/15 text-red-400 border-red-500/30";

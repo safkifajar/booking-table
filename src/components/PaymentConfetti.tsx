@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-const COLORS = ["#c9a961", "#e6c478", "#a8893f", "#f5f5f0", "#10b981"];
+const COLORS = ["#e11d2a", "#ff4d57", "#b3141f", "#f5f5f0", "#10b981"];
 const PIECES = 80;
 
 interface Piece {

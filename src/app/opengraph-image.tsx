@@ -12,7 +12,7 @@ export default async function OG() {
           width: "100%",
           height: "100%",
           background:
-            "radial-gradient(ellipse at top, rgba(201,169,97,0.20), transparent 60%), radial-gradient(ellipse at bottom right, rgba(201,169,97,0.10), transparent 50%), #0a0a0a",
+            "radial-gradient(ellipse at top, rgba(225, 29, 42,0.20), transparent 60%), radial-gradient(ellipse at bottom right, rgba(225, 29, 42,0.10), transparent 50%), #0a0a0a",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
@@ -27,7 +27,7 @@ export default async function OG() {
             style={{
               width: 48,
               height: 1,
-              background: "rgba(201,169,97,0.8)",
+              background: "rgba(225, 29, 42,0.8)",
             }}
           />
           <span
@@ -35,7 +35,7 @@ export default async function OG() {
               fontSize: 18,
               letterSpacing: 8,
               textTransform: "uppercase",
-              color: "#c9a961",
+              color: "#e11d2a",
               fontWeight: 500,
             }}
           >
@@ -64,7 +64,7 @@ export default async function OG() {
               lineHeight: 1.05,
               letterSpacing: "-0.02em",
               backgroundImage:
-                "linear-gradient(135deg, #e6c478 0%, #c9a961 50%, #a8893f 100%)",
+                "linear-gradient(135deg, #ff4d57 0%, #e11d2a 50%, #b3141f 100%)",
               backgroundClip: "text",
               color: "transparent",
               display: "flex",
@@ -86,25 +86,25 @@ export default async function OG() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 36, color: "#c9a961", fontWeight: 700 }}>
+            <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Open
             </span>
             <span>Buka meja</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 36, color: "#c9a961", fontWeight: 700 }}>
+            <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Invite
             </span>
             <span>Ajak teman</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 36, color: "#c9a961", fontWeight: 700 }}>
+            <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Order
             </span>
             <span>Pesan bareng</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 36, color: "#c9a961", fontWeight: 700 }}>
+            <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Split
             </span>
             <span>Bayar patungan</span>

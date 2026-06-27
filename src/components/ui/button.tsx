@@ -19,7 +19,7 @@ const buttonVariants = cva(
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         secondary:
           "bg-muted text-foreground hover:bg-muted/80 border border-border",
-        gold: "bg-gradient-to-br from-[#e6c478] via-[#c9a961] to-[#a8893f] text-black hover:brightness-110 shadow-lg shadow-primary/20",
+        gold: "bg-gradient-to-br from-[#ff4d57] via-[#e11d2a] to-[#b3141f] text-white hover:brightness-110 shadow-lg shadow-primary/25",
       },
       size: {
         default: "h-10 px-4 py-2",
