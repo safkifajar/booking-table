@@ -32,13 +32,17 @@ export function ProfileAvatar({
 }) {
   const [storyOpen, setStoryOpen] = React.useState(false);
   const [photoOpen, setPhotoOpen] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   const canStory = hasStory && !!viewerId;
   const canPhoto = !!avatarUrl;
   const clickable = canStory || canPhoto;
+  // Punya story DAN foto → tap munculkan pilihan (ala Instagram).
+  const hasChoice = canStory && canPhoto;
 
   function handleClick() {
-    if (canStory) setStoryOpen(true);
+    if (hasChoice) setMenuOpen(true);
+    else if (canStory) setStoryOpen(true);
     else if (canPhoto) setPhotoOpen(true);
   }
 
@@ -74,6 +78,47 @@ export function ProfileAvatar({
         </button>
       ) : (
         inner
+      )}
+
+      {/* Pilihan: lihat story atau foto profil (ala Instagram) */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+          onClick={() => setMenuOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-xs rounded-t-2xl sm:rounded-2xl border border-border bg-card p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setStoryOpen(true);
+              }}
+              className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted/50 transition"
+            >
+              Lihat Story
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                setPhotoOpen(true);
+              }}
+              className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted/50 transition"
+            >
+              Lihat Foto Profil
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(false)}
+              className="w-full text-center px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-muted/50 transition"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
       )}
 
       {storyOpen && viewerId && (
