@@ -30,6 +30,7 @@ export interface MoveTargetTable {
   label: string;
   area_name: string;
   capacity: number;
+  min_spend: number;
 }
 
 /**
@@ -96,6 +97,7 @@ export async function getMoveTargets(
       label: tables.label,
       area_name: floorAreas.name,
       capacity: tables.capacity,
+      min_spend: tables.minSpend,
     })
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -115,6 +117,7 @@ export async function getMoveTargets(
       label: r.label,
       area_name: r.area_name,
       capacity: r.capacity,
+      min_spend: r.min_spend ?? 0,
     }));
 }
 

@@ -10,7 +10,7 @@ import {
   moveTable,
   type MoveTargetTable,
 } from "@/lib/move-table-actions";
-import { getActionErrorMessage } from "@/lib/utils";
+import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 
 /**
  * Tombol "Pindah Meja" + modal pilih meja tujuan. Fase 1: hanya sesi 'reserved'
@@ -103,6 +103,11 @@ export function MoveTableButton({ sessionId }: { sessionId: string }) {
                       <div className="text-xs text-muted-foreground">
                         {t.area_name} · {t.capacity} kursi
                       </div>
+                      {t.min_spend > 0 && (
+                        <div className="text-[11px] text-amber-400 mt-0.5">
+                          Min. spend {formatIDR(t.min_spend)}
+                        </div>
+                      )}
                     </div>
                     {moving === t.id && (
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
