@@ -11,11 +11,11 @@ import {
   getReservationDataForWaiter,
   getBookingsForWaiter,
 } from "@/lib/waiter-actions";
-import { getPendingMoveRequests } from "@/lib/move-approval-actions";
+import { getMoveRequests } from "@/lib/move-approval-actions";
 import { ChefHat } from "lucide-react";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { WaiterDashboard } from "./WaiterDashboard";
-import { MoveRequestsPanel } from "@/components/staff/MoveRequestsPanel";
+import { NotificationBell } from "@/components/NotificationBell";
 
 /**
  * Waiter dashboard — order queue + bantu pesan flow.
@@ -50,7 +50,7 @@ export default async function StaffWaiterPage() {
     getAvailableTablesForWaiter(),
     getReservationDataForWaiter(),
     getBookingsForWaiter(),
-    getPendingMoveRequests(),
+    getMoveRequests(),
   ]);
 
   if (!bar) {
@@ -76,6 +76,7 @@ export default async function StaffWaiterPage() {
               {bar.name}
             </h1>
           </div>
+          {profile && <NotificationBell userId={profile.id} />}
           {profile && (
             <AdminHeaderProfile
               displayName={profile.displayName}
@@ -88,7 +89,6 @@ export default async function StaffWaiterPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <MoveRequestsPanel requests={moveRequests} />
         <Suspense>
           <WaiterDashboard
             initialQueue={queue}
@@ -96,6 +96,7 @@ export default async function StaffWaiterPage() {
             initialAvailableTables={availableTables}
             reservationData={reservationData}
             initialBookings={bookings}
+            moveRequests={moveRequests}
             barId={bar.id}
           />
         </Suspense>

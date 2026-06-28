@@ -7,7 +7,7 @@ import { ArrowRightLeft, Check, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   resolveMoveRequest,
-  type PendingMoveRequest,
+  type MoveRequestRow,
 } from "@/lib/move-approval-actions";
 import { getActionErrorMessage } from "@/lib/utils";
 
@@ -18,19 +18,47 @@ function fmt(iso: string): string {
   });
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    pending: {
+      label: "Menunggu",
+      cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+    },
+    approved: {
+      label: "Disetujui",
+      cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    },
+    rejected: {
+      label: "Ditolak",
+      cls: "bg-red-500/15 text-red-300 border-red-500/30",
+    },
+    cancelled: {
+      label: "Dibatalkan",
+      cls: "bg-muted text-muted-foreground border-border",
+    },
+  };
+  const s = map[status] ?? map.cancelled;
+  return (
+    <span
+      className={`text-[11px] px-2 py-0.5 rounded-full border ${s.cls} shrink-0`}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 /**
- * Panel request pindah meja untuk staff (waiter/kasir). Approve → eksekusi
- * pindah; Tolak → batalkan. Customer dapat notif keputusan.
+ * Daftar request pindah meja untuk staff (waiter/kasir) — konten tab "Pindah
+ * Meja". Pending bisa di-approve/tolak; yg sudah diproses tetap tampil sbg
+ * riwayat dgn badge status.
  */
 export function MoveRequestsPanel({
   requests,
 }: {
-  requests: PendingMoveRequest[];
+  requests: MoveRequestRow[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
-
-  if (requests.length === 0) return null;
 
   async function resolve(id: string, approve: boolean) {
     setBusy(id);
@@ -45,29 +73,34 @@ export function MoveRequestsPanel({
     }
   }
 
-  return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3 mb-4">
-      <div className="flex items-center gap-1.5 text-sm font-semibold mb-2 text-amber-300">
-        <ArrowRightLeft className="h-4 w-4" /> Request Pindah Meja
-        <span className="text-xs font-normal opacity-70">
-          ({requests.length})
-        </span>
+  if (requests.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        Belum ada request pindah meja.
       </div>
-      <div className="space-y-2">
-        {requests.map((r) => (
-          <div
-            key={r.id}
-            className="rounded-lg border border-border bg-card p-3 flex items-center gap-3 flex-wrap"
-          >
-            <div className="flex-1 min-w-0">
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {requests.map((r) => (
+        <div
+          key={r.id}
+          className="rounded-lg border border-border bg-card p-3 flex items-center gap-3 flex-wrap"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium">
                 {r.requester_name}: Meja {r.from_label} →{" "}
                 <span className="text-primary">{r.to_label}</span>
               </p>
-              <p className="text-xs text-muted-foreground">
-                {fmt(r.reservation_at)} – {fmt(r.reservation_end_at)}
-              </p>
+              <StatusBadge status={r.status} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              {fmt(r.reservation_at)} – {fmt(r.reservation_end_at)}
+            </p>
+          </div>
+          {r.status === "pending" && (
             <div className="flex gap-2 shrink-0">
               <Button
                 size="sm"
@@ -92,9 +125,16 @@ export function MoveRequestsPanel({
                 <X className="h-4 w-4" /> Tolak
               </Button>
             </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
+
+/** Jumlah request pending (utk badge tab). */
+export function countPending(requests: MoveRequestRow[]): number {
+  return requests.filter((r) => r.status === "pending").length;
+}
+
+export { ArrowRightLeft as MoveIcon };

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ne, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ne, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
@@ -373,18 +373,23 @@ export async function getMyPendingMove(
     : null;
 }
 
-export interface PendingMoveRequest {
+export interface MoveRequestRow {
   id: string;
   requester_name: string;
   from_label: string;
   to_label: string;
   reservation_at: string;
   reservation_end_at: string;
+  status: string;
   created_at: string;
 }
 
-/** Daftar request pindah pending utk staff dashboard. */
-export async function getPendingMoveRequests(): Promise<PendingMoveRequest[]> {
+/**
+ * Daftar request pindah utk staff dashboard — SEMUA status (pending dulu, lalu
+ * yg sudah diproses), terbaru. Pending tetap bisa di-approve/tolak; yg sudah
+ * resolved tetap tampil sbg riwayat.
+ */
+export async function getMoveRequests(): Promise<MoveRequestRow[]> {
   const ctx = await requirePermission(
     "open_table_for_customer",
     "/staff/waiter"
@@ -399,21 +404,21 @@ export async function getPendingMoveRequests(): Promise<PendingMoveRequest[]> {
       to_label: tt.label,
       reservation_at: tableMoveRequests.reservationAt,
       reservation_end_at: tableMoveRequests.reservationEndAt,
+      status: tableMoveRequests.status,
       created_at: tableMoveRequests.createdAt,
-      barId: floorAreas.barId,
     })
     .from(tableMoveRequests)
     .innerJoin(profiles, eq(profiles.id, tableMoveRequests.requestedBy))
     .innerJoin(ft, eq(ft.id, tableMoveRequests.fromTableId))
     .innerJoin(tt, eq(tt.id, tableMoveRequests.toTableId))
     .innerJoin(floorAreas, eq(floorAreas.id, ft.areaId))
-    .where(
-      and(
-        eq(tableMoveRequests.status, "pending"),
-        eq(floorAreas.barId, ctx.barId)
-      )
+    .where(eq(floorAreas.barId, ctx.barId))
+    // pending paling atas, lalu terbaru.
+    .orderBy(
+      sql`case when ${tableMoveRequests.status} = 'pending' then 0 else 1 end`,
+      desc(tableMoveRequests.createdAt)
     )
-    .orderBy(asc(tableMoveRequests.createdAt));
+    .limit(30);
   return rows.map((r) => ({
     id: r.id,
     requester_name: r.requester_name,
@@ -421,6 +426,7 @@ export async function getPendingMoveRequests(): Promise<PendingMoveRequest[]> {
     to_label: r.to_label,
     reservation_at: r.reservation_at.toISOString(),
     reservation_end_at: r.reservation_end_at.toISOString(),
+    status: r.status,
     created_at: r.created_at.toISOString(),
   }));
 }

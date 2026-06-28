@@ -14,6 +14,7 @@ import {
   Sparkles,
   Layers,
   CalendarClock,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,16 +32,22 @@ import type {
   AvailableTable,
   WaiterReservationData,
 } from "@/lib/waiter-actions";
+import {
+  MoveRequestsPanel,
+  countPending,
+} from "@/components/staff/MoveRequestsPanel";
+import type { MoveRequestRow } from "@/lib/move-approval-actions";
 
 interface Props {
   sessions: CashierSessionItem[];
   bookings: CashierBookingItem[];
   availableTables: AvailableTable[];
   reservationData: WaiterReservationData;
+  moveRequests: MoveRequestRow[];
   barId: string;
 }
 
-type Tab = "active" | "bookings";
+type Tab = "active" | "bookings" | "moves";
 
 function fmtDate(iso: string): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -67,6 +74,7 @@ export function CashierSessionList({
   bookings,
   availableTables,
   reservationData,
+  moveRequests,
   barId,
 }: Props) {
   const router = useRouter();
@@ -143,6 +151,13 @@ export function CashierSessionList({
           onClick={() => setTab("bookings")}
           badge={bookings.length}
         />
+        <TabButton
+          icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
+          label="Pindah Meja"
+          active={tab === "moves"}
+          onClick={() => setTab("moves")}
+          badge={countPending(moveRequests)}
+        />
       </div>
 
       {tab === "active" && (
@@ -190,6 +205,8 @@ export function CashierSessionList({
       )}
 
       {tab === "bookings" && <BookingsList bookings={bookings} />}
+
+      {tab === "moves" && <MoveRequestsPanel requests={moveRequests} />}
 
       {/* Tombol "Buka Meja Baru" — sticky di bawah */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">

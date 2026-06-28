@@ -15,6 +15,7 @@ import {
   Plus,
   Clock,
   CalendarClock,
+  ArrowRightLeft,
   Loader2,
   UserPlus,
   X,
@@ -34,6 +35,11 @@ import {
   type WaiterBookingItem,
 } from "@/lib/waiter-actions";
 import { OpenTableModal } from "@/components/staff/OpenTableModal";
+import {
+  MoveRequestsPanel,
+  countPending,
+} from "@/components/staff/MoveRequestsPanel";
+import type { MoveRequestRow } from "@/lib/move-approval-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
@@ -42,10 +48,11 @@ interface Props {
   initialAvailableTables: AvailableTable[];
   reservationData: WaiterReservationData;
   initialBookings: WaiterBookingItem[];
+  moveRequests: MoveRequestRow[];
   barId: string;
 }
 
-type Tab = "queue" | "sessions" | "bookings";
+type Tab = "queue" | "sessions" | "bookings" | "moves";
 
 const AUDIO_PREF_KEY = "waiter_audio_enabled";
 
@@ -81,6 +88,7 @@ export function WaiterDashboard({
   initialAvailableTables,
   reservationData,
   initialBookings,
+  moveRequests,
   barId,
 }: Props) {
   const router = useRouter();
@@ -91,7 +99,9 @@ export function WaiterDashboard({
       ? "sessions"
       : tabParam === "bookings"
         ? "bookings"
-        : "queue";
+        : tabParam === "moves"
+          ? "moves"
+          : "queue";
   const [tab, setTab] = React.useState<Tab>(initialTab);
   const [audioEnabled, setAudioEnabled] = React.useState(true);
   const [optimistic, setOptimistic] = React.useState<Set<string>>(new Set());
@@ -215,6 +225,14 @@ export function WaiterDashboard({
             onClick={() => setTab("bookings")}
             badge={initialBookings.length}
           />
+          <TabButton
+            icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
+            label="Pindah Meja"
+            active={tab === "moves"}
+            onClick={() => setTab("moves")}
+            badge={countPending(moveRequests)}
+            alert={countPending(moveRequests) > 0}
+          />
         </div>
 
         <Button
@@ -251,6 +269,8 @@ export function WaiterDashboard({
         />
       )}
       {tab === "bookings" && <BookingsView bookings={initialBookings} />}
+
+      {tab === "moves" && <MoveRequestsPanel requests={moveRequests} />}
 
       {/* Tombol "Buka Meja Baru" — sticky di bawah */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">

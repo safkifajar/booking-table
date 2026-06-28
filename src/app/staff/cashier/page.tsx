@@ -16,8 +16,8 @@ import { Wallet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { CashierSessionList } from "./CashierSessionList";
-import { MoveRequestsPanel } from "@/components/staff/MoveRequestsPanel";
-import { getPendingMoveRequests } from "@/lib/move-approval-actions";
+import { NotificationBell } from "@/components/NotificationBell";
+import { getMoveRequests } from "@/lib/move-approval-actions";
 
 /**
  * Cashier dashboard utama.
@@ -55,7 +55,7 @@ export default async function CashierPage() {
       getBookingsForCashier(),
       getAvailableTablesForWaiter(),
       getReservationDataForWaiter(),
-      getPendingMoveRequests(),
+      getMoveRequests(),
     ]);
 
   return (
@@ -81,6 +81,7 @@ export default async function CashierPage() {
               <span className="sm:hidden">Shift</span>
             </Link>
           </Button>
+          {profile && <NotificationBell userId={profile.id} />}
           {profile && (
             <AdminHeaderProfile
               displayName={profile.displayName}
@@ -93,12 +94,12 @@ export default async function CashierPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <MoveRequestsPanel requests={moveRequests} />
         <CashierSessionList
           sessions={sessions}
           bookings={bookings}
           availableTables={availableTables}
           reservationData={reservationData}
+          moveRequests={moveRequests}
           barId={ctx.barId}
         />
       </div>
