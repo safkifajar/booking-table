@@ -45,6 +45,73 @@ export function OnboardingWizard({
   const [bio, setBio] = React.useState("");
   const [hobbies, setHobbies] = React.useState<string[]>([]);
 
+  // Persist draft ke sessionStorage supaya tak hilang saat refresh.
+  const STORAGE_KEY = "soho_onboarding_draft";
+  const restored = React.useRef(false);
+
+  React.useEffect(() => {
+    // queueMicrotask: hindari setState sinkron di body effect (cascading render).
+    queueMicrotask(() => {
+      try {
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const d = JSON.parse(raw);
+          if (d.step === 3) setStep(3);
+          setBirthDate(d.birthDate ?? "");
+          setGender(d.gender ?? "");
+          setInterestedIn(d.interestedIn ?? "");
+          setArea(d.area ?? "");
+          setSocialLink(d.socialLink ?? "");
+          setLookingFor(d.lookingFor ?? "");
+          setMusicPref(d.musicPref ?? "");
+          setFavFood(d.favFood ?? "");
+          setFavDrink(d.favDrink ?? "");
+          setBio(d.bio ?? "");
+          setHobbies(Array.isArray(d.hobbies) ? d.hobbies : []);
+        }
+      } catch {
+        /* abaikan draft rusak */
+      }
+      restored.current = true;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    if (!restored.current) return; // jangan timpa sebelum restore selesai
+    const draft = {
+      step,
+      birthDate,
+      gender,
+      interestedIn,
+      area,
+      socialLink,
+      lookingFor,
+      musicPref,
+      favFood,
+      favDrink,
+      bio,
+      hobbies,
+    };
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      /* storage penuh — abaikan */
+    }
+  }, [
+    step,
+    birthDate,
+    gender,
+    interestedIn,
+    area,
+    socialLink,
+    lookingFor,
+    musicPref,
+    favFood,
+    favDrink,
+    bio,
+    hobbies,
+  ]);
+
   function toggleHobby(h: string) {
     setHobbies((prev) =>
       prev.includes(h)
@@ -72,6 +139,11 @@ export function OnboardingWizard({
         bio: bio.trim() || undefined,
         hobbies,
       });
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* abaikan */
+      }
       toast.success("Profil lengkap! Selamat datang 🎉");
       router.push(next || "/");
       router.refresh();
@@ -157,7 +229,7 @@ export function OnboardingWizard({
               type="text"
               value={socialLink}
               onChange={(e) => setSocialLink(e.target.value)}
-              placeholder="cth: instagram.com/username"
+              placeholder="@namauser"
               maxLength={200}
               className={inputCls}
             />

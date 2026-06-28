@@ -350,7 +350,7 @@ export function ProfileForm({
               type="text"
               value={socialLink}
               onChange={(e) => setSocialLink(e.target.value)}
-              placeholder="cth: instagram.com/username atau @username"
+              placeholder="@namauser"
               maxLength={200}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
