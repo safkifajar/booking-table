@@ -83,10 +83,12 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   if (!target || target.barId !== session.barId)
     throw new Error("Meja tujuan tidak valid");
 
-  // Pindah berlaku SEKARANG → jam selesai booking lama (sisa waktu, tak reset).
-  const newStart = new Date();
+  // Pertahankan JAM BOOKING ASLI (tak reset, tak pakai sisa). Pindah hanya ganti
+  // meja; rentang waktu ikut apa adanya supaya jadwal meja lama tak jadi "kosong"
+  // & tak ada celah waktu gratis. Tolak kalau waktu sudah habis.
+  const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
-  if (newStart.getTime() >= newEnd.getTime())
+  if (Date.now() >= newEnd.getTime())
     throw new Error("Waktu booking sudah habis — tak bisa pindah");
 
   await db.insert(tableMoveRequests).values({
@@ -234,10 +236,10 @@ export async function requestMoveTableWithOrder(
     );
   }
 
-  // Pindah berlaku SEKARANG → jam selesai booking lama (sisa waktu, tak reset).
-  const newStart = new Date();
+  // Pertahankan JAM BOOKING ASLI (tak reset). Lihat catatan di requestMoveTable.
+  const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
-  if (newStart.getTime() >= newEnd.getTime())
+  if (Date.now() >= newEnd.getTime())
     throw new Error("Waktu booking sudah habis — tak bisa pindah");
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.

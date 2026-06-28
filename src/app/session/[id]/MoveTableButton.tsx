@@ -197,7 +197,7 @@ export function MoveTableButton({
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
                 {needsApproval
-                  ? "Hanya meja yg kapasitasnya cukup & kosong di sisa waktu booking. Pindah berlaku sekarang sampai jam selesai booking — perlu persetujuan staff."
+                  ? "Hanya meja yg kapasitasnya cukup & kosong di jam booking kamu. Jam booking tetap sama — pindah hanya ganti meja & perlu persetujuan staff."
                   : "Hanya meja yg kapasitasnya cukup. Durasi booking tetap sama; kamu pilih jam mulai di langkah berikutnya."}
               </p>
               {loading ? (

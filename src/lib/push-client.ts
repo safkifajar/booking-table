@@ -19,6 +19,10 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 export function pushSupported(): boolean {
   return (
     typeof window !== "undefined" &&
+    // Service Worker & Push API HANYA tersedia di secure context (HTTPS atau
+    // localhost). Lewat LAN IP via HTTP (mis. 192.168.x.x) tidak — tanpa cek ini
+    // toggle bisa menggantung di "loading". isSecureContext = true utk localhost.
+    window.isSecureContext === true &&
     "serviceWorker" in navigator &&
     "PushManager" in window &&
     "Notification" in window &&
@@ -39,7 +43,13 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 /** Apakah device ini sudah punya push subscription aktif? */
 export async function getExistingSubscription(): Promise<PushSubscription | null> {
   if (!pushSupported()) return null;
-  const reg = await navigator.serviceWorker.ready;
+  // Jaring pengaman: serviceWorker.ready bisa menggantung kalau SW tak pernah
+  // aktif. Race dgn timeout supaya UI tak stuck loading selamanya.
+  const reg = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+  ]);
+  if (!reg) return null;
   return reg.pushManager.getSubscription();
 }
 

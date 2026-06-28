@@ -71,30 +71,29 @@ export async function getMoveTargets(
     .where(eq(tableSessions.id, sessionId));
   if (!session || session.hostId !== profile.id) return [];
 
-  // Mode AKTIF (open/locked): pindah berlaku SEKARANG → jam selesai. Tak ada
-  // pilih jam, jadi meja yg bentrok di rentang [now, end] HARUS disembunyikan
-  // di sini. Mode reserved: tampilkan semua, ketersediaan dipilih di step jam.
+  // Mode AKTIF (open/locked): pindah pertahankan JAM BOOKING ASLI & tak ada step
+  // pilih jam, jadi meja yg bentrok di rentang booking [start, end] HARUS
+  // disembunyikan di sini. Mode reserved: tampilkan semua, ketersediaan dipilih
+  // di step jam.
   const isActive = session.status === "open" || session.status === "locked";
   const busyTableIds = new Set<string>();
-  if (isActive && session.reservationEndAt) {
-    const now = new Date();
+  if (isActive && session.reservationAt && session.reservationEndAt) {
+    const start = session.reservationAt;
     const end = session.reservationEndAt;
-    if (now.getTime() < end.getTime()) {
-      const overlapping = await db
-        .select({ tableId: tableSessions.tableId })
-        .from(tableSessions)
-        .where(
-          and(
-            inArray(tableSessions.status, ["reserved", "open", "locked"]),
-            ne(tableSessions.id, session.id),
-            isNotNull(tableSessions.reservationAt),
-            isNotNull(tableSessions.reservationEndAt),
-            lt(tableSessions.reservationAt, end),
-            gt(tableSessions.reservationEndAt, now)
-          )
-        );
-      for (const r of overlapping) busyTableIds.add(r.tableId);
-    }
+    const overlapping = await db
+      .select({ tableId: tableSessions.tableId })
+      .from(tableSessions)
+      .where(
+        and(
+          inArray(tableSessions.status, ["reserved", "open", "locked"]),
+          ne(tableSessions.id, session.id),
+          isNotNull(tableSessions.reservationAt),
+          isNotNull(tableSessions.reservationEndAt),
+          lt(tableSessions.reservationAt, end),
+          gt(tableSessions.reservationEndAt, start)
+        )
+      );
+    for (const r of overlapping) busyTableIds.add(r.tableId);
   }
 
   // Jumlah anggota (utk filter kapasitas).
