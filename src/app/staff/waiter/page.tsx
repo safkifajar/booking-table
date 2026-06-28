@@ -10,6 +10,7 @@ import {
   getAvailableTablesForWaiter,
   getReservationDataForWaiter,
   getBookingsForWaiter,
+  getClosedSessionsForWaiter,
 } from "@/lib/waiter-actions";
 import { getMoveRequests } from "@/lib/move-approval-actions";
 import { ChefHat } from "lucide-react";
@@ -37,6 +38,7 @@ export default async function StaffWaiterPage() {
     reservationData,
     bookings,
     moveRequests,
+    closedSessions,
   ] = await Promise.all([
     db
       .select({ id: bars.id, name: bars.name })
@@ -51,6 +53,7 @@ export default async function StaffWaiterPage() {
     getReservationDataForWaiter(),
     getBookingsForWaiter(),
     getMoveRequests(),
+    getClosedSessionsForWaiter(),
   ]);
 
   if (!bar) {
@@ -97,6 +100,7 @@ export default async function StaffWaiterPage() {
             reservationData={reservationData}
             initialBookings={bookings}
             moveRequests={moveRequests}
+            closedSessions={closedSessions}
             barId={bar.id}
           />
         </Suspense>

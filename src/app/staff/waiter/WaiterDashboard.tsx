@@ -48,11 +48,12 @@ interface Props {
   initialAvailableTables: AvailableTable[];
   reservationData: WaiterReservationData;
   initialBookings: WaiterBookingItem[];
+  closedSessions: WaiterSessionItem[];
   moveRequests: MoveRequestRow[];
   barId: string;
 }
 
-type Tab = "queue" | "sessions" | "bookings" | "moves";
+type Tab = "queue" | "sessions" | "bookings" | "moves" | "done";
 
 const AUDIO_PREF_KEY = "waiter_audio_enabled";
 
@@ -88,6 +89,7 @@ export function WaiterDashboard({
   initialAvailableTables,
   reservationData,
   initialBookings,
+  closedSessions,
   moveRequests,
   barId,
 }: Props) {
@@ -101,7 +103,9 @@ export function WaiterDashboard({
         ? "bookings"
         : tabParam === "moves"
           ? "moves"
-          : "queue";
+          : tabParam === "done"
+            ? "done"
+            : "queue";
   const [tab, setTab] = React.useState<Tab>(initialTab);
   const [audioEnabled, setAudioEnabled] = React.useState(true);
   const [optimistic, setOptimistic] = React.useState<Set<string>>(new Set());
@@ -201,8 +205,8 @@ export function WaiterDashboard({
   return (
     <div className="space-y-4 pb-24">
       {/* Tab strip + audio toggle */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-lg bg-muted/40 border border-border overflow-x-auto">
           <TabButton
             icon={<Utensils className="h-3.5 w-3.5" />}
             label="Order Masuk"
@@ -232,6 +236,12 @@ export function WaiterDashboard({
             onClick={() => setTab("moves")}
             badge={countPending(moveRequests)}
             alert={countPending(moveRequests) > 0}
+          />
+          <TabButton
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+            label="Selesai"
+            active={tab === "done"}
+            onClick={() => setTab("done")}
           />
         </div>
 
@@ -271,6 +281,15 @@ export function WaiterDashboard({
       {tab === "bookings" && <BookingsView bookings={initialBookings} />}
 
       {tab === "moves" && <MoveRequestsPanel requests={moveRequests} />}
+
+      {tab === "done" && (
+        <SessionsView
+          sessions={closedSessions}
+          onAssist={handleAssistOrder}
+          joiningSession={joiningSession}
+          emptyLabel="Belum ada sesi selesai"
+        />
+      )}
 
       {/* Tombol "Buka Meja Baru" — sticky di bawah */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
@@ -471,10 +490,12 @@ function SessionsView({
   sessions,
   onAssist,
   joiningSession,
+  emptyLabel = "Belum ada meja aktif",
 }: {
   sessions: WaiterSessionItem[];
   onAssist: (id: string) => Promise<void>;
   joiningSession: string | null;
+  emptyLabel?: string;
 }) {
   const [dateFilter, setDateFilter] = React.useState<string>("all");
 
@@ -493,7 +514,7 @@ function SessionsView({
     return (
       <Card className="p-12 text-center border-dashed">
         <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
+        <p className="text-sm font-medium mb-1">{emptyLabel}</p>
         <p className="text-xs text-muted-foreground">
           Meja yang sudah dibuka customer akan muncul di sini.
         </p>
@@ -698,9 +719,20 @@ function SessionCard({
   onAssist: (id: string) => Promise<void>;
   isJoining: boolean;
 }) {
+  const router = useRouter();
+  // open → bantu pesan (join). Selain itu (overdue/locked) → buka sesi langsung
+  // supaya staff tetap bisa lihat bill & close/terima bayar.
+  function handleClick() {
+    if (isJoining) return;
+    if (session.status === "open") {
+      void onAssist(session.session_id);
+    } else {
+      router.push(`/session/${session.session_id}`);
+    }
+  }
   return (
     <Card
-      onClick={() => !isJoining && onAssist(session.session_id)}
+      onClick={handleClick}
       className={cn(
         "p-4 cursor-pointer transition hover:border-primary/40 hover:bg-primary/[0.03]",
         isJoining && "opacity-60 pointer-events-none"
@@ -814,15 +846,18 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
+      title={label}
       className={cn(
-        "relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition",
+        "relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition shrink-0",
         active
           ? "bg-primary/15 text-primary"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
-      <span>{label}</span>
+      {/* Label disembunyikan di layar sangat kecil utk tab non-aktif → icon-only,
+          tab aktif tetap tampil label. */}
+      <span className={cn(active ? "inline" : "hidden sm:inline")}>{label}</span>
       {badge !== undefined && badge > 0 && (
         <span
           className={cn(
