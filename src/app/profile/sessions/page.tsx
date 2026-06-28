@@ -9,7 +9,7 @@ import { getOutstandingMap } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { formatIDR } from "@/lib/utils";
-import { Crown, Users, Lock, ChevronRight, History } from "lucide-react";
+import { Crown, Users, Lock, ChevronRight, History, Clock } from "lucide-react";
 import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
 
 interface SessionRow {
@@ -99,11 +99,13 @@ export default async function ProfileSessionsPage() {
 
 function SessionListItem({ session }: { session: SessionRow }) {
   const isActive =
+    session.status === "reserved" ||
     session.status === "open" ||
     session.status === "locked" ||
     session.status === "overdue";
-  // Aktif/overdue → /session/[id] (overdue masih bisa dibayar). closed/cancelled
-  // → /session/[id]/rate (rate page handle empty state untuk solo, jadi aman).
+  // Reserved/aktif/overdue → /session/[id] (booking belum mulai & overdue masih
+  // relevan dibuka/dibayar). closed/cancelled → /session/[id]/rate (rate page
+  // handle empty state untuk solo, jadi aman).
   const href = isActive ? `/session/${session.id}` : `/session/${session.id}/rate`;
 
   return (
@@ -143,7 +145,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
             memberStatus={session.member_status}
             isHost={session.is_host}
           />
-          {session.outstanding > 0 && (
+          {session.outstanding > 0 && session.status !== "reserved" && (
             <>
               <span>·</span>
               <span className="inline-flex items-center gap-1 text-orange-400 font-medium">
@@ -167,6 +169,13 @@ function StatusBadge({
   memberStatus: SessionRow["member_status"];
   isHost: boolean;
 }) {
+  if (status === "reserved") {
+    return (
+      <span className="inline-flex items-center gap-1 text-sky-400">
+        <Clock className="h-3 w-3" /> Booking
+      </span>
+    );
+  }
   if (status === "open") {
     return (
       <span className="inline-flex items-center gap-1 text-emerald-400">
