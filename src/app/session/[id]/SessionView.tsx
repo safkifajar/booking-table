@@ -48,6 +48,7 @@ import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicke
 import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
+import { MoveTableButton } from "./MoveTableButton";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
   MemberRole,
@@ -467,6 +468,11 @@ function VibeTab(
 
   return (
     <div className="space-y-4">
+      {/* Pindah meja — host, sebelum jam booking (reserved) */}
+      {props.isHost && props.session.status === "reserved" && (
+        <MoveTableButton sessionId={props.session.id} />
+      )}
+
       {/* Vibe tags */}
       {props.session.vibe_tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
