@@ -29,6 +29,7 @@ import { openTable } from "@/lib/actions";
 import { type InviteCandidate } from "@/lib/customer-actions";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
+import { AvatarViewer } from "@/components/network/AvatarViewer";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
 import type { TableShape, SessionVisibility } from "@/types/db";
 import type { ReservationConfig } from "@/lib/settings-constants";
@@ -548,6 +549,10 @@ function MenuPickerModal({
     () => new Map(cart)
   );
   const [activeCat, setActiveCat] = React.useState(menu[0]?.id ?? "");
+  // Foto menu yg sedang diperbesar (lightbox).
+  const [photo, setPhoto] = React.useState<{ src: string; alt: string } | null>(
+    null
+  );
 
   function setQty(id: string, qty: number) {
     setLocal((prev) => {
@@ -639,6 +644,28 @@ function MenuPickerModal({
                   key={item.id}
                   className="flex items-center gap-3 p-2.5 rounded-md border border-border"
                 >
+                  {/* Thumbnail — klik utk perbesar */}
+                  {item.image_url ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPhoto({ src: item.image_url!, alt: item.name })
+                      }
+                      className="h-12 w-12 shrink-0 rounded-md overflow-hidden border border-border"
+                      aria-label={`Perbesar foto ${item.name}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ) : (
+                    <div className="h-12 w-12 shrink-0 rounded-md border border-border bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground uppercase">
+                      {item.name.slice(0, 2)}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
                       {item.name}
@@ -704,6 +731,15 @@ function MenuPickerModal({
           </Button>
         </div>
       </div>
+
+      {/* Lightbox foto menu */}
+      {photo && (
+        <AvatarViewer
+          src={photo.src}
+          alt={photo.alt}
+          onClose={() => setPhoto(null)}
+        />
+      )}
     </div>
   );
 }
