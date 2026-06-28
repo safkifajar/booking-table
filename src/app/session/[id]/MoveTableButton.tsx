@@ -15,6 +15,7 @@ import {
 } from "@/lib/move-table-actions";
 import {
   requestMoveTable,
+  requestMoveTableWithOrder,
   getMyPendingMove,
 } from "@/lib/move-approval-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
@@ -90,9 +91,9 @@ export function MoveTableButton({
   }
 
   function handlePick(t: MoveTargetTable) {
-    // Min-spend popup hanya di mode reserved (pindah langsung). Mode aktif
-    // (request approval) tak menagih min-spend di fase ini.
-    if (!needsApproval && t.min_spend > 0 && existingOrderTotal < t.min_spend) {
+    // Meja ber-min-spend & order belum cukup → popup konfirmasi dulu
+    // (berlaku utk pindah langsung MAUPUN request approval).
+    if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
       setConfirmMinSpend(t);
       return;
     }
@@ -101,7 +102,13 @@ export function MoveTableButton({
 
   // Setelah pilih jam.
   async function handleSlotChosen(t: MoveTargetTable, slotIso: string) {
-    // Mode aktif → ajukan request approval (tanpa min-spend modal di fase ini).
+    // Min-spend kurang → modal order dulu (baik mode aktif maupun reserved).
+    if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
+      setOrderStep({ target: t, slotIso });
+      setSlotTarget(null);
+      return;
+    }
+    // Mode aktif → ajukan request approval.
     if (needsApproval) {
       setMoving(true);
       try {
@@ -120,12 +127,6 @@ export function MoveTableButton({
       } finally {
         setMoving(false);
       }
-      return;
-    }
-    // Mode reserved → min-spend kurang? order : pindah langsung.
-    if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
-      setOrderStep({ target: t, slotIso });
-      setSlotTarget(null);
       return;
     }
     setMoving(true);
@@ -287,8 +288,15 @@ export function MoveTableButton({
           slotIso={orderStep.slotIso}
           menu={menu}
           existingOrderTotal={existingOrderTotal}
+          needsApproval={needsApproval}
           onBack={() => setOrderStep(null)}
           onDone={() => {
+            if (needsApproval) {
+              setPending({
+                toLabel: orderStep.target.label,
+                reservationAt: orderStep.slotIso,
+              });
+            }
             setOrderStep(null);
             setOpen(false);
             router.refresh();
@@ -326,6 +334,20 @@ function SlotPickStep({
       alive = false;
     };
   }, [sessionId, target.id]);
+
+  // Konflik: rentang [start, end) menabrak slot yg sudah dibooking di meja
+  // tujuan (durasi terkunci bisa melewati slot booked walau jam mulai kosong).
+  const rangeConflict = React.useMemo(() => {
+    if (!startIso || !endIso || !data) return false;
+    const booked = new Set(data.bookedSlotIsos);
+    const slotMs = data.slotIntervalMinutes * 60 * 1000;
+    const startMs = new Date(startIso).getTime();
+    const endMs = new Date(endIso).getTime();
+    for (let t = startMs; t < endMs; t += slotMs) {
+      if (booked.has(new Date(t).toISOString())) return true;
+    }
+    return false;
+  }, [startIso, endIso, data]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
@@ -379,13 +401,19 @@ function SlotPickStep({
           )}
         </div>
         {data && data.slots.length > 0 && (
-          <div className="p-4 border-t border-border shrink-0">
+          <div className="p-4 border-t border-border shrink-0 space-y-2">
+            {rangeConflict && (
+              <p className="text-[11px] text-amber-400">
+                Rentang jam ini bentrok dengan booking lain di meja tujuan. Pilih
+                jam mulai lain.
+              </p>
+            )}
             <Button
               variant="gold"
               size="lg"
               className="w-full"
-              disabled={!startIso || moving}
-              onClick={() => startIso && onChoose(startIso)}
+              disabled={!startIso || rangeConflict || moving}
+              onClick={() => startIso && !rangeConflict && onChoose(startIso)}
             >
               {moving ? (
                 <>
@@ -409,6 +437,7 @@ function MoveOrderModal({
   slotIso,
   menu,
   existingOrderTotal,
+  needsApproval,
   onBack,
   onDone,
 }: {
@@ -417,6 +446,7 @@ function MoveOrderModal({
   slotIso: string;
   menu: MenuPickerCategory[];
   existingOrderTotal: number;
+  needsApproval: boolean;
   onBack: () => void;
   onDone: () => void;
 }) {
@@ -465,14 +495,25 @@ function MoveOrderModal({
     }
     setSubmitting(true);
     try {
-      await moveTableWithOrder({
-        sessionId,
-        targetTableId: target.id,
-        reservationAt: slotIso,
-        items,
-        paymentMethod: method,
-      });
-      toast.success(`Bayar berhasil & pindah ke meja ${target.label}`);
+      if (needsApproval) {
+        await requestMoveTableWithOrder({
+          sessionId,
+          targetTableId: target.id,
+          reservationAt: slotIso,
+          items,
+          paymentMethod: method,
+        });
+        toast.success("Bayar berhasil — request pindah menunggu persetujuan");
+      } else {
+        await moveTableWithOrder({
+          sessionId,
+          targetTableId: target.id,
+          reservationAt: slotIso,
+          items,
+          paymentMethod: method,
+        });
+        toast.success(`Bayar berhasil & pindah ke meja ${target.label}`);
+      }
       onDone();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal pindah"));
