@@ -524,13 +524,13 @@ function PrivacyToggle({
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
           checked ? "bg-primary" : "bg-muted border border-border"
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+            "inline-flex h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
             checked ? "translate-x-[22px]" : "translate-x-0.5"
           )}
         />
