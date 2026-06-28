@@ -13,6 +13,10 @@ import {
   type MoveTargetTable,
   type MoveSlotData,
 } from "@/lib/move-table-actions";
+import {
+  requestMoveTable,
+  getMyPendingMove,
+} from "@/lib/move-approval-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
@@ -27,14 +31,22 @@ type PayMethod = "qris" | "cash";
  */
 export function MoveTableButton({
   sessionId,
+  status,
   menu,
   existingOrderTotal,
 }: {
   sessionId: string;
+  status: string;
   menu: MenuPickerCategory[];
   existingOrderTotal: number;
 }) {
   const router = useRouter();
+  // Aktif (open/locked) → request + approval. reserved → pindah langsung.
+  const needsApproval = status === "open" || status === "locked";
+  const [pending, setPending] = React.useState<{
+    toLabel: string;
+    reservationAt: string;
+  } | null>(null);
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [targets, setTargets] = React.useState<MoveTargetTable[] | null>(null);
@@ -52,6 +64,18 @@ export function MoveTableButton({
   const [confirmMinSpend, setConfirmMinSpend] =
     React.useState<MoveTargetTable | null>(null);
 
+  // Cek apakah ada request pindah yg masih menunggu (mode aktif).
+  React.useEffect(() => {
+    if (!needsApproval) return;
+    let alive = true;
+    getMyPendingMove(sessionId)
+      .then((p) => alive && setPending(p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [needsApproval, sessionId]);
+
   async function openModal() {
     setOpen(true);
     setLoading(true);
@@ -66,16 +90,39 @@ export function MoveTableButton({
   }
 
   function handlePick(t: MoveTargetTable) {
-    // #1 Popup konfirmasi dulu kalau meja ber-min-spend & order belum cukup.
-    if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
+    // Min-spend popup hanya di mode reserved (pindah langsung). Mode aktif
+    // (request approval) tak menagih min-spend di fase ini.
+    if (!needsApproval && t.min_spend > 0 && existingOrderTotal < t.min_spend) {
       setConfirmMinSpend(t);
       return;
     }
-    setSlotTarget(t); // langsung ke step pilih jam
+    setSlotTarget(t); // ke step pilih jam
   }
 
-  // Setelah pilih jam: kalau min-spend kurang → order, else pindah langsung.
+  // Setelah pilih jam.
   async function handleSlotChosen(t: MoveTargetTable, slotIso: string) {
+    // Mode aktif → ajukan request approval (tanpa min-spend modal di fase ini).
+    if (needsApproval) {
+      setMoving(true);
+      try {
+        await requestMoveTable({
+          sessionId,
+          targetTableId: t.id,
+          reservationAt: slotIso,
+        });
+        toast.success("Request pindah dikirim — menunggu persetujuan staff");
+        setOpen(false);
+        setSlotTarget(null);
+        setPending({ toLabel: t.label, reservationAt: slotIso });
+        router.refresh();
+      } catch (err) {
+        toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+      } finally {
+        setMoving(false);
+      }
+      return;
+    }
+    // Mode reserved → min-spend kurang? order : pindah langsung.
     if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
       setOrderStep({ target: t, slotIso });
       setSlotTarget(null);
@@ -101,9 +148,25 @@ export function MoveTableButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" className="w-full" onClick={openModal}>
-        <ArrowRightLeft className="h-4 w-4" /> Pindah Meja
-      </Button>
+      {pending ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+          <span>
+            Menunggu persetujuan staff — pindah ke meja{" "}
+            <strong>{pending.toLabel}</strong>.
+          </span>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={openModal}
+        >
+          <ArrowRightLeft className="h-4 w-4" />{" "}
+          {needsApproval ? "Request Pindah Meja" : "Pindah Meja"}
+        </Button>
+      )}
 
       {/* Step 1: pilih meja */}
       {open && !slotTarget && !orderStep && (

@@ -11,9 +11,11 @@ import {
   getReservationDataForWaiter,
   getBookingsForWaiter,
 } from "@/lib/waiter-actions";
+import { getPendingMoveRequests } from "@/lib/move-approval-actions";
 import { ChefHat } from "lucide-react";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { WaiterDashboard } from "./WaiterDashboard";
+import { MoveRequestsPanel } from "@/components/staff/MoveRequestsPanel";
 
 /**
  * Waiter dashboard — order queue + bantu pesan flow.
@@ -34,6 +36,7 @@ export default async function StaffWaiterPage() {
     availableTables,
     reservationData,
     bookings,
+    moveRequests,
   ] = await Promise.all([
     db
       .select({ id: bars.id, name: bars.name })
@@ -47,6 +50,7 @@ export default async function StaffWaiterPage() {
     getAvailableTablesForWaiter(),
     getReservationDataForWaiter(),
     getBookingsForWaiter(),
+    getPendingMoveRequests(),
   ]);
 
   if (!bar) {
@@ -84,6 +88,7 @@ export default async function StaffWaiterPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+        <MoveRequestsPanel requests={moveRequests} />
         <Suspense>
           <WaiterDashboard
             initialQueue={queue}

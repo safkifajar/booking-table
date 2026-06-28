@@ -22,6 +22,9 @@ type NotifType =
   | "invite_accepted"
   | "invite_rejected"
   | "invite_cancelled"
+  | "move_request"
+  | "move_approved"
+  | "move_rejected"
   | "general";
 
 export interface AdminNotificationRow {

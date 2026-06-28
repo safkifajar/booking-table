@@ -468,18 +468,22 @@ function VibeTab(
 
   return (
     <div className="space-y-4">
-      {/* Pindah meja — host, sebelum jam booking (reserved) */}
-      {props.isHost && props.session.status === "reserved" && (
-        <MoveTableButton
-          sessionId={props.session.id}
-          menu={props.menu}
-          existingOrderTotal={props.orderItems.reduce(
-            (acc, i) =>
-              i.status === "void" ? acc : acc + i.quantity * i.unit_price,
-            0
-          )}
-        />
-      )}
+      {/* Pindah meja — host. reserved=langsung; aktif(open/locked)=request approval */}
+      {props.isHost &&
+        (props.session.status === "reserved" ||
+          props.session.status === "open" ||
+          props.session.status === "locked") && (
+          <MoveTableButton
+            sessionId={props.session.id}
+            status={props.session.status}
+            menu={props.menu}
+            existingOrderTotal={props.orderItems.reduce(
+              (acc, i) =>
+                i.status === "void" ? acc : acc + i.quantity * i.unit_price,
+              0
+            )}
+          />
+        )}
 
       {/* Vibe tags */}
       {props.session.vibe_tags.length > 0 && (

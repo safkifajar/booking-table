@@ -48,6 +48,9 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "general",
   "invite_rejected", // pengundang: undangan ditolak
   "invite_cancelled", // penerima: undangan dibatalkan host (migration 0027)
+  "move_request", // staff: ada request pindah meja (migration 0042)
+  "move_approved", // host: request pindah di-approve
+  "move_rejected", // host: request pindah ditolak
 ]);
 
 export const orderStatusEnum = pgEnum("order_status", [

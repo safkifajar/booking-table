@@ -1,0 +1,322 @@
+"use server";
+
+import { z } from "zod";
+import { and, asc, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db/client";
+import { tableSessions } from "@/lib/db/schema/sessions";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { tableMoveRequests } from "@/lib/db/schema/move-requests";
+import { staffRoles } from "@/lib/db/schema/extras";
+import { profiles } from "@/lib/db/schema/profiles";
+import { requireProfile } from "@/lib/auth-v2/current";
+import { requirePermission } from "@/lib/auth-v2/permissions";
+import { createNotification } from "@/lib/notifications";
+import { isDbConstraintError } from "@/lib/utils";
+import { notify } from "@/lib/realtime/notify";
+import { channels } from "@/lib/realtime/channels";
+
+// ============================================================
+// FASE 2 — REQUEST & APPROVAL (sesi aktif)
+// ============================================================
+
+const requestSchema = z.object({
+  sessionId: z.string().uuid(),
+  targetTableId: z.string().uuid(),
+  reservationAt: z.string().datetime(),
+});
+
+/**
+ * Host minta pindah meja saat sesi AKTIF (open/locked). Buat request pending +
+ * notif ke semua staff bar. Tak langsung pindah — tunggu approval.
+ */
+export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
+  const profile = await requireProfile();
+  const data = requestSchema.parse(input);
+
+  const [session] = await db
+    .select({
+      id: tableSessions.id,
+      status: tableSessions.status,
+      hostId: tableSessions.hostId,
+      tableId: tableSessions.tableId,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
+      barId: floorAreas.barId,
+      fromLabel: tables.label,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableSessions.id, data.sessionId));
+  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (session.hostId !== profile.id)
+    throw new Error("Hanya host yang bisa minta pindah meja");
+  if (session.status !== "open" && session.status !== "locked")
+    throw new Error("Request pindah hanya saat meja aktif");
+  if (!session.reservationAt || !session.reservationEndAt)
+    throw new Error("Sesi ini tak punya rentang waktu");
+
+  const [pendingExisting] = await db
+    .select({ id: tableMoveRequests.id })
+    .from(tableMoveRequests)
+    .where(
+      and(
+        eq(tableMoveRequests.sessionId, session.id),
+        eq(tableMoveRequests.status, "pending")
+      )
+    );
+  if (pendingExisting) throw new Error("Sudah ada request pindah yang menunggu");
+
+  const [target] = await db
+    .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
+    .from(tables)
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tables.id, data.targetTableId));
+  if (!target || target.barId !== session.barId)
+    throw new Error("Meja tujuan tidak valid");
+
+  const durationMs =
+    session.reservationEndAt.getTime() - session.reservationAt.getTime();
+  const newStart = new Date(data.reservationAt);
+  const newEnd = new Date(newStart.getTime() + durationMs);
+
+  await db.insert(tableMoveRequests).values({
+    sessionId: session.id,
+    requestedBy: profile.id,
+    fromTableId: session.tableId,
+    toTableId: data.targetTableId,
+    reservationAt: newStart,
+    reservationEndAt: newEnd,
+    status: "pending",
+  });
+
+  // Notif ke semua staff bar (in-app + push) + channel staff realtime.
+  const staff = await db
+    .selectDistinct({ profileId: staffRoles.profileId })
+    .from(staffRoles)
+    .where(
+      and(eq(staffRoles.barId, session.barId), eq(staffRoles.isActive, true))
+    );
+  await Promise.allSettled(
+    staff.map((s) =>
+      createNotification({
+        profileId: s.profileId,
+        type: "move_request",
+        title: "Request pindah meja",
+        body: `${profile.displayName} minta pindah dari meja ${session.fromLabel} ke ${target.label}.`,
+        link: "/staff/waiter",
+      })
+    )
+  );
+  await Promise.allSettled([
+    notify(channels.staff(session.barId)),
+    notify(channels.session(session.id)),
+  ]);
+
+  revalidatePath(`/session/${session.id}`);
+  revalidatePath("/staff/waiter");
+  revalidatePath("/staff/cashier");
+}
+
+/** Request pindah pending milik sesi (badge status di UI customer). */
+export async function getMyPendingMove(
+  sessionId: string
+): Promise<{ toLabel: string; reservationAt: string } | null> {
+  const [row] = await db
+    .select({
+      toLabel: tables.label,
+      reservationAt: tableMoveRequests.reservationAt,
+    })
+    .from(tableMoveRequests)
+    .innerJoin(tables, eq(tables.id, tableMoveRequests.toTableId))
+    .where(
+      and(
+        eq(tableMoveRequests.sessionId, sessionId),
+        eq(tableMoveRequests.status, "pending")
+      )
+    )
+    .limit(1);
+  return row
+    ? { toLabel: row.toLabel, reservationAt: row.reservationAt.toISOString() }
+    : null;
+}
+
+export interface PendingMoveRequest {
+  id: string;
+  requester_name: string;
+  from_label: string;
+  to_label: string;
+  reservation_at: string;
+  reservation_end_at: string;
+  created_at: string;
+}
+
+/** Daftar request pindah pending utk staff dashboard. */
+export async function getPendingMoveRequests(): Promise<PendingMoveRequest[]> {
+  const ctx = await requirePermission(
+    "open_table_for_customer",
+    "/staff/waiter"
+  );
+  const ft = alias(tables, "ft");
+  const tt = alias(tables, "tt");
+  const rows = await db
+    .select({
+      id: tableMoveRequests.id,
+      requester_name: profiles.displayName,
+      from_label: ft.label,
+      to_label: tt.label,
+      reservation_at: tableMoveRequests.reservationAt,
+      reservation_end_at: tableMoveRequests.reservationEndAt,
+      created_at: tableMoveRequests.createdAt,
+      barId: floorAreas.barId,
+    })
+    .from(tableMoveRequests)
+    .innerJoin(profiles, eq(profiles.id, tableMoveRequests.requestedBy))
+    .innerJoin(ft, eq(ft.id, tableMoveRequests.fromTableId))
+    .innerJoin(tt, eq(tt.id, tableMoveRequests.toTableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, ft.areaId))
+    .where(
+      and(
+        eq(tableMoveRequests.status, "pending"),
+        eq(floorAreas.barId, ctx.barId)
+      )
+    )
+    .orderBy(asc(tableMoveRequests.createdAt));
+  return rows.map((r) => ({
+    id: r.id,
+    requester_name: r.requester_name,
+    from_label: r.from_label,
+    to_label: r.to_label,
+    reservation_at: r.reservation_at.toISOString(),
+    reservation_end_at: r.reservation_end_at.toISOString(),
+    created_at: r.created_at.toISOString(),
+  }));
+}
+
+/** Staff approve/reject request. Approve → eksekusi pindah (cek slot ulang). */
+export async function resolveMoveRequest(input: {
+  requestId: string;
+  approve: boolean;
+}) {
+  const ctx = await requirePermission(
+    "open_table_for_customer",
+    "/staff/waiter"
+  );
+
+  const [req] = await db
+    .select()
+    .from(tableMoveRequests)
+    .where(eq(tableMoveRequests.id, input.requestId));
+  if (!req) throw new Error("Request tidak ditemukan");
+  if (req.status !== "pending") throw new Error("Request sudah diproses");
+
+  const [session] = await db
+    .select({
+      id: tableSessions.id,
+      hostId: tableSessions.hostId,
+      barId: floorAreas.barId,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableSessions.id, req.sessionId));
+  const [toTable] = await db
+    .select({ label: tables.label })
+    .from(tables)
+    .where(eq(tables.id, req.toTableId));
+  const toLabel = toTable?.label ?? "meja baru";
+
+  if (!input.approve) {
+    await db
+      .update(tableMoveRequests)
+      .set({
+        status: "rejected",
+        resolvedBy: ctx.profileId,
+        resolvedAt: new Date(),
+      })
+      .where(eq(tableMoveRequests.id, req.id));
+    if (session) {
+      await createNotification({
+        profileId: session.hostId,
+        type: "move_rejected",
+        title: "Request pindah ditolak",
+        body: `Maaf, request pindah ke meja ${toLabel} ditolak.`,
+        link: `/session/${session.id}`,
+      });
+      await Promise.allSettled([
+        notify(channels.session(session.id)),
+        notify(channels.staff(session.barId)),
+      ]);
+    }
+    revalidatePath("/staff/waiter");
+    revalidatePath("/staff/cashier");
+    return;
+  }
+
+  // Approve → eksekusi pindah (constraint DB cek slot ulang).
+  try {
+    await db
+      .update(tableSessions)
+      .set({
+        tableId: req.toTableId,
+        reservationAt: req.reservationAt,
+        reservationEndAt: req.reservationEndAt,
+      })
+      .where(eq(tableSessions.id, req.sessionId));
+  } catch (err) {
+    if (
+      isDbConstraintError(err, "no_overlapping_reservation") ||
+      isDbConstraintError(err, "uq_active_session_per_table")
+    ) {
+      await db
+        .update(tableMoveRequests)
+        .set({
+          status: "rejected",
+          resolvedBy: ctx.profileId,
+          resolvedAt: new Date(),
+        })
+        .where(eq(tableMoveRequests.id, req.id));
+      if (session) {
+        await createNotification({
+          profileId: session.hostId,
+          type: "move_rejected",
+          title: "Pindah meja gagal",
+          body: `Meja ${toLabel} keburu terisi. Request dibatalkan.`,
+          link: `/session/${session.id}`,
+        });
+      }
+      throw new Error(
+        `Meja ${toLabel} keburu terisi — request ditolak otomatis.`
+      );
+    }
+    throw err;
+  }
+
+  await db
+    .update(tableMoveRequests)
+    .set({
+      status: "approved",
+      resolvedBy: ctx.profileId,
+      resolvedAt: new Date(),
+    })
+    .where(eq(tableMoveRequests.id, req.id));
+
+  if (session) {
+    await createNotification({
+      profileId: session.hostId,
+      type: "move_approved",
+      title: "Pindah meja disetujui",
+      body: `Kamu sudah dipindah ke meja ${toLabel}.`,
+      link: `/session/${session.id}`,
+    });
+    await Promise.allSettled([
+      notify(channels.session(session.id)),
+      notify(channels.bar(session.barId)),
+      notify(channels.staff(session.barId)),
+    ]);
+  }
+  revalidatePath("/staff/waiter");
+  revalidatePath("/staff/cashier");
+}

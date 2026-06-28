@@ -16,6 +16,8 @@ import { Wallet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { CashierSessionList } from "./CashierSessionList";
+import { MoveRequestsPanel } from "@/components/staff/MoveRequestsPanel";
+import { getPendingMoveRequests } from "@/lib/move-approval-actions";
 
 /**
  * Cashier dashboard utama.
@@ -47,12 +49,13 @@ export default async function CashierPage() {
     );
   }
 
-  const [sessions, bookings, availableTables, reservationData] =
+  const [sessions, bookings, availableTables, reservationData, moveRequests] =
     await Promise.all([
       getActiveSessionsForCashier(),
       getBookingsForCashier(),
       getAvailableTablesForWaiter(),
       getReservationDataForWaiter(),
+      getPendingMoveRequests(),
     ]);
 
   return (
@@ -90,6 +93,7 @@ export default async function CashierPage() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+        <MoveRequestsPanel requests={moveRequests} />
         <CashierSessionList
           sessions={sessions}
           bookings={bookings}
