@@ -289,19 +289,26 @@ function SlotPickStep({
               <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
             </div>
           ) : data.slots.length > 0 ? (
-            <SlotRangePicker
-              slots={data.slots}
-              bookedSlotIsos={data.bookedSlotIsos}
-              slotIntervalMinutes={data.slotIntervalMinutes}
-              bookingWindowDays={data.bookingWindowDays}
-              startIso={startIso}
-              endIso={endIso}
-              lockedDurationMs={data.durationMinutes * 60 * 1000}
-              onChange={(s, e) => {
-                setStartIso(s);
-                setEndIso(e);
-              }}
-            />
+            <div className="space-y-3">
+              <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
+                Durasi pindah meja{" "}
+                <strong>sama dengan booking sebelumnya ({durasiLabel(data.durationMinutes)})</strong>
+                . Cukup pilih jam mulai — jam selesai otomatis mengikuti.
+              </div>
+              <SlotRangePicker
+                slots={data.slots}
+                bookedSlotIsos={data.bookedSlotIsos}
+                slotIntervalMinutes={data.slotIntervalMinutes}
+                bookingWindowDays={data.bookingWindowDays}
+                startIso={startIso}
+                endIso={endIso}
+                lockedDurationMs={data.durationMinutes * 60 * 1000}
+                onChange={(s, e) => {
+                  setStartIso(s);
+                  setEndIso(e);
+                }}
+              />
+            </div>
           ) : (
             <div className="py-10 text-center text-sm text-muted-foreground">
               Tak ada jam tersedia di meja ini.
@@ -564,4 +571,13 @@ function MoveOrderModal({
       </div>
     </div>
   );
+}
+
+/** "3 jam" / "1 jam 30 menit" / "45 menit" dari total menit. */
+function durasiLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} menit`;
+  if (m === 0) return `${h} jam`;
+  return `${h} jam ${m} menit`;
 }
