@@ -7,10 +7,18 @@ import { db } from "@/lib/db/client";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
-import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { isDbConstraintError } from "@/lib/utils";
 import { getPaymentGateway } from "@/lib/payments/gateway";
+import { generateAvailableSlots } from "@/lib/reservation-helpers";
+import type { AvailableSlot } from "@/lib/reservation-format";
+import {
+  DEFAULT_OPERATING_HOURS,
+  DEFAULT_RESERVATION_CONFIG,
+  type OperatingHours,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import type { PaymentMethod } from "@/types/db";
@@ -125,9 +133,91 @@ export async function getMoveTargets(
     }));
 }
 
+/**
+ * Slot jam mulai yg tersedia di meja tujuan, dgn DURASI dikunci = durasi booking
+ * awal sesi ini. Hanya jam yg muat penuh & tak bentrok di meja tujuan.
+ */
+export async function getMoveTableSlots(
+  sessionId: string,
+  targetTableId: string
+): Promise<AvailableSlot[]> {
+  const profile = await requireProfile();
+
+  const [session] = await db
+    .select({
+      hostId: tableSessions.hostId,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
+      barId: floorAreas.barId,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableSessions.id, sessionId));
+  if (
+    !session ||
+    session.hostId !== profile.id ||
+    !session.reservationAt ||
+    !session.reservationEndAt
+  )
+    return [];
+
+  const durationMs =
+    session.reservationEndAt.getTime() - session.reservationAt.getTime();
+
+  // Config + jam operasi bar.
+  const [barRow] = await db
+    .select({
+      opening_hours: bars.openingHours,
+      reservation_config: bars.reservationConfig,
+    })
+    .from(bars)
+    .where(eq(bars.id, session.barId));
+  const opHours: OperatingHours = {
+    ...DEFAULT_OPERATING_HOURS,
+    ...((barRow?.opening_hours as OperatingHours) ?? {}),
+  };
+  const resConfig: ReservationConfig = {
+    ...DEFAULT_RESERVATION_CONFIG,
+    ...((barRow?.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
+  if (!resConfig.enabled) return [];
+
+  const slots = generateAvailableSlots(new Date(), resConfig, opHours);
+
+  // Rentang booked di meja tujuan (reserved/open/locked, kecuali sesi ini).
+  const booked = await db
+    .select({
+      startAt: tableSessions.reservationAt,
+      endAt: tableSessions.reservationEndAt,
+    })
+    .from(tableSessions)
+    .where(
+      and(
+        eq(tableSessions.tableId, targetTableId),
+        inArray(tableSessions.status, ["reserved", "open", "locked"]),
+        ne(tableSessions.id, sessionId),
+        isNotNull(tableSessions.reservationAt),
+        isNotNull(tableSessions.reservationEndAt)
+      )
+    );
+  const ranges = booked
+    .filter((b) => b.startAt && b.endAt)
+    .map((b) => ({ s: b.startAt!.getTime(), e: b.endAt!.getTime() }));
+
+  // Filter: slot mulai yg [mulai, mulai+durasi) tak overlap booked manapun.
+  return slots.filter((slot) => {
+    const s = new Date(slot.iso).getTime();
+    const e = s + durationMs;
+    return !ranges.some((r) => s < r.e && r.s < e);
+  });
+}
+
 const moveSchema = z.object({
   sessionId: z.string().uuid(),
   targetTableId: z.string().uuid(),
+  /** ISO jam mulai baru di meja tujuan. Wajib. End = mulai + durasi awal. */
+  reservationAt: z.string().datetime(),
 });
 
 export async function moveTable(input: z.infer<typeof moveSchema>) {
@@ -200,17 +290,29 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
     );
   }
 
-  // 4. Eksekusi: ganti table_id (waktu tetap → durasi sama). Constraint DB
-  //    menolak kalau slot meja tujuan bentrok.
+  // 4. Hitung jam baru: durasi dikunci = durasi booking awal.
+  if (!session.reservationAt || !session.reservationEndAt) {
+    throw new Error("Sesi ini tak punya rentang waktu booking");
+  }
+  const durationMs =
+    session.reservationEndAt.getTime() - session.reservationAt.getTime();
+  const newStart = new Date(data.reservationAt);
+  const newEnd = new Date(newStart.getTime() + durationMs);
+
+  // 5. Eksekusi: ganti table_id + jam baru. Constraint DB jaga overlap.
   try {
     await db
       .update(tableSessions)
-      .set({ tableId: data.targetTableId })
+      .set({
+        tableId: data.targetTableId,
+        reservationAt: newStart,
+        reservationEndAt: newEnd,
+      })
       .where(eq(tableSessions.id, session.id));
   } catch (err) {
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
-        `Slot waktu di meja ${target.label} sudah dibooking. Pilih meja lain.`
+        `Slot waktu di meja ${target.label} sudah dibooking. Pilih jam/meja lain.`
       );
     }
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
@@ -237,6 +339,7 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
 const moveWithOrderSchema = z.object({
   sessionId: z.string().uuid(),
   targetTableId: z.string().uuid(),
+  reservationAt: z.string().datetime(),
   items: z
     .array(
       z.object({
@@ -261,6 +364,8 @@ export async function moveTableWithOrder(
       status: tableSessions.status,
       hostId: tableSessions.hostId,
       tableId: tableSessions.tableId,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
       barId: floorAreas.barId,
     })
     .from(tableSessions)
@@ -274,6 +379,12 @@ export async function moveTableWithOrder(
     throw new Error("Meja sudah aktif. Pindah saat aktif butuh persetujuan staff.");
   if (session.tableId === data.targetTableId)
     throw new Error("Meja tujuan sama dengan sekarang");
+  if (!session.reservationAt || !session.reservationEndAt)
+    throw new Error("Sesi ini tak punya rentang waktu booking");
+  const durationMs =
+    session.reservationEndAt.getTime() - session.reservationAt.getTime();
+  const newStart = new Date(data.reservationAt);
+  const newEnd = new Date(newStart.getTime() + durationMs);
 
   // 2. Meja tujuan + min_spend.
   const [target] = await db
@@ -384,10 +495,14 @@ export async function moveTableWithOrder(
         })
         .returning({ id: payments.id });
 
-      // Pindah meja.
+      // Pindah meja + jam baru (durasi dikunci).
       await tx
         .update(tableSessions)
-        .set({ tableId: data.targetTableId })
+        .set({
+          tableId: data.targetTableId,
+          reservationAt: newStart,
+          reservationEndAt: newEnd,
+        })
         .where(eq(tableSessions.id, session.id));
 
       return pay.id;

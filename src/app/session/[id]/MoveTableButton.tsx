@@ -7,11 +7,13 @@ import { ArrowRightLeft, Loader2, X, MapPin, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getMoveTargets,
+  getMoveTableSlots,
   moveTable,
   moveTableWithOrder,
   type MoveTargetTable,
 } from "@/lib/move-table-actions";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
+import type { AvailableSlot } from "@/lib/reservation-format";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 
 type PayMethod = "qris" | "cash";
@@ -35,10 +37,19 @@ export function MoveTableButton({
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [targets, setTargets] = React.useState<MoveTargetTable[] | null>(null);
-  const [moving, setMoving] = React.useState<string | null>(null);
-  const [orderTarget, setOrderTarget] = React.useState<MoveTargetTable | null>(
+  // Meja yg dipilih → masuk step pilih jam.
+  const [slotTarget, setSlotTarget] = React.useState<MoveTargetTable | null>(
     null
   );
+  // {target, slotIso} → masuk modal order (min-spend).
+  const [orderStep, setOrderStep] = React.useState<{
+    target: MoveTargetTable;
+    slotIso: string;
+  } | null>(null);
+  const [moving, setMoving] = React.useState(false);
+  // Popup konfirmasi min-spend sebelum pilih jam.
+  const [confirmMinSpend, setConfirmMinSpend] =
+    React.useState<MoveTargetTable | null>(null);
 
   async function openModal() {
     setOpen(true);
@@ -53,23 +64,37 @@ export function MoveTableButton({
     }
   }
 
-  async function handlePick(t: MoveTargetTable) {
-    // Min-spend & order belum cukup → buka modal order.
+  function handlePick(t: MoveTargetTable) {
+    // #1 Popup konfirmasi dulu kalau meja ber-min-spend & order belum cukup.
     if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
-      setOrderTarget(t);
+      setConfirmMinSpend(t);
       return;
     }
-    // Langsung pindah.
-    setMoving(t.id);
+    setSlotTarget(t); // langsung ke step pilih jam
+  }
+
+  // Setelah pilih jam: kalau min-spend kurang → order, else pindah langsung.
+  async function handleSlotChosen(t: MoveTargetTable, slotIso: string) {
+    if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
+      setOrderStep({ target: t, slotIso });
+      setSlotTarget(null);
+      return;
+    }
+    setMoving(true);
     try {
-      await moveTable({ sessionId, targetTableId: t.id });
+      await moveTable({
+        sessionId,
+        targetTableId: t.id,
+        reservationAt: slotIso,
+      });
       toast.success(`Berhasil pindah ke meja ${t.label}`);
       setOpen(false);
+      setSlotTarget(null);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal pindah meja"));
     } finally {
-      setMoving(null);
+      setMoving(false);
     }
   }
 
@@ -79,7 +104,8 @@ export function MoveTableButton({
         <ArrowRightLeft className="h-4 w-4" /> Pindah Meja
       </Button>
 
-      {open && !orderTarget && (
+      {/* Step 1: pilih meja */}
+      {open && !slotTarget && !orderStep && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
           onClick={() => setOpen(false)}
@@ -102,8 +128,8 @@ export function MoveTableButton({
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                Hanya meja yg slot waktunya kosong & kapasitasnya cukup. Durasi
-                booking tetap sama.
+                Hanya meja yg kapasitasnya cukup. Durasi booking tetap sama;
+                kamu pilih jam mulai di langkah berikutnya.
               </p>
               {loading ? (
                 <div className="py-10 text-center">
@@ -115,8 +141,7 @@ export function MoveTableButton({
                     key={t.id}
                     type="button"
                     onClick={() => handlePick(t)}
-                    disabled={moving !== null}
-                    className="w-full flex items-center gap-3 rounded-lg border border-border p-3 text-left transition hover:bg-muted/40 disabled:opacity-50"
+                    className="w-full flex items-center gap-3 rounded-lg border border-border p-3 text-left transition hover:bg-muted/40"
                   >
                     <div className="h-9 w-9 rounded-md bg-muted/60 flex items-center justify-center shrink-0">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -132,14 +157,11 @@ export function MoveTableButton({
                         </div>
                       )}
                     </div>
-                    {moving === t.id && (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    )}
                   </button>
                 ))
               ) : (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  Tak ada meja tersedia untuk slot ini.
+                  Tak ada meja tersedia.
                 </div>
               )}
             </div>
@@ -147,15 +169,63 @@ export function MoveTableButton({
         </div>
       )}
 
-      {orderTarget && (
+      {/* #1 Popup konfirmasi min-spend */}
+      {confirmMinSpend && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 text-center">
+            <h3 className="text-base font-bold mb-1">Meja ada minimum spend</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Meja {confirmMinSpend.label} punya minimum spend{" "}
+              <span className="text-amber-400 font-semibold">
+                {formatIDR(confirmMinSpend.min_spend)}
+              </span>
+              . Kamu perlu tambah order & bayar dulu untuk pindah ke sini.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setConfirmMinSpend(null)}
+              >
+                Batal
+              </Button>
+              <Button
+                variant="gold"
+                className="flex-1"
+                onClick={() => {
+                  setSlotTarget(confirmMinSpend);
+                  setConfirmMinSpend(null);
+                }}
+              >
+                Lanjut
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: pilih jam di meja tujuan */}
+      {slotTarget && (
+        <SlotPickStep
+          sessionId={sessionId}
+          target={slotTarget}
+          moving={moving}
+          onBack={() => setSlotTarget(null)}
+          onChoose={(iso) => handleSlotChosen(slotTarget, iso)}
+        />
+      )}
+
+      {/* Step 3: order (min-spend) — dgn jam terpilih */}
+      {orderStep && (
         <MoveOrderModal
           sessionId={sessionId}
-          target={orderTarget}
+          target={orderStep.target}
+          slotIso={orderStep.slotIso}
           menu={menu}
           existingOrderTotal={existingOrderTotal}
-          onBack={() => setOrderTarget(null)}
+          onBack={() => setOrderStep(null)}
           onDone={() => {
-            setOrderTarget(null);
+            setOrderStep(null);
             setOpen(false);
             router.refresh();
           }}
@@ -165,10 +235,86 @@ export function MoveTableButton({
   );
 }
 
+/* ---------- Step pilih jam ---------- */
+function SlotPickStep({
+  sessionId,
+  target,
+  moving,
+  onBack,
+  onChoose,
+}: {
+  sessionId: string;
+  target: MoveTargetTable;
+  moving: boolean;
+  onBack: () => void;
+  onChoose: (iso: string) => void;
+}) {
+  const [slots, setSlots] = React.useState<AvailableSlot[] | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    getMoveTableSlots(sessionId, target.id)
+      .then((s) => alive && setSlots(s))
+      .catch(() => alive && setSlots([]));
+    return () => {
+      alive = false;
+    };
+  }, [sessionId, target.id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+      <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
+          <div>
+            <h2 className="text-sm font-semibold">Pilih jam · Meja {target.label}</h2>
+            <p className="text-[11px] text-muted-foreground">
+              Durasi tetap sama dgn booking awal
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+            aria-label="Kembali"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {slots === null ? (
+            <div className="py-10 text-center">
+              <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+            </div>
+          ) : slots.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {slots.map((s) => (
+                <button
+                  key={s.iso}
+                  type="button"
+                  disabled={moving}
+                  onClick={() => onChoose(s.iso)}
+                  className="rounded-lg border border-border p-2.5 text-sm hover:bg-muted/40 disabled:opacity-50"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              Tak ada jam tersedia di meja ini untuk durasi booking-mu.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Modal order utk min-spend ---------- */
 function MoveOrderModal({
   sessionId,
   target,
+  slotIso,
   menu,
   existingOrderTotal,
   onBack,
@@ -176,6 +322,7 @@ function MoveOrderModal({
 }: {
   sessionId: string;
   target: MoveTargetTable;
+  slotIso: string;
   menu: MenuPickerCategory[];
   existingOrderTotal: number;
   onBack: () => void;
@@ -229,6 +376,7 @@ function MoveOrderModal({
       await moveTableWithOrder({
         sessionId,
         targetTableId: target.id,
+        reservationAt: slotIso,
         items,
         paymentMethod: method,
       });
