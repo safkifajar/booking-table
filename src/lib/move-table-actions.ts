@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql, inArray, isNotNull, lt, gt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -78,13 +78,13 @@ export async function getMoveTargets(
       .from(tableSessions)
       .where(
         and(
-          sql`${tableSessions.status} in ('reserved','open','locked')`,
+          inArray(tableSessions.status, ["reserved", "open", "locked"]),
           ne(tableSessions.id, session.id),
-          sql`${tableSessions.reservationAt} is not null`,
-          sql`${tableSessions.reservationEndAt} is not null`,
-          // overlap: start < other.end AND other.start < end
-          sql`${tableSessions.reservationAt} < ${end}`,
-          sql`${tableSessions.reservationEndAt} > ${start}`
+          isNotNull(tableSessions.reservationAt),
+          isNotNull(tableSessions.reservationEndAt),
+          // overlap: other.start < end AND other.end > start
+          lt(tableSessions.reservationAt, end),
+          gt(tableSessions.reservationEndAt, start)
         )
       );
     for (const r of overlapping) busyTableIds.add(r.tableId);
