@@ -7,7 +7,6 @@ import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getOutstandingMap } from "@/lib/queries";
 import { Badge } from "@/components/ui/badge";
-import { RelativeTime } from "@/components/ui/relative-time";
 import { formatIDR } from "@/lib/utils";
 import { Crown, Users, Lock, ChevronRight, History, Clock } from "lucide-react";
 import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
@@ -18,6 +17,8 @@ interface SessionRow {
   status: "reserved" | "open" | "locked" | "closed" | "cancelled" | "overdue";
   started_at: Date;
   closed_at: Date | null;
+  reservation_at: Date | null;
+  reservation_end_at: Date | null;
   table_label: string;
   area_name: string;
   bar_name: string;
@@ -42,6 +43,8 @@ export default async function ProfileSessionsPage() {
       status: tableSessions.status,
       started_at: tableSessions.startedAt,
       closed_at: tableSessions.closedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       table_label: tables.label,
       area_name: floorAreas.name,
       bar_name: bars.name,
@@ -97,6 +100,28 @@ export default async function ProfileSessionsPage() {
   );
 }
 
+/**
+ * Label waktu pemakaian meja: tanggal + jam. Pakai rentang reservasi kalau ada
+ * (booking → "28 Jun 2026 · 13:50–15:50"), selain itu jam mulai pakai
+ * (walk-in → "28 Jun 2026 · 20:36").
+ */
+function usageLabel(session: SessionRow): string {
+  const start = session.reservation_at ?? session.started_at;
+  const end = session.reservation_end_at;
+  const tgl = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(start);
+  const jam = (d: Date) =>
+    new Intl.DateTimeFormat("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(d);
+  const waktu = end ? `${jam(start)}–${jam(end)}` : jam(start);
+  return `${tgl} · ${waktu}`;
+}
+
 function SessionListItem({ session }: { session: SessionRow }) {
   const isActive =
     session.status === "reserved" ||
@@ -135,10 +160,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
           {session.title ?? "Open Table"}
         </div>
         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-          <RelativeTime
-            date={session.started_at.toISOString()}
-            className="text-[11px]"
-          />
+          <span className="tabular-nums">{usageLabel(session)}</span>
           <span>·</span>
           <StatusBadge
             status={session.status}
