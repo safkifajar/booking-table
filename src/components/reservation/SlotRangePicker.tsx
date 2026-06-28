@@ -21,6 +21,7 @@ export function SlotRangePicker({
   endIso,
   onChange,
   initialStart,
+  lockedDurationMs,
 }: {
   slots: AvailableSlot[];
   bookedSlotIsos?: string[];
@@ -31,6 +32,9 @@ export function SlotRangePicker({
   onChange: (startIso: string, endIso: string) => void;
   /** Prefill (deep-link) — auto-scroll & set tanggal awal. */
   initialStart?: string;
+  /** Mode durasi terkunci (pindah meja): klik slot mana saja → jadi jam mulai,
+   *  end otomatis = mulai + durasi ini. Tak ada pemilihan rentang bebas. */
+  lockedDurationMs?: number;
 }) {
   const slotMs = slotIntervalMinutes * 60 * 1000;
   const bookedSet = React.useMemo(
@@ -64,6 +68,11 @@ export function SlotRangePicker({
 
   function handleSlotClick(iso: string) {
     const clickedMs = new Date(iso).getTime();
+    // Mode durasi terkunci: klik slot mana saja → jadi mulai, end = +durasi.
+    if (lockedDurationMs && lockedDurationMs > 0) {
+      onChange(iso, new Date(clickedMs + lockedDurationMs).toISOString());
+      return;
+    }
     if (!startIso) {
       onChange(iso, "");
       return;

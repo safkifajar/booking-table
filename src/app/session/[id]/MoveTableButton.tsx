@@ -264,21 +264,6 @@ function SlotPickStep({
     };
   }, [sessionId, target.id]);
 
-  // Durasi dikunci: tiap user pilih jam mulai, end = mulai + durasi awal.
-  function handleChange(s: string) {
-    if (!s || !data) {
-      setStartIso("");
-      setEndIso("");
-      return;
-    }
-    setStartIso(s);
-    setEndIso(
-      new Date(
-        new Date(s).getTime() + data.durationMinutes * 60 * 1000
-      ).toISOString()
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
       <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
@@ -311,7 +296,11 @@ function SlotPickStep({
               bookingWindowDays={data.bookingWindowDays}
               startIso={startIso}
               endIso={endIso}
-              onChange={(s) => handleChange(s)}
+              lockedDurationMs={data.durationMinutes * 60 * 1000}
+              onChange={(s, e) => {
+                setStartIso(s);
+                setEndIso(e);
+              }}
             />
           ) : (
             <div className="py-10 text-center text-sm text-muted-foreground">
