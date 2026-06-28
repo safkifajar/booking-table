@@ -732,13 +732,16 @@ function MenuPickerModal({
         </div>
       </div>
 
-      {/* Lightbox foto menu */}
+      {/* Lightbox foto menu — stopPropagation supaya klik tutup lightbox tak
+          ikut menutup modal Pilih Order Awal. */}
       {photo && (
-        <AvatarViewer
-          src={photo.src}
-          alt={photo.alt}
-          onClose={() => setPhoto(null)}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <AvatarViewer
+            src={photo.src}
+            alt={photo.alt}
+            onClose={() => setPhoto(null)}
+          />
+        </div>
       )}
     </div>
   );
