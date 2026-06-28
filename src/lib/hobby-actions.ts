@@ -1,23 +1,35 @@
 "use server";
 
 import { z } from "zod";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { hobbies } from "@/lib/db/schema/hobbies";
+import { hobbies, hobbyCategories } from "@/lib/db/schema/hobbies";
 import { requireAdmin } from "@/lib/admin";
-import {
-  HOBBY_CATEGORY_OPTIONS,
-  type HobbyItem,
-  type HobbyGroup,
-} from "@/lib/hobbies";
+import type { HobbyItem, HobbyGroup, HobbyCategory } from "@/lib/hobbies";
 
-/** Semua hobi, dikelompokkan per kategori (urut sort_order). Untuk profil/onboarding/admin. */
-export async function getHobbyGroups(): Promise<HobbyGroup[]> {
+// ============================================================
+// READ
+// ============================================================
+
+/** Semua kategori (urut sortOrder). */
+export async function getHobbyCategories(): Promise<HobbyCategory[]> {
   const rows = await db
     .select()
-    .from(hobbies)
-    .orderBy(asc(hobbies.category), asc(hobbies.sortOrder), asc(hobbies.name));
+    .from(hobbyCategories)
+    .orderBy(asc(hobbyCategories.sortOrder), asc(hobbyCategories.name));
+  return rows.map((r) => ({ id: r.id, name: r.name, sort_order: r.sortOrder }));
+}
+
+/** Hobi dikelompokkan per kategori (urut kategori → hobi). */
+export async function getHobbyGroups(): Promise<HobbyGroup[]> {
+  const [cats, rows] = await Promise.all([
+    getHobbyCategories(),
+    db
+      .select()
+      .from(hobbies)
+      .orderBy(asc(hobbies.sortOrder), asc(hobbies.name)),
+  ]);
 
   const byCat = new Map<string, HobbyItem[]>();
   for (const r of rows) {
@@ -30,37 +42,76 @@ export async function getHobbyGroups(): Promise<HobbyGroup[]> {
     if (!byCat.has(r.category)) byCat.set(r.category, []);
     byCat.get(r.category)!.push(item);
   }
-  // Urutkan kategori sesuai opsi tetap dulu, sisanya di belakang.
   const ordered: HobbyGroup[] = [];
-  for (const cat of HOBBY_CATEGORY_OPTIONS) {
-    if (byCat.has(cat)) {
-      ordered.push({ category: cat, items: byCat.get(cat)! });
-      byCat.delete(cat);
-    }
+  for (const c of cats) {
+    ordered.push({ category: c.name, items: byCat.get(c.name) ?? [] });
+    byCat.delete(c.name);
   }
+  // Kategori "yatim" (hobi dgn kategori yg sudah dihapus) — tetap tampil.
   for (const [category, items] of byCat) ordered.push({ category, items });
-  return ordered;
+  return ordered.filter((g) => g.items.length > 0 || cats.some((c) => c.name === g.category));
 }
 
-const addSchema = z.object({
+/** Daftar hobi flat (untuk tabel admin). */
+export async function getHobbiesList(): Promise<HobbyItem[]> {
+  const rows = await db
+    .select()
+    .from(hobbies)
+    .orderBy(asc(hobbies.category), asc(hobbies.sortOrder), asc(hobbies.name));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    sort_order: r.sortOrder,
+  }));
+}
+
+// ============================================================
+// HOBBY CRUD
+// ============================================================
+
+const addHobbySchema = z.object({
   name: z.string().min(1, "Nama wajib").max(40),
-  category: z.string().min(1).max(60),
+  category: z.string().min(1, "Kategori wajib").max(60),
 });
 
-export async function addHobby(input: z.infer<typeof addSchema>) {
+export async function addHobby(input: z.infer<typeof addHobbySchema>) {
   await requireAdmin();
-  const data = addSchema.parse(input);
+  const data = addHobbySchema.parse(input);
   const name = data.name.trim().toLowerCase();
-
   try {
-    await db.insert(hobbies).values({
-      name,
-      category: data.category.trim(),
-      sortOrder: 999,
-    });
+    await db
+      .insert(hobbies)
+      .values({ name, category: data.category.trim(), sortOrder: 999 });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
       throw new Error("Hobi ini sudah ada");
+    }
+    throw err;
+  }
+  revalidatePath("/admin/hobbies");
+}
+
+const updateHobbySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(40),
+  category: z.string().min(1).max(60),
+});
+
+export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
+  await requireAdmin();
+  const data = updateHobbySchema.parse(input);
+  try {
+    await db
+      .update(hobbies)
+      .set({
+        name: data.name.trim().toLowerCase(),
+        category: data.category.trim(),
+      })
+      .where(eq(hobbies.id, data.id));
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("uq_hobby_name")) {
+      throw new Error("Nama hobi sudah dipakai");
     }
     throw err;
   }
@@ -73,25 +124,77 @@ export async function deleteHobby(id: string) {
   revalidatePath("/admin/hobbies");
 }
 
-const updateSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).max(40),
-  category: z.string().min(1).max(60),
-});
+// ============================================================
+// CATEGORY CRUD
+// ============================================================
 
-export async function updateHobby(input: z.infer<typeof updateSchema>) {
+const addCatSchema = z.object({ name: z.string().min(1, "Nama wajib").max(60) });
+
+export async function addHobbyCategory(input: z.infer<typeof addCatSchema>) {
   await requireAdmin();
-  const data = updateSchema.parse(input);
+  const data = addCatSchema.parse(input);
   try {
     await db
-      .update(hobbies)
-      .set({ name: data.name.trim().toLowerCase(), category: data.category.trim() })
-      .where(eq(hobbies.id, data.id));
+      .insert(hobbyCategories)
+      .values({ name: data.name.trim(), sortOrder: 999 });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_hobby_name")) {
-      throw new Error("Nama hobi sudah dipakai");
+    if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
+      throw new Error("Kategori ini sudah ada");
     }
     throw err;
   }
+  revalidatePath("/admin/hobbies");
+}
+
+const updateCatSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(60),
+});
+
+export async function updateHobbyCategory(
+  input: z.infer<typeof updateCatSchema>
+) {
+  await requireAdmin();
+  const data = updateCatSchema.parse(input);
+  // Ambil nama lama untuk update hobi yg memakainya (jaga konsistensi).
+  const [old] = await db
+    .select({ name: hobbyCategories.name })
+    .from(hobbyCategories)
+    .where(eq(hobbyCategories.id, data.id));
+  if (!old) throw new Error("Kategori tidak ditemukan");
+  const newName = data.name.trim();
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(hobbyCategories)
+      .set({ name: newName })
+      .where(eq(hobbyCategories.id, data.id));
+    // Pindahkan hobi lama ke nama kategori baru.
+    await tx
+      .update(hobbies)
+      .set({ category: newName })
+      .where(eq(hobbies.category, old.name));
+  });
+  revalidatePath("/admin/hobbies");
+}
+
+export async function deleteHobbyCategory(id: string) {
+  await requireAdmin();
+  const [cat] = await db
+    .select({ name: hobbyCategories.name })
+    .from(hobbyCategories)
+    .where(eq(hobbyCategories.id, id));
+  if (!cat) return;
+  // Cegah hapus kalau masih ada hobi di kategori ini.
+  const [{ c }] = await db
+    .select({ c: sql<number>`count(*)::int` })
+    .from(hobbies)
+    .where(eq(hobbies.category, cat.name));
+  if (c > 0) {
+    throw new Error(
+      `Masih ada ${c} hobi di kategori ini. Pindah/hapus dulu hobinya.`
+    );
+  }
+  await db.delete(hobbyCategories).where(eq(hobbyCategories.id, id));
   revalidatePath("/admin/hobbies");
 }

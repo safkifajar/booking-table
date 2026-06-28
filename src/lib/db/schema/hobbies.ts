@@ -1,6 +1,22 @@
 import { pgTable, uuid, text, integer, timestamp, unique } from "drizzle-orm/pg-core";
 
 /**
+ * Kategori hobi — dikelola admin. Dipakai mengelompokkan hobi di tampilan.
+ */
+export const hobbyCategories = pgTable(
+  "hobby_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [unique("uq_hobby_category_name").on(t.name)]
+);
+
+/**
  * Master list hobi & minat — dikelola admin. Customer hanya memilih dari sini
  * (tak boleh nambah custom). Dikelompokkan per kategori untuk tampilan.
  */

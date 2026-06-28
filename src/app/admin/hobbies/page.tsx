@@ -1,10 +1,13 @@
 import { requireAdmin } from "@/lib/admin";
-import { getHobbyGroups } from "@/lib/hobby-actions";
+import { getHobbiesList, getHobbyCategories } from "@/lib/hobby-actions";
 import { HobbiesManager } from "./HobbiesManager";
 
 export default async function AdminHobbiesPage() {
   await requireAdmin();
-  const groups = await getHobbyGroups();
+  const [hobbiesList, categories] = await Promise.all([
+    getHobbiesList(),
+    getHobbyCategories(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -20,7 +23,7 @@ export default async function AdminHobbiesPage() {
           </p>
         </div>
 
-        <HobbiesManager groups={groups} />
+        <HobbiesManager hobbiesList={hobbiesList} categories={categories} />
       </div>
     </main>
   );

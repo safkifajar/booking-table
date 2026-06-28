@@ -1,16 +1,8 @@
 /**
- * Konstanta & tipe hobi (non-server). Master data hobi ada di DB (tabel hobbies),
- * dikelola admin lewat hobby-actions.ts. File ini cuma berisi opsi kategori &
- * tipe — aman di-import client/server.
+ * Tipe hobi (non-server). Master data hobi & kategori ada di DB (tabel hobbies,
+ * hobby_categories), dikelola admin lewat hobby-actions.ts. File ini cuma tipe —
+ * aman di-import client/server.
  */
-
-export const HOBBY_CATEGORY_OPTIONS = [
-  "Musik & Hiburan",
-  "Minuman & Kuliner",
-  "Aktivitas Sosial",
-  "Vibe & Gaya",
-  "Lifestyle",
-];
 
 export interface HobbyItem {
   id: string;
@@ -22,4 +14,10 @@ export interface HobbyItem {
 export interface HobbyGroup {
   category: string;
   items: HobbyItem[];
+}
+
+export interface HobbyCategory {
+  id: string;
+  name: string;
+  sort_order: number;
 }
