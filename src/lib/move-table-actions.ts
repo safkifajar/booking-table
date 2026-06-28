@@ -133,14 +133,31 @@ export async function getMoveTargets(
     }));
 }
 
+export interface MoveSlotData {
+  slots: AvailableSlot[];
+  /** ISO slot ter-booking di meja tujuan (utk picker konsisten dgn open table). */
+  bookedSlotIsos: string[];
+  slotIntervalMinutes: number;
+  bookingWindowDays: number;
+  /** Durasi booking awal (menit) — end dikunci = mulai + durasi. */
+  durationMinutes: number;
+}
+
 /**
- * Slot jam mulai yg tersedia di meja tujuan, dgn DURASI dikunci = durasi booking
- * awal sesi ini. Hanya jam yg muat penuh & tak bentrok di meja tujuan.
+ * Data slot meja tujuan untuk picker pindah meja — DURASI dikunci = durasi
+ * booking awal. Konsisten dgn picker open table (SlotRangePicker).
  */
 export async function getMoveTableSlots(
   sessionId: string,
   targetTableId: string
-): Promise<AvailableSlot[]> {
+): Promise<MoveSlotData> {
+  const empty: MoveSlotData = {
+    slots: [],
+    bookedSlotIsos: [],
+    slotIntervalMinutes: 60,
+    bookingWindowDays: 7,
+    durationMinutes: 60,
+  };
   const profile = await requireProfile();
 
   const [session] = await db
@@ -160,7 +177,7 @@ export async function getMoveTableSlots(
     !session.reservationAt ||
     !session.reservationEndAt
   )
-    return [];
+    return empty;
 
   const durationMs =
     session.reservationEndAt.getTime() - session.reservationAt.getTime();
@@ -181,7 +198,7 @@ export async function getMoveTableSlots(
     ...DEFAULT_RESERVATION_CONFIG,
     ...((barRow?.reservation_config as Partial<ReservationConfig>) ?? {}),
   };
-  if (!resConfig.enabled) return [];
+  if (!resConfig.enabled) return empty;
 
   const slots = generateAvailableSlots(new Date(), resConfig, opHours);
 
@@ -205,12 +222,21 @@ export async function getMoveTableSlots(
     .filter((b) => b.startAt && b.endAt)
     .map((b) => ({ s: b.startAt!.getTime(), e: b.endAt!.getTime() }));
 
-  // Filter: slot mulai yg [mulai, mulai+durasi) tak overlap booked manapun.
-  return slots.filter((slot) => {
+  // bookedSlotIsos: tiap slot interval yg jatuh dalam rentang booked → ditandai
+  // (picker SlotRangePicker pakai ini untuk disable, konsisten dgn open table).
+  const bookedSlotIsos: string[] = [];
+  for (const slot of slots) {
     const s = new Date(slot.iso).getTime();
-    const e = s + durationMs;
-    return !ranges.some((r) => s < r.e && r.s < e);
-  });
+    if (ranges.some((r) => s < r.e && r.s <= s)) bookedSlotIsos.push(slot.iso);
+  }
+
+  return {
+    slots,
+    bookedSlotIsos,
+    slotIntervalMinutes: resConfig.slotIntervalMinutes,
+    bookingWindowDays: resConfig.bookingWindowDays,
+    durationMinutes: Math.round(durationMs / 60000),
+  };
 }
 
 const moveSchema = z.object({

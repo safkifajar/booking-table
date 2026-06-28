@@ -11,9 +11,10 @@ import {
   moveTable,
   moveTableWithOrder,
   type MoveTargetTable,
+  type MoveSlotData,
 } from "@/lib/move-table-actions";
+import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
-import type { AvailableSlot } from "@/lib/reservation-format";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 
 type PayMethod = "qris" | "cash";
@@ -235,7 +236,7 @@ export function MoveTableButton({
   );
 }
 
-/* ---------- Step pilih jam ---------- */
+/* ---------- Step pilih jam (pakai SlotRangePicker — konsisten open table) ---------- */
 function SlotPickStep({
   sessionId,
   target,
@@ -249,21 +250,38 @@ function SlotPickStep({
   onBack: () => void;
   onChoose: (iso: string) => void;
 }) {
-  const [slots, setSlots] = React.useState<AvailableSlot[] | null>(null);
+  const [data, setData] = React.useState<MoveSlotData | null>(null);
+  const [startIso, setStartIso] = React.useState("");
+  const [endIso, setEndIso] = React.useState("");
 
   React.useEffect(() => {
     let alive = true;
     getMoveTableSlots(sessionId, target.id)
-      .then((s) => alive && setSlots(s))
-      .catch(() => alive && setSlots([]));
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setData(null));
     return () => {
       alive = false;
     };
   }, [sessionId, target.id]);
 
+  // Durasi dikunci: tiap user pilih jam mulai, end = mulai + durasi awal.
+  function handleChange(s: string) {
+    if (!s || !data) {
+      setStartIso("");
+      setEndIso("");
+      return;
+    }
+    setStartIso(s);
+    setEndIso(
+      new Date(
+        new Date(s).getTime() + data.durationMinutes * 60 * 1000
+      ).toISOString()
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
-      <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[85vh] flex flex-col">
+      <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div>
             <h2 className="text-sm font-semibold">Pilih jam · Meja {target.label}</h2>
@@ -281,30 +299,45 @@ function SlotPickStep({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
-          {slots === null ? (
+          {data === null ? (
             <div className="py-10 text-center">
               <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
             </div>
-          ) : slots.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2">
-              {slots.map((s) => (
-                <button
-                  key={s.iso}
-                  type="button"
-                  disabled={moving}
-                  onClick={() => onChoose(s.iso)}
-                  className="rounded-lg border border-border p-2.5 text-sm hover:bg-muted/40 disabled:opacity-50"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
+          ) : data.slots.length > 0 ? (
+            <SlotRangePicker
+              slots={data.slots}
+              bookedSlotIsos={data.bookedSlotIsos}
+              slotIntervalMinutes={data.slotIntervalMinutes}
+              bookingWindowDays={data.bookingWindowDays}
+              startIso={startIso}
+              endIso={endIso}
+              onChange={(s) => handleChange(s)}
+            />
           ) : (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Tak ada jam tersedia di meja ini untuk durasi booking-mu.
+              Tak ada jam tersedia di meja ini.
             </div>
           )}
         </div>
+        {data && data.slots.length > 0 && (
+          <div className="p-4 border-t border-border shrink-0">
+            <Button
+              variant="gold"
+              size="lg"
+              className="w-full"
+              disabled={!startIso || moving}
+              onClick={() => startIso && onChoose(startIso)}
+            >
+              {moving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Memproses…
+                </>
+              ) : (
+                "Lanjut"
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
