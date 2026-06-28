@@ -146,6 +146,8 @@ interface SessionViewProps {
    * Display sebagai badge "Dibuka oleh Waiter X" di header.
    */
   openedByStaff: { id: string; display_name: string } | null;
+  /** Request pindah meja yg menunggu approval (badge realtime). */
+  pendingMove: { toLabel: string; reservationAt: string } | null;
 }
 
 export function SessionView(props: SessionViewProps) {
@@ -477,6 +479,7 @@ function VibeTab(
             sessionId={props.session.id}
             status={props.session.status}
             menu={props.menu}
+            pendingMove={props.pendingMove}
             existingOrderTotal={props.orderItems.reduce(
               (acc, i) =>
                 i.status === "void" ? acc : acc + i.quantity * i.unit_price,

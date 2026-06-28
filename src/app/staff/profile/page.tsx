@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AvatarUploader } from "@/app/profile/AvatarUploader";
+import { PushToggle } from "@/components/PushToggle";
 
 /**
  * Staff profile (cashier, waiter).
@@ -93,6 +94,11 @@ export default async function StaffProfilePage() {
               </div>
             )}
           </div>
+        </Card>
+
+        {/* Notifikasi push */}
+        <Card className="overflow-hidden">
+          <PushToggle />
         </Card>
 
         {/* Menu list */}

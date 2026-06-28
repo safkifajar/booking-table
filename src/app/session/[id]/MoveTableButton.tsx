@@ -16,7 +16,6 @@ import {
 import {
   requestMoveTable,
   requestMoveTableWithOrder,
-  getMyPendingMove,
 } from "@/lib/move-approval-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
@@ -35,19 +34,24 @@ export function MoveTableButton({
   status,
   menu,
   existingOrderTotal,
+  pendingMove,
 }: {
   sessionId: string;
   status: string;
   menu: MenuPickerCategory[];
   existingOrderTotal: number;
+  pendingMove: { toLabel: string; reservationAt: string } | null;
 }) {
   const router = useRouter();
   // Aktif (open/locked) → request + approval. reserved → pindah langsung.
   const needsApproval = status === "open" || status === "locked";
-  const [pending, setPending] = React.useState<{
+  // Badge "menunggu approval" — sumber utama dari server prop (realtime ikut
+  // router.refresh). State lokal cuma utk optimistic sesaat setelah submit.
+  const [optimisticPending, setOptimisticPending] = React.useState<{
     toLabel: string;
     reservationAt: string;
   } | null>(null);
+  const pending = pendingMove ?? optimisticPending;
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [targets, setTargets] = React.useState<MoveTargetTable[] | null>(null);
@@ -65,17 +69,11 @@ export function MoveTableButton({
   const [confirmMinSpend, setConfirmMinSpend] =
     React.useState<MoveTargetTable | null>(null);
 
-  // Cek apakah ada request pindah yg masih menunggu (mode aktif).
+  // Saat server konfirmasi tak ada pending lagi (di-approve/reject), bersihkan
+  // optimistic supaya badge ikut hilang realtime.
   React.useEffect(() => {
-    if (!needsApproval) return;
-    let alive = true;
-    getMyPendingMove(sessionId)
-      .then((p) => alive && setPending(p))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [needsApproval, sessionId]);
+    if (pendingMove === null) setOptimisticPending(null);
+  }, [pendingMove]);
 
   async function openModal() {
     setOpen(true);
@@ -114,7 +112,10 @@ export function MoveTableButton({
       toast.success("Request pindah dikirim — menunggu persetujuan staff");
       setOpen(false);
       setConfirmMinSpend(null);
-      setPending({ toLabel: t.label, reservationAt: new Date().toISOString() });
+      setOptimisticPending({
+        toLabel: t.label,
+        reservationAt: new Date().toISOString(),
+      });
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal kirim request"));
@@ -300,7 +301,7 @@ export function MoveTableButton({
           onBack={() => setOrderStep(null)}
           onDone={() => {
             if (needsApproval) {
-              setPending({
+              setOptimisticPending({
                 toLabel: orderStep.target.label,
                 reservationAt:
                   orderStep.slotIso || new Date().toISOString(),

@@ -21,6 +21,7 @@ import {
   defaultDashboardFor,
   type StaffRoleName,
 } from "@/lib/auth-v2/permissions";
+import { getMyPendingMove } from "@/lib/move-approval-actions";
 import { SessionView } from "./SessionView";
 
 interface PageProps {
@@ -218,6 +219,13 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   const memberProfileIds = membersRaw.map((m) => m.profile_id);
   const ratingsBatch = await getUserRatingsBatch(memberProfileIds);
 
+  // Request pindah meja yg menunggu (badge realtime — ikut router.refresh).
+  const pendingMove =
+    isHost &&
+    (sessionRow.status === "open" || sessionRow.status === "locked")
+      ? await getMyPendingMove(sessionRow.id)
+      : null;
+
   return (
     <SessionView
       session={{
@@ -297,6 +305,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       backHref={backHref}
       staffRole={!isMember ? staffRole : null}
       openedByStaff={openedByStaff}
+      pendingMove={pendingMove}
     />
   );
 }
