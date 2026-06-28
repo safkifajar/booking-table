@@ -8,6 +8,7 @@ import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { isDbConstraintError } from "@/lib/utils";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -69,7 +70,21 @@ export async function getMoveTargets(
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
-  if (!session || session.hostId !== profile.id) return [];
+  if (!session) return [];
+  // Host sesi ATAU staff aktif di bar sesi ini (utk fitur pindah oleh staff).
+  if (session.hostId !== profile.id) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, session.barId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    if (!staff) return [];
+  }
 
   // Mode AKTIF (open/locked): pindah pertahankan JAM BOOKING ASLI & tak ada step
   // pilih jam, jadi meja yg bentrok di rentang booking [start, end] HARUS

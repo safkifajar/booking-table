@@ -49,6 +49,7 @@ import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { MoveTableButton } from "./MoveTableButton";
+import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
   MemberRole,
@@ -486,6 +487,16 @@ function VibeTab(
               0
             )}
           />
+        )}
+
+      {/* Pindah meja — STAFF (kasir/waiter) langsung tanpa approval. Tampil saat
+          viewer staff & bukan host (host pakai tombol di atas). */}
+      {!props.isHost &&
+        props.staffRole &&
+        (props.session.status === "reserved" ||
+          props.session.status === "open" ||
+          props.session.status === "locked") && (
+          <StaffMoveTableButton sessionId={props.session.id} />
         )}
 
       {/* Vibe tags */}

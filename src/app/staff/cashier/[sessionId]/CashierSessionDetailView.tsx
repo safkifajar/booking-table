@@ -34,6 +34,7 @@ import {
 } from "@/lib/cashier-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 import type { PaymentMethod } from "@/types/db";
+import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 
 interface Props {
   detail: CashierSessionDetail;
@@ -376,6 +377,16 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Pindahkan meja (staff, langsung tanpa approval) — saat sesi belum tutup
+          & masih berstatus booking/aktif. */}
+      {(detail.status === "reserved" ||
+        detail.status === "open" ||
+        detail.status === "locked") && (
+        <div className="mt-3">
+          <StaffMoveTableButton sessionId={detail.session_id} />
+        </div>
       )}
 
       {/* Action buttons */}

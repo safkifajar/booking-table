@@ -561,3 +561,107 @@ export async function resolveMoveRequest(input: {
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
 }
+
+// ============================================================
+// STAFF — PINDAH LANGSUNG (tanpa approval, ada audit)
+// ============================================================
+
+const staffMoveSchema = z.object({
+  sessionId: z.string().uuid(),
+  targetTableId: z.string().uuid(),
+});
+
+/**
+ * Staff (kasir/waiter/manager/admin) memindahkan meja LANGSUNG tanpa approval.
+ * Jam booking dipertahankan apa adanya (tak reset). Tercatat di
+ * table_move_requests status 'approved' + resolvedBy = staff (audit). Host
+ * dapat notif.
+ */
+export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
+  const ctx = await requirePermission("open_table_for_customer", "/staff/waiter");
+  const data = staffMoveSchema.parse(input);
+
+  const [session] = await db
+    .select({
+      id: tableSessions.id,
+      status: tableSessions.status,
+      hostId: tableSessions.hostId,
+      tableId: tableSessions.tableId,
+      reservationAt: tableSessions.reservationAt,
+      reservationEndAt: tableSessions.reservationEndAt,
+      barId: floorAreas.barId,
+      fromLabel: tables.label,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableSessions.id, data.sessionId));
+  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (session.barId !== ctx.barId) throw new Error("Sesi di luar bar kamu");
+  if (
+    session.status !== "reserved" &&
+    session.status !== "open" &&
+    session.status !== "locked"
+  )
+    throw new Error("Hanya sesi aktif/booking yang bisa dipindah");
+  if (!session.reservationAt || !session.reservationEndAt)
+    throw new Error("Sesi ini tak punya rentang waktu");
+
+  const [target] = await db
+    .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
+    .from(tables)
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tables.id, data.targetTableId));
+  if (!target || target.barId !== session.barId)
+    throw new Error("Meja tujuan tidak valid");
+
+  // Jam booking dipertahankan apa adanya.
+  const newStart = session.reservationAt;
+  const newEnd = session.reservationEndAt;
+
+  try {
+    await db
+      .update(tableSessions)
+      .set({ tableId: data.targetTableId })
+      .where(eq(tableSessions.id, session.id));
+  } catch (err) {
+    if (
+      isDbConstraintError(err, "no_overlapping_reservation") ||
+      isDbConstraintError(err, "uq_active_session_per_table")
+    ) {
+      throw new Error(`Meja ${target.label} bentrok di jam booking ini`);
+    }
+    throw err;
+  }
+
+  // Audit: catat sbg request approved oleh staff.
+  await db.insert(tableMoveRequests).values({
+    sessionId: session.id,
+    requestedBy: session.hostId,
+    fromTableId: session.tableId,
+    toTableId: data.targetTableId,
+    reservationAt: newStart,
+    reservationEndAt: newEnd,
+    status: "approved",
+    resolvedBy: ctx.profileId,
+    resolvedAt: new Date(),
+  });
+
+  // Notif host.
+  await createNotification({
+    profileId: session.hostId,
+    type: "move_approved",
+    title: "Meja kamu dipindah",
+    body: `Staff memindahkan kamu dari meja ${session.fromLabel} ke ${target.label}.`,
+    link: `/session/${session.id}`,
+  });
+  await Promise.allSettled([
+    notify(channels.session(session.id)),
+    notify(channels.bar(session.barId)),
+    notify(channels.staff(session.barId)),
+  ]);
+
+  revalidatePath(`/session/${session.id}`);
+  revalidatePath("/staff/waiter");
+  revalidatePath("/staff/cashier");
+}
