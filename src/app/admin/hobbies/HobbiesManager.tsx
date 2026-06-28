@@ -2,9 +2,11 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Edit2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Pagination } from "@/components/admin/Pagination";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   addHobby,
@@ -75,7 +77,7 @@ function TabBtn({
   );
 }
 
-/* ---------- Tab Hobi (tabel) ---------- */
+/* ---------- Tab Hobi ---------- */
 function HobbiesTab({
   hobbiesList,
   categories,
@@ -85,30 +87,19 @@ function HobbiesTab({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [name, setName] = React.useState("");
-  const [category, setCategory] = React.useState(categories[0]?.name ?? "");
-  const [adding, setAdding] = React.useState(false);
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const [editId, setEditId] = React.useState<string | null>(null);
-  const [editName, setEditName] = React.useState("");
-  const [editCat, setEditCat] = React.useState("");
+  const [formMode, setFormMode] = React.useState<
+    { mode: "create" } | { mode: "edit"; item: HobbyItem } | null
+  >(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(10);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return toast.error("Nama hobi wajib diisi");
-    if (!category) return toast.error("Pilih kategori dulu");
-    setAdding(true);
-    try {
-      await addHobby({ name: name.trim(), category });
-      toast.success("Hobi ditambahkan");
-      setName("");
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal menambah"));
-    } finally {
-      setAdding(false);
-    }
-  }
+  const totalPages = Math.max(1, Math.ceil(hobbiesList.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = hobbiesList.slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize
+  );
 
   async function handleDelete(h: HobbyItem) {
     const ok = await confirm({
@@ -118,7 +109,7 @@ function HobbiesTab({
       variant: "destructive",
     });
     if (!ok) return;
-    setBusy(h.id);
+    setDeletingId(h.id);
     try {
       await deleteHobby(h.id);
       toast.success("Hobi dihapus");
@@ -126,70 +117,19 @@ function HobbiesTab({
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal hapus"));
     } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleSaveEdit(id: string) {
-    if (!editName.trim()) return toast.error("Nama wajib diisi");
-    setBusy(id);
-    try {
-      await updateHobby({ id, name: editName.trim(), category: editCat });
-      toast.success("Hobi diperbarui");
-      setEditId(null);
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
-    } finally {
-      setBusy(null);
+      setDeletingId(null);
     }
   }
 
   return (
     <div className="space-y-4">
-      {/* Form tambah */}
-      <form
-        onSubmit={handleAdd}
-        className="rounded-xl border border-border bg-card p-4 flex flex-col sm:flex-row gap-2 sm:items-end"
-      >
-        <div className="flex-1">
-          <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-            Nama hobi
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="cth: panjat tebing"
-            maxLength={40}
-            className={inputCls}
-          />
-        </div>
-        <div className="sm:w-56">
-          <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-            Kategori
-          </label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className={inputCls}
-          >
-            {categories.length === 0 && <option value="">— belum ada —</option>}
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="submit" variant="gold" disabled={adding}>
-          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Tambah
+      <div className="flex justify-end">
+        <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
+          <Plus className="h-4 w-4" /> Tambah Hobi
         </Button>
-      </form>
+      </div>
 
-      {/* Tabel */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
@@ -199,98 +139,72 @@ function HobbiesTab({
             </tr>
           </thead>
           <tbody>
-            {hobbiesList.map((h) => (
+            {pageItems.map((h) => (
               <tr key={h.id} className="border-b border-border/40 last:border-0">
-                {editId === h.id ? (
-                  <>
-                    <td className="px-4 py-2">
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        maxLength={40}
-                        className="w-full h-9 px-2 rounded-md bg-input border border-border text-sm"
-                      />
-                    </td>
-                    <td className="px-4 py-2">
-                      <select
-                        value={editCat}
-                        onChange={(e) => setEditCat(e.target.value)}
-                        className="w-full h-9 px-2 rounded-md bg-input border border-border text-sm"
-                      >
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.name}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => handleSaveEdit(h.id)}
-                        disabled={busy === h.id}
-                        className="p-1.5 rounded hover:bg-emerald-500/15 text-emerald-400"
-                        aria-label="Simpan"
-                      >
-                        {busy === h.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setEditId(null)}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground"
-                        aria-label="Batal"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-4 py-2.5 font-medium">{h.name}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">
-                      {h.category}
-                    </td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => {
-                          setEditId(h.id);
-                          setEditName(h.name);
-                          setEditCat(h.category);
-                        }}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        aria-label="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(h)}
-                        disabled={busy === h.id}
-                        className="p-1.5 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-400"
-                        aria-label="Hapus"
-                      >
-                        {busy === h.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                  </>
-                )}
+                <td className="px-4 py-2.5 font-medium">{h.name}</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{h.category}</td>
+                <td className="p-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormMode({ mode: "edit", item: h })}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(h)}
+                      disabled={deletingId === h.id}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      {deletingId === h.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </td>
               </tr>
             ))}
             {hobbiesList.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
                   Belum ada hobi.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
+
+      <PaginationBar
+        page={safePage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(0);
+        }}
+      />
+
+      {formMode && (
+        <HobbyFormModal
+          mode={formMode.mode}
+          initial={formMode.mode === "edit" ? formMode.item : null}
+          categories={categories}
+          onClose={() => setFormMode(null)}
+          onSaved={() => {
+            setFormMode(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -299,27 +213,19 @@ function HobbiesTab({
 function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [name, setName] = React.useState("");
-  const [adding, setAdding] = React.useState(false);
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const [editId, setEditId] = React.useState<string | null>(null);
-  const [editName, setEditName] = React.useState("");
+  const [formMode, setFormMode] = React.useState<
+    { mode: "create" } | { mode: "edit"; cat: HobbyCategory } | null
+  >(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(10);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return toast.error("Nama kategori wajib diisi");
-    setAdding(true);
-    try {
-      await addHobbyCategory({ name: name.trim() });
-      toast.success("Kategori ditambahkan");
-      setName("");
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal menambah"));
-    } finally {
-      setAdding(false);
-    }
-  }
+  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageItems = categories.slice(
+    safePage * pageSize,
+    safePage * pageSize + pageSize
+  );
 
   async function handleDelete(c: HobbyCategory) {
     const ok = await confirm({
@@ -329,7 +235,7 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
       variant: "destructive",
     });
     if (!ok) return;
-    setBusy(c.id);
+    setDeletingId(c.id);
     try {
       await deleteHobbyCategory(c.id);
       toast.success("Kategori dihapus");
@@ -337,51 +243,19 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal hapus"));
     } finally {
-      setBusy(null);
-    }
-  }
-
-  async function handleSaveEdit(id: string) {
-    if (!editName.trim()) return toast.error("Nama wajib diisi");
-    setBusy(id);
-    try {
-      await updateHobbyCategory({ id, name: editName.trim() });
-      toast.success("Kategori diperbarui");
-      setEditId(null);
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
-    } finally {
-      setBusy(null);
+      setDeletingId(null);
     }
   }
 
   return (
     <div className="space-y-4">
-      <form
-        onSubmit={handleAdd}
-        className="rounded-xl border border-border bg-card p-4 flex gap-2 items-end"
-      >
-        <div className="flex-1">
-          <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-            Nama kategori
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="cth: Olahraga"
-            maxLength={60}
-            className={inputCls}
-          />
-        </div>
-        <Button type="submit" variant="gold" disabled={adding}>
-          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Tambah
+      <div className="flex justify-end">
+        <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
+          <Plus className="h-4 w-4" /> Tambah Kategori
         </Button>
-      </form>
+      </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
@@ -390,84 +264,319 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
             </tr>
           </thead>
           <tbody>
-            {categories.map((c) => (
+            {pageItems.map((c) => (
               <tr key={c.id} className="border-b border-border/40 last:border-0">
-                {editId === c.id ? (
-                  <>
-                    <td className="px-4 py-2">
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        maxLength={60}
-                        className="w-full h-9 px-2 rounded-md bg-input border border-border text-sm"
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => handleSaveEdit(c.id)}
-                        disabled={busy === c.id}
-                        className="p-1.5 rounded hover:bg-emerald-500/15 text-emerald-400"
-                        aria-label="Simpan"
-                      >
-                        {busy === c.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => setEditId(null)}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground"
-                        aria-label="Batal"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                    <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => {
-                          setEditId(c.id);
-                          setEditName(c.name);
-                        }}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                        aria-label="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(c)}
-                        disabled={busy === c.id}
-                        className="p-1.5 rounded hover:bg-red-500/15 text-muted-foreground hover:text-red-400"
-                        aria-label="Hapus"
-                      >
-                        {busy === c.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                  </>
-                )}
+                <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                <td className="p-3 text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormMode({ mode: "edit", cat: c })}
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(c)}
+                      disabled={deletingId === c.id}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      {deletingId === c.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </td>
               </tr>
             ))}
             {categories.length === 0 && (
               <tr>
-                <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground text-sm">
+                <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
                   Belum ada kategori.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
-      </div>
+      </Card>
+
+      <PaginationBar
+        page={safePage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(0);
+        }}
+      />
+
+      {formMode && (
+        <CategoryFormModal
+          mode={formMode.mode}
+          initial={formMode.mode === "edit" ? formMode.cat : null}
+          onClose={() => setFormMode(null)}
+          onSaved={() => {
+            setFormMode(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-const inputCls =
-  "w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60";
+/* ---------- Form Modals ---------- */
+function HobbyFormModal({
+  mode,
+  initial,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  mode: "create" | "edit";
+  initial: HobbyItem | null;
+  categories: HobbyCategory[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = React.useState(initial?.name ?? "");
+  const [category, setCategory] = React.useState(
+    initial?.category ?? categories[0]?.name ?? ""
+  );
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || submitting) return;
+    if (!category) {
+      toast.error("Pilih kategori dulu");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      if (mode === "create") {
+        await addHobby({ name: name.trim(), category });
+      } else {
+        await updateHobby({ id: initial!.id, name: name.trim(), category });
+      }
+      toast.success(mode === "create" ? "Hobi ditambahkan" : "Hobi disimpan");
+      onSaved();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell title={mode === "create" ? "Hobi Baru" : "Edit Hobi"} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            Nama hobi
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="cth: panjat tebing"
+            maxLength={40}
+            autoFocus
+            required
+            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            Kategori
+          </label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          >
+            {categories.length === 0 && <option value="">— belum ada —</option>}
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sticky bottom-0 -mx-4 -mb-4 p-4 bg-background border-t border-border">
+          <Button
+            type="submit"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            disabled={!name.trim() || submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...
+              </>
+            ) : mode === "create" ? (
+              "Tambah Hobi"
+            ) : (
+              "Simpan Perubahan"
+            )}
+          </Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+function CategoryFormModal({
+  mode,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  mode: "create" | "edit";
+  initial: HobbyCategory | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = React.useState(initial?.name ?? "");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      if (mode === "create") {
+        await addHobbyCategory({ name: name.trim() });
+      } else {
+        await updateHobbyCategory({ id: initial!.id, name: name.trim() });
+      }
+      toast.success(mode === "create" ? "Kategori ditambahkan" : "Kategori disimpan");
+      onSaved();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <ModalShell
+      title={mode === "create" ? "Kategori Baru" : "Edit Kategori"}
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4 p-4">
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            Nama kategori
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="cth: Olahraga"
+            maxLength={60}
+            autoFocus
+            required
+            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
+        <div className="sticky bottom-0 -mx-4 -mb-4 p-4 bg-background border-t border-border">
+          <Button
+            type="submit"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            disabled={!name.trim() || submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...
+              </>
+            ) : mode === "create" ? (
+              "Tambah Kategori"
+            ) : (
+              "Simpan Perubahan"
+            )}
+          </Button>
+        </div>
+      </form>
+    </ModalShell>
+  );
+}
+
+/* ---------- Shared ---------- */
+function PaginationBar({
+  page,
+  totalPages,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span>Per halaman:</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
+        >
+          <option value={10}>10</option>
+          <option value={25}>25</option>
+          <option value={50}>50</option>
+          <option value={100}>100</option>
+        </select>
+      </label>
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} onChange={onPageChange} />
+      )}
+    </div>
+  );
+}
+
+function ModalShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-md bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
+            aria-label="Tutup"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  );
+}
