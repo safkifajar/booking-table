@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ne, sql, inArray, isNotNull, lt, gt } from "drizzle-orm";
+import { and, asc, eq, ne, sql, inArray, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -81,28 +81,9 @@ export async function getMoveTargets(
       )
     );
 
-  // Meja yg slot waktunya bentrok dgn rentang sesi ini (reserved/open/locked).
-  const start = session.reservationAt;
-  const end = session.reservationEndAt;
-  const busyTableIds = new Set<string>();
-  if (start && end) {
-    const overlapping = await db
-      .select({ tableId: tableSessions.tableId })
-      .from(tableSessions)
-      .where(
-        and(
-          inArray(tableSessions.status, ["reserved", "open", "locked"]),
-          ne(tableSessions.id, session.id),
-          isNotNull(tableSessions.reservationAt),
-          isNotNull(tableSessions.reservationEndAt),
-          // overlap: other.start < end AND other.end > start
-          lt(tableSessions.reservationAt, end),
-          gt(tableSessions.reservationEndAt, start)
-        )
-      );
-    for (const r of overlapping) busyTableIds.add(r.tableId);
-  }
-
+  // TAMPILKAN SEMUA meja (kapasitas cukup), JANGAN sembunyikan meja yg sebagian
+  // jamnya terisi — meja bisa punya slot jam lain yg kosong. Ketersediaan
+  // per-jam ditangani di step pilih jam (getMoveTableSlots), sama spt booking.
   const rows = await db
     .select({
       id: tables.id,
@@ -123,7 +104,7 @@ export async function getMoveTargets(
     .orderBy(asc(floorAreas.sortOrder), asc(tables.label));
 
   return rows
-    .filter((r) => !busyTableIds.has(r.id) && r.capacity >= cnt)
+    .filter((r) => r.capacity >= cnt)
     .map((r) => ({
       id: r.id,
       label: r.label,
