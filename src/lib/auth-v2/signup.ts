@@ -26,6 +26,7 @@ const signupSchema = z.object({
   email: z.string().email("Email tidak valid").max(255),
   password: z.string().min(6, "Password minimal 6 karakter").max(100),
   displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  phone: z.string().max(20).optional().or(z.literal("")),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
@@ -81,6 +82,8 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
       await tx.insert(profiles).values({
         id: newUser.id,
         displayName,
+        phone: data.phone?.trim() || null,
+        // onboarded default false → user diarahkan ke /onboarding (step 2-3).
       });
 
       return newUser;

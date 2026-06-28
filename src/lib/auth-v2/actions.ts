@@ -36,6 +36,7 @@ export async function signUpAction(formData: {
   email: string;
   password: string;
   displayName: string;
+  phone?: string;
   next?: string;
 }): Promise<ActionResult> {
   try {
@@ -43,13 +44,19 @@ export async function signUpAction(formData: {
       email: formData.email,
       password: formData.password,
       displayName: formData.displayName,
+      phone: formData.phone,
     });
 
-    // Auto signin pakai credentials provider — akan trigger NEXT_REDIRECT
+    // Auto signin → lanjut ke wizard onboarding (step 2-3). next disimpan
+    // supaya setelah onboarding selesai bisa diarahkan ke tujuan awal.
+    const onboardingUrl =
+      formData.next && formData.next !== "/"
+        ? `/onboarding?next=${encodeURIComponent(formData.next)}`
+        : "/onboarding";
     await signIn("credentials", {
       email: formData.email.toLowerCase().trim(),
       password: formData.password,
-      redirectTo: formData.next ?? "/",
+      redirectTo: onboardingUrl,
     });
 
     return { ok: true };

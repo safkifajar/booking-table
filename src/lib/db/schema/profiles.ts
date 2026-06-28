@@ -56,6 +56,8 @@ export const profiles = pgTable(
     isGuest: boolean("is_guest").notNull().default(false),
     /** Akun aktif. False = di-nonaktifkan admin → tidak bisa login. */
     isActive: boolean("is_active").notNull().default(true),
+    /** Onboarding (step 2-3 saat daftar) selesai. False = paksa ke /onboarding. */
+    onboarded: boolean("onboarded").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [index("idx_profiles_hobbies").using("gin", t.hobbies)]

@@ -58,6 +58,7 @@ export interface Profile {
   hideLocation: boolean;
   hideAge: boolean;
   hideSocial: boolean;
+  onboarded: boolean;
   hobbies: string[];
   createdAt: Date;
 }
@@ -122,6 +123,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     hideLocation: row.hideLocation,
     hideAge: row.hideAge,
     hideSocial: row.hideSocial,
+    onboarded: row.onboarded,
     hobbies: row.hobbies,
     createdAt: row.createdAt,
   };

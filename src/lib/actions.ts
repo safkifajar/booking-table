@@ -1841,6 +1841,66 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
 }
 
 // ============================================================
+// ONBOARDING (wizard step 2-3 saat daftar)
+// ============================================================
+
+const onboardingSchema = z.object({
+  // Step 2 — data diri
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+  gender: z.enum(["male", "female"]).optional().or(z.literal("")),
+  interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
+  area: z.string().max(120).optional().or(z.literal("")),
+  socialLink: z.string().max(200).optional().or(z.literal("")),
+  // Step 3 — interest & preferensi
+  lookingFor: z
+    .enum(["relationship", "casual", "friendship"])
+    .optional()
+    .or(z.literal("")),
+  musicPref: z.string().max(120).optional().or(z.literal("")),
+  favFood: z.string().max(120).optional().or(z.literal("")),
+  favDrink: z.string().max(120).optional().or(z.literal("")),
+  bio: z.string().max(280).optional().or(z.literal("")),
+  hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
+});
+
+/** Selesaikan onboarding: simpan profil step 2-3 + tandai onboarded=true. */
+export async function completeOnboarding(
+  input: z.infer<typeof onboardingSchema>
+) {
+  const profile = await requireProfile();
+  const data = onboardingSchema.parse(input);
+
+  const hobbies = (data.hobbies ?? [])
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0)
+    .filter((h, i, arr) => arr.indexOf(h) === i);
+
+  await db
+    .update(profiles)
+    .set({
+      birthDate: data.birthDate || null,
+      gender: data.gender || null,
+      interestedIn: data.interestedIn || null,
+      area: data.area || null,
+      socialLink: data.socialLink?.trim() || null,
+      lookingFor: data.lookingFor || null,
+      musicPref: data.musicPref?.trim() || null,
+      favFood: data.favFood?.trim() || null,
+      favDrink: data.favDrink?.trim() || null,
+      bio: data.bio?.trim() || null,
+      hobbies,
+      onboarded: true,
+    })
+    .where(eq(profiles.id, profile.id));
+
+  revalidatePath("/", "layout");
+}
+
+// ============================================================
 // PASSWORD CHANGE
 // ============================================================
 

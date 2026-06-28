@@ -25,6 +25,10 @@ export default async function NetworkPage() {
   if (!profile) {
     redirect("/auth?next=/network");
   }
+  // Belum selesai daftar → paksa onboarding.
+  if (!profile.onboarded) {
+    redirect("/onboarding");
+  }
 
   if (!bar) {
     return (

@@ -147,6 +147,7 @@ function PasswordForm({
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
@@ -165,6 +166,7 @@ function PasswordForm({
               email,
               password,
               displayName: displayName.trim(),
+              phone: phone.trim() || undefined,
               next,
             })
           : await signInAction({ email, password, next });
@@ -195,6 +197,16 @@ function PasswordForm({
           required
           minLength={2}
           maxLength={40}
+          className={inputCls}
+        />
+      )}
+      {mode === "signup" && (
+        <input
+          type="tel"
+          placeholder="Nomor WA (cth: 0812...)"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          maxLength={20}
           className={inputCls}
         />
       )}

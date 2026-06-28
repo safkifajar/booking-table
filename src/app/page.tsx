@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -30,6 +31,11 @@ export default async function HomePage() {
     getCurrentProfile(),
     getBarBySlug(barSlug),
   ]);
+
+  // Gate onboarding: user login yg belum selesai daftar → paksa ke wizard.
+  if (profile && !profile.onboarded) {
+    redirect("/onboarding");
+  }
 
   if (!bar) {
     return (
