@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
+import { HOBBY_CATEGORIES } from "@/lib/hobbies";
 
 const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
@@ -14,11 +15,6 @@ const LOOKING_FOR = [
   { value: "friendship", label: "Friendship" },
 ];
 
-const HOBBY_PRESET = [
-  "live music", "dj set", "rock", "jazz", "hip-hop", "cocktails", "wine",
-  "craft beer", "coffee", "billiard", "nobar", "travel", "gym", "movies",
-  "gaming", "photography", "fashion", "football",
-];
 
 export function OnboardingWizard({
   next,
@@ -262,21 +258,30 @@ export function OnboardingWizard({
           </Field>
 
           <Field label="Hobi & minat (pilih beberapa)">
-            <div className="flex flex-wrap gap-1.5">
-              {HOBBY_PRESET.map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => toggleHobby(h)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-full text-xs font-medium border transition",
-                    hobbies.includes(h)
-                      ? "bg-primary/15 border-primary/40 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {h}
-                </button>
+            <div className="space-y-3">
+              {HOBBY_CATEGORIES.map((cat) => (
+                <div key={cat.label}>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1.5">
+                    {cat.label}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cat.items.map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => toggleHobby(h)}
+                        className={cn(
+                          "px-3 py-1.5 rounded-full text-xs font-medium border transition",
+                          hobbies.includes(h)
+                            ? "bg-primary/15 border-primary/40 text-primary"
+                            : "border-border text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {h}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </Field>
