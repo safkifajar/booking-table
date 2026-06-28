@@ -39,12 +39,20 @@ export function PushToggle() {
         }
         return;
       }
-      await registerServiceWorker();
-      const existing = await getExistingSubscription();
-      if (!cancelled) {
-        setPerm(notificationPermission());
-        setEnabled(!!existing);
-        setLoading(false);
+      try {
+        await registerServiceWorker();
+        const existing = await getExistingSubscription();
+        if (!cancelled) {
+          setPerm(notificationPermission());
+          setEnabled(!!existing);
+        }
+      } catch {
+        // Apa pun yg gagal (SW register/ready menggantung di subdomain dll) —
+        // jangan biarkan UI stuck. Anggap belum aktif; tombol tetap bisa dicoba.
+        if (!cancelled) setPerm(notificationPermission());
+      } finally {
+        // SELALU hentikan loading, apa pun hasilnya.
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {

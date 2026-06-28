@@ -99,7 +99,12 @@ export default authMiddleware(async (req) => {
       path.startsWith("/staff") ||
       path.startsWith("/session") ||
       path.startsWith("/bar") ||
-      path.startsWith("/api/");
+      path.startsWith("/api/") ||
+      // Service worker & PWA manifest harus di-serve apa adanya (jangan
+      // di-rewrite ke /admin/* → 404 → SW gagal register, push toggle hang).
+      path === "/sw.js" ||
+      path === "/manifest.webmanifest" ||
+      path === "/manifest.json";
 
     // Default: rewrite path ke /admin prefix untuk root + path lain
     if (!skipRewrite) {
@@ -129,7 +134,8 @@ export default authMiddleware(async (req) => {
 
 export const config = {
   matcher: [
-    // Match all paths kecuali static assets, images, dan API auth (Auth.js handle sendiri).
-    "/((?!_next/static|_next/image|favicon.ico|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Match all paths kecuali static assets, images, service worker, manifest,
+    // dan API auth (Auth.js handle sendiri).
+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|manifest.json|api/auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
