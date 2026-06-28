@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import {
   X,
-  Plus,
   Sparkles,
   Mail,
   Phone,
@@ -24,7 +23,7 @@ import {
 } from "lucide-react";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
-import { HOBBY_CATEGORIES } from "@/lib/hobbies";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 
 type Gender = "" | "male" | "female";
@@ -55,6 +54,7 @@ interface Props {
   initialHideAge: boolean;
   initialHideSocial: boolean;
   initialHobbies: string[];
+  hobbyGroups: HobbyGroup[];
 }
 
 export function ProfileForm({
@@ -76,6 +76,7 @@ export function ProfileForm({
   initialHideAge,
   initialHideSocial,
   initialHobbies,
+  hobbyGroups,
 }: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
@@ -96,7 +97,6 @@ export function ProfileForm({
   const [hideAge, setHideAge] = React.useState(initialHideAge);
   const [hideSocial, setHideSocial] = React.useState(initialHideSocial);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
-  const [customInput, setCustomInput] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   function toggleHobby(h: string) {
@@ -107,22 +107,6 @@ export function ProfileForm({
         ? prev.filter((x) => x !== normalized)
         : [...prev, normalized].slice(0, 15)
     );
-  }
-
-  function addCustom(e: React.FormEvent) {
-    e.preventDefault();
-    const cleaned = customInput.trim().toLowerCase();
-    if (!cleaned) return;
-    if (hobbies.includes(cleaned)) {
-      toast.error("Hobi sudah dipilih");
-      return;
-    }
-    if (hobbies.length >= 15) {
-      toast.error("Maks 15 hobi");
-      return;
-    }
-    setHobbies((prev) => [...prev, cleaned]);
-    setCustomInput("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -163,11 +147,13 @@ export function ProfileForm({
     }
   }
 
-  // Saran per kategori, sembunyikan yg sudah dipilih.
-  const suggestionGroups = HOBBY_CATEGORIES.map((cat) => ({
-    label: cat.label,
-    items: cat.items.filter((h) => !hobbies.includes(h)),
-  })).filter((cat) => cat.items.length > 0);
+  // Saran per kategori (dari master list admin), sembunyikan yg sudah dipilih.
+  const suggestionGroups = hobbyGroups
+    .map((cat) => ({
+      label: cat.category,
+      items: cat.items.map((i) => i.name).filter((h) => !hobbies.includes(h)),
+    }))
+    .filter((cat) => cat.items.length > 0);
   const bioLength = bio.length;
 
   return (
@@ -406,7 +392,7 @@ export function ProfileForm({
           </CardTitle>
           <CardDescription>
             Bantu host & teman semeja kenal kamu — vibe match jadi gampang. Pilih
-            dari preset atau tambah hobi sendiri. Maks 15 hobi.
+            dari pilihan yang tersedia. Maks 15 hobi.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -416,7 +402,7 @@ export function ProfileForm({
             </p>
             {hobbies.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                Belum ada. Pilih dari saran di bawah atau tambah sendiri.
+                Belum ada. Pilih dari daftar di bawah.
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -433,38 +419,6 @@ export function ProfileForm({
                 ))}
               </div>
             )}
-          </div>
-
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Tambah hobi sendiri
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                placeholder="cth: panjat tebing"
-                maxLength={30}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustom(e);
-                  }
-                }}
-                className="flex-1 h-10 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="default"
-                onClick={addCustom}
-                disabled={!customInput.trim()}
-              >
-                <Plus className="h-4 w-4" />
-                Tambah
-              </Button>
-            </div>
           </div>
 
           {suggestionGroups.length > 0 && (

@@ -7,7 +7,7 @@ import { Loader2, ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
-import { HOBBY_CATEGORIES } from "@/lib/hobbies";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
@@ -19,9 +19,11 @@ const LOOKING_FOR = [
 export function OnboardingWizard({
   next,
   initialName,
+  hobbyGroups,
 }: {
   next: string;
   initialName: string;
+  hobbyGroups: HobbyGroup[];
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
@@ -259,13 +261,13 @@ export function OnboardingWizard({
 
           <Field label="Hobi & minat (pilih beberapa)">
             <div className="space-y-3">
-              {HOBBY_CATEGORIES.map((cat) => (
-                <div key={cat.label}>
+              {hobbyGroups.map((cat) => (
+                <div key={cat.category}>
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1.5">
-                    {cat.label}
+                    {cat.category}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {cat.items.map((h) => (
+                    {cat.items.map((item) => item.name).map((h) => (
                       <button
                         key={h}
                         type="button"

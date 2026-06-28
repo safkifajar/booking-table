@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
 import { ProfileForm } from "../ProfileForm";
+import { getHobbyGroups } from "@/lib/hobby-actions";
 
 export default async function ProfileAccountPage() {
   const profile = await getCurrentProfile();
+  const hobbyGroups = await getHobbyGroups();
   if (!profile) {
     redirect("/auth?next=/profile/account");
   }
@@ -37,6 +39,7 @@ export default async function ProfileAccountPage() {
           initialHideAge={profile.hideAge}
           initialHideSocial={profile.hideSocial}
           initialHobbies={profile.hobbies ?? []}
+          hobbyGroups={hobbyGroups}
         />
       </div>
     </main>

@@ -1,0 +1,51 @@
+-- 0040: master list hobi & minat (dikelola admin).
+CREATE TABLE IF NOT EXISTS hobbies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  category text NOT NULL,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT uq_hobby_name UNIQUE (name)
+);
+
+-- Seed dari daftar hardcode (HOBBY_CATEGORIES). Idempotent.
+INSERT INTO hobbies (name, category, sort_order) VALUES
+  ('live music','Musik & Hiburan',10),
+  ('dj set','Musik & Hiburan',20),
+  ('karaoke','Musik & Hiburan',30),
+  ('rock','Musik & Hiburan',40),
+  ('jazz','Musik & Hiburan',50),
+  ('hip-hop','Musik & Hiburan',60),
+  ('edm','Musik & Hiburan',70),
+  ('indie','Musik & Hiburan',80),
+  ('vinyl','Musik & Hiburan',90),
+  ('music production','Musik & Hiburan',100),
+  ('cocktails','Minuman & Kuliner',10),
+  ('wine','Minuman & Kuliner',20),
+  ('craft beer','Minuman & Kuliner',30),
+  ('whiskey','Minuman & Kuliner',40),
+  ('coffee','Minuman & Kuliner',50),
+  ('mixology','Minuman & Kuliner',60),
+  ('foodie','Minuman & Kuliner',70),
+  ('shisha','Minuman & Kuliner',80),
+  ('billiard','Aktivitas Sosial',10),
+  ('board game','Aktivitas Sosial',20),
+  ('darts','Aktivitas Sosial',30),
+  ('nobar','Aktivitas Sosial',40),
+  ('stand-up comedy','Aktivitas Sosial',50),
+  ('open mic','Aktivitas Sosial',60),
+  ('nongkrong santai','Vibe & Gaya',10),
+  ('networking','Vibe & Gaya',20),
+  ('cari teman baru','Vibe & Gaya',30),
+  ('party','Vibe & Gaya',40),
+  ('fashion','Vibe & Gaya',50),
+  ('photography','Vibe & Gaya',60),
+  ('travel','Lifestyle',10),
+  ('gym','Lifestyle',20),
+  ('football','Lifestyle',30),
+  ('basketball','Lifestyle',40),
+  ('movies','Lifestyle',50),
+  ('gaming','Lifestyle',60),
+  ('art','Lifestyle',70),
+  ('books','Lifestyle',80)
+ON CONFLICT (name) DO NOTHING;

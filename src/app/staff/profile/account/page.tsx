@@ -4,9 +4,11 @@ import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ProfileForm } from "@/app/profile/ProfileForm";
+import { getHobbyGroups } from "@/lib/hobby-actions";
 
 export default async function StaffProfileAccountPage() {
   const profile = await getCurrentProfile();
+  const hobbyGroups = await getHobbyGroups();
   if (!profile) redirect("/login");
   const user = await getCurrentUser();
 
@@ -50,6 +52,7 @@ export default async function StaffProfileAccountPage() {
           initialHideAge={profile.hideAge}
           initialHideSocial={profile.hideSocial}
           initialHobbies={profile.hobbies ?? []}
+          hobbyGroups={hobbyGroups}
         />
       </div>
     </main>
