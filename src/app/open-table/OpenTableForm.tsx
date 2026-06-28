@@ -92,7 +92,6 @@ export function OpenTableForm({
   menu,
 }: Props) {
   const router = useRouter();
-  const [title, setTitle] = React.useState("");
   const [visibility, setVisibility] =
     React.useState<SessionVisibility>("public");
   const [vibes, setVibes] = React.useState<string[]>([]);
@@ -225,7 +224,6 @@ export function OpenTableForm({
 
       await openTable({
         tableId: table.id,
-        title: title.trim() || undefined,
         visibility,
         vibeTags: vibes,
         reservationAt: selectedSlot || null,
@@ -298,24 +296,6 @@ export function OpenTableForm({
               Reservasi belum tersedia saat ini. Coba lagi nanti atau hubungi bar.
             </div>
           )}
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm font-medium mb-1.5">
-              Judul meja{" "}
-              <span className="text-muted-foreground font-normal">
-                (opsional)
-              </span>
-            </label>
-            <input
-              type="text"
-              placeholder="Friday night vibes"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={80}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-            />
-          </div>
 
           {/* Visibility */}
           <div>
