@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ne, sql, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, ne, sql, inArray, isNotNull, lt, gt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
@@ -58,6 +58,7 @@ export async function getMoveTargets(
   const [session] = await db
     .select({
       id: tableSessions.id,
+      status: tableSessions.status,
       hostId: tableSessions.hostId,
       tableId: tableSessions.tableId,
       reservationAt: tableSessions.reservationAt,
@@ -69,6 +70,32 @@ export async function getMoveTargets(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
   if (!session || session.hostId !== profile.id) return [];
+
+  // Mode AKTIF (open/locked): pindah berlaku SEKARANG → jam selesai. Tak ada
+  // pilih jam, jadi meja yg bentrok di rentang [now, end] HARUS disembunyikan
+  // di sini. Mode reserved: tampilkan semua, ketersediaan dipilih di step jam.
+  const isActive = session.status === "open" || session.status === "locked";
+  const busyTableIds = new Set<string>();
+  if (isActive && session.reservationEndAt) {
+    const now = new Date();
+    const end = session.reservationEndAt;
+    if (now.getTime() < end.getTime()) {
+      const overlapping = await db
+        .select({ tableId: tableSessions.tableId })
+        .from(tableSessions)
+        .where(
+          and(
+            inArray(tableSessions.status, ["reserved", "open", "locked"]),
+            ne(tableSessions.id, session.id),
+            isNotNull(tableSessions.reservationAt),
+            isNotNull(tableSessions.reservationEndAt),
+            lt(tableSessions.reservationAt, end),
+            gt(tableSessions.reservationEndAt, now)
+          )
+        );
+      for (const r of overlapping) busyTableIds.add(r.tableId);
+    }
+  }
 
   // Jumlah anggota (utk filter kapasitas).
   const [{ cnt }] = await db
@@ -104,7 +131,7 @@ export async function getMoveTargets(
     .orderBy(asc(floorAreas.sortOrder), asc(tables.label));
 
   return rows
-    .filter((r) => r.capacity >= cnt)
+    .filter((r) => r.capacity >= cnt && !busyTableIds.has(r.id))
     .map((r) => ({
       id: r.id,
       label: r.label,

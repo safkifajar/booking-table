@@ -97,36 +97,38 @@ export function MoveTableButton({
       setConfirmMinSpend(t);
       return;
     }
-    setSlotTarget(t); // ke step pilih jam
+    // Mode aktif: TAK pilih jam (pindah berlaku sekarang→jam selesai) → langsung
+    // ajukan request. Mode reserved: lanjut ke step pilih jam.
+    if (needsApproval) {
+      submitActiveRequest(t);
+      return;
+    }
+    setSlotTarget(t);
   }
 
-  // Setelah pilih jam.
+  // Mode aktif tanpa min-spend issue → request langsung (tanpa jam).
+  async function submitActiveRequest(t: MoveTargetTable) {
+    setMoving(true);
+    try {
+      await requestMoveTable({ sessionId, targetTableId: t.id });
+      toast.success("Request pindah dikirim — menunggu persetujuan staff");
+      setOpen(false);
+      setConfirmMinSpend(null);
+      setPending({ toLabel: t.label, reservationAt: new Date().toISOString() });
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+    } finally {
+      setMoving(false);
+    }
+  }
+
+  // Mode reserved — setelah pilih jam.
   async function handleSlotChosen(t: MoveTargetTable, slotIso: string) {
-    // Min-spend kurang → modal order dulu (baik mode aktif maupun reserved).
+    // Min-spend kurang → modal order dulu.
     if (t.min_spend > 0 && existingOrderTotal < t.min_spend) {
       setOrderStep({ target: t, slotIso });
       setSlotTarget(null);
-      return;
-    }
-    // Mode aktif → ajukan request approval.
-    if (needsApproval) {
-      setMoving(true);
-      try {
-        await requestMoveTable({
-          sessionId,
-          targetTableId: t.id,
-          reservationAt: slotIso,
-        });
-        toast.success("Request pindah dikirim — menunggu persetujuan staff");
-        setOpen(false);
-        setSlotTarget(null);
-        setPending({ toLabel: t.label, reservationAt: slotIso });
-        router.refresh();
-      } catch (err) {
-        toast.error(getActionErrorMessage(err, "Gagal kirim request"));
-      } finally {
-        setMoving(false);
-      }
       return;
     }
     setMoving(true);
@@ -193,8 +195,9 @@ export function MoveTableButton({
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                Hanya meja yg kapasitasnya cukup. Durasi booking tetap sama;
-                kamu pilih jam mulai di langkah berikutnya.
+                {needsApproval
+                  ? "Hanya meja yg kapasitasnya cukup & kosong di sisa waktu booking. Pindah berlaku sekarang sampai jam selesai booking — perlu persetujuan staff."
+                  : "Hanya meja yg kapasitasnya cukup. Durasi booking tetap sama; kamu pilih jam mulai di langkah berikutnya."}
               </p>
               {loading ? (
                 <div className="py-10 text-center">
@@ -258,7 +261,12 @@ export function MoveTableButton({
                 variant="gold"
                 className="flex-1"
                 onClick={() => {
-                  setSlotTarget(confirmMinSpend);
+                  if (needsApproval) {
+                    // Mode aktif: tak pilih jam → langsung modal order.
+                    setOrderStep({ target: confirmMinSpend, slotIso: "" });
+                  } else {
+                    setSlotTarget(confirmMinSpend);
+                  }
                   setConfirmMinSpend(null);
                 }}
               >
@@ -294,7 +302,8 @@ export function MoveTableButton({
             if (needsApproval) {
               setPending({
                 toLabel: orderStep.target.label,
-                reservationAt: orderStep.slotIso,
+                reservationAt:
+                  orderStep.slotIso || new Date().toISOString(),
               });
             }
             setOrderStep(null);
@@ -496,10 +505,10 @@ function MoveOrderModal({
     setSubmitting(true);
     try {
       if (needsApproval) {
+        // Mode aktif: tak kirim jam (server set sekarang→jam selesai).
         await requestMoveTableWithOrder({
           sessionId,
           targetTableId: target.id,
-          reservationAt: slotIso,
           items,
           paymentMethod: method,
         });

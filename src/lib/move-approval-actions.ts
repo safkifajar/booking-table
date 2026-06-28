@@ -28,12 +28,14 @@ import type { PaymentMethod } from "@/types/db";
 const requestSchema = z.object({
   sessionId: z.string().uuid(),
   targetTableId: z.string().uuid(),
-  reservationAt: z.string().datetime(),
 });
 
 /**
  * Host minta pindah meja saat sesi AKTIF (open/locked). Buat request pending +
  * notif ke semua staff bar. Tak langsung pindah — tunggu approval.
+ *
+ * Waktu: pindah berlaku SEKARANG s/d jam selesai booking lama (tak reset jam,
+ * tak ada waktu gratis). Tamu tak memilih jam saat aktif.
  */
 export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   const profile = await requireProfile();
@@ -81,10 +83,11 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   if (!target || target.barId !== session.barId)
     throw new Error("Meja tujuan tidak valid");
 
-  const durationMs =
-    session.reservationEndAt.getTime() - session.reservationAt.getTime();
-  const newStart = new Date(data.reservationAt);
-  const newEnd = new Date(newStart.getTime() + durationMs);
+  // Pindah berlaku SEKARANG → jam selesai booking lama (sisa waktu, tak reset).
+  const newStart = new Date();
+  const newEnd = session.reservationEndAt;
+  if (newStart.getTime() >= newEnd.getTime())
+    throw new Error("Waktu booking sudah habis — tak bisa pindah");
 
   await db.insert(tableMoveRequests).values({
     sessionId: session.id,
@@ -127,7 +130,6 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
 const requestWithOrderSchema = z.object({
   sessionId: z.string().uuid(),
   targetTableId: z.string().uuid(),
-  reservationAt: z.string().datetime(),
   items: z
     .array(
       z.object({
@@ -232,10 +234,11 @@ export async function requestMoveTableWithOrder(
     );
   }
 
-  const durationMs =
-    session.reservationEndAt.getTime() - session.reservationAt.getTime();
-  const newStart = new Date(data.reservationAt);
-  const newEnd = new Date(newStart.getTime() + durationMs);
+  // Pindah berlaku SEKARANG → jam selesai booking lama (sisa waktu, tak reset).
+  const newStart = new Date();
+  const newEnd = session.reservationEndAt;
+  if (newStart.getTime() >= newEnd.getTime())
+    throw new Error("Waktu booking sudah habis — tak bisa pindah");
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.
   let paymentId: string | null = null;
