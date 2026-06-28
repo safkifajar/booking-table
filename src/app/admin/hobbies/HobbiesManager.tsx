@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Edit2, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Edit2, X, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -68,7 +68,7 @@ function TabBtn({
       className={cn(
         "px-4 py-1.5 rounded-md text-sm font-medium transition",
         active
-          ? "bg-card text-foreground shadow-sm"
+          ? "bg-primary/15 text-primary"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
@@ -91,12 +91,21 @@ function HobbiesTab({
     { mode: "create" } | { mode: "edit"; item: HobbyItem } | null
   >(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
 
-  const totalPages = Math.max(1, Math.ceil(hobbiesList.length / pageSize));
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? hobbiesList.filter(
+        (h) =>
+          h.name.toLowerCase().includes(q) ||
+          h.category.toLowerCase().includes(q)
+      )
+    : hobbiesList;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
-  const pageItems = hobbiesList.slice(
+  const pageItems = filtered.slice(
     safePage * pageSize,
     safePage * pageSize + pageSize
   );
@@ -123,7 +132,19 @@ function HobbiesTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Cari hobi / kategori…"
+            className="w-full h-10 pl-8 pr-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
         <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
           <Plus className="h-4 w-4" /> Tambah Hobi
         </Button>
@@ -171,10 +192,10 @@ function HobbiesTab({
                 </td>
               </tr>
             ))}
-            {hobbiesList.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
-                  Belum ada hobi.
+                  {q ? "Tidak ada hobi yang cocok." : "Belum ada hobi."}
                 </td>
               </tr>
             )}
@@ -217,12 +238,17 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
     { mode: "create" } | { mode: "edit"; cat: HobbyCategory } | null
   >(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
 
-  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? categories.filter((c) => c.name.toLowerCase().includes(q))
+    : categories;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
-  const pageItems = categories.slice(
+  const pageItems = filtered.slice(
     safePage * pageSize,
     safePage * pageSize + pageSize
   );
@@ -249,7 +275,19 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Cari kategori…"
+            className="w-full h-10 pl-8 pr-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
         <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
           <Plus className="h-4 w-4" /> Tambah Kategori
         </Button>
@@ -295,10 +333,10 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
                 </td>
               </tr>
             ))}
-            {categories.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
-                  Belum ada kategori.
+                  {q ? "Tidak ada kategori yang cocok." : "Belum ada kategori."}
                 </td>
               </tr>
             )}
