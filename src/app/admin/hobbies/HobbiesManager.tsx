@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Edit2, X, Search } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Loader2,
+  Edit2,
+  X,
+  Search,
+  Sparkles,
+  Layers,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,15 +41,21 @@ export function HobbiesManager({
 
   return (
     <div>
-      <div className="flex gap-1 rounded-lg bg-muted/40 p-1 mb-4 w-fit">
-        <TabBtn active={tab === "hobbies"} onClick={() => setTab("hobbies")}>
-          Hobi &amp; Minat
-          <span className="ml-1.5 text-xs opacity-70">{hobbiesList.length}</span>
-        </TabBtn>
-        <TabBtn active={tab === "categories"} onClick={() => setTab("categories")}>
-          Kategori
-          <span className="ml-1.5 text-xs opacity-70">{categories.length}</span>
-        </TabBtn>
+      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit mb-4">
+        <TabButton
+          icon={<Sparkles className="h-3.5 w-3.5" />}
+          label="Hobi & Minat"
+          active={tab === "hobbies"}
+          onClick={() => setTab("hobbies")}
+          badge={hobbiesList.length}
+        />
+        <TabButton
+          icon={<Layers className="h-3.5 w-3.5" />}
+          label="Kategori"
+          active={tab === "categories"}
+          onClick={() => setTab("categories")}
+          badge={categories.length}
+        />
       </div>
 
       {tab === "hobbies" ? (
@@ -52,27 +67,42 @@ export function HobbiesManager({
   );
 }
 
-function TabBtn({
+function TabButton({
+  icon,
+  label,
   active,
   onClick,
-  children,
+  badge,
 }: {
+  icon: React.ReactNode;
+  label: string;
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "px-4 py-1.5 rounded-md text-sm font-medium transition",
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition",
         active
           ? "bg-primary/15 text-primary"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
-      {children}
+      {icon}
+      <span>{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span
+          className={cn(
+            "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1",
+            active ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+          )}
+        >
+          {badge}
+        </span>
+      )}
     </button>
   );
 }
