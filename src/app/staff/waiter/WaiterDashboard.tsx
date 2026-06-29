@@ -143,13 +143,21 @@ export function WaiterDashboard({
   React.useEffect(() => {
     if (!barId) return;
     const es = new EventSource(`/api/realtime/staff/${barId}`);
-    es.onmessage = () => router.refresh();
+    // Debounce: event beruntun → 1 refresh (hindari badai re-render multi-tab).
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    es.onmessage = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => router.refresh(), 400);
+    };
     es.onerror = () => {
       if (process.env.NODE_ENV === "development") {
         console.warn(`[realtime] staff:${barId} disconnected`);
       }
     };
-    return () => es.close();
+    return () => {
+      es.close();
+      if (debounce) clearTimeout(debounce);
+    };
   }, [barId, router]);
 
   // Apply optimistic state — filter out items marked served

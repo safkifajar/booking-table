@@ -91,13 +91,20 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
   React.useEffect(() => {
     if (!barId) return;
     const es = new EventSource(`/api/realtime/session/${detail.session_id}`);
-    es.onmessage = () => router.refresh();
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    es.onmessage = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => router.refresh(), 400);
+    };
     es.onerror = () => {
       if (process.env.NODE_ENV === "development") {
         console.warn(`[realtime] session disconnected`);
       }
     };
-    return () => es.close();
+    return () => {
+      es.close();
+      if (debounce) clearTimeout(debounce);
+    };
   }, [barId, detail.session_id, router]);
 
   const isPaid = detail.outstanding === 0 && detail.subtotal > 0;

@@ -29,9 +29,12 @@ const globalForDb = globalThis as unknown as {
 const pgClient =
   globalForDb.pgClient ??
   postgres(DATABASE_URL, {
-    // Vercel serverless: max=1 supaya tidak overflow connection pool
-    // Local dev / VPS dedicated: bisa lebih (10-20)
-    max: process.env.VERCEL ? 1 : 10,
+    // Vercel serverless: max=1 supaya tidak overflow connection pool.
+    // Local dev / VPS dedicated: lebih besar. Di dev dgn banyak tab + SSE +
+    // router.refresh, request paralel banyak → pool 10 cepat habis & query
+    // ANTRI (render terasa makin lama). 25 memberi ruang (Postgres default
+    // max_connections=100; listener pool terpisah max 50).
+    max: process.env.VERCEL ? 1 : 25,
     idle_timeout: 20,
     connect_timeout: 10,
     // Recycle koneksi tiap 1 jam. Mencegah koneksi "basi" (mis. setelah

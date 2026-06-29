@@ -25,12 +25,21 @@ export function useSessionRealtime(sessionId: string) {
 
     const es = new EventSource(`/api/realtime/session/${sessionId}`);
 
+    // Debounce refresh: beberapa event beruntun (mis. order + payment + notify
+    // dalam 1 aksi) cukup picu SATU router.refresh. Mencegah badai re-render
+    // server saat banyak tab saling memicu notify.
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => router.refresh(), 400);
+    };
+
     es.addEventListener("ready", () => {
       // Connected — server akan stream notifications dari sini
     });
 
     es.onmessage = () => {
-      router.refresh();
+      scheduleRefresh();
     };
 
     es.onerror = () => {
@@ -48,13 +57,14 @@ export function useSessionRealtime(sessionId: string) {
     // refresh = re-run server components × jumlah tab).
     const poll = setInterval(() => {
       if (document.visibilityState === "visible") {
-        router.refresh();
+        scheduleRefresh();
       }
     }, 30000);
 
     return () => {
       es.close();
       clearInterval(poll);
+      if (debounce) clearTimeout(debounce);
     };
   }, [sessionId, router]);
 }
