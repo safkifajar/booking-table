@@ -23,7 +23,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { RelativeTime } from "@/components/ui/relative-time";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   cashierCreatePayment,
@@ -39,6 +38,39 @@ import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 interface Props {
   detail: CashierSessionDetail;
   barId: string;
+}
+
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+}
+/** Tanggal+jam ringkas, mis. "28 Jun 2026 · 21:00". */
+function fmtDateTime(iso: string): string {
+  const tgl = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
+  return `${tgl} · ${fmtTime(iso)}`;
+}
+/** Waktu pemakaian meja: rentang reservasi kalau ada, else jam mulai. */
+function usageLabel(d: {
+  reservation_at: string | null;
+  reservation_end_at: string | null;
+  started_at: string;
+}): string {
+  const start = d.reservation_at ?? d.started_at;
+  const tgl = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(start));
+  const waktu = d.reservation_end_at
+    ? `${fmtTime(start)}–${fmtTime(d.reservation_end_at)}`
+    : fmtTime(start);
+  return `${tgl} · ${waktu}`;
 }
 
 const PAYMENT_METHODS: {
@@ -225,10 +257,9 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                 {detail.members.length}/{detail.table_capacity}
               </span>
               <span>·</span>
-              <RelativeTime
-                date={detail.started_at}
-                className="text-[11px]"
-              />
+              <span className="text-[11px] tabular-nums">
+                {usageLabel(detail)}
+              </span>
             </div>
           </div>
         </div>
@@ -332,10 +363,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                     {p.paid_at && (
                       <>
                         {" · "}
-                        <RelativeTime
-                          date={p.paid_at}
-                          className="text-[11px]"
-                        />
+                        <span className="tabular-nums">{fmtDateTime(p.paid_at)}</span>
                       </>
                     )}
                   </div>

@@ -55,6 +55,8 @@ export interface CashierSessionItem {
   host_avatar: string | null;
   member_count: number;
   started_at: string;
+  reservation_at: string | null;
+  reservation_end_at: string | null;
   subtotal: number;
   paid_total: number;
   /** Sisa yang belum dibayar (subtotal - paid) */
@@ -84,6 +86,8 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       opened_by_staff_id: tableSessions.openedByStaffId,
       guest_names: tableSessions.guestNames,
     })
@@ -184,6 +188,10 @@ export async function getActiveSessionsForCashier(): Promise<
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
       started_at: s.started_at.toISOString(),
+      reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
+      reservation_end_at: s.reservation_end_at
+        ? s.reservation_end_at.toISOString()
+        : null,
       subtotal,
       paid_total: paid,
       outstanding: Math.max(0, subtotal - paid),
@@ -216,6 +224,8 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       opened_by_staff_id: tableSessions.openedByStaffId,
       guest_names: tableSessions.guestNames,
     })
@@ -307,6 +317,10 @@ export async function getClosedSessionsForCashier(): Promise<
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
       started_at: s.started_at.toISOString(),
+      reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
+      reservation_end_at: s.reservation_end_at
+        ? s.reservation_end_at.toISOString()
+        : null,
       subtotal,
       paid_total: paid,
       outstanding: Math.max(0, subtotal - paid),
@@ -447,6 +461,8 @@ export interface CashierSessionDetail {
   host_name: string;
   host_avatar: string | null;
   started_at: string;
+  reservation_at: string | null;
+  reservation_end_at: string | null;
   order_id: string | null;
   items: CashierBillItem[];
   payments: CashierPayment[];
@@ -483,6 +499,8 @@ export async function getSessionDetailForCashier(
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      reservation_at: tableSessions.reservationAt,
+      reservation_end_at: tableSessions.reservationEndAt,
       opened_by_staff_id: tableSessions.openedByStaffId,
       guest_names: tableSessions.guestNames,
     })
@@ -594,6 +612,12 @@ export async function getSessionDetailForCashier(
     host_name: row.host_name,
     host_avatar: row.host_avatar,
     started_at: row.started_at.toISOString(),
+    reservation_at: row.reservation_at
+      ? row.reservation_at.toISOString()
+      : null,
+    reservation_end_at: row.reservation_end_at
+      ? row.reservation_end_at.toISOString()
+      : null,
     order_id: order?.id ?? null,
     items: itemsRaw.map((i) => ({
       id: i.id,

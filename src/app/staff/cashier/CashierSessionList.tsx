@@ -20,7 +20,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { RelativeTime } from "@/components/ui/relative-time";
 import { UserPlus } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import { OpenTableModal } from "@/components/staff/OpenTableModal";
@@ -61,6 +60,27 @@ function fmtTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(
     d.getMinutes()
   ).padStart(2, "0")}`;
+}
+/**
+ * Label waktu pemakaian meja: tanggal + jam (bukan "x jam lalu"). Pakai rentang
+ * reservasi kalau ada (booking → "28 Jun 2026 · 21:00–23:00"), selain itu jam
+ * mulai pakai (walk-in → "28 Jun 2026 · 20:36").
+ */
+function usageLabel(s: {
+  reservation_at: string | null;
+  reservation_end_at: string | null;
+  started_at: string;
+}): string {
+  const start = s.reservation_at ?? s.started_at;
+  const tgl = new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(start));
+  const waktu = s.reservation_end_at
+    ? `${fmtTime(start)}–${fmtTime(s.reservation_end_at)}`
+    : fmtTime(start);
+  return `${tgl} · ${waktu}`;
 }
 
 /**
@@ -519,10 +539,9 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
                 {session.host_name}
               </span>
               <span>·</span>
-              <RelativeTime
-                date={session.started_at}
-                className="text-[11px] whitespace-nowrap"
-              />
+              <span className="whitespace-nowrap tabular-nums">
+                {usageLabel(session)}
+              </span>
             </div>
             {session.is_walk_in && session.opened_by_staff_name && (
               <div className="text-[10px] text-primary/70 mt-0.5 truncate">
