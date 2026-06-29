@@ -523,11 +523,14 @@ export async function getSessionDetailForCashier(
     if (staffRow) openedByStaffName = staffRow.name;
   }
 
-  // Order
+  // Order sesi (terbaru). JANGAN filter status — sesi closed punya order closed,
+  // tapi bill/item-nya tetap harus ditampilkan & sisa tagihan tetap bisa dibayar.
   const [order] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, sessionId), ne(orders.status, "closed")));
+    .where(eq(orders.sessionId, sessionId))
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
 
   // Items
   const itemsRaw = order
