@@ -691,13 +691,14 @@ export async function cashierCreatePayment(
     throw new Error("Akses bar tidak valid");
   }
 
-  // 2. Get open order
+  // 2. Get order sesi. Sesi closed yg masih punya sisa tagihan tetap boleh
+  //    dibayar (tamu bayar belakangan) → jangan filter status order.
   const [order] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(
-      and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed"))
-    );
+    .where(eq(orders.sessionId, data.sessionId))
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
   if (!order) throw new Error("Order tidak ditemukan");
 
   // 3. Validate payer is joined member

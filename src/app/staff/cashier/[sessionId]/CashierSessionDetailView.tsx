@@ -202,12 +202,26 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     <div className="space-y-4">
       {/* Status banner kalau closed */}
       {isClosed && (
-        <Card className="p-4 bg-muted/40 border-muted-foreground/20 flex items-center gap-3">
-          <Lock className="h-5 w-5 text-muted-foreground" />
+        <Card
+          className={cn(
+            "p-4 flex items-center gap-3",
+            detail.outstanding > 0
+              ? "bg-orange-500/10 border-orange-500/30"
+              : "bg-muted/40 border-muted-foreground/20"
+          )}
+        >
+          <Lock
+            className={cn(
+              "h-5 w-5",
+              detail.outstanding > 0 ? "text-orange-400" : "text-muted-foreground"
+            )}
+          />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium">Meja sudah ditutup</div>
             <div className="text-xs text-muted-foreground">
-              Tidak bisa terima pembayaran baru.
+              {detail.outstanding > 0
+                ? `Masih ada sisa ${formatIDR(detail.outstanding)} — bisa dilunasi di bawah.`
+                : "Tidak bisa terima pembayaran baru."}
             </div>
           </div>
           <Button asChild variant="outline" size="sm">
@@ -424,7 +438,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
         </div>
       )}
 
-      {/* Action buttons */}
+      {/* Action buttons — sesi belum tutup: Bayar + Tutup Meja */}
       {!isClosed && (
         <div className="grid grid-cols-2 gap-2 sticky bottom-0 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 border-t border-border">
           <Button
@@ -453,6 +467,21 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                 Tutup Meja
               </>
             )}
+          </Button>
+        </div>
+      )}
+
+      {/* Sesi sudah closed TAPI masih ada sisa tagihan → tetap bisa lunasi. */}
+      {isClosed && detail.outstanding > 0 && (
+        <div className="sticky bottom-0 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 border-t border-border">
+          <Button
+            variant="gold"
+            size="lg"
+            className="w-full"
+            onClick={() => setPaymentModalOpen(true)}
+          >
+            <Wallet className="h-4 w-4" />
+            Terima Pembayaran ({formatIDR(detail.outstanding)})
           </Button>
         </div>
       )}
