@@ -116,10 +116,18 @@ export function CashierSessionList({
     );
   }, [sessions, query]);
 
-  // Quick stats hari ini (active sessions saja — bukan transaksi closed)
+  // Quick stats. "Meja aktif" = jumlah sesi aktif. "Outstanding" & "Sudah bayar"
+  // mencakup sesi aktif DAN sesi closed yg masih punya sisa tagihan (closed
+  // belum lunas) — supaya tagihan yg masih perlu ditagih tetap terhitung, tidak
+  // hilang begitu sesi ditutup.
   const totalOpen = sessions.length;
-  const totalUnpaid = sessions.reduce((s, x) => s + x.outstanding, 0);
-  const totalPaidPartial = sessions.reduce((s, x) => s + x.paid_total, 0);
+  const closedUnpaid = closedSessions.filter((x) => x.outstanding > 0);
+  const totalUnpaid =
+    sessions.reduce((s, x) => s + x.outstanding, 0) +
+    closedUnpaid.reduce((s, x) => s + x.outstanding, 0);
+  const totalPaidPartial =
+    sessions.reduce((s, x) => s + x.paid_total, 0) +
+    closedUnpaid.reduce((s, x) => s + x.paid_total, 0);
 
   return (
     <div className="space-y-4 pb-24">
