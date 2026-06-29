@@ -44,10 +44,11 @@ interface Props {
   availableTables: AvailableTable[];
   reservationData: WaiterReservationData;
   moveRequests: MoveRequestRow[];
+  closedSessions: CashierSessionItem[];
   barId: string;
 }
 
-type Tab = "active" | "bookings" | "moves";
+type Tab = "active" | "bookings" | "moves" | "done";
 
 function fmtDate(iso: string): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -75,6 +76,7 @@ export function CashierSessionList({
   availableTables,
   reservationData,
   moveRequests,
+  closedSessions,
   barId,
 }: Props) {
   const router = useRouter();
@@ -143,7 +145,7 @@ export function CashierSessionList({
       </div>
 
       {/* Tab: Meja Aktif / Booking */}
-      <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit">
+      <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border max-w-full overflow-x-auto">
         <TabButton
           icon={<Layers className="h-3.5 w-3.5" />}
           label="Meja Aktif"
@@ -164,6 +166,12 @@ export function CashierSessionList({
           active={tab === "moves"}
           onClick={() => setTab("moves")}
           badge={countPending(moveRequests)}
+        />
+        <TabButton
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          label="Selesai"
+          active={tab === "done"}
+          onClick={() => setTab("done")}
         />
       </div>
 
@@ -215,6 +223,26 @@ export function CashierSessionList({
 
       {tab === "moves" && <MoveRequestsPanel requests={moveRequests} />}
 
+      {tab === "done" && (
+        <div className="space-y-3">
+          {closedSessions.length === 0 ? (
+            <Card className="p-12 text-center border-dashed">
+              <CheckCircle2 className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+              <p className="text-sm font-medium mb-1">Belum ada sesi selesai</p>
+              <p className="text-xs text-muted-foreground">
+                Meja yang sudah ditutup akan muncul di sini.
+              </p>
+            </Card>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {closedSessions.map((s) => (
+                <SessionCard key={s.session_id} session={s} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tombol "Buka Meja Baru" — sticky di bawah */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
@@ -265,15 +293,17 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
+      title={label}
       className={cn(
-        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition",
+        "flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-sm font-medium transition shrink-0",
         active
           ? "bg-background text-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
-      {label}
+      {/* layar kecil: tab non-aktif icon-only supaya 4 tab muat */}
+      <span className={cn(active ? "inline" : "hidden sm:inline")}>{label}</span>
       {badge !== undefined && badge > 0 && (
         <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 bg-muted text-foreground">
           {badge}

@@ -3,6 +3,7 @@ import { requireAnyRole } from "@/lib/auth-v2/permissions";
 import {
   getActiveSessionsForCashier,
   getBookingsForCashier,
+  getClosedSessionsForCashier,
 } from "@/lib/cashier-actions";
 import {
   getAvailableTablesForWaiter,
@@ -49,14 +50,21 @@ export default async function CashierPage() {
     );
   }
 
-  const [sessions, bookings, availableTables, reservationData, moveRequests] =
-    await Promise.all([
-      getActiveSessionsForCashier(),
-      getBookingsForCashier(),
-      getAvailableTablesForWaiter(),
-      getReservationDataForWaiter(),
-      getMoveRequests(),
-    ]);
+  const [
+    sessions,
+    bookings,
+    availableTables,
+    reservationData,
+    moveRequests,
+    closedSessions,
+  ] = await Promise.all([
+    getActiveSessionsForCashier(),
+    getBookingsForCashier(),
+    getAvailableTablesForWaiter(),
+    getReservationDataForWaiter(),
+    getMoveRequests(),
+    getClosedSessionsForCashier(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -100,6 +108,7 @@ export default async function CashierPage() {
           availableTables={availableTables}
           reservationData={reservationData}
           moveRequests={moveRequests}
+          closedSessions={closedSessions}
           barId={ctx.barId}
         />
       </div>

@@ -197,6 +197,129 @@ export async function getActiveSessionsForCashier(): Promise<
   });
 }
 
+/**
+ * Sesi yang sudah SELESAI (closed) — untuk tab "Selesai" di dashboard kasir.
+ * Terbaru dulu (50). Bentuk = CashierSessionItem (reuse kartu).
+ */
+export async function getClosedSessionsForCashier(): Promise<
+  CashierSessionItem[]
+> {
+  const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  const sessionRows = await db
+    .select({
+      id: tableSessions.id,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      title: tableSessions.title,
+      host_id: tableSessions.hostId,
+      host_name: profiles.displayName,
+      host_avatar: profiles.avatarUrl,
+      started_at: tableSessions.startedAt,
+      opened_by_staff_id: tableSessions.openedByStaffId,
+      guest_names: tableSessions.guestNames,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(
+      and(
+        eq(floorAreas.barId, ctx.barId),
+        eq(tableSessions.status, "closed")
+      )
+    )
+    .orderBy(desc(tableSessions.closedAt))
+    .limit(50);
+
+  if (sessionRows.length === 0) return [];
+  const sessionIds = sessionRows.map((s) => s.id);
+
+  const bills = await db
+    .select({
+      session_id: orders.sessionId,
+      subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+    })
+    .from(orders)
+    .leftJoin(
+      orderItems,
+      and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
+    )
+    .where(inArray(orders.sessionId, sessionIds))
+    .groupBy(orders.sessionId);
+  const billMap = new Map(bills.map((b) => [b.session_id, Number(b.subtotal)]));
+
+  const paidRows = await db
+    .select({
+      session_id: orders.sessionId,
+      paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+    )
+    .groupBy(orders.sessionId);
+  const paidMap = new Map(paidRows.map((p) => [p.session_id, Number(p.paid)]));
+
+  const memberCountRows = await db
+    .select({
+      session_id: sessionMembers.sessionId,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(sessionMembers)
+    .where(
+      and(
+        inArray(sessionMembers.sessionId, sessionIds),
+        eq(sessionMembers.status, "joined")
+      )
+    )
+    .groupBy(sessionMembers.sessionId);
+  const memberMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+
+  const staffIds = Array.from(
+    new Set(
+      sessionRows
+        .map((s) => s.opened_by_staff_id)
+        .filter((id): id is string => !!id)
+    )
+  );
+  const staffNameMap = new Map<string, string>();
+  if (staffIds.length > 0) {
+    const staffRows = await db
+      .select({ id: profiles.id, name: profiles.displayName })
+      .from(profiles)
+      .where(inArray(profiles.id, staffIds));
+    for (const row of staffRows) staffNameMap.set(row.id, row.name);
+  }
+
+  return sessionRows.map((s) => {
+    const subtotal = billMap.get(s.id) ?? 0;
+    const paid = paidMap.get(s.id) ?? 0;
+    return {
+      session_id: s.id,
+      table_label: s.table_label,
+      area_name: s.area_name,
+      title: s.title,
+      host_name: s.host_name,
+      host_avatar: s.host_avatar,
+      member_count: memberMap.get(s.id) ?? 0,
+      started_at: s.started_at.toISOString(),
+      subtotal,
+      paid_total: paid,
+      outstanding: Math.max(0, subtotal - paid),
+      is_paid: subtotal > 0 && paid >= subtotal,
+      is_walk_in: !!s.opened_by_staff_id,
+      opened_by_staff_name: s.opened_by_staff_id
+        ? staffNameMap.get(s.opened_by_staff_id) ?? null
+        : null,
+      guest_names: s.guest_names ?? [],
+    };
+  });
+}
+
 // ============================================================
 // BOOKINGS (reservasi terjadwal — untuk tab "Booking" kasir)
 // ============================================================
