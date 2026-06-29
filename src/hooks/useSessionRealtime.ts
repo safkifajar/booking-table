@@ -42,14 +42,15 @@ export function useSessionRealtime(sessionId: string) {
     };
 
     // Fallback polling: jaring pengaman kalau SSE telat/putus (mis. koneksi
-    // listener basi, proxy buffering). Refresh tiap 12 dtk hanya saat tab
-    // terlihat — supaya perubahan (request join, approve, reject, order) tetap
-    // muncul tanpa user refresh manual. Murah: router.refresh dedupe oleh Next.
+    // listener basi, proxy buffering). Refresh tiap 30 dtk hanya saat tab
+    // terlihat. SSE sudah meng-handle update instan; polling cuma cadangan, jadi
+    // interval dilonggarkan (12→30s) supaya tak membebani (mahal di dev: tiap
+    // refresh = re-run server components × jumlah tab).
     const poll = setInterval(() => {
       if (document.visibilityState === "visible") {
         router.refresh();
       }
-    }, 12000);
+    }, 30000);
 
     return () => {
       es.close();

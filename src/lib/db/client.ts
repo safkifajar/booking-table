@@ -54,7 +54,13 @@ if (process.env.NODE_ENV !== "production") globalForDb.pgClient = pgClient;
  *   import { db } from "@/lib/db/client";
  *   const profile = await db.query.profiles.findFirst({ where: ... });
  */
-export const db = drizzle(pgClient, { schema, logger: process.env.NODE_ENV === "development" });
+// Query logger: OFF default. Nyalakan eksplisit via DB_LOG=1 saat debugging.
+// (Sebelumnya selalu ON di dev → membanjiri console saat banyak tab + SSE
+// polling, bikin dev server berat & render terasa lama.)
+export const db = drizzle(pgClient, {
+  schema,
+  logger: process.env.DB_LOG === "1",
+});
 
 export type DB = typeof db;
 
