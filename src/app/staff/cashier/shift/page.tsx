@@ -68,7 +68,7 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
               Shift Report
             </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
-              Transaksi
+              Transactions
             </h1>
           </div>
           {profile && (

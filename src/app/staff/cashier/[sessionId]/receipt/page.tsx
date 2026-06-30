@@ -33,13 +33,13 @@ export default async function ReceiptPage({ params }: PageProps) {
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md print:hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
-            <Link href="/staff/cashier" aria-label="Kembali ke list">
+            <Link href="/staff/cashier" aria-label="Back to list">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
           <div className="flex-1 min-w-0">
             <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Struk Pembayaran
+              Payment Receipt
             </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
               {detail.table_label} · {detail.area_name}

@@ -78,12 +78,12 @@ export function ShiftReportView({
       <Card className="p-4">
         <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-3">
           <Calendar className="h-3.5 w-3.5" />
-          Filter Periode
+          Filter Period
         </div>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-[10px] text-muted-foreground mb-1">
-              Dari
+              From
             </label>
             <input
               type="date"
@@ -94,7 +94,7 @@ export function ShiftReportView({
           </div>
           <div>
             <label className="block text-[10px] text-muted-foreground mb-1">
-              Sampai
+              To
             </label>
             <input
               type="date"
@@ -110,25 +110,25 @@ export function ShiftReportView({
             onClick={() => setQuickRange("today")}
             className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
           >
-            Hari ini
+            Today
           </button>
           <button
             type="button"
             onClick={() => setQuickRange("yesterday")}
             className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
           >
-            Kemarin
+            Yesterday
           </button>
           <button
             type="button"
             onClick={() => setQuickRange("week")}
             className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
           >
-            7 hari terakhir
+            Last 7 days
           </button>
           <div className="flex-1" />
           <Button size="sm" variant="gold" onClick={applyFilter}>
-            Terapkan
+            Apply
           </Button>
         </div>
       </Card>
@@ -137,7 +137,7 @@ export function ShiftReportView({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <SummaryCard
           icon={<Receipt className="h-3.5 w-3.5" />}
-          label="Transaksi"
+          label="Transactions"
           value={summary.transaction_count.toString()}
         />
         <SummaryCard
@@ -162,9 +162,9 @@ export function ShiftReportView({
       {transactions.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium mb-1">Tidak ada transaksi</p>
+          <p className="text-sm font-medium mb-1">No transactions</p>
           <p className="text-xs text-muted-foreground">
-            Tidak ada meja yang ditutup di periode ini.
+            No tables were closed in this period.
           </p>
         </Card>
       ) : (
@@ -173,23 +173,23 @@ export function ShiftReportView({
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Waktu</th>
-                  <th className="px-4 py-3 font-medium">Meja</th>
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium">Table</th>
                   <th className="px-4 py-3 font-medium">Host</th>
                   <th className="px-4 py-3 font-medium text-right">Subtotal</th>
-                  <th className="px-4 py-3 font-medium text-right">Terbayar</th>
+                  <th className="px-4 py-3 font-medium text-right">Paid</th>
                   <th className="px-4 py-3 font-medium">Method</th>
-                  <th className="px-4 py-3 font-medium text-right">Aksi</th>
+                  <th className="px-4 py-3 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {transactions.map((t) => {
                   const time = new Date(t.closed_at).toLocaleTimeString(
-                    "id-ID",
+                    "en-US",
                     { hour: "2-digit", minute: "2-digit" }
                   );
                   const date = new Date(t.closed_at).toLocaleDateString(
-                    "id-ID",
+                    "en-US",
                     { day: "2-digit", month: "short" }
                   );
                   return (
@@ -241,7 +241,7 @@ export function ShiftReportView({
                             href={`/staff/cashier/${t.session_id}/receipt`}
                           >
                             <Receipt className="h-3.5 w-3.5" />
-                            Struk
+                            Receipt
                           </Link>
                         </Button>
                       </td>

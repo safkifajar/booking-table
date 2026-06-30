@@ -66,7 +66,7 @@ const AUDIO_PREF_KEY = "waiter_audio_enabled";
 
 /** "22 Jun" — tanggal ringkas. */
 function fmtDate(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
   }).format(new Date(iso));
@@ -134,7 +134,7 @@ export function WaiterDashboard({
     if (next) {
       playBeep();
     }
-    toast.success(next ? "Suara notifikasi nyala" : "Suara notifikasi mati");
+    toast.success(next ? "Notification sound on" : "Notification sound off");
   }
 
   // Play beep when new "sent" items arrive (queue length increases)
@@ -191,7 +191,7 @@ export function WaiterDashboard({
     setOptimistic((prev) => new Set(prev).add(itemId));
     try {
       await waiterMarkServed(itemId);
-      toast.success("Pesanan diantar");
+      toast.success("Order served");
     } catch (err) {
       // Rollback
       setOptimistic((prev) => {
@@ -199,7 +199,7 @@ export function WaiterDashboard({
         next.delete(itemId);
         return next;
       });
-      toast.error(getActionErrorMessage(err, "Gagal mark served"));
+      toast.error(getActionErrorMessage(err, "Failed to mark served"));
     }
   }
 
@@ -212,7 +212,7 @@ export function WaiterDashboard({
       const message = err instanceof Error ? err.message : "";
       // NEXT_REDIRECT lempar ulang — biarkan Next.js handle
       if (message.includes("NEXT_REDIRECT")) throw err;
-      toast.error(getActionErrorMessage(err, "Gagal bantu pesan"));
+      toast.error(getActionErrorMessage(err, "Failed to assist order"));
       setJoiningSession(null);
     }
   }
@@ -227,33 +227,33 @@ export function WaiterDashboard({
           tabs={[
             {
               key: "queue",
-              label: "Order Masuk",
+              label: "Incoming Orders",
               icon: <Utensils className="h-3.5 w-3.5" />,
               badge: visibleQueue.length,
               alert: visibleQueue.length > 0,
             },
             {
               key: "sessions",
-              label: "Meja Aktif",
+              label: "Active Tables",
               icon: <Layers className="h-3.5 w-3.5" />,
               badge: initialSessions.length,
             },
             {
               key: "bookings",
-              label: "Booking",
+              label: "Bookings",
               icon: <CalendarClock className="h-3.5 w-3.5" />,
               badge: initialBookings.length,
             },
             {
               key: "moves",
-              label: "Pindah Meja",
+              label: "Move Table",
               icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
               badge: countPending(moveRequests),
               alert: countPending(moveRequests) > 0,
             },
             {
               key: "done",
-              label: "Selesai",
+              label: "Done",
               icon: <CheckCircle2 className="h-3.5 w-3.5" />,
             },
           ]}
@@ -268,7 +268,7 @@ export function WaiterDashboard({
             "shrink-0",
             audioEnabled ? "text-primary" : "text-muted-foreground"
           )}
-          title={audioEnabled ? "Matikan suara" : "Nyalakan suara"}
+          title={audioEnabled ? "Mute sound" : "Unmute sound"}
         >
           {audioEnabled ? (
             <Volume2 className="h-4 w-4" />
@@ -301,7 +301,7 @@ export function WaiterDashboard({
           sessions={closedSessions}
           onAssist={handleAssistOrder}
           joiningSession={joiningSession}
-          emptyLabel="Belum ada sesi selesai"
+          emptyLabel="No completed sessions yet"
         />
       )}
 
@@ -317,10 +317,10 @@ export function WaiterDashboard({
             disabled={initialAvailableTables.length === 0}
           >
             <UserPlus className="h-4 w-4" />
-            Buka Meja
+            Open Table
             {initialAvailableTables.length > 0 && (
               <span className="ml-1 text-xs opacity-70">
-                ({initialAvailableTables.length} meja kosong)
+                ({initialAvailableTables.length} tables free)
               </span>
             )}
           </Button>
@@ -355,9 +355,9 @@ function QueueView({
     return (
       <Card className="p-12 text-center border-dashed">
         <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Tidak ada pesanan baru</p>
+        <p className="text-sm font-medium mb-1">No new orders</p>
         <p className="text-xs text-muted-foreground">
-          Semua pesanan sudah diantar. Mantap!
+          All orders have been served. Nice!
         </p>
       </Card>
     );
@@ -481,7 +481,7 @@ function QueueItemCard({
           ) : (
             <CheckCircle2 className="h-3.5 w-3.5" />
           )}
-          Sudah diantar
+          Served
         </Button>
       </div>
     </Card>
@@ -496,7 +496,7 @@ function SessionsView({
   sessions,
   onAssist,
   joiningSession,
-  emptyLabel = "Belum ada meja aktif",
+  emptyLabel = "No active tables yet",
 }: {
   sessions: WaiterSessionItem[];
   onAssist: (id: string) => Promise<void>;
@@ -521,7 +521,7 @@ function SessionsView({
         <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
         <p className="text-sm font-medium mb-1">{emptyLabel}</p>
         <p className="text-xs text-muted-foreground">
-          Meja yang sudah dibuka customer akan muncul di sini.
+          Tables opened by customers will appear here.
         </p>
       </Card>
     );
@@ -539,7 +539,7 @@ function SessionsView({
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground">
-            Tidak ada meja di filter ini.
+            No tables in this filter.
           </p>
         </Card>
       ) : (
@@ -609,9 +609,9 @@ function BookingsView({ bookings }: { bookings: WaiterBookingItem[] }) {
     return (
       <Card className="p-12 text-center border-dashed">
         <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Belum ada booking terjadwal</p>
+        <p className="text-sm font-medium mb-1">No scheduled bookings yet</p>
         <p className="text-xs text-muted-foreground">
-          Reservasi yang jamnya belum tiba akan muncul di sini.
+          Reservations that haven't started yet will appear here.
         </p>
       </Card>
     );
@@ -622,7 +622,7 @@ function BookingsView({ bookings }: { bookings: WaiterBookingItem[] }) {
       {dates.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           <DateChip
-            label="Semua"
+            label="All"
             active={dateFilter === "all"}
             onClick={() => setDateFilter("all")}
           />
@@ -640,7 +640,7 @@ function BookingsView({ bookings }: { bookings: WaiterBookingItem[] }) {
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground">
-            Tidak ada booking di tanggal ini.
+            No bookings on this date.
           </p>
         </Card>
       ) : (
@@ -800,20 +800,20 @@ function SessionCard({
               {session.is_paid ? (
                 <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Lunas
+                  Paid
                 </span>
               ) : session.paid_total > 0 ? (
                 <>
                   <span className="text-emerald-400 tabular-nums">
-                    {formatIDR(session.paid_total)} terbayar
+                    {formatIDR(session.paid_total)} paid
                   </span>
                   <span className="text-amber-400 tabular-nums font-medium">
-                    {formatIDR(session.outstanding)} kurang
+                    {formatIDR(session.outstanding)} remaining
                   </span>
                 </>
               ) : (
                 <span className="text-amber-400 font-medium tabular-nums">
-                  Belum dibayar
+                  Unpaid
                 </span>
               )}
             </div>
@@ -822,7 +822,7 @@ function SessionCard({
 
         {session.subtotal === 0 && (
           <div className="text-xs text-muted-foreground italic">
-            Belum ada order
+            No orders yet
           </div>
         )}
 
@@ -830,7 +830,7 @@ function SessionCard({
         {isJoining && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-primary pt-1">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Membuka...
+            Opening...
           </div>
         )}
       </div>

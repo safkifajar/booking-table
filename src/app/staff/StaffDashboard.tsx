@@ -191,9 +191,9 @@ function QueueView({
     return (
       <Card className="p-8 text-center border-dashed">
         <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/50 mb-2" />
-        <p className="text-sm font-medium">Tidak ada antrian</p>
+        <p className="text-sm font-medium">No orders in queue</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Semua pesanan sudah disajikan. Mantap!
+          All orders have been served. Nice!
         </p>
       </Card>
     );
@@ -209,7 +209,7 @@ function QueueView({
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">
             <Clock className="h-4 w-4" />
-            Baru masuk ({sent.length})
+            New ({sent.length})
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">
             {sent.map((item) => (
@@ -228,7 +228,7 @@ function QueueView({
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-primary mb-3 flex items-center gap-2">
             <ChefHat className="h-4 w-4" />
-            Sedang disiapkan ({preparing.length})
+            Preparing ({preparing.length})
           </h2>
           <div className="grid sm:grid-cols-2 gap-3">
             {preparing.map((item) => (
@@ -269,12 +269,12 @@ function QueueItemCard({
     try {
       await markOrderItemStatus(item.id, newStatus);
       toast.success(
-        isNew ? `Antrian ${queueLabel} mulai disiapkan` : `Antrian ${queueLabel} diantar`
+        isNew ? `Order ${queueLabel} is being prepared` : `Order ${queueLabel} served`
       );
     } catch (err) {
       // Rollback kalau gagal
       onRevert(item.id);
-      toast.error(getActionErrorMessage(err, "Gagal update status"));
+      toast.error(getActionErrorMessage(err, "Failed to update status"));
     } finally {
       setLoading(false);
     }
@@ -299,10 +299,10 @@ function QueueItemCard({
                 ? "border-amber-500/40 bg-amber-500/15"
                 : "border-primary/40 bg-primary/15"
             )}
-            aria-label={`Antrian nomor ${item.queue_number}`}
+            aria-label={`Queue number ${item.queue_number}`}
           >
             <div className="text-[9px] uppercase tracking-wider text-muted-foreground font-medium">
-              Antri
+              Queue
             </div>
             <div
               className={cn(
@@ -370,8 +370,8 @@ function QueueItemCard({
           {loading
             ? "..."
             : isNew
-              ? "Mulai siapkan"
-              : "Sudah diantar"}
+              ? "Start preparing"
+              : "Served"}
         </Button>
       </div>
     </Card>
@@ -386,9 +386,9 @@ function TablesView({ tables }: { tables: ActiveTable[] }) {
     return (
       <Card className="p-8 text-center border-dashed">
         <Users className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-        <p className="text-sm font-medium">Belum ada meja aktif</p>
+        <p className="text-sm font-medium">No active tables yet</p>
         <p className="text-xs text-muted-foreground mt-1">
-          Meja yang sudah dibuka customer akan muncul di sini.
+          Tables opened by customers will appear here.
         </p>
       </Card>
     );
@@ -400,9 +400,9 @@ function TablesView({ tables }: { tables: ActiveTable[] }) {
     <div className="space-y-4">
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-2">
-        <StatCard label="Meja aktif" value={tables.length.toString()} />
+        <StatCard label="Active tables" value={tables.length.toString()} />
         <StatCard
-          label="Total tamu"
+          label="Total guests"
           value={tables.reduce((sum, t) => sum + t.member_count, 0).toString()}
         />
         <StatCard label="Running bill" value={formatIDR(totalRevenue)} />
@@ -460,7 +460,7 @@ function TablesView({ tables }: { tables: ActiveTable[] }) {
               </div>
               <Button asChild variant="outline" size="sm">
                 <Link href={`/session/${t.session_id}`}>
-                  <Eye className="h-3.5 w-3.5" /> Lihat
+                  <Eye className="h-3.5 w-3.5" /> View
                 </Link>
               </Button>
             </div>

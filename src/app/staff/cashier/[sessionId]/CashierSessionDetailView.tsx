@@ -48,7 +48,7 @@ function fmtTime(iso: string): string {
 }
 /** Tanggal+jam ringkas, mis. "28 Jun 2026 · 21:00". */
 function fmtDateTime(iso: string): string {
-  const tgl = new Intl.DateTimeFormat("id-ID", {
+  const tgl = new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -62,7 +62,7 @@ function usageLabel(d: {
   started_at: string;
 }): string {
   const start = d.reservation_at ?? d.started_at;
-  const tgl = new Intl.DateTimeFormat("id-ID", {
+  const tgl = new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -81,19 +81,19 @@ const PAYMENT_METHODS: {
 }[] = [
   {
     value: "cash",
-    label: "Tunai",
+    label: "Cash",
     icon: <Banknote className="h-4 w-4" />,
-    description: "Bayar pakai uang cash, kalkulator kembalian otomatis",
+    description: "Pay with cash, automatic change calculator",
   },
   {
     value: "qris",
     label: "QRIS",
     icon: <QrCode className="h-4 w-4" />,
-    description: "Scan QR code, terhubung ke payment gateway",
+    description: "Scan QR code, connected to payment gateway",
   },
   {
     value: "card",
-    label: "Kartu",
+    label: "Card",
     icon: <CreditCard className="h-4 w-4" />,
     description: "Debit / Credit card via EDC",
   },
@@ -146,9 +146,9 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     setMarkingPaid(paymentId);
     try {
       await cashierMarkPaymentPaid(paymentId);
-      toast.success("Pembayaran dikonfirmasi");
+      toast.success("Payment confirmed");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal konfirmasi"));
+      toast.error(getActionErrorMessage(err, "Failed to confirm"));
     } finally {
       setMarkingPaid(null);
     }
@@ -156,10 +156,10 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
 
   async function handleCancelPayment(paymentId: string) {
     const ok = await confirm({
-      title: "Batalkan pembayaran ini?",
-      description: "Payment akan di-mark gagal dan tidak count ke total bayar.",
-      confirmText: "Batalkan",
-      cancelText: "Tidak jadi",
+      title: "Cancel this payment?",
+      description: "The payment will be marked as failed and won't count toward the total paid.",
+      confirmText: "Cancel payment",
+      cancelText: "Never mind",
       variant: "danger",
     });
     if (!ok) return;
@@ -167,9 +167,9 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     setCancelling(paymentId);
     try {
       await cashierCancelPayment(paymentId);
-      toast.success("Payment dibatalkan");
+      toast.success("Payment cancelled");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal batalkan"));
+      toast.error(getActionErrorMessage(err, "Failed to cancel"));
     } finally {
       setCancelling(null);
     }
@@ -177,12 +177,12 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
 
   async function handleCloseSession() {
     const ok = await confirm({
-      title: "Tutup meja sekarang?",
+      title: "Close table now?",
       description: isPaid
-        ? "Meja akan ditutup dan struk akan ditampilkan."
-        : "Masih ada outstanding payment. Tetap tutup meja?",
-      confirmText: "Tutup Meja",
-      cancelText: "Batal",
+        ? "The table will be closed and the receipt will be shown."
+        : "There's still an outstanding payment. Close the table anyway?",
+      confirmText: "Close Table",
+      cancelText: "Cancel",
       variant: isPaid ? "default" : "danger",
     });
     if (!ok) return;
@@ -190,10 +190,10 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     setClosing(true);
     try {
       await cashierCloseSession(detail.session_id);
-      toast.success("Meja ditutup");
+      toast.success("Table closed");
       router.push(`/staff/cashier/${detail.session_id}/receipt`);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal tutup meja"));
+      toast.error(getActionErrorMessage(err, "Failed to close table"));
       setClosing(false);
     }
   }
@@ -217,16 +217,16 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             )}
           />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">Meja sudah ditutup</div>
+            <div className="text-sm font-medium">Table is closed</div>
             <div className="text-xs text-muted-foreground">
               {detail.outstanding > 0
-                ? `Masih ada sisa ${formatIDR(detail.outstanding)} — bisa dilunasi di bawah.`
-                : "Tidak bisa terima pembayaran baru."}
+                ? `Still has a balance of ${formatIDR(detail.outstanding)} — can be settled below.`
+                : "Can't accept new payments."}
             </div>
           </div>
           <Button asChild variant="outline" size="sm">
             <a href={`/staff/cashier/${detail.session_id}/receipt`}>
-              <Receipt className="h-3.5 w-3.5" /> Lihat Struk
+              <Receipt className="h-3.5 w-3.5" /> View Receipt
             </a>
           </Button>
         </Card>
@@ -244,7 +244,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/70 mb-0.5">
               <Crown className="h-3 w-3" />
-              {detail.is_walk_in ? "Tamu" : "Host"}
+              {detail.is_walk_in ? "Guest" : "Host"}
               {detail.is_walk_in && (
                 <Badge
                   variant="default"
@@ -262,7 +262,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             </div>
             {detail.is_walk_in && detail.opened_by_staff_name && (
               <div className="text-[10px] text-primary/70 truncate mt-0.5">
-                Dibuka oleh {detail.opened_by_staff_name}
+                Opened by {detail.opened_by_staff_name}
               </div>
             )}
             <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
@@ -289,7 +289,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
         </div>
         {detail.items.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground italic">
-            Belum ada order
+            No orders yet
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -324,7 +324,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
         <div className="px-4 py-3 border-t border-border space-y-1.5 bg-muted/20">
           <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
           <Row
-            label="Sudah dibayar"
+            label="Paid"
             value={formatIDR(detail.paid_total)}
             valueClass="text-emerald-400"
           />
@@ -345,7 +345,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
       {detail.payments.length > 0 && (
         <Card className="overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-sm font-semibold">Riwayat Pembayaran</h2>
+            <h2 className="text-sm font-semibold">Payment History</h2>
           </div>
           <div className="divide-y divide-border">
             {detail.payments.map((p) => (
@@ -364,11 +364,11 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                       className="text-[10px] px-1.5"
                     >
                       {p.status === "paid"
-                        ? "Lunas"
+                        ? "Paid"
                         : p.status === "pending"
                           ? "Pending"
                           : p.status === "failed"
-                            ? "Dibatalkan"
+                            ? "Cancelled"
                             : p.status}
                     </Badge>
                   </div>
@@ -403,7 +403,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                         {markingPaid === p.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          "Tandai Lunas"
+                          "Mark Paid"
                         )}
                       </Button>
                       <Button
@@ -416,7 +416,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
                         {cancelling === p.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
-                          "Batal"
+                          "Cancel"
                         )}
                       </Button>
                     </div>
@@ -448,7 +448,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             disabled={detail.subtotal === 0 || isPaid}
           >
             <Wallet className="h-4 w-4" />
-            Bayar
+            Pay
           </Button>
           <Button
             variant="gold"
@@ -459,12 +459,12 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             {closing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menutup...
+                Closing...
               </>
             ) : (
               <>
                 <Lock className="h-4 w-4" />
-                Tutup Meja
+                Close Table
               </>
             )}
           </Button>
@@ -481,7 +481,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             onClick={() => setPaymentModalOpen(true)}
           >
             <Wallet className="h-4 w-4" />
-            Terima Pembayaran ({formatIDR(detail.outstanding)})
+            Accept Payment ({formatIDR(detail.outstanding)})
           </Button>
         </div>
       )}
@@ -571,10 +571,10 @@ function PaymentModal({
       <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
         <Card className="max-w-sm p-6 text-center">
           <p className="text-sm">
-            Tidak ada member joined. Tidak bisa terima pembayaran.
+            No members joined. Can't accept payment.
           </p>
           <Button onClick={onClose} variant="outline" className="mt-3 w-full">
-            Tutup
+            Close
           </Button>
         </Card>
       </div>
@@ -594,11 +594,11 @@ function PaymentModal({
   async function handleSubmit() {
     if (!selectedMember) return;
     if (amount <= 0) {
-      toast.error("Nominal harus > 0");
+      toast.error("Amount must be > 0");
       return;
     }
     if (method === "cash" && cashReceived < amount) {
-      toast.error("Nominal terima kurang dari total");
+      toast.error("Received amount is less than the total");
       return;
     }
 
@@ -625,15 +625,15 @@ function PaymentModal({
       if (result.status === "paid") {
         const message =
           method === "cash" && result.change !== null
-            ? `Pembayaran lunas. Kembalian: ${formatIDR(result.change)}`
-            : "Pembayaran lunas";
+            ? `Payment complete. Change: ${formatIDR(result.change)}`
+            : "Payment complete";
         toast.success(message);
       } else {
-        toast.success("Payment dibuat (pending konfirmasi)");
+        toast.success("Payment created (pending confirmation)");
       }
       onSuccess();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal proses pembayaran"));
+      toast.error(getActionErrorMessage(err, "Failed to process payment"));
       setLoading(false);
     }
   }
@@ -643,10 +643,10 @@ function PaymentModal({
     setLoading(true);
     try {
       await cashierMarkPaymentPaid(qrPaymentId);
-      toast.success("Pembayaran QRIS dikonfirmasi");
+      toast.success("QRIS payment confirmed");
       onSuccess();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal konfirmasi"));
+      toast.error(getActionErrorMessage(err, "Failed to confirm"));
       setLoading(false);
     }
   }
@@ -656,10 +656,10 @@ function PaymentModal({
     setLoading(true);
     try {
       await cashierCancelPayment(qrPaymentId);
-      toast.success("QRIS dibatalkan");
+      toast.success("QRIS cancelled");
       onSuccess();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal batalkan"));
+      toast.error(getActionErrorMessage(err, "Failed to cancel"));
       setLoading(false);
     }
   }
@@ -671,7 +671,7 @@ function PaymentModal({
       <Card className="w-full max-w-md my-auto max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <h2 className="font-semibold">
-            {step === "method" && "Pilih Pembayaran"}
+            {step === "method" && "Select Payment"}
             {step === "amount" && methodMeta?.label}
             {step === "qris-display" && "Scan QRIS"}
           </h2>
@@ -680,7 +680,7 @@ function PaymentModal({
             onClick={onClose}
             disabled={loading}
             className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted/60"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -702,7 +702,7 @@ function PaymentModal({
 
               <div>
                 <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                  Pembayar
+                  Payer
                 </label>
                 <select
                   value={selectedMember?.member_id ?? ""}
@@ -723,7 +723,7 @@ function PaymentModal({
 
               <div>
                 <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                  Metode Pembayaran
+                  Payment Method
                 </label>
                 <div className="space-y-2">
                   {PAYMENT_METHODS.map((m) => (
@@ -759,7 +759,7 @@ function PaymentModal({
                   {methodMeta?.label}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Pembayar:{" "}
+                  Payer:{" "}
                   <strong className="text-foreground">
                     {selectedMember?.display_name}
                   </strong>
@@ -768,7 +768,7 @@ function PaymentModal({
 
               <div>
                 <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                  Nominal Bayar
+                  Payment Amount
                 </label>
                 <MoneyInput value={amount} onChange={setAmount} max={detail.outstanding} />
                 <div className="flex gap-1.5 mt-2">
@@ -794,7 +794,7 @@ function PaymentModal({
                 <>
                   <div>
                     <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                      Nominal Diterima
+                      Amount Received
                     </label>
                     <MoneyInput value={cashReceived} onChange={setCashReceived} />
                     <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -821,7 +821,7 @@ function PaymentModal({
                   >
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5 flex items-center justify-center gap-1.5">
                       <Calculator className="h-3 w-3" />
-                      {cashReceived >= amount ? "Kembalian" : "Kurang"}
+                      {cashReceived >= amount ? "Change" : "Short"}
                     </div>
                     <div
                       className={cn(
@@ -844,7 +844,7 @@ function PaymentModal({
             <div className="space-y-3">
               <div className="rounded-md border border-primary/30 bg-primary/[0.03] p-4 text-center space-y-3">
                 <div className="text-xs text-muted-foreground">
-                  Customer scan QR code untuk bayar
+                  Customer scans the QR code to pay
                 </div>
                 {/* QR placeholder — production akan render actual QR image */}
                 <div className="aspect-square max-w-[240px] mx-auto bg-white rounded-md p-3 flex items-center justify-center">
@@ -857,7 +857,7 @@ function PaymentModal({
                   {formatIDR(amount)}
                 </div>
                 <div className="text-[10px] text-amber-400 italic">
-                  ℹ️ Mock QR — production akan terhubung ke gateway
+                  ℹ️ Mock QR — production will connect to the gateway
                 </div>
               </div>
 
@@ -870,11 +870,11 @@ function PaymentModal({
               >
                 {loading ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Memproses...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Processing...
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-4 w-4" /> Customer Sudah Bayar
+                    <CheckCircle2 className="h-4 w-4" /> Customer Has Paid
                   </>
                 )}
               </Button>
@@ -888,7 +888,7 @@ function PaymentModal({
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Batalkan QRIS"
+                  "Cancel QRIS"
                 )}
               </Button>
             </div>
@@ -904,7 +904,7 @@ function PaymentModal({
                 onClick={() => setStep("method")}
                 disabled={loading}
               >
-                Kembali
+                Back
               </Button>
             )}
             <Button
@@ -913,7 +913,7 @@ function PaymentModal({
               onClick={onClose}
               disabled={loading}
             >
-              Batal
+              Cancel
             </Button>
             {step === "amount" && (
               <Button
@@ -925,12 +925,12 @@ function PaymentModal({
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Memproses...
+                    Processing...
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Konfirmasi {formatIDR(amount)}
+                    Confirm {formatIDR(amount)}
                   </>
                 )}
               </Button>

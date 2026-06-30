@@ -36,12 +36,12 @@ export function ReceiptView({ detail }: Props) {
       <div className="flex gap-2 print:hidden">
         <Button onClick={handlePrint} variant="gold" size="lg" className="flex-1">
           <Printer className="h-4 w-4" />
-          Print Struk
+          Print Receipt
         </Button>
         <Button asChild variant="outline" size="lg" className="flex-1">
           <Link href="/staff/cashier">
             <ArrowLeft className="h-4 w-4" />
-            Selesai
+            Done
           </Link>
         </Button>
       </div>
@@ -55,7 +55,7 @@ export function ReceiptView({ detail }: Props) {
         <div className="text-center border-b border-dashed border-zinc-300 pb-3 mb-3">
           <div className="flex items-center justify-center gap-1 text-xs uppercase tracking-widest text-zinc-600 mb-1">
             <Receipt className="h-3 w-3" />
-            STRUK PEMBAYARAN
+            PAYMENT RECEIPT
           </div>
           <div className="text-base font-bold">SOHO Social House</div>
           <div className="text-[10px] text-zinc-600">Purwokerto</div>
@@ -63,26 +63,26 @@ export function ReceiptView({ detail }: Props) {
 
         {/* Meta */}
         <div className="space-y-0.5 text-[10px] mb-3 pb-3 border-b border-dashed border-zinc-300">
-          <Row label="No. Meja" value={detail.table_label} />
+          <Row label="Table No." value={detail.table_label} />
           <Row label="Area" value={detail.area_name} />
           <Row
-            label={detail.is_walk_in ? "Tamu" : "Host"}
+            label={detail.is_walk_in ? "Guest" : "Host"}
             value={detail.host_name}
           />
           {detail.is_walk_in && detail.guest_names.length > 1 && (
             <Row
-              label="Tamu lain"
+              label="Other guests"
               value={detail.guest_names.slice(1).join(", ")}
             />
           )}
           {!detail.is_walk_in && detail.title && (
-            <Row label="Sesi" value={detail.title} />
+            <Row label="Session" value={detail.title} />
           )}
           {detail.is_walk_in && detail.opened_by_staff_name && (
-            <Row label="Dibuka oleh" value={detail.opened_by_staff_name} />
+            <Row label="Opened by" value={detail.opened_by_staff_name} />
           )}
-          <Row label="Tanggal" value={date.toLocaleString("id-ID")} />
-          <Row label="No. Trx" value={`#${detail.session_id.slice(0, 8).toUpperCase()}`} />
+          <Row label="Date" value={date.toLocaleString("en-US")} />
+          <Row label="Trx No." value={`#${detail.session_id.slice(0, 8).toUpperCase()}`} />
         </div>
 
         {/* Walk-in badge */}
@@ -112,7 +112,7 @@ export function ReceiptView({ detail }: Props) {
         {/* Totals */}
         <div className="space-y-1 text-[10px] mb-3">
           <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
-          <Row label="Pajak" value={formatIDR(0)} />
+          <Row label="Tax" value={formatIDR(0)} />
           <div className="border-t border-zinc-300 pt-1 mt-1">
             <Row
               label="TOTAL"
@@ -125,7 +125,7 @@ export function ReceiptView({ detail }: Props) {
         {/* Payments */}
         {detail.payments.filter((p) => p.status === "paid").length > 0 && (
           <div className="space-y-1 text-[10px] mb-3 pb-3 border-b border-dashed border-zinc-300">
-            <div className="font-semibold text-center mb-1">PEMBAYARAN</div>
+            <div className="font-semibold text-center mb-1">PAYMENT</div>
             {detail.payments
               .filter((p) => p.status === "paid")
               .map((p) => (
@@ -137,7 +137,7 @@ export function ReceiptView({ detail }: Props) {
               ))}
             <div className="border-t border-zinc-300 pt-1 mt-1">
               <Row
-                label="TERBAYAR"
+                label="PAID"
                 value={formatIDR(detail.paid_total)}
                 bold
               />
@@ -154,7 +154,7 @@ export function ReceiptView({ detail }: Props) {
 
         {/* Footer */}
         <div className="text-center text-[9px] text-zinc-600 space-y-0.5">
-          <div>Terima kasih sudah berkunjung</div>
+          <div>Thank you for visiting</div>
           <div>~ SOHO Social House ~</div>
         </div>
       </Card>

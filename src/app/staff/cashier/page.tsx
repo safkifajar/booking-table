@@ -49,7 +49,7 @@ export default async function CashierPage() {
   if (!bar) {
     return (
       <main className="flex-1 flex items-center justify-center px-4 py-8">
-        <p className="text-sm text-muted-foreground">Bar tidak ditemukan</p>
+        <p className="text-sm text-muted-foreground">Bar not found</p>
       </main>
     );
   }
@@ -84,7 +84,7 @@ export default async function CashierPage() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs uppercase tracking-widest text-primary/70">
-              Kasir Dashboard · {ctx.role}
+              Cashier Dashboard · {ctx.role}
             </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
               {bar.name}

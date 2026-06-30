@@ -68,7 +68,7 @@ export default async function StaffWaiterPage() {
   if (!bar) {
     return (
       <main className="flex-1 flex items-center justify-center px-4 py-8">
-        <p className="text-sm text-muted-foreground">Bar tidak ditemukan</p>
+        <p className="text-sm text-muted-foreground">Bar not found</p>
       </main>
     );
   }

@@ -40,7 +40,7 @@ export default async function StaffProfilePage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
-            <Link href={backUrl} aria-label="Kembali ke Dashboard">
+            <Link href={backUrl} aria-label="Back to Dashboard">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
@@ -82,7 +82,7 @@ export default async function StaffProfilePage() {
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
                   <Sparkles className="h-3 w-3 text-primary/70" />
-                  Hobi & minat
+                  Hobbies & interests
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {profile.hobbies.map((h) => (
@@ -107,13 +107,13 @@ export default async function StaffProfilePage() {
             href="/staff/profile/account"
             icon={<User className="h-4 w-4" />}
             label="Account"
-            description="Nama, nomor WA, tanggal lahir, bio, hobi"
+            description="Name, WhatsApp number, birth date, bio, hobbies"
           />
           <MenuItem
             href="/staff/profile/password"
             icon={<KeyRound className="h-4 w-4" />}
             label="Change Password"
-            description="Ubah password login"
+            description="Change your login password"
           />
         </Card>
       </div>

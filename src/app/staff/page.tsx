@@ -27,13 +27,13 @@ export default async function StaffPage() {
       <main className="flex-1 flex items-center justify-center px-4 py-8">
         <Card className="max-w-md text-center p-8">
           <Lock className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <h2 className="text-lg font-semibold mb-2">Akses Staff Diperlukan</h2>
+          <h2 className="text-lg font-semibold mb-2">Staff Access Required</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Halaman ini hanya untuk staff bar. Hubungi manager kalau kamu butuh
-            akses.
+            This page is for bar staff only. Contact your manager if you need
+            access.
           </p>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/">Kembali ke beranda</Link>
+            <Link href="/">Back to home</Link>
           </Button>
         </Card>
       </main>

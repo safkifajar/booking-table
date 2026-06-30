@@ -56,7 +56,7 @@ interface Props {
 type Tab = "active" | "bookings" | "moves" | "done";
 
 function fmtDate(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
   }).format(new Date(iso));
@@ -78,7 +78,7 @@ function usageLabel(s: {
   started_at: string;
 }): string {
   const start = s.reservation_at ?? s.started_at;
-  const tgl = new Intl.DateTimeFormat("id-ID", {
+  const tgl = new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -172,12 +172,12 @@ export function CashierSessionList({
       <div className="grid grid-cols-3 gap-2">
         <StatCard
           icon={<Users className="h-3.5 w-3.5" />}
-          label="Meja aktif"
+          label="Active tables"
           value={totalOpen.toString()}
         />
         <StatCard
           icon={<Wallet className="h-3.5 w-3.5" />}
-          label="Sudah bayar"
+          label="Paid"
           value={formatIDR(totalPaidPartial)}
           tone="success"
         />
@@ -196,26 +196,26 @@ export function CashierSessionList({
         tabs={[
           {
             key: "active",
-            label: "Meja Aktif",
+            label: "Active Tables",
             icon: <Layers className="h-3.5 w-3.5" />,
             badge: sessions.length,
           },
           {
             key: "bookings",
-            label: "Booking",
+            label: "Bookings",
             icon: <CalendarClock className="h-3.5 w-3.5" />,
             badge: bookings.length,
           },
           {
             key: "moves",
-            label: "Pindah Meja",
+            label: "Move Table",
             icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
             badge: countPending(moveRequests),
             alert: countPending(moveRequests) > 0,
           },
           {
             key: "done",
-            label: "Selesai",
+            label: "Done",
             icon: <CheckCircle2 className="h-3.5 w-3.5" />,
           },
         ]}
@@ -236,16 +236,16 @@ export function CashierSessionList({
               <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
               {sessions.length === 0 ? (
                 <>
-                  <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
+                  <p className="text-sm font-medium mb-1">No active tables yet</p>
                   <p className="text-xs text-muted-foreground">
-                    Meja akan muncul di sini setelah customer buka session.
+                    Tables will appear here after a customer opens a session.
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium mb-1">Tidak ada hasil</p>
+                  <p className="text-sm font-medium mb-1">No results</p>
                   <p className="text-xs text-muted-foreground">
-                    Coba ubah filter atau kata kunci lain.
+                    Try changing the filter or search term.
                   </p>
                 </>
               )}
@@ -269,9 +269,9 @@ export function CashierSessionList({
           {closedSessions.length === 0 ? (
             <Card className="p-12 text-center border-dashed">
               <CheckCircle2 className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-              <p className="text-sm font-medium mb-1">Belum ada sesi selesai</p>
+              <p className="text-sm font-medium mb-1">No completed sessions yet</p>
               <p className="text-xs text-muted-foreground">
-                Meja yang sudah ditutup akan muncul di sini.
+                Closed tables will appear here.
               </p>
             </Card>
           ) : (
@@ -285,7 +285,7 @@ export function CashierSessionList({
               {filteredClosed.length === 0 ? (
                 <Card className="p-8 text-center border-dashed">
                   <p className="text-sm text-muted-foreground">
-                    Tidak ada sesi di filter ini.
+                    No sessions in this filter.
                   </p>
                 </Card>
               ) : (
@@ -312,10 +312,10 @@ export function CashierSessionList({
             disabled={availableTables.length === 0}
           >
             <UserPlus className="h-4 w-4" />
-            Buka Meja
+            Open Table
             {availableTables.length > 0 && (
               <span className="ml-1 text-xs opacity-70">
-                ({availableTables.length} meja kosong)
+                ({availableTables.length} tables free)
               </span>
             )}
           </Button>
@@ -356,9 +356,9 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
     return (
       <Card className="p-12 text-center border-dashed">
         <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Belum ada booking terjadwal</p>
+        <p className="text-sm font-medium mb-1">No scheduled bookings yet</p>
         <p className="text-xs text-muted-foreground">
-          Reservasi yang jamnya belum tiba akan muncul di sini.
+          Reservations that haven't started yet will appear here.
         </p>
       </Card>
     );
@@ -380,7 +380,7 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
                   : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
               )}
             >
-              {d === "all" ? "Semua" : fmtDate(d)}
+              {d === "all" ? "All" : fmtDate(d)}
             </button>
           ))}
         </div>
@@ -389,7 +389,7 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground">
-            Tidak ada booking di tanggal ini.
+            No bookings on this date.
           </p>
         </Card>
       ) : (
@@ -537,11 +537,11 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
             </div>
             {session.is_walk_in && session.opened_by_staff_name && (
               <div className="text-[10px] text-primary/70 mt-0.5 truncate">
-                Dibuka oleh {session.opened_by_staff_name}
+                Opened by {session.opened_by_staff_name}
                 {session.guest_names.length > 1 && (
                   <span className="text-muted-foreground">
                     {" · "}
-                    {session.guest_names.length} tamu
+                    {session.guest_names.length} guests
                   </span>
                 )}
               </div>
@@ -576,20 +576,20 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
                 {session.is_paid ? (
                   <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    Lunas
+                    Paid
                   </span>
                 ) : session.paid_total > 0 ? (
                   <>
                     <span className="text-emerald-400 tabular-nums">
-                      {formatIDR(session.paid_total)} terbayar
+                      {formatIDR(session.paid_total)} paid
                     </span>
                     <span className="text-amber-400 tabular-nums font-medium">
-                      {formatIDR(session.outstanding)} kurang
+                      {formatIDR(session.outstanding)} remaining
                     </span>
                   </>
                 ) : (
                   <span className="text-amber-400 font-medium tabular-nums">
-                    Belum dibayar
+                    Unpaid
                   </span>
                 )}
               </div>
@@ -598,7 +598,7 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
 
           {session.subtotal === 0 && (
             <div className="text-xs text-muted-foreground italic">
-              Belum ada order
+              No orders yet
             </div>
           )}
         </div>
