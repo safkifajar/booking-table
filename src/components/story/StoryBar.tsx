@@ -139,7 +139,7 @@ function YourStoryBubble({
               ? "bg-gradient-to-tr from-primary via-amber-400 to-primary"
               : "bg-border hover:bg-muted-foreground/40"
           )}
-          aria-label={hasOwn ? "Lihat story kamu" : "Upload story baru"}
+          aria-label={hasOwn ? "View your story" : "Upload new story"}
         >
           <Avatar className="h-14 w-14 ring-2 ring-background">
             {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
@@ -153,7 +153,7 @@ function YourStoryBubble({
             type="button"
             onClick={onUpload}
             className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-primary border-2 border-background flex items-center justify-center hover:scale-110 transition"
-            aria-label="Upload story baru"
+            aria-label="Upload new story"
           >
             <Plus className="h-3 w-3 text-primary-foreground" strokeWidth={3} />
           </button>
@@ -162,14 +162,14 @@ function YourStoryBubble({
             type="button"
             onClick={onUpload}
             className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card border-2 border-background flex items-center justify-center hover:scale-110 transition"
-            aria-label="Tambah story"
+            aria-label="Add story"
           >
             <Camera className="h-3 w-3 text-primary" />
           </button>
         )}
       </div>
       <span className="text-[10px] text-center text-foreground/80 truncate w-full">
-        {hasOwn ? "Story kamu" : "Story-mu"}
+        {hasOwn ? "Your story" : "Your story"}
       </span>
     </div>
   );
@@ -193,7 +193,7 @@ function StoryItem({
             ? "bg-border"
             : "bg-gradient-to-tr from-primary via-amber-400 to-primary"
         )}
-        aria-label={`Lihat story ${item.displayName}`}
+        aria-label={`View ${item.displayName}'s story`}
       >
         <Avatar className="h-14 w-14 ring-2 ring-background">
           {item.avatarUrl && <AvatarImage src={item.avatarUrl} alt={item.displayName} />}

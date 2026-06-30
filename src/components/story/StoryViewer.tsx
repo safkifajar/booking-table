@@ -188,10 +188,10 @@ export function StoryViewer({
     // Pause story (auto-advance + progress) selama dialog konfirmasi terbuka.
     setPaused(true);
     const ok = await confirm({
-      title: "Hapus story ini?",
-      description: "Story akan hilang dari semua viewer dan tidak bisa di-restore.",
-      confirmText: "Hapus",
-      cancelText: "Batal",
+      title: "Delete this story?",
+      description: "The story will disappear for all viewers and cannot be restored.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
       variant: "danger",
     });
     if (!ok) {
@@ -202,7 +202,7 @@ export function StoryViewer({
 
     try {
       await deleteStory(currentStory.id);
-      toast.success("Story dihapus");
+      toast.success("Story deleted");
       // Remove dari list local
       setStories((arr) => arr.filter((s) => s.id !== currentStory.id));
       // Kalau habis, lompat ke user berikutnya / close
@@ -215,7 +215,7 @@ export function StoryViewer({
       // Lanjutkan auto-advance utk story berikutnya.
       setPaused(false);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus story"));
+      toast.error(getActionErrorMessage(err, "Failed to delete story"));
       // Gagal hapus → story tetap ada, lanjutkan.
       setPaused(false);
     }
@@ -230,7 +230,7 @@ export function StoryViewer({
         const rows = await getStoryViewers(currentStory.id);
         setViewers(rows);
       } catch {
-        toast.error("Gagal load viewer");
+        toast.error("Failed to load viewers");
       }
     }
   }
@@ -238,7 +238,7 @@ export function StoryViewer({
   if (phase === "loading") {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <div className="text-white/40 text-sm">Memuat...</div>
+        <div className="text-white/40 text-sm">Loading...</div>
       </div>
     );
   }
@@ -269,7 +269,7 @@ export function StoryViewer({
           onPointerUp={() => onPressEnd("prev")}
           onPointerLeave={() => onPressEnd("prev")}
           className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2 touch-none select-none"
-          aria-label="Story sebelumnya"
+          aria-label="Previous story"
         >
           <span className="opacity-0 group-hover:opacity-60 transition">
             <ChevronLeft className="h-6 w-6 text-white" />
@@ -281,7 +281,7 @@ export function StoryViewer({
           onPointerUp={() => onPressEnd("next")}
           onPointerLeave={() => onPressEnd("next")}
           className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2 touch-none select-none"
-          aria-label="Story berikutnya"
+          aria-label="Next story"
         >
           <span className="opacity-0 group-hover:opacity-60 transition">
             <ChevronRight className="h-6 w-6 text-white" />
@@ -294,7 +294,7 @@ export function StoryViewer({
           onPointerUp={() => setPaused(false)}
           onPointerLeave={() => setPaused(false)}
           className="absolute inset-y-0 left-1/3 w-1/3 touch-none select-none"
-          aria-label="Tahan untuk jeda"
+          aria-label="Hold to pause"
         />
 
         {/* Progress bars */}
@@ -329,7 +329,7 @@ export function StoryViewer({
             type="button"
             onClick={onClose}
             className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/10 transition pointer-events-auto"
-            aria-label="Tutup story"
+            aria-label="Close story"
           >
             <X className="h-5 w-5 text-white" />
           </button>
@@ -359,7 +359,7 @@ export function StoryViewer({
                   <Eye className="h-4 w-4" />
                   {currentStory.viewCount > 0
                     ? `${currentStory.viewCount} viewers`
-                    : "Lihat viewers"}
+                    : "View viewers"}
                 </button>
                 <button
                   type="button"
@@ -367,7 +367,7 @@ export function StoryViewer({
                   className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition ml-auto"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Hapus
+                  Delete
                 </button>
               </div>
             )}
@@ -406,17 +406,17 @@ function ViewersPanel({
           type="button"
           onClick={onClose}
           className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-white/10 transition"
-          aria-label="Tutup viewer list"
+          aria-label="Close viewer list"
         >
           <X className="h-4 w-4 text-white" />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-2">
         {viewers === null ? (
-          <div className="text-white/40 text-sm text-center py-6">Memuat...</div>
+          <div className="text-white/40 text-sm text-center py-6">Loading...</div>
         ) : viewers.length === 0 ? (
           <div className="text-white/40 text-sm text-center py-6">
-            Belum ada yang lihat
+            No views yet
           </div>
         ) : (
           <div className="divide-y divide-white/5">
@@ -450,16 +450,16 @@ function ViewersPanel({
 /** Umur story singkat (baru / Nm / Nj). Module-scope: Date.now di luar render. */
 function formatStoryAge(createdAt: Date): string {
   const m = Math.floor((Date.now() - createdAt.getTime()) / 60_000);
-  if (m < 1) return "baru";
+  if (m < 1) return "now";
   if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}j`;
+  return `${Math.floor(m / 60)}h`;
 }
 
 function timeAgoShort(date: Date): string {
   const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 1) return "baru saja";
-  if (minutes < 60) return `${minutes} menit lalu`;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} jam lalu`;
-  return `${Math.floor(hours / 24)} hari lalu`;
+  if (hours < 24) return `${hours} hr ago`;
+  return `${Math.floor(hours / 24)} days ago`;
 }

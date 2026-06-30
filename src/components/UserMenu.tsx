@@ -17,7 +17,7 @@ export async function UserMenu() {
     return (
       <Button asChild variant="outline" size="sm">
         <Link href="/auth">
-          <LogIn className="h-4 w-4" /> Masuk
+          <LogIn className="h-4 w-4" /> Sign in
         </Link>
       </Button>
     );
@@ -43,7 +43,7 @@ export async function UserMenu() {
       <div className="absolute right-0 top-full mt-2 w-56 rounded-md border border-border bg-card shadow-2xl overflow-hidden z-[100]">
         <div className="px-3 py-2 border-b border-border">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Masuk sebagai
+            Signed in as
           </div>
           <div className="text-sm font-medium truncate">{profile.displayName}</div>
           {staffRole && (
@@ -56,7 +56,7 @@ export async function UserMenu() {
           href="/profile"
           className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border"
         >
-          <UserCircle className="h-4 w-4" /> Profil saya
+          <UserCircle className="h-4 w-4" /> My profile
         </Link>
         {staffRole && (
           <>
@@ -91,7 +91,7 @@ export async function UserMenuCompact() {
   if (!profile) {
     return (
       <Button asChild variant="ghost" size="icon">
-        <Link href="/auth" aria-label="Masuk">
+        <Link href="/auth" aria-label="Sign in">
           <User className="h-5 w-5" />
         </Link>
       </Button>
@@ -115,7 +115,7 @@ export async function UserMenuCompact() {
       <div className="absolute right-0 top-full mt-2 w-56 rounded-md border border-border bg-card shadow-2xl overflow-hidden z-[100]">
         <div className="px-3 py-2 border-b border-border">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Masuk sebagai
+            Signed in as
           </div>
           <div className="text-sm font-medium truncate">{profile.displayName}</div>
           {staffRole && (
@@ -128,7 +128,7 @@ export async function UserMenuCompact() {
           href="/profile"
           className="block px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 border-b border-border"
         >
-          <UserCircle className="h-4 w-4" /> Profil saya
+          <UserCircle className="h-4 w-4" /> My profile
         </Link>
         {staffRole && (
           <>

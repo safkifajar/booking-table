@@ -2,19 +2,19 @@ import { MapPin } from "lucide-react";
 import type { UserTableHistoryEntry, SessionVisibility } from "@/types/db";
 
 function visibilityLabel(v: SessionVisibility): string {
-  if (v === "public") return "Publik";
-  if (v === "friends") return "Teman";
-  return "Undangan";
+  if (v === "public") return "Public";
+  if (v === "friends") return "Friends";
+  return "Invite-only";
 }
 
 const STATUS_LABEL: Record<UserTableHistoryEntry["status"], string> = {
-  closed: "Selesai",
-  cancelled: "Dibatalkan",
-  overdue: "Belum lunas",
+  closed: "Done",
+  cancelled: "Cancelled",
+  overdue: "Unpaid",
 };
 
 function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -33,7 +33,7 @@ export function TableHistoryList({
   if (entries.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-2">
-        Belum ada riwayat nongkrong.
+        No hangout history yet.
       </p>
     );
   }
@@ -49,7 +49,7 @@ export function TableHistoryList({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">
-              Meja {e.table_label}
+              Table {e.table_label}
               <span className="font-normal text-muted-foreground">
                 {" "}
                 · {e.area_name}

@@ -23,9 +23,9 @@ export function LiveTablesFeed({ sessions, isAnon }: Props) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center">
         <Sparkles className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Belum ada meja aktif</p>
+        <p className="text-sm font-medium mb-1">No active tables yet</p>
         <p className="text-xs text-muted-foreground">
-          Jadi yang pertama — buka meja sendiri dan undang temanmu.
+          Be the first — open your own table and invite your friends.
         </p>
       </div>
     );

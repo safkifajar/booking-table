@@ -29,10 +29,10 @@ export async function StaffShortcut() {
           </div>
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-widest text-primary/80">
-              Akses staff · {staff.role}
+              Staff access · {staff.role}
             </div>
             <div className="text-sm font-medium truncate">
-              Selamat datang kembali, {profile.displayName}
+              Welcome back, {profile.displayName}
             </div>
           </div>
         </div>

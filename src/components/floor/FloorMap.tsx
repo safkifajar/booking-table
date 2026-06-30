@@ -302,10 +302,10 @@ export function FloorMap({
         >
           ⟲
         </ZoomBtn>
-        <ZoomBtn label="Perbesar" onClick={() => zoomButton(1)} disabled={scale >= MAX_SCALE - 0.001}>
+        <ZoomBtn label="Zoom in" onClick={() => zoomButton(1)} disabled={scale >= MAX_SCALE - 0.001}>
           +
         </ZoomBtn>
-        <ZoomBtn label="Perkecil" onClick={() => zoomButton(-1)} disabled={scale <= MIN_SCALE + 0.001}>
+        <ZoomBtn label="Zoom out" onClick={() => zoomButton(-1)} disabled={scale <= MIN_SCALE + 0.001}>
           −
         </ZoomBtn>
       </div>

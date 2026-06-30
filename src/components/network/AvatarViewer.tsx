@@ -34,7 +34,7 @@ export function AvatarViewer({
         type="button"
         onClick={onClose}
         className="absolute right-4 top-4 z-10 rounded-full bg-black/40 p-2 text-white/80 transition hover:text-white"
-        aria-label="Tutup"
+        aria-label="Close"
       >
         <X className="h-5 w-5" />
       </button>

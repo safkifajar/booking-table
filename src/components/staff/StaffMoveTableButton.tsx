@@ -27,7 +27,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
     try {
       setTargets(await getMoveTargets(sessionId));
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal memuat meja"));
+      toast.error(getActionErrorMessage(err, "Failed to load tables"));
       setTargets([]);
     } finally {
       setLoading(false);
@@ -38,12 +38,12 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
     setMoving(true);
     try {
       await staffMoveTable({ sessionId, targetTableId: t.id });
-      toast.success(`Berhasil pindah ke meja ${t.label}`);
+      toast.success(`Moved to table ${t.label}`);
       setOpen(false);
       setConfirm(null);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal pindah meja"));
+      toast.error(getActionErrorMessage(err, "Failed to move table"));
     } finally {
       setMoving(false);
     }
@@ -57,7 +57,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
         className="w-full"
         onClick={openModal}
       >
-        <ArrowRightLeft className="h-4 w-4" /> Pindahkan Meja
+        <ArrowRightLeft className="h-4 w-4" /> Move Table
       </Button>
 
       {/* Pilih meja tujuan */}
@@ -71,20 +71,20 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-              <h2 className="text-sm font-semibold">Pindahkan ke meja lain</h2>
+              <h2 className="text-sm font-semibold">Move to another table</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-                aria-label="Tutup"
+                aria-label="Close"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
-                Hanya meja yg kapasitasnya cukup & kosong di jam booking. Jam
-                booking tetap sama — pindah langsung tanpa approval.
+                Only tables with enough capacity & free at the booking time. The
+                booking time stays the same — moves instantly without approval.
               </p>
               {loading ? (
                 <div className="py-10 text-center">
@@ -103,10 +103,10 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium">
-                        Meja {t.label}
+                        Table {t.label}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {t.area_name} · {t.capacity} kursi
+                        {t.area_name} · {t.capacity} seats
                       </span>
                       {t.min_spend > 0 && (
                         <span className="block text-[11px] text-amber-400">
@@ -118,7 +118,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
                 ))
               ) : (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  Tak ada meja tujuan yang tersedia.
+                  No destination tables available.
                 </div>
               )}
             </div>
@@ -130,10 +130,10 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
       {confirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm bg-background border border-border rounded-2xl shadow-2xl p-5">
-            <h3 className="text-base font-semibold mb-1">Pindahkan meja?</h3>
+            <h3 className="text-base font-semibold mb-1">Move table?</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Sesi ini akan dipindah ke <strong>meja {confirm.label}</strong>.
-              Jam booking tetap sama. Tindakan langsung tanpa approval.
+              This session will be moved to <strong>table {confirm.label}</strong>.
+              The booking time stays the same. Takes effect instantly without approval.
             </p>
             <div className="flex gap-2">
               <Button
@@ -142,7 +142,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
                 disabled={moving}
                 onClick={() => setConfirm(null)}
               >
-                Batal
+                Cancel
               </Button>
               <Button
                 variant="gold"
@@ -153,7 +153,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
                 {moving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Pindahkan"
+                  "Move"
                 )}
               </Button>
             </div>

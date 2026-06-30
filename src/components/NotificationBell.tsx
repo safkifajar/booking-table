@@ -100,11 +100,11 @@ export function NotificationBell({ userId }: { userId: string }) {
       await acceptInvite({ sessionId: sid });
       // Server (acceptInvite) sudah set responded_at; refresh() di finally
       // akan re-fetch sehingga tombol hilang & jadi label status.
-      toast.success("Undangan diterima — kamu bergabung ke meja");
+      toast.success("Invitation accepted — you joined the table");
       setOpen(false);
       router.push(n.link!);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal terima undangan"));
+      toast.error(getActionErrorMessage(err, "Failed to accept invitation"));
     } finally {
       setBusyId(null);
       void refresh();
@@ -119,9 +119,9 @@ export function NotificationBell({ userId }: { userId: string }) {
       await declineInvite({ sessionId: sid });
       // Server (declineInvite) sudah set responded_at; refresh() di finally
       // akan re-fetch sehingga tombol hilang & jadi label status.
-      toast.success("Undangan ditolak");
+      toast.success("Invitation declined");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal tolak undangan"));
+      toast.error(getActionErrorMessage(err, "Failed to decline invitation"));
     } finally {
       setBusyId(null);
       void refresh();
@@ -134,7 +134,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         type="button"
         onClick={toggle}
         className="relative h-9 w-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition text-muted-foreground hover:text-foreground"
-        aria-label="Notifikasi"
+        aria-label="Notifications"
       >
         <Bell className="h-4 w-4" />
         {unread > 0 && (
@@ -153,14 +153,14 @@ export function NotificationBell({ userId }: { userId: string }) {
           />
           <div className="absolute right-0 mt-2 w-80 max-w-[90vw] z-50 rounded-xl border border-border bg-card shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-              <span className="text-sm font-semibold">Notifikasi</span>
+              <span className="text-sm font-semibold">Notifications</span>
               {items.some((x) => !x.read) && (
                 <button
                   type="button"
                   onClick={handleMarkAll}
                   className="text-xs text-primary hover:underline"
                 >
-                  Tandai semua dibaca
+                  Mark all as read
                 </button>
               )}
             </div>
@@ -171,7 +171,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                 </div>
               ) : items.length === 0 ? (
                 <p className="p-6 text-center text-sm text-muted-foreground">
-                  Belum ada notifikasi.
+                  No notifications yet.
                 </p>
               ) : (
                 items.map((n) => {
@@ -235,7 +235,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                             ) : (
                               <Check className="h-3 w-3" />
                             )}
-                            Terima
+                            Accept
                           </button>
                           <button
                             type="button"
@@ -243,32 +243,32 @@ export function NotificationBell({ userId }: { userId: string }) {
                             onClick={() => handleDecline(n)}
                             className="flex-1 h-8 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
                           >
-                            Tolak
+                            Decline
                           </button>
                         </div>
                       )}
                       {respondedOutcome === "accepted" && (
                         <p className="mt-2 pl-4 text-xs text-emerald-500 flex items-center gap-1">
                           <Check className="h-3 w-3" />
-                          Kamu menerima undangan ini
+                          You accepted this invitation
                         </p>
                       )}
                       {respondedOutcome === "rejected" && (
                         <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
                           <X className="h-3 w-3" />
-                          Kamu menolak undangan ini
+                          You declined this invitation
                         </p>
                       )}
                       {respondedOutcome === "cancelled" && (
                         <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
                           <X className="h-3 w-3" />
-                          Undangan dibatalkan host
+                          Invitation cancelled by host
                         </p>
                       )}
                       {respondedOutcome === "done" && (
                         <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
                           <Check className="h-3 w-3" />
-                          Undangan sudah direspon
+                          Invitation already responded to
                         </p>
                       )}
                     </div>

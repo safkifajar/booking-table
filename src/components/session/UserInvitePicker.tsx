@@ -64,9 +64,9 @@ export function UserInvitePicker({
   return (
     <div>
       <label className="block text-sm font-medium mb-2">
-        {mode === "join" ? "Ajak teman" : "Undang user"}{" "}
+        {mode === "join" ? "Invite friends" : "Invite user"}{" "}
         <span className="text-muted-foreground font-normal">
-          {mode === "join" ? "(langsung gabung)" : "(perlu mereka terima)"}
+          {mode === "join" ? "(join instantly)" : "(they need to accept)"}
         </span>
       </label>
 
@@ -87,7 +87,7 @@ export function UserInvitePicker({
               <button
                 type="button"
                 onClick={() => remove(u.id)}
-                aria-label="Hapus"
+                aria-label="Remove"
                 className="text-primary/60 hover:text-primary"
               >
                 <X className="h-3 w-3" />
@@ -104,7 +104,7 @@ export function UserInvitePicker({
           type="text"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Cari nama atau email…"
+          placeholder="Search name or email…"
           className="w-full h-11 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </div>
@@ -118,7 +118,7 @@ export function UserInvitePicker({
             </div>
           ) : results.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">
-              Tidak ada user cocok.
+              No matching users.
             </p>
           ) : (
             results.map((u) => (

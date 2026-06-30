@@ -26,11 +26,11 @@ export function UnpaidBanner({ sessions }: { sessions: UnpaidSessionView[] }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-orange-300">
           {single
-            ? `Tagihan belum lunas di meja ${single.table_label}`
-            : `${sessions.length} tagihan belum lunas`}
+            ? `Unpaid bill at table ${single.table_label}`
+            : `${sessions.length} unpaid bills`}
         </p>
         <p className="text-xs text-muted-foreground">
-          Total sisa {formatIDR(total)} · ketuk untuk lunasi
+          Remaining total {formatIDR(total)} · tap to pay
         </p>
       </div>
       <ChevronRight className="h-4 w-4 text-orange-400/70 shrink-0" />

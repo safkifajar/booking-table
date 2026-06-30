@@ -66,7 +66,7 @@ export function ProfileAvatar({
             canStory &&
               "p-[3px] bg-gradient-to-tr from-primary to-amber-400 ring-0"
           )}
-          aria-label={canStory ? "Lihat story" : "Lihat foto profil"}
+          aria-label={canStory ? "View Story" : "View Profile Photo"}
         >
           {canStory ? (
             <span className="block rounded-full ring-2 ring-background">
@@ -98,7 +98,7 @@ export function ProfileAvatar({
               }}
               className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted/50 transition"
             >
-              Lihat Story
+              View Story
             </button>
             <button
               type="button"
@@ -108,14 +108,14 @@ export function ProfileAvatar({
               }}
               className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted/50 transition"
             >
-              Lihat Foto Profil
+              View Profile Photo
             </button>
             <button
               type="button"
               onClick={() => setMenuOpen(false)}
               className="w-full text-center px-4 py-3 rounded-lg text-sm text-muted-foreground hover:bg-muted/50 transition"
             >
-              Batal
+              Cancel
             </button>
           </div>
         </div>

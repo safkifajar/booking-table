@@ -51,9 +51,9 @@ export function HobbyFilterSheet({
               <SlidersHorizontal className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">Filter hobi & minat</h2>
+              <h2 className="text-sm font-semibold">Hobbies & interests filter</h2>
               <p className="text-[11px] text-muted-foreground">
-                Pilih satu atau lebih
+                Select one or more
               </p>
             </div>
           </div>
@@ -61,7 +61,7 @@ export function HobbyFilterSheet({
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -71,7 +71,7 @@ export function HobbyFilterSheet({
         <div className="flex-1 overflow-y-auto p-4">
           {hobbies.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              Belum ada data hobi.
+              No hobbies yet.
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -115,7 +115,7 @@ export function HobbyFilterSheet({
             }}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
-            Terapkan
+            Apply
             {draft.length > 0 && ` (${draft.length})`}
           </button>
         </div>

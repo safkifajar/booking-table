@@ -112,7 +112,7 @@ export function MarkdownView({
 }) {
   if (!content.trim()) {
     return (
-      <p className="text-sm text-muted-foreground">Belum ada konten.</p>
+      <p className="text-sm text-muted-foreground">No content yet.</p>
     );
   }
   return (

@@ -120,7 +120,7 @@ export function SplitPayment(props: Props) {
           </div>
           <div className="text-right">
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-              {props.remaining <= 0 && props.subtotal > 0 ? "Status" : "Belum bayar"}
+              {props.remaining <= 0 && props.subtotal > 0 ? "Status" : "Unpaid"}
             </div>
             <div
               className={cn(
@@ -131,7 +131,7 @@ export function SplitPayment(props: Props) {
               )}
             >
               {props.remaining <= 0 && props.subtotal > 0
-                ? "Lunas"
+                ? "Paid"
                 : formatIDR(props.remaining)}
             </div>
           </div>
@@ -147,11 +147,11 @@ export function SplitPayment(props: Props) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-emerald-400">
-                Tagihan sudah lunas
+                Bill fully paid
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Total {formatIDR(props.subtotal)} sudah dibayar penuh. Tunggu
-                kasir menutup meja, atau kalau ada lagi mau pesan tinggal lanjut.
+                Total {formatIDR(props.subtotal)} has been paid in full. Wait for
+                the cashier to close the table, or keep ordering if you want more.
               </div>
             </div>
           </div>
@@ -161,23 +161,23 @@ export function SplitPayment(props: Props) {
       {/* Mode selector — hide kalau sudah lunas / waiter (payFullOnly) */}
       {!isFullyPaid && !props.payFullOnly && (
       <div>
-        <h3 className="text-sm font-semibold mb-2">Cara bayar</h3>
+        <h3 className="text-sm font-semibold mb-2">Payment method</h3>
         <div className="grid grid-cols-3 gap-2">
           <ModeOption
-            label="Patungan"
-            desc={`${formatIDR(equalShare)}/orang`}
+            label="Split equally"
+            desc={`${formatIDR(equalShare)}/person`}
             active={mode === "equal"}
             onClick={() => setMode("equal")}
           />
           <ModeOption
-            label="Pesanan saya"
-            desc="Bayar yang aku pesan"
+            label="My order"
+            desc="Pay for what I ordered"
             active={mode === "itemized"}
             onClick={() => setMode("itemized")}
           />
           <ModeOption
-            label="Aku traktir"
-            desc="Bayar penuh semua"
+            label="My treat"
+            desc="Pay for everything"
             active={mode === "custom"}
             onClick={() => setMode("custom")}
           />
@@ -188,7 +188,7 @@ export function SplitPayment(props: Props) {
       {/* Per-member share preview */}
       {!isFullyPaid && mode === "equal" && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold mb-3">Pembagian merata</h3>
+          <h3 className="text-sm font-semibold mb-3">Even split</h3>
           <div className="space-y-2">
             {props.members.map((m) => (
               <div key={m.id} className="flex items-center justify-between">
@@ -210,7 +210,7 @@ export function SplitPayment(props: Props) {
 
       {!isFullyPaid && mode === "itemized" && (
         <Card className="p-4">
-          <h3 className="text-sm font-semibold mb-3">Bayar yang kamu pesan</h3>
+          <h3 className="text-sm font-semibold mb-3">Pay for what you ordered</h3>
           {myItemsTotal > 0 ? (
             <div className="space-y-1.5 text-sm">
               {props.items
@@ -224,12 +224,12 @@ export function SplitPayment(props: Props) {
                   </div>
                 ))}
               <div className="border-t border-border pt-1.5 mt-2 flex justify-between font-semibold">
-                <span>Total kamu</span>
+                <span>Your total</span>
                 <span className="text-primary">{formatIDR(myItemsTotal)}</span>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Kamu belum pesan apa-apa.</p>
+            <p className="text-sm text-muted-foreground">You haven&apos;t ordered anything yet.</p>
           )}
         </Card>
       )}
@@ -238,22 +238,22 @@ export function SplitPayment(props: Props) {
         <Card className="p-4 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
             <Sparkles className="h-4 w-4 text-primary" />
-            {props.payFullOnly ? "Bayar penuh" : "Kamu yang traktir"}
+            {props.payFullOnly ? "Pay in full" : "Your treat"}
           </h3>
           {treatAmount > 0 ? (
             <div className="space-y-2 text-sm">
               <p className="text-muted-foreground">
                 {props.payFullOnly
-                  ? "Seluruh sisa tagihan meja akan dibayar penuh."
-                  : "Sisa tagihan akan kamu bayar penuh. Anggota lain tidak perlu bayar."}
+                  ? "The entire remaining table bill will be paid in full."
+                  : "You'll pay the remaining bill in full. Other members don't need to pay."}
               </p>
               <div className="flex justify-between font-semibold pt-2 border-t border-border">
-                <span>Total bayar</span>
+                <span>Total to pay</span>
                 <span className="text-primary text-base">{formatIDR(treatAmount)}</span>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Tagihan sudah lunas.</p>
+            <p className="text-sm text-muted-foreground">The bill is fully paid.</p>
           )}
         </Card>
       )}
@@ -261,7 +261,7 @@ export function SplitPayment(props: Props) {
       {/* Payment method — hide kalau sudah lunas */}
       {!isFullyPaid && (
       <div>
-        <h3 className="text-sm font-semibold mb-2">Metode pembayaran</h3>
+        <h3 className="text-sm font-semibold mb-2">Payment method</h3>
         <div className="grid grid-cols-4 gap-2">
           <MethodOption
             icon={<QrCode className="h-5 w-5" />}
@@ -289,7 +289,7 @@ export function SplitPayment(props: Props) {
           />
         </div>
         <p className="text-[10px] text-muted-foreground mt-2 italic">
-          * Demo: semua metode di-mock. Integrasi Midtrans/Xendit di milestone berikutnya.
+          * All methods are mocked for now. Midtrans/Xendit integration in the next milestone.
         </p>
       </div>
       )}
@@ -304,17 +304,17 @@ export function SplitPayment(props: Props) {
           onClick={handlePay}
         >
           {loading
-            ? "Memproses..."
+            ? "Processing..."
             : myAmount > 0
-              ? `Bayar ${formatIDR(myAmount)}`
-              : "Tidak ada yang dibayar"}
+              ? `Pay ${formatIDR(myAmount)}`
+              : "Nothing to pay"}
         </Button>
       )}
 
       {/* Payment history */}
       {props.payments.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold mb-2 mt-6">Pembayaran masuk</h3>
+          <h3 className="text-sm font-semibold mb-2 mt-6">Payments received</h3>
           <div className="space-y-2">
             {props.payments.map((p) => (
               <Card key={p.id} className="p-3 flex items-center gap-3">
@@ -352,9 +352,9 @@ export function SplitPayment(props: Props) {
 }
 
 function splitModeLabel(mode: SplitMode): string {
-  if (mode === "equal") return "Patungan";
-  if (mode === "itemized") return "Pesanan sendiri";
-  if (mode === "custom") return "Traktir";
+  if (mode === "equal") return "Split equally";
+  if (mode === "itemized") return "Own order";
+  if (mode === "custom") return "Treat";
   return mode;
 }
 

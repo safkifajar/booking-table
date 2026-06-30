@@ -121,7 +121,7 @@ export function SlotRangePicker({
     <div className="space-y-4">
       {/* Strip tanggal */}
       <div>
-        <label className="block text-sm font-medium mb-2">Tanggal</label>
+        <label className="block text-sm font-medium mb-2">Date</label>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {windowDates.map((d) => {
             const active = selectedDate === d.groupKey;
@@ -157,7 +157,7 @@ export function SlotRangePicker({
 
       {/* List jam */}
       <div>
-        <label className="block text-sm font-medium mb-2">Pilih jam</label>
+        <label className="block text-sm font-medium mb-2">Select time</label>
         <TimeRangeList
           slots={startSlotsForDate}
           rangeIsos={selectedRangeIsos}
@@ -171,15 +171,15 @@ export function SlotRangePicker({
       {/* Ringkasan + konflik */}
       {startIso && !conflict && (
         <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-primary">
-          Reservasi <strong>{rangeLabel(startIso, effectiveEnd)}</strong> ·{" "}
+          Reservation <strong>{rangeLabel(startIso, effectiveEnd)}</strong> ·{" "}
           {durationHours(startIso, effectiveEnd, slotMs)}
         </div>
       )}
       {conflict && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
-          Rentang ini melewati jam <strong>{conflict.bookedFromLabel}</strong>{" "}
-          yang sudah dibooking. Pilih sampai sebelum {conflict.bookedFromLabel},
-          atau mulai dari {conflict.bookedFromLabel} ke atas.
+          This range passes <strong>{conflict.bookedFromLabel}</strong>{" "}
+          which is already booked. Pick up to before {conflict.bookedFromLabel},
+          or start from {conflict.bookedFromLabel} onward.
         </div>
       )}
     </div>
@@ -194,7 +194,7 @@ function slotTime(label: string): string {
   return label.split("·")[1]?.trim() ?? label;
 }
 
-const HARI_SHORT = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
+const HARI_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 interface DateChip {
   groupKey: string;
@@ -262,8 +262,8 @@ function durationHours(startIso: string, endIso: string, slotMs: number): string
     (new Date(endIso).getTime() - new Date(startIso).getTime()) / slotMs
   );
   const totalMin = (n * slotMs) / 60000;
-  if (totalMin % 60 === 0) return `${totalMin / 60} jam`;
-  return `${totalMin} menit`;
+  if (totalMin % 60 === 0) return `${totalMin / 60} hr`;
+  return `${totalMin} min`;
 }
 
 function TimeRangeList({
@@ -294,7 +294,7 @@ function TimeRangeList({
   if (slots.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-        Tidak ada slot di tanggal ini.
+        No slots on this date.
       </div>
     );
   }
@@ -342,7 +342,7 @@ function TimeRangeList({
             </span>
             {isBooked ? (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                Dibooking
+                Booked
               </span>
             ) : (
               <span
@@ -351,7 +351,7 @@ function TimeRangeList({
                   inRange ? "text-primary" : "text-muted-foreground"
                 )}
               >
-                {inRange ? "Dipilih ✓" : "Tersedia"}
+                {inRange ? "Selected ✓" : "Available"}
               </span>
             )}
           </button>

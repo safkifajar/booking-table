@@ -34,9 +34,9 @@ export function LatestStoriesGrid({ stories, barId, viewerId }: Props) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center">
         <Camera className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Belum ada story</p>
+        <p className="text-sm font-medium mb-1">No stories yet</p>
         <p className="text-xs text-muted-foreground">
-          Story foto dari pengunjung lain akan muncul di sini.
+          Photo stories from other guests will show up here.
         </p>
       </div>
     );

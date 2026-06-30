@@ -21,9 +21,9 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center">
         <UtensilsCrossed className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">Menu belum tersedia</p>
+        <p className="text-sm font-medium mb-1">Menu not available yet</p>
         <p className="text-xs text-muted-foreground">
-          Belum ada item menu untuk ditampilkan.
+          No menu items to show yet.
         </p>
       </div>
     );
@@ -48,7 +48,7 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari menu…"
+          placeholder="Search menu…"
           className="w-full h-10 pl-9 pr-3 rounded-lg bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </div>
@@ -56,7 +56,7 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
       {!anyMatch ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            Tidak ada menu cocok dengan &ldquo;{query}&rdquo;.
+            No menu matches &ldquo;{query}&rdquo;.
           </p>
         </div>
       ) : (
@@ -99,7 +99,7 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
                         <p className="text-sm font-medium truncate">{item.name}</p>
                         {habis && (
                           <span className="text-[10px] text-red-400 border border-red-500/40 rounded px-1 shrink-0">
-                            Habis
+                            Sold out
                           </span>
                         )}
                       </div>

@@ -108,7 +108,7 @@ export function BottomNav({
             </Avatar>
           )}
           <span className="max-w-[60px] truncate">
-            {isAnon ? "Masuk" : firstName ?? "Profil"}
+            {isAnon ? "Sign in" : firstName ?? "Profile"}
           </span>
         </Link>
       </div>
@@ -157,7 +157,7 @@ function CenterCameraButton({
       <Link
         href="/auth?next=/"
         className="flex flex-col items-center justify-end gap-1 h-full pb-2 leading-none"
-        aria-label="Sign in untuk upload story"
+        aria-label="Sign in to upload story"
       >
         <span className="h-12 w-12 -mt-6 rounded-full bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center shadow-lg shadow-primary/30 ring-2 ring-background">
           <Camera className="h-6 w-6 text-primary-foreground" />

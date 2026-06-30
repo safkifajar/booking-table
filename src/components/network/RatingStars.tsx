@@ -16,7 +16,7 @@ export function RatingStars({
   if (!rating || rating.rating_count === 0) {
     return (
       <span className={cn("text-xs text-muted-foreground", className)}>
-        Belum ada rating
+        No rating yet
       </span>
     );
   }

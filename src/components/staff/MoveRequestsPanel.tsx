@@ -12,7 +12,7 @@ import {
 import { getActionErrorMessage } from "@/lib/utils";
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -21,19 +21,19 @@ function fmt(iso: string): string {
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     pending: {
-      label: "Menunggu",
+      label: "Pending",
       cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
     },
     approved: {
-      label: "Disetujui",
+      label: "Approved",
       cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
     },
     rejected: {
-      label: "Ditolak",
+      label: "Rejected",
       cls: "bg-red-500/15 text-red-300 border-red-500/30",
     },
     cancelled: {
-      label: "Dibatalkan",
+      label: "Cancelled",
       cls: "bg-muted text-muted-foreground border-border",
     },
   };
@@ -64,10 +64,10 @@ export function MoveRequestsPanel({
     setBusy(id);
     try {
       await resolveMoveRequest({ requestId: id, approve });
-      toast.success(approve ? "Pindah meja disetujui" : "Request ditolak");
+      toast.success(approve ? "Table move approved" : "Request rejected");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal memproses"));
+      toast.error(getActionErrorMessage(err, "Failed to process"));
     } finally {
       setBusy(null);
     }
@@ -76,7 +76,7 @@ export function MoveRequestsPanel({
   if (requests.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-        Belum ada request pindah meja.
+        No table move requests yet.
       </div>
     );
   }
@@ -91,7 +91,7 @@ export function MoveRequestsPanel({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-medium">
-                {r.requester_name}: Meja {r.from_label} →{" "}
+                {r.requester_name}: Table {r.from_label} →{" "}
                 <span className="text-primary">{r.to_label}</span>
               </p>
               <StatusBadge status={r.status} />
@@ -122,7 +122,7 @@ export function MoveRequestsPanel({
                 onClick={() => resolve(r.id, false)}
                 className="text-red-400"
               >
-                <X className="h-4 w-4" /> Tolak
+                <X className="h-4 w-4" /> Reject
               </Button>
             </div>
           )}

@@ -66,15 +66,15 @@ export function PushToggle() {
       const sub = await subscribePush();
       if (!sub) {
         setPerm(notificationPermission());
-        toast.error("Izin notifikasi ditolak atau tidak didukung");
+        toast.error("Notification permission denied or not supported");
         return;
       }
       await saveSubscription(sub);
       setEnabled(true);
       setPerm("granted");
-      toast.success("Notifikasi diaktifkan untuk perangkat ini");
+      toast.success("Notifications enabled for this device");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal aktifkan notifikasi"));
+      toast.error(getActionErrorMessage(err, "Failed to enable notifications"));
     } finally {
       setBusy(false);
     }
@@ -86,9 +86,9 @@ export function PushToggle() {
       const endpoint = await unsubscribePush();
       if (endpoint) await removeSubscription(endpoint);
       setEnabled(false);
-      toast.success("Notifikasi dimatikan untuk perangkat ini");
+      toast.success("Notifications disabled for this device");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal matikan notifikasi"));
+      toast.error(getActionErrorMessage(err, "Failed to disable notifications"));
     } finally {
       setBusy(false);
     }
@@ -101,9 +101,9 @@ export function PushToggle() {
           <BellOff className="h-4 w-4" />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">Notifikasi</p>
+          <p className="text-sm font-medium">Notifications</p>
           <p className="text-xs text-muted-foreground">
-            Perangkat/browser ini tidak mendukung notifikasi push.
+            This device/browser doesn&apos;t support push notifications.
           </p>
         </div>
       </div>
@@ -128,13 +128,13 @@ export function PushToggle() {
         )}
       </span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">Notifikasi push</p>
+        <p className="text-sm font-medium">Push notifications</p>
         <p className="text-xs text-muted-foreground">
           {denied
-            ? "Izin diblokir — aktifkan lewat setelan browser."
+            ? "Permission blocked — enable it in your browser settings."
             : enabled
-              ? "Aktif di perangkat ini (request pindah meja, dll)."
-              : "Dapat notif walau aplikasi ditutup."}
+              ? "Active on this device (move table requests, etc.)."
+              : "Get notified even when the app is closed."}
         </p>
       </div>
 

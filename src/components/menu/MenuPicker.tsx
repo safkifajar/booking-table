@@ -60,7 +60,7 @@ export function MenuPicker({ menu, onAdd }: Props) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           type="search"
-          placeholder="Cari menu, signature, mocktail..."
+          placeholder="Search menu, signature, mocktail..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
@@ -135,7 +135,7 @@ export function MenuPicker({ menu, onAdd }: Props) {
       {filtered.length === 0 && (
         <Card className="p-6 text-center border-dashed">
           <p className="text-sm text-muted-foreground">
-            Tidak ada menu yang cocok dengan &quot;{query}&quot;.
+            No menu matches &quot;{query}&quot;.
           </p>
         </Card>
       )}
@@ -197,7 +197,7 @@ function AddItemSheet({
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Jumlah
+              Quantity
             </label>
             <div className="flex items-center gap-3">
               <Button
@@ -220,11 +220,11 @@ function AddItemSheet({
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Catatan <span className="font-normal lowercase">(opsional)</span>
+              Notes <span className="font-normal lowercase">(optional)</span>
             </label>
             <input
               type="text"
-              placeholder="Less ice, no sugar, dll"
+              placeholder="Less ice, no sugar, etc."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               maxLength={200}
@@ -234,7 +234,7 @@ function AddItemSheet({
 
           <div className="flex gap-2 pt-2">
             <Button variant="outline" size="lg" className="flex-1" onClick={onClose}>
-              Batal
+              Cancel
             </Button>
             <Button
               variant="gold"
@@ -244,8 +244,8 @@ function AddItemSheet({
               disabled={loading}
             >
               {loading
-                ? "Menambah..."
-                : `Tambah ${formatIDR(qty * item.price)}`}
+                ? "Adding..."
+                : `Add ${formatIDR(qty * item.price)}`}
             </Button>
           </div>
         </div>

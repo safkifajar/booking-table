@@ -86,7 +86,7 @@ export function StaffMenuGrid({
       setCart({}); // kosongkan keranjang setelah tersimpan
       setCartOpen(false);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan pesanan"));
+      toast.error(getActionErrorMessage(err, "Failed to save order"));
     } finally {
       setSaving(false);
     }
@@ -100,14 +100,14 @@ export function StaffMenuGrid({
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari menu…"
+          placeholder="Search menu…"
           className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
         />
       </div>
 
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
-          Menu tidak ditemukan.
+          No menu found.
         </p>
       )}
 
@@ -136,7 +136,7 @@ export function StaffMenuGrid({
                       {formatIDR(item.price)}
                       {!item.is_available && (
                         <span className="ml-1.5 text-muted-foreground">
-                          · Habis
+                          · Sold out
                         </span>
                       )}
                     </p>
@@ -149,7 +149,7 @@ export function StaffMenuGrid({
                         onClick={() => dec(item.id)}
                         disabled={qty === 0}
                         className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        aria-label="Kurangi"
+                        aria-label="Decrease"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
@@ -161,7 +161,7 @@ export function StaffMenuGrid({
                         onClick={() => inc(item.id)}
                         disabled={qty >= 20}
                         className="h-8 w-8 flex items-center justify-center text-primary hover:text-primary/80 disabled:opacity-30"
-                        aria-label="Tambah"
+                        aria-label="Add"
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
@@ -185,7 +185,7 @@ export function StaffMenuGrid({
               className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition"
             >
               <span className="font-medium">
-                {cartOpen ? "Sembunyikan" : "Lihat"} pesanan ({totalQty} item)
+                {cartOpen ? "Hide" : "View"} order ({totalQty} items)
               </span>
               {cartOpen ? (
                 <ChevronDown className="h-4 w-4" />
@@ -217,7 +217,7 @@ export function StaffMenuGrid({
                         type="button"
                         onClick={() => dec(l.menuItemId)}
                         className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0"
-                        aria-label="Kurangi"
+                        aria-label="Decrease"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </button>
@@ -238,7 +238,7 @@ export function StaffMenuGrid({
               ) : (
                 <ShoppingCart className="h-4 w-4" />
               )}
-              Simpan Pesanan · {totalQty} item · {formatIDR(totalPrice)}
+              Save Order · {totalQty} items · {formatIDR(totalPrice)}
             </button>
           </div>
         </div>

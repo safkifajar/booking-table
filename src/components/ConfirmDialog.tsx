@@ -97,7 +97,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               onClick={() => handle(false)}
               className="sm:min-w-[100px]"
             >
-              {pending?.cancelText ?? "Batal"}
+              {pending?.cancelText ?? "Cancel"}
             </Button>
             <Button
               variant={confirmButtonVariant(pending?.variant)}
@@ -105,7 +105,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               className="sm:min-w-[100px]"
               autoFocus
             >
-              {pending?.confirmText ?? "Lanjut"}
+              {pending?.confirmText ?? "Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>

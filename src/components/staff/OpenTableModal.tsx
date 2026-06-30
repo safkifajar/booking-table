@@ -97,7 +97,7 @@ export function OpenTableModal({
     e.preventDefault();
     if (!canSubmit || !selectedTableId) return;
     if (reservationEnabled && !slotStart) {
-      toast.error("Pilih jam booking dulu");
+      toast.error("Select a booking time first");
       return;
     }
 
@@ -113,7 +113,7 @@ export function OpenTableModal({
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       if (raw.includes("NEXT_REDIRECT")) throw err;
-      const message = getActionErrorMessage(err, "Gagal buka meja");
+      const message = getActionErrorMessage(err, "Failed to open table");
       toast.error(message);
       setSubmitting(false);
       // Slot keburu dibooking (race) → tutup modal, kembali ke daftar meja
@@ -140,9 +140,9 @@ export function OpenTableModal({
               <UserPlus className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">Buka Meja untuk Tamu</h2>
+              <h2 className="text-sm font-semibold">Open Table for Guest</h2>
               <p className="text-[11px] text-muted-foreground">
-                Untuk tamu yang tidak bawa HP / walk-in
+                For guests without a phone / walk-in
               </p>
             </div>
           </div>
@@ -160,12 +160,12 @@ export function OpenTableModal({
             {/* Pilih meja DULU karena capacity-nya nentuin max tamu */}
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                1. Pilih meja kosong
+                1. Select an empty table
               </label>
               {tables.length === 0 ? (
                 <Card className="p-6 text-center border-dashed">
                   <p className="text-xs text-muted-foreground">
-                    Semua meja sedang terpakai. Tutup salah satu dulu.
+                    All tables are in use. Close one first.
                   </p>
                 </Card>
               ) : (
@@ -208,7 +208,7 @@ export function OpenTableModal({
             {reservationEnabled && selectedTableId && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  2. Pilih jam booking
+                  2. Select a booking time
                 </label>
                 <SlotRangePicker
                   slots={reservationData.slots}
@@ -231,11 +231,11 @@ export function OpenTableModal({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  3. Nama tamu di meja
+                  3. Guest names at the table
                 </label>
                 {selectedTable && (
                   <span className="text-[10px] text-muted-foreground">
-                    {validNamesCount}/{capacity} tamu
+                    {validNamesCount}/{capacity} guests
                   </span>
                 )}
               </div>
@@ -243,7 +243,7 @@ export function OpenTableModal({
               {!selectedTable ? (
                 <Card className="p-4 text-center border-dashed">
                   <p className="text-[11px] text-muted-foreground">
-                    Pilih meja dulu untuk input nama tamu
+                    Select a table first to enter guest names
                   </p>
                 </Card>
               ) : (
@@ -259,8 +259,8 @@ export function OpenTableModal({
                         onChange={(e) => updateGuestName(index, e.target.value)}
                         placeholder={
                           index === 0
-                            ? "Nama utama (tampil di bill)"
-                            : `Nama tamu ${index + 1}`
+                            ? "Main name (shown on bill)"
+                            : `Guest name ${index + 1}`
                         }
                         maxLength={80}
                         autoFocus={index === 0}
@@ -271,7 +271,7 @@ export function OpenTableModal({
                           type="button"
                           onClick={() => removeGuest(index)}
                           className="h-9 w-9 shrink-0 rounded-md text-muted-foreground hover:bg-destructive/15 hover:text-destructive flex items-center justify-center"
-                          aria-label="Hapus tamu"
+                          aria-label="Remove guest"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -288,13 +288,13 @@ export function OpenTableModal({
                       className="w-full border border-dashed border-border text-muted-foreground hover:text-primary"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Tambah tamu lain
+                      Add another guest
                     </Button>
                   )}
 
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Nama tamu pertama akan tampil di bill & receipt sebagai
-                    pemilik meja.
+                    The first guest name will appear on the bill & receipt as
+                    the table owner.
                   </p>
                 </div>
               )}
@@ -313,12 +313,12 @@ export function OpenTableModal({
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Membuka meja...
+                  Opening table...
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4" />
-                  Buka Meja & Mulai Pesan
+                  Open Table & Start Ordering
                 </>
               )}
             </Button>

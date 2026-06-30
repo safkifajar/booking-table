@@ -89,9 +89,9 @@ export function filterSessions<T extends SessionFilterItem>(
 }
 
 const PAY_LABELS: Record<PayFilter, string> = {
-  all: "Semua",
-  paid: "Lunas",
-  unpaid: "Belum lunas",
+  all: "All",
+  paid: "Paid",
+  unpaid: "Unpaid",
 };
 
 export function SessionListFilters({
@@ -164,7 +164,7 @@ export function SessionListFilters({
           {/* Status bayar — dropdown */}
           <div>
             <label className="block text-xs font-medium mb-1.5">
-              Status Pembayaran
+              Payment Status
             </label>
             <select
               value={filter.pay}
@@ -183,7 +183,7 @@ export function SessionListFilters({
 
           {/* Tanggal: range + opsi "Semua tanggal" */}
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium">Tanggal</span>
+            <span className="text-xs font-medium">Date</span>
             <button
               type="button"
               onClick={() => onFilter({ ...filter, from: "", to: "" })}
@@ -194,14 +194,14 @@ export function SessionListFilters({
                   : "border-border text-muted-foreground hover:bg-muted/60"
               )}
             >
-              Semua tanggal
+              All dates
             </button>
           </div>
 
           {/* Dari Tanggal */}
           <div>
             <label className="block text-xs font-medium mb-1.5">
-              Dari Tanggal
+              From Date
             </label>
             <input
               type="date"
@@ -215,7 +215,7 @@ export function SessionListFilters({
             {/* Sampai Tanggal */}
             <div>
               <label className="block text-xs font-medium mb-1.5">
-                Sampai Tanggal
+                To Date
               </label>
               <input
                 type="date"
@@ -236,7 +236,7 @@ export function SessionListFilters({
           type="search"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Cari meja, host, atau judul…"
+          placeholder="Search table, host, or title…"
           className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
         />
       </div>

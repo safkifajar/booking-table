@@ -45,16 +45,16 @@ function usePushSetup() {
     try {
       const sub = await subscribePush();
       if (!sub) {
-        toast.error("Izin notifikasi ditolak atau tidak didukung");
+        toast.error("Notification permission denied or not supported");
         if (notificationPermission() === "denied") setCanOffer(false);
         return false;
       }
       await saveSubscription(sub);
-      toast.success("Notifikasi diaktifkan untuk perangkat ini");
+      toast.success("Notifications enabled for this device");
       setCanOffer(false);
       return true;
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal aktifkan notifikasi"));
+      toast.error(getActionErrorMessage(err, "Failed to enable notifications"));
       return false;
     } finally {
       setBusy(false);
@@ -76,14 +76,14 @@ export function PushSetup() {
       onClick={() => void enable()}
       disabled={busy}
       className="h-9 px-3 rounded-full flex items-center gap-1.5 text-xs font-medium border border-primary/40 text-primary hover:bg-primary/10 transition disabled:opacity-50"
-      aria-label="Aktifkan notifikasi"
+      aria-label="Enable notifications"
     >
       {busy ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
       ) : (
         <BellRing className="h-3.5 w-3.5" />
       )}
-      <span className="hidden sm:inline">Aktifkan notifikasi</span>
+      <span className="hidden sm:inline">Enable notifications</span>
     </button>
   );
 }
@@ -121,9 +121,9 @@ export function PushBanner() {
     <div className="mx-4 sm:mx-6 mt-3 rounded-xl border border-primary/30 bg-primary/[0.07] p-3 flex items-center gap-3">
       <BellRing className="h-5 w-5 text-primary shrink-0" />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">Aktifkan notifikasi</p>
+        <p className="text-sm font-medium">Enable notifications</p>
         <p className="text-xs text-muted-foreground">
-          Biar gak ketinggalan undangan meja & update penting.
+          So you don&apos;t miss table invitations & important updates.
         </p>
       </div>
       <button
@@ -136,12 +136,12 @@ export function PushBanner() {
         className="h-8 px-3 rounded-full bg-primary text-primary-foreground text-xs font-medium flex items-center gap-1.5 disabled:opacity-50 shrink-0"
       >
         {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        Aktifkan
+        Enable
       </button>
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Nanti"
+        aria-label="Later"
         className="text-muted-foreground hover:text-foreground shrink-0"
       >
         <X className="h-4 w-4" />

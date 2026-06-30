@@ -13,10 +13,10 @@ export function SignOutButton({ displayName }: { displayName: string }) {
 
   async function handle() {
     const ok = await confirm({
-      title: "Keluar dari akun?",
-      description: `Kamu akan dikeluarkan dari ${displayName}. Bisa masuk lagi kapan saja kalau pakai akun email + password.`,
-      confirmText: "Keluar",
-      cancelText: "Tetap masuk",
+      title: "Sign out of your account?",
+      description: `You'll be signed out of ${displayName}. You can sign back in anytime if you use an email + password account.`,
+      confirmText: "Sign out",
+      cancelText: "Stay signed in",
       variant: "danger",
     });
     if (!ok) return;
@@ -24,7 +24,7 @@ export function SignOutButton({ displayName }: { displayName: string }) {
     try {
       await signOutAction();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal keluar"));
+      toast.error(getActionErrorMessage(err, "Failed to sign out"));
       setLoading(false);
     }
   }
@@ -37,7 +37,7 @@ export function SignOutButton({ displayName }: { displayName: string }) {
       className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 text-red-400 disabled:opacity-50"
     >
       <LogOut className="h-4 w-4" />
-      {loading ? "Keluar..." : "Keluar"}
+      {loading ? "Signing out..." : "Sign out"}
     </button>
   );
 }
