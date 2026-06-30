@@ -386,11 +386,13 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
     .where(
       and(
         eq(floorAreas.barId, barId),
-        inArray(tableSessions.status, ["reserved", "open", "locked"])
+        // Termasuk 'overdue' (data lama) supaya ikut di-close — overdue tak
+        // dipakai lagi sbg status auto-expire.
+        inArray(tableSessions.status, ["reserved", "open", "locked", "overdue"])
       )
     );
 
-  // Kandidat yg waktunya habis (reservasi lewat / walk-in basi).
+  // Kandidat yg waktunya habis (reservasi lewat / walk-in basi / overdue lama).
   const expiring = active.filter((s) => {
     const reservationEnded =
       !!s.reservationEndAt && s.reservationEndAt.getTime() <= now.getTime();
@@ -402,24 +404,16 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
   });
   if (expiring.length === 0) return 0;
 
-  // Cek tagihan: yg masih ada sisa → 'overdue' (jangan close, biar tetap
-  // tertagih). Yg lunas / tanpa tagihan → 'closed' seperti biasa.
-  const outstandingMap = await getOutstandingMap(expiring.map((s) => s.id));
-
+  // Lewat jam selesai = meja tidak aktif lagi → SELALU 'closed' (meja bebas,
+  // hilang dari Meja Aktif). Sisa tagihan (kalau ada) tidak hilang: tetap bisa
+  // ditagih di tab "Selesai" (fitur bayar-sisa sesi closed). Status 'overdue'
+  // tak dipakai lagi untuk auto-expire.
   let processed = 0;
   for (const s of expiring) {
-    const outstanding = outstandingMap.get(s.id) ?? 0;
-    if (outstanding > 0) {
-      await db
-        .update(tableSessions)
-        .set({ status: "overdue" })
-        .where(eq(tableSessions.id, s.id));
-    } else {
-      await db
-        .update(tableSessions)
-        .set({ status: "closed", closedAt: now })
-        .where(eq(tableSessions.id, s.id));
-    }
+    await db
+      .update(tableSessions)
+      .set({ status: "closed", closedAt: now })
+      .where(eq(tableSessions.id, s.id));
     processed++;
   }
   return processed;

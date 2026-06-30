@@ -529,15 +529,6 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
                   Walk-in
                 </Badge>
               )}
-              {session.status === "overdue" && (
-                <Badge
-                  variant="default"
-                  className="bg-orange-500/15 text-orange-400 border-orange-500/30 text-[10px] px-1.5 gap-1"
-                >
-                  <Clock className="h-2.5 w-2.5" />
-                  Lewat waktu
-                </Badge>
-              )}
             </div>
             <div className="text-sm font-medium truncate group-hover:text-primary transition">
               {session.title ?? "Open Table"}
