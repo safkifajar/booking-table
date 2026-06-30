@@ -112,14 +112,14 @@ export function SessionListFilters({
     (filter.from ? 1 : 0) + (filter.to ? 1 : 0) + (filter.pay !== "all" ? 1 : 0);
 
   return (
-    <div className="space-y-2">
-      {/* Baris: tombol Filter + search */}
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
+      {/* Tombol Filter + panel melayang (absolute, list tak ikut turun) */}
+      <div className="relative shrink-0">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            "shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-md border text-sm font-medium transition",
+            "inline-flex items-center gap-1.5 h-11 px-3.5 rounded-md border text-sm font-medium transition",
             open || activeCount > 0
               ? "border-primary/60 bg-primary/10 text-primary"
               : "border-border text-foreground hover:bg-muted/60"
@@ -134,21 +134,18 @@ export function SessionListFilters({
           )}
         </button>
 
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder="Cari meja, host, atau judul…"
-            className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+        {/* Klik di luar → tutup */}
+        {open && (
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+            aria-hidden
           />
-        </div>
-      </div>
+        )}
 
-      {/* Panel filter — tampil saat tombol Filter ditekan */}
-      {open && (
-        <div className="rounded-lg border border-border bg-card p-4 space-y-4 max-w-sm">
+        {/* Panel filter — melayang di atas konten, tak mendorong list */}
+        {open && (
+          <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-border bg-card p-4 space-y-4 shadow-2xl">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Filter
@@ -215,21 +212,34 @@ export function SessionListFilters({
             />
           </div>
 
-          {/* Sampai Tanggal */}
-          <div>
-            <label className="block text-xs font-medium mb-1.5">
-              Sampai Tanggal
-            </label>
-            <input
-              type="date"
-              value={filter.to}
-              min={filter.from || undefined}
-              onChange={(e) => onFilter({ ...filter, to: e.target.value })}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            />
+            {/* Sampai Tanggal */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5">
+                Sampai Tanggal
+              </label>
+              <input
+                type="date"
+                value={filter.to}
+                min={filter.from || undefined}
+                onChange={(e) => onFilter({ ...filter, to: e.target.value })}
+                className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* Search — tetap satu baris di kanan tombol Filter */}
+      <div className="relative flex-1 min-w-0">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder="Cari meja, host, atau judul…"
+          className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+        />
+      </div>
     </div>
   );
 }
