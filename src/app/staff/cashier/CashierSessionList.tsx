@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Search,
   Users,
   CheckCircle2,
   Clock,
@@ -35,6 +34,12 @@ import {
   MoveRequestsPanel,
   countPending,
 } from "@/components/staff/MoveRequestsPanel";
+import {
+  SessionListFilters,
+  filterSessions,
+  monthDateKeys,
+  type PayFilter,
+} from "@/components/staff/SessionListFilters";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 
 interface Props {
@@ -100,9 +105,18 @@ export function CashierSessionList({
   barId,
 }: Props) {
   const router = useRouter();
-  const [query, setQuery] = React.useState("");
   const [tab, setTab] = React.useState<Tab>("active");
   const [openTableModal, setOpenTableModal] = React.useState(false);
+
+  // Filter tab "Meja Aktif"
+  const [dateFilter, setDateFilter] = React.useState<string>("all");
+  const [query, setQuery] = React.useState("");
+  const [pay, setPay] = React.useState<PayFilter>("all");
+
+  // Filter tab "Selesai"
+  const [doneDateFilter, setDoneDateFilter] = React.useState<string>("all");
+  const [doneQuery, setDoneQuery] = React.useState("");
+  const [donePay, setDonePay] = React.useState<PayFilter>("all");
 
   // Realtime: subscribe SSE staff channel
   React.useEffect(() => {
@@ -124,17 +138,25 @@ export function CashierSessionList({
     };
   }, [barId, router]);
 
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter(
-      (s) =>
-        s.table_label.toLowerCase().includes(q) ||
-        s.host_name.toLowerCase().includes(q) ||
-        (s.title ?? "").toLowerCase().includes(q) ||
-        s.area_name.toLowerCase().includes(q)
-    );
-  }, [sessions, query]);
+  const activeDates = React.useMemo(() => monthDateKeys(sessions), [sessions]);
+  const filtered = React.useMemo(
+    () => filterSessions(sessions, { dateKey: dateFilter, query, pay }),
+    [sessions, dateFilter, query, pay]
+  );
+
+  const doneDates = React.useMemo(
+    () => monthDateKeys(closedSessions),
+    [closedSessions]
+  );
+  const filteredClosed = React.useMemo(
+    () =>
+      filterSessions(closedSessions, {
+        dateKey: doneDateFilter,
+        query: doneQuery,
+        pay: donePay,
+      }),
+    [closedSessions, doneDateFilter, doneQuery, donePay]
+  );
 
   // Quick stats. "Meja aktif" = jumlah sesi aktif. "Outstanding" & "Sudah bayar"
   // mencakup sesi aktif DAN sesi closed yg masih punya sisa tagihan (closed
@@ -205,17 +227,15 @@ export function CashierSessionList({
 
       {tab === "active" && (
         <>
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Cari nomor meja, host, atau title..."
-              className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-            />
-          </div>
+          <SessionListFilters
+            dates={activeDates}
+            dateFilter={dateFilter}
+            onDateFilter={setDateFilter}
+            query={query}
+            onQuery={setQuery}
+            pay={pay}
+            onPay={setPay}
+          />
 
           {/* Session list */}
           {filtered.length === 0 ? (
@@ -232,7 +252,7 @@ export function CashierSessionList({
                 <>
                   <p className="text-sm font-medium mb-1">Tidak ada hasil</p>
                   <p className="text-xs text-muted-foreground">
-                    Coba kata kunci lain.
+                    Coba ubah filter atau kata kunci lain.
                   </p>
                 </>
               )}
@@ -262,11 +282,30 @@ export function CashierSessionList({
               </p>
             </Card>
           ) : (
-            <div className="grid sm:grid-cols-2 gap-3">
-              {closedSessions.map((s) => (
-                <SessionCard key={s.session_id} session={s} />
-              ))}
-            </div>
+            <>
+              <SessionListFilters
+                dates={doneDates}
+                dateFilter={doneDateFilter}
+                onDateFilter={setDoneDateFilter}
+                query={doneQuery}
+                onQuery={setDoneQuery}
+                pay={donePay}
+                onPay={setDonePay}
+              />
+              {filteredClosed.length === 0 ? (
+                <Card className="p-8 text-center border-dashed">
+                  <p className="text-sm text-muted-foreground">
+                    Tidak ada sesi di filter ini.
+                  </p>
+                </Card>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {filteredClosed.map((s) => (
+                    <SessionCard key={s.session_id} session={s} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

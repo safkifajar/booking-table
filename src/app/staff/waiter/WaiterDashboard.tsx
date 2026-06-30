@@ -39,6 +39,12 @@ import {
   MoveRequestsPanel,
   countPending,
 } from "@/components/staff/MoveRequestsPanel";
+import {
+  SessionListFilters,
+  filterSessions,
+  monthDateKeys,
+  type PayFilter,
+} from "@/components/staff/SessionListFilters";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
@@ -486,14 +492,6 @@ function QueueItemCard({
 // TAB: SESSIONS (Bantu Pesan)
 // ============================================================
 
-/** Kunci tanggal sesi (reservation_at kalau ada, else started_at) → "YYYY-MM-DD". */
-function sessionDateKey(s: WaiterSessionItem): string {
-  const d = new Date(s.reservation_at ?? s.started_at);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
-}
-
 function SessionsView({
   sessions,
   onAssist,
@@ -506,17 +504,16 @@ function SessionsView({
   emptyLabel?: string;
 }) {
   const [dateFilter, setDateFilter] = React.useState<string>("all");
+  const [query, setQuery] = React.useState("");
+  const [pay, setPay] = React.useState<PayFilter>("all");
 
-  // Tanggal unik (urut) dari sesi, untuk tab filter.
-  const dates = React.useMemo(() => {
-    const set = new Set(sessions.map(sessionDateKey));
-    return Array.from(set).sort();
-  }, [sessions]);
+  // Tanggal unik (urut) dari sesi di bulan berjalan, untuk chip filter.
+  const dates = React.useMemo(() => monthDateKeys(sessions), [sessions]);
 
-  const filtered =
-    dateFilter === "all"
-      ? sessions
-      : sessions.filter((s) => sessionDateKey(s) === dateFilter);
+  const filtered = React.useMemo(
+    () => filterSessions(sessions, { dateKey: dateFilter, query, pay }),
+    [sessions, dateFilter, query, pay]
+  );
 
   if (sessions.length === 0) {
     return (
@@ -532,29 +529,20 @@ function SessionsView({
 
   return (
     <div className="space-y-3">
-      {/* Tab tanggal — filter sesi per tanggal booking */}
-      {dates.length > 1 && (
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          <DateChip
-            label="Semua"
-            active={dateFilter === "all"}
-            onClick={() => setDateFilter("all")}
-          />
-          {dates.map((d) => (
-            <DateChip
-              key={d}
-              label={fmtDate(d)}
-              active={dateFilter === d}
-              onClick={() => setDateFilter(d)}
-            />
-          ))}
-        </div>
-      )}
+      <SessionListFilters
+        dates={dates}
+        dateFilter={dateFilter}
+        onDateFilter={setDateFilter}
+        query={query}
+        onQuery={setQuery}
+        pay={pay}
+        onPay={setPay}
+      />
 
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground">
-            Tidak ada meja di tanggal ini.
+            Tidak ada meja di filter ini.
           </p>
         </Card>
       ) : (
@@ -728,6 +716,10 @@ function SessionCard({
   isJoining: boolean;
 }) {
   const router = useRouter();
+  const paidPercentage =
+    session.subtotal > 0
+      ? Math.min(100, Math.round((session.paid_total / session.subtotal) * 100))
+      : 0;
   // open → bantu pesan (join). Selain itu (overdue/locked) → buka sesi langsung
   // supaya staff tetap bisa lihat bill & close/terima bayar.
   function handleClick() {
@@ -785,37 +777,55 @@ function SessionCard({
         </div>
       </div>
 
-      {/* Bill summary */}
+      {/* Bill summary — disamakan dengan kartu kasir (progress bar + status). */}
       <div className="pt-3 border-t border-border space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Running bill</span>
+          <span className="text-muted-foreground">Total bill</span>
           <span className="font-semibold tabular-nums">
-            {session.subtotal > 0 ? formatIDR(session.subtotal) : (
-              <span className="text-muted-foreground italic font-normal">—</span>
-            )}
+            {formatIDR(session.subtotal)}
           </span>
         </div>
 
         {session.subtotal > 0 && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Status bayar</span>
-            {session.is_paid ? (
-              <Badge
-                variant="default"
-                className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] gap-1"
-              >
-                <CheckCircle2 className="h-2.5 w-2.5" />
-                Lunas
-              </Badge>
-            ) : (
-              <Badge
-                variant="default"
-                className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] gap-1"
-              >
-                <Clock className="h-2.5 w-2.5" />
-                Sisa {formatIDR(session.outstanding)}
-              </Badge>
-            )}
+          <>
+            {/* Progress bar */}
+            <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  "h-full transition-all",
+                  session.is_paid ? "bg-emerald-500" : "bg-primary"
+                )}
+                style={{ width: `${paidPercentage}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs">
+              {session.is_paid ? (
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Lunas
+                </span>
+              ) : session.paid_total > 0 ? (
+                <>
+                  <span className="text-emerald-400 tabular-nums">
+                    {formatIDR(session.paid_total)} terbayar
+                  </span>
+                  <span className="text-amber-400 tabular-nums font-medium">
+                    {formatIDR(session.outstanding)} kurang
+                  </span>
+                </>
+              ) : (
+                <span className="text-amber-400 font-medium tabular-nums">
+                  Belum dibayar
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        {session.subtotal === 0 && (
+          <div className="text-xs text-muted-foreground italic">
+            Belum ada order
           </div>
         )}
 
