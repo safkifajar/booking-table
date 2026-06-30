@@ -37,8 +37,8 @@ import {
 import {
   SessionListFilters,
   filterSessions,
-  monthDateKeys,
-  type PayFilter,
+  currentMonthRange,
+  type SessionFilterState,
 } from "@/components/staff/SessionListFilters";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 
@@ -108,15 +108,19 @@ export function CashierSessionList({
   const [tab, setTab] = React.useState<Tab>("active");
   const [openTableModal, setOpenTableModal] = React.useState(false);
 
-  // Filter tab "Meja Aktif"
-  const [dateFilter, setDateFilter] = React.useState<string>("all");
+  // Filter tab "Meja Aktif" (default rentang bulan berjalan)
+  const [filter, setFilter] = React.useState<SessionFilterState>(() => ({
+    ...currentMonthRange(),
+    pay: "all",
+  }));
   const [query, setQuery] = React.useState("");
-  const [pay, setPay] = React.useState<PayFilter>("all");
 
   // Filter tab "Selesai"
-  const [doneDateFilter, setDoneDateFilter] = React.useState<string>("all");
+  const [doneFilter, setDoneFilter] = React.useState<SessionFilterState>(() => ({
+    ...currentMonthRange(),
+    pay: "all",
+  }));
   const [doneQuery, setDoneQuery] = React.useState("");
-  const [donePay, setDonePay] = React.useState<PayFilter>("all");
 
   // Realtime: subscribe SSE staff channel
   React.useEffect(() => {
@@ -138,24 +142,14 @@ export function CashierSessionList({
     };
   }, [barId, router]);
 
-  const activeDates = React.useMemo(() => monthDateKeys(sessions), [sessions]);
   const filtered = React.useMemo(
-    () => filterSessions(sessions, { dateKey: dateFilter, query, pay }),
-    [sessions, dateFilter, query, pay]
+    () => filterSessions(sessions, { ...filter, query }),
+    [sessions, filter, query]
   );
 
-  const doneDates = React.useMemo(
-    () => monthDateKeys(closedSessions),
-    [closedSessions]
-  );
   const filteredClosed = React.useMemo(
-    () =>
-      filterSessions(closedSessions, {
-        dateKey: doneDateFilter,
-        query: doneQuery,
-        pay: donePay,
-      }),
-    [closedSessions, doneDateFilter, doneQuery, donePay]
+    () => filterSessions(closedSessions, { ...doneFilter, query: doneQuery }),
+    [closedSessions, doneFilter, doneQuery]
   );
 
   // Quick stats. "Meja aktif" = jumlah sesi aktif. "Outstanding" & "Sudah bayar"
@@ -228,13 +222,10 @@ export function CashierSessionList({
       {tab === "active" && (
         <>
           <SessionListFilters
-            dates={activeDates}
-            dateFilter={dateFilter}
-            onDateFilter={setDateFilter}
+            filter={filter}
+            onFilter={setFilter}
             query={query}
             onQuery={setQuery}
-            pay={pay}
-            onPay={setPay}
           />
 
           {/* Session list */}
@@ -284,13 +275,10 @@ export function CashierSessionList({
           ) : (
             <>
               <SessionListFilters
-                dates={doneDates}
-                dateFilter={doneDateFilter}
-                onDateFilter={setDoneDateFilter}
+                filter={doneFilter}
+                onFilter={setDoneFilter}
                 query={doneQuery}
                 onQuery={setDoneQuery}
-                pay={donePay}
-                onPay={setDonePay}
               />
               {filteredClosed.length === 0 ? (
                 <Card className="p-8 text-center border-dashed">

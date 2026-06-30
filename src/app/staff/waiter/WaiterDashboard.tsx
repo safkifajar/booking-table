@@ -42,8 +42,8 @@ import {
 import {
   SessionListFilters,
   filterSessions,
-  monthDateKeys,
-  type PayFilter,
+  currentMonthRange,
+  type SessionFilterState,
 } from "@/components/staff/SessionListFilters";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
@@ -503,16 +503,16 @@ function SessionsView({
   joiningSession: string | null;
   emptyLabel?: string;
 }) {
-  const [dateFilter, setDateFilter] = React.useState<string>("all");
+  // Default rentang = bulan berjalan; user bisa "Semua tanggal" utk lihat semua.
+  const [filter, setFilter] = React.useState<SessionFilterState>(() => ({
+    ...currentMonthRange(),
+    pay: "all",
+  }));
   const [query, setQuery] = React.useState("");
-  const [pay, setPay] = React.useState<PayFilter>("all");
-
-  // Tanggal unik (urut) dari sesi di bulan berjalan, untuk chip filter.
-  const dates = React.useMemo(() => monthDateKeys(sessions), [sessions]);
 
   const filtered = React.useMemo(
-    () => filterSessions(sessions, { dateKey: dateFilter, query, pay }),
-    [sessions, dateFilter, query, pay]
+    () => filterSessions(sessions, { ...filter, query }),
+    [sessions, filter, query]
   );
 
   if (sessions.length === 0) {
@@ -530,13 +530,10 @@ function SessionsView({
   return (
     <div className="space-y-3">
       <SessionListFilters
-        dates={dates}
-        dateFilter={dateFilter}
-        onDateFilter={setDateFilter}
+        filter={filter}
+        onFilter={setFilter}
         query={query}
         onQuery={setQuery}
-        pay={pay}
-        onPay={setPay}
       />
 
       {filtered.length === 0 ? (
