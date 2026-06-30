@@ -45,6 +45,7 @@ import {
   currentMonthRange,
   type SessionFilterState,
 } from "@/components/staff/SessionListFilters";
+import { StaffTabs } from "@/components/staff/StaffTabs";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
@@ -220,44 +221,43 @@ export function WaiterDashboard({
     <div className="space-y-4 pb-24">
       {/* Tab strip + audio toggle */}
       <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-lg bg-muted/40 border border-border overflow-x-auto">
-          <TabButton
-            icon={<Utensils className="h-3.5 w-3.5" />}
-            label="Order Masuk"
-            active={tab === "queue"}
-            onClick={() => setTab("queue")}
-            badge={visibleQueue.length}
-            alert={visibleQueue.length > 0}
-          />
-          <TabButton
-            icon={<Layers className="h-3.5 w-3.5" />}
-            label="Meja Aktif"
-            active={tab === "sessions"}
-            onClick={() => setTab("sessions")}
-            badge={initialSessions.length}
-          />
-          <TabButton
-            icon={<CalendarClock className="h-3.5 w-3.5" />}
-            label="Booking"
-            active={tab === "bookings"}
-            onClick={() => setTab("bookings")}
-            badge={initialBookings.length}
-          />
-          <TabButton
-            icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
-            label="Pindah Meja"
-            active={tab === "moves"}
-            onClick={() => setTab("moves")}
-            badge={countPending(moveRequests)}
-            alert={countPending(moveRequests) > 0}
-          />
-          <TabButton
-            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-            label="Selesai"
-            active={tab === "done"}
-            onClick={() => setTab("done")}
-          />
-        </div>
+        <StaffTabs
+          active={tab}
+          onChange={(k) => setTab(k as Tab)}
+          tabs={[
+            {
+              key: "queue",
+              label: "Order Masuk",
+              icon: <Utensils className="h-3.5 w-3.5" />,
+              badge: visibleQueue.length,
+              alert: visibleQueue.length > 0,
+            },
+            {
+              key: "sessions",
+              label: "Meja Aktif",
+              icon: <Layers className="h-3.5 w-3.5" />,
+              badge: initialSessions.length,
+            },
+            {
+              key: "bookings",
+              label: "Booking",
+              icon: <CalendarClock className="h-3.5 w-3.5" />,
+              badge: initialBookings.length,
+            },
+            {
+              key: "moves",
+              label: "Pindah Meja",
+              icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
+              badge: countPending(moveRequests),
+              alert: countPending(moveRequests) > 0,
+            },
+            {
+              key: "done",
+              label: "Selesai",
+              icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            },
+          ]}
+        />
 
         <Button
           type="button"
@@ -841,56 +841,6 @@ function SessionCard({
 // ============================================================
 // SHARED
 // ============================================================
-
-function TabButton({
-  icon,
-  label,
-  active,
-  onClick,
-  badge,
-  alert,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  badge?: number;
-  alert?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      className={cn(
-        "relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition shrink-0",
-        active
-          ? "bg-primary/15 text-primary"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {icon}
-      {/* Label disembunyikan di layar sangat kecil utk tab non-aktif → icon-only,
-          tab aktif tetap tampil label. */}
-      <span className={cn(active ? "inline" : "hidden sm:inline")}>{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span
-          className={cn(
-            "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1",
-            active
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"
-          )}
-        >
-          {badge}
-        </span>
-      )}
-      {alert && (
-        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-      )}
-    </button>
-  );
-}
 
 // ============================================================
 // OPEN TABLE MODAL (Walk-in customer tanpa HP)

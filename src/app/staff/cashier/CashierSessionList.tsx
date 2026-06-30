@@ -34,6 +34,7 @@ import {
   MoveRequestsPanel,
   countPending,
 } from "@/components/staff/MoveRequestsPanel";
+import { StaffTabs } from "@/components/staff/StaffTabs";
 import {
   SessionListFilters,
   filterSessions,
@@ -188,36 +189,37 @@ export function CashierSessionList({
         />
       </div>
 
-      {/* Tab: Meja Aktif / Booking */}
-      <div className="flex gap-1 p-1 rounded-lg bg-muted/40 border border-border max-w-full overflow-x-auto">
-        <TabButton
-          icon={<Layers className="h-3.5 w-3.5" />}
-          label="Meja Aktif"
-          active={tab === "active"}
-          onClick={() => setTab("active")}
-          badge={sessions.length}
-        />
-        <TabButton
-          icon={<CalendarClock className="h-3.5 w-3.5" />}
-          label="Booking"
-          active={tab === "bookings"}
-          onClick={() => setTab("bookings")}
-          badge={bookings.length}
-        />
-        <TabButton
-          icon={<ArrowRightLeft className="h-3.5 w-3.5" />}
-          label="Pindah Meja"
-          active={tab === "moves"}
-          onClick={() => setTab("moves")}
-          badge={countPending(moveRequests)}
-        />
-        <TabButton
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-          label="Selesai"
-          active={tab === "done"}
-          onClick={() => setTab("done")}
-        />
-      </div>
+      {/* Tab strip (komponen bersama dgn waiter) */}
+      <StaffTabs
+        active={tab}
+        onChange={(k) => setTab(k as Tab)}
+        tabs={[
+          {
+            key: "active",
+            label: "Meja Aktif",
+            icon: <Layers className="h-3.5 w-3.5" />,
+            badge: sessions.length,
+          },
+          {
+            key: "bookings",
+            label: "Booking",
+            icon: <CalendarClock className="h-3.5 w-3.5" />,
+            badge: bookings.length,
+          },
+          {
+            key: "moves",
+            label: "Pindah Meja",
+            icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
+            badge: countPending(moveRequests),
+            alert: countPending(moveRequests) > 0,
+          },
+          {
+            key: "done",
+            label: "Selesai",
+            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+          },
+        ]}
+      />
 
       {tab === "active" && (
         <>
@@ -328,43 +330,6 @@ export function CashierSessionList({
         />
       )}
     </div>
-  );
-}
-
-function TabButton({
-  icon,
-  label,
-  active,
-  onClick,
-  badge,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  badge?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-sm font-medium transition shrink-0",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {icon}
-      {/* layar kecil: tab non-aktif icon-only supaya 4 tab muat */}
-      <span className={cn(active ? "inline" : "hidden sm:inline")}>{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 bg-muted text-foreground">
-          {badge}
-        </span>
-      )}
-    </button>
   );
 }
 
