@@ -1,11 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { Search } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Filter bersama untuk daftar sesi di dashboard Waiter & Kasir.
+ *
+ * Layout: satu baris — tombol [Filter] (buka panel: tanggal + status bayar) di
+ * kiri, input search di kanan.
  *
  * Generic: bekerja untuk WaiterSessionItem maupun CashierSessionItem selama
  * item memenuhi bentuk minimal `SessionFilterItem`.
@@ -88,6 +91,12 @@ function fmtDateChip(key: string): string {
   }).format(new Date(key));
 }
 
+const PAY_LABELS: Record<PayFilter, string> = {
+  all: "Semua",
+  paid: "Lunas",
+  unpaid: "Belum lunas",
+};
+
 function Chip({
   label,
   active,
@@ -130,51 +139,107 @@ export function SessionListFilters({
   pay: PayFilter;
   onPay: (v: PayFilter) => void;
 }) {
+  const [open, setOpen] = React.useState(false);
+
+  // Jumlah filter aktif (tanggal != semua, status != semua) → badge di tombol.
+  const activeCount = (dateFilter !== "all" ? 1 : 0) + (pay !== "all" ? 1 : 0);
+
   return (
     <div className="space-y-2">
-      {/* Chip tanggal — scroll horizontal */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <Chip
-          label="Semua"
-          active={dateFilter === "all"}
-          onClick={() => onDateFilter("all")}
-        />
-        {dates.map((d) => (
-          <Chip
-            key={d}
-            label={fmtDateChip(d)}
-            active={dateFilter === d}
-            onClick={() => onDateFilter(d)}
+      {/* Baris: tombol Filter + search */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-md border text-sm font-medium transition",
+            open || activeCount > 0
+              ? "border-primary/60 bg-primary/10 text-primary"
+              : "border-border text-foreground hover:bg-muted/60"
+          )}
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Filter
+          {activeCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1 bg-primary text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
+        </button>
+
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onQuery(e.target.value)}
+            placeholder="Cari meja, host, atau judul…"
+            className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
           />
-        ))}
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          placeholder="Cari meja, host, atau judul…"
-          className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-        />
-      </div>
+      {/* Panel filter — tampil saat tombol Filter ditekan */}
+      {open && (
+        <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Filter
+            </span>
+            {activeCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDateFilter("all");
+                  onPay("all");
+                }}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" /> Reset
+              </button>
+            )}
+          </div>
 
-      {/* Chip status bayar */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <Chip label="Semua" active={pay === "all"} onClick={() => onPay("all")} />
-        <Chip
-          label="Lunas"
-          active={pay === "paid"}
-          onClick={() => onPay("paid")}
-        />
-        <Chip
-          label="Belum lunas"
-          active={pay === "unpaid"}
-          onClick={() => onPay("unpaid")}
-        />
-      </div>
+          {/* Tanggal */}
+          <div>
+            <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+              Tanggal
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <Chip
+                label="Semua"
+                active={dateFilter === "all"}
+                onClick={() => onDateFilter("all")}
+              />
+              {dates.map((d) => (
+                <Chip
+                  key={d}
+                  label={fmtDateChip(d)}
+                  active={dateFilter === d}
+                  onClick={() => onDateFilter(d)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Status bayar */}
+          <div>
+            <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+              Status bayar
+            </div>
+            <div className="flex gap-1.5">
+              {(["all", "paid", "unpaid"] as PayFilter[]).map((p) => (
+                <Chip
+                  key={p}
+                  label={PAY_LABELS[p]}
+                  active={pay === p}
+                  onClick={() => onPay(p)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
