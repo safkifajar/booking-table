@@ -13,6 +13,10 @@ import {
   getClosedSessionsForWaiter,
 } from "@/lib/waiter-actions";
 import { getMoveRequests } from "@/lib/move-approval-actions";
+import {
+  expireFinishedSessions,
+  promoteDueReservations,
+} from "@/lib/queries";
 import { ChefHat } from "lucide-react";
 import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
 import { WaiterDashboard } from "./WaiterDashboard";
@@ -27,6 +31,11 @@ export default async function StaffWaiterPage() {
     ["waiter", "manager", "admin"],
     "/staff/waiter"
   );
+
+  // Transisi status berbasis waktu (lazy, tanpa cron) SEBELUM ambil list:
+  // reservasi yg jamnya tiba → open; sesi yg jam selesainya lewat → overdue/closed.
+  await expireFinishedSessions(ctx.barId);
+  await promoteDueReservations(ctx.barId);
 
   const [
     bar,

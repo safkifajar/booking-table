@@ -54,6 +54,7 @@ export interface CashierSessionItem {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  status: string;
   started_at: string;
   reservation_at: string | null;
   reservation_end_at: string | null;
@@ -86,6 +87,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
       opened_by_staff_id: tableSessions.openedByStaffId,
@@ -187,6 +189,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      status: s.status,
       started_at: s.started_at.toISOString(),
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at
@@ -224,6 +227,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
       opened_by_staff_id: tableSessions.openedByStaffId,
@@ -316,6 +320,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      status: s.status,
       started_at: s.started_at.toISOString(),
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at

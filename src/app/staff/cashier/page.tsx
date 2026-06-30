@@ -10,6 +10,10 @@ import {
   getReservationDataForWaiter,
 } from "@/lib/waiter-actions";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import {
+  expireFinishedSessions,
+  promoteDueReservations,
+} from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import { eq } from "drizzle-orm";
@@ -49,6 +53,11 @@ export default async function CashierPage() {
       </main>
     );
   }
+
+  // Transisi status berbasis waktu (lazy, tanpa cron) SEBELUM ambil list:
+  // reservasi yg jamnya tiba → open; sesi yg jam selesainya lewat → overdue/closed.
+  await expireFinishedSessions(ctx.barId);
+  await promoteDueReservations(ctx.barId);
 
   const [
     sessions,
