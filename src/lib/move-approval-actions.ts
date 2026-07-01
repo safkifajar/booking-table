@@ -56,13 +56,13 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
-  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id)
-    throw new Error("Hanya host yang bisa minta pindah meja");
+    throw new Error("Only the host can request a table move");
   if (session.status !== "open" && session.status !== "locked")
-    throw new Error("Request pindah hanya saat meja aktif");
+    throw new Error("Table move requests are only allowed while the table is active");
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("Sesi ini tak punya rentang waktu");
+    throw new Error("This session has no time range");
 
   const [pendingExisting] = await db
     .select({ id: tableMoveRequests.id })
@@ -73,7 +73,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
         eq(tableMoveRequests.status, "pending")
       )
     );
-  if (pendingExisting) throw new Error("Sudah ada request pindah yang menunggu");
+  if (pendingExisting) throw new Error("There's already a pending move request");
 
   const [target] = await db
     .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
@@ -81,7 +81,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Meja tujuan tidak valid");
+    throw new Error("Invalid destination table");
 
   // Pertahankan JAM BOOKING ASLI (tak reset, tak pakai sisa). Pindah hanya ganti
   // meja; rentang waktu ikut apa adanya supaya jadwal meja lama tak jadi "kosong"
@@ -89,7 +89,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Waktu booking sudah habis — tak bisa pindah");
+    throw new Error("Booking time is over — can't move");
 
   await db.insert(tableMoveRequests).values({
     sessionId: session.id,
@@ -169,13 +169,13 @@ export async function requestMoveTableWithOrder(
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
-  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id)
-    throw new Error("Hanya host yang bisa minta pindah");
+    throw new Error("Only the host can request a table move");
   if (session.status !== "open" && session.status !== "locked")
-    throw new Error("Request pindah hanya saat meja aktif");
+    throw new Error("Table move requests are only allowed while the table is active");
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("Sesi ini tak punya rentang waktu");
+    throw new Error("This session has no time range");
 
   const [pendingExisting] = await db
     .select({ id: tableMoveRequests.id })
@@ -186,7 +186,7 @@ export async function requestMoveTableWithOrder(
         eq(tableMoveRequests.status, "pending")
       )
     );
-  if (pendingExisting) throw new Error("Sudah ada request pindah yang menunggu");
+  if (pendingExisting) throw new Error("There's already a pending move request");
 
   const [target] = await db
     .select({
@@ -199,7 +199,7 @@ export async function requestMoveTableWithOrder(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Meja tujuan tidak valid");
+    throw new Error("Invalid destination table");
   const minSpend = target.minSpend ?? 0;
 
   // Resolve harga item dari DB.
@@ -216,7 +216,7 @@ export async function requestMoveTableWithOrder(
   let addedTotal = 0;
   const resolved = data.items.map((i) => {
     const m = priceMap.get(i.menuItemId);
-    if (!m || !m.is_available) throw new Error("Item menu tak tersedia");
+    if (!m || !m.is_available) throw new Error("Menu item unavailable");
     addedTotal += m.price * i.quantity;
     return { menuItemId: i.menuItemId, quantity: i.quantity, unitPrice: m.price };
   });
@@ -232,7 +232,7 @@ export async function requestMoveTableWithOrder(
   const existingTotal = Number(existing?.total ?? 0);
   if (existingTotal + addedTotal < minSpend) {
     throw new Error(
-      `Belum capai minimum spend meja ${target.label}. Tambah order lagi.`
+      `Minimum spend for table ${target.label} not reached. Add more orders.`
     );
   }
 
@@ -240,7 +240,7 @@ export async function requestMoveTableWithOrder(
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Waktu booking sudah habis — tak bisa pindah");
+    throw new Error("Booking time is over — can't move");
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.
   let paymentId: string | null = null;
@@ -254,7 +254,7 @@ export async function requestMoveTableWithOrder(
           eq(sessionMembers.profileId, profile.id)
         )
       );
-    if (!hostMember) throw new Error("Member host tak ditemukan");
+    if (!hostMember) throw new Error("Host member not found");
 
     let [order] = await tx
       .select({ id: orders.id })
@@ -450,8 +450,8 @@ export async function resolveMoveRequest(input: {
     .select()
     .from(tableMoveRequests)
     .where(eq(tableMoveRequests.id, input.requestId));
-  if (!req) throw new Error("Request tidak ditemukan");
-  if (req.status !== "pending") throw new Error("Request sudah diproses");
+  if (!req) throw new Error("Request not found");
+  if (req.status !== "pending") throw new Error("Request already processed");
 
   const [session] = await db
     .select({
@@ -529,7 +529,7 @@ export async function resolveMoveRequest(input: {
         });
       }
       throw new Error(
-        `Meja ${toLabel} keburu terisi — request ditolak otomatis.`
+        `Table ${toLabel} was taken — request auto-rejected.`
       );
     }
     throw err;
@@ -596,16 +596,16 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
-  if (!session) throw new Error("Sesi tidak ditemukan");
-  if (session.barId !== ctx.barId) throw new Error("Sesi di luar bar kamu");
+  if (!session) throw new Error("Session not found");
+  if (session.barId !== ctx.barId) throw new Error("Session outside your bar");
   if (
     session.status !== "reserved" &&
     session.status !== "open" &&
     session.status !== "locked"
   )
-    throw new Error("Hanya sesi aktif/booking yang bisa dipindah");
+    throw new Error("Only active/booking sessions can be moved");
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("Sesi ini tak punya rentang waktu");
+    throw new Error("This session has no time range");
 
   const [target] = await db
     .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
@@ -613,7 +613,7 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Meja tujuan tidak valid");
+    throw new Error("Invalid destination table");
 
   // Jam booking dipertahankan apa adanya.
   const newStart = session.reservationAt;
@@ -629,7 +629,7 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
       isDbConstraintError(err, "no_overlapping_reservation") ||
       isDbConstraintError(err, "uq_active_session_per_table")
     ) {
-      throw new Error(`Meja ${target.label} bentrok di jam booking ini`);
+      throw new Error(`Table ${target.label} conflicts at this booking time`);
     }
     throw err;
   }

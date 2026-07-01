@@ -483,13 +483,13 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(orderItems.id, itemId));
 
-  if (!item) throw new Error("Order item tidak ditemukan");
-  if (item.bar_id !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!item) throw new Error("Order item not found");
+  if (item.bar_id !== ctx.barId) throw new Error("Invalid bar access");
   if (item.current_status === "served") {
     return; // Idempotent — sudah served
   }
   if (item.current_status === "void") {
-    throw new Error("Item ini sudah di-batalkan");
+    throw new Error("This item has already been voided");
   }
 
   await db
@@ -530,10 +530,10 @@ export async function waiterJoinSession(sessionId: string): Promise<void> {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
 
-  if (!row) throw new Error("Session tidak ditemukan");
-  if (row.bar_id !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!row) throw new Error("Session not found");
+  if (row.bar_id !== ctx.barId) throw new Error("Invalid bar access");
   if (row.status !== "open") {
-    throw new Error("Session sudah tidak terbuka — tidak bisa bantu pesan");
+    throw new Error("Session is no longer open — cannot assist with ordering");
   }
 
   // Waiter TIDAK insert sebagai member meja. Konsep: staff = operator, bukan
@@ -727,7 +727,7 @@ export async function staffOpenTableForCustomer(
   const resAt = reservationAt ? new Date(reservationAt) : null;
   const resEnd = reservationEndAt ? new Date(reservationEndAt) : null;
   if (resAt && resEnd && resEnd.getTime() <= resAt.getTime()) {
-    throw new Error("Jam selesai harus setelah jam mulai");
+    throw new Error("End time must be after start time");
   }
   const isReservation = !!resAt;
 
@@ -737,10 +737,10 @@ export async function staffOpenTableForCustomer(
     .filter((n) => n.length > 0);
 
   if (cleanNames.length === 0) {
-    throw new Error("Minimal 1 nama tamu wajib diisi");
+    throw new Error("At least 1 guest name is required");
   }
   if (cleanNames.some((n) => n.length > 80)) {
-    throw new Error("Setiap nama tamu maksimal 80 karakter");
+    throw new Error("Each guest name can be at most 80 characters");
   }
 
   // Validate table aktif & ada di bar yang sama
@@ -755,12 +755,12 @@ export async function staffOpenTableForCustomer(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, tableId));
 
-  if (!table) throw new Error("Meja tidak ditemukan");
-  if (!table.isActive) throw new Error("Meja tidak aktif");
-  if (table.barId !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!table) throw new Error("Table not found");
+  if (!table.isActive) throw new Error("Table is inactive");
+  if (table.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (cleanNames.length > table.capacity) {
     throw new Error(
-      `Maksimal ${table.capacity} tamu untuk meja ini (kapasitas)`
+      `Maximum ${table.capacity} guests for this table (capacity)`
     );
   }
 
@@ -867,16 +867,16 @@ export async function staffOpenTableForCustomer(
     });
   } catch (err) {
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
-      throw new Error("Meja ini sudah ada session aktif");
+      throw new Error("This table already has an active session");
     }
     // Race condition: slot waktu meja ini baru saja dibooking lebih dulu.
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
-        "Slot waktu meja ini baru saja dibooking. Pilih waktu atau meja lain."
+        "This table's time slot was just booked. Pick another time or table."
       );
     }
     const message = err instanceof Error ? err.message : "";
-    throw new Error(message || "Gagal membuka meja");
+    throw new Error(message || "Failed to open table");
   }
 
   await notify(channels.session(sessionId), { type: "session.opened" });
@@ -909,8 +909,8 @@ export async function staffAddGuestToTable(
   );
 
   const cleanName = guestName.trim();
-  if (!cleanName) throw new Error("Nama tamu wajib diisi");
-  if (cleanName.length > 80) throw new Error("Nama tamu maksimal 80 karakter");
+  if (!cleanName) throw new Error("Guest name is required");
+  if (cleanName.length > 80) throw new Error("Guest name can be at most 80 characters");
 
   // Get session + capacity
   const [session] = await db
@@ -927,14 +927,14 @@ export async function staffAddGuestToTable(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
 
-  if (!session) throw new Error("Session tidak ditemukan");
-  if (session.barId !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!session) throw new Error("Session not found");
+  if (session.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (session.status !== "open") {
-    throw new Error("Session sudah tidak open");
+    throw new Error("Session is no longer open");
   }
   if (!session.openedByStaffId) {
     throw new Error(
-      "Session ini dibuka customer sendiri — minta customer untuk invite teman"
+      "This session was opened by the customer — ask the customer to invite their friends"
     );
   }
 
@@ -952,7 +952,7 @@ export async function staffAddGuestToTable(
 
   if (currentCount >= session.tableCapacity) {
     throw new Error(
-      `Meja sudah penuh (${currentCount}/${session.tableCapacity})`
+      `Table is full (${currentCount}/${session.tableCapacity})`
     );
   }
 

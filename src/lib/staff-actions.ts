@@ -89,8 +89,8 @@ export async function listStaffForBar(barId: string): Promise<AdminStaffRow[]> {
 
 const inviteSchema = z.object({
   barId: z.string().uuid(),
-  email: z.string().email("Email tidak valid").max(255),
-  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  email: z.string().email("Invalid email").max(255),
+  displayName: z.string().min(2, "Name must be at least 2 characters").max(40),
   role: z.enum(["waiter", "cashier", "manager", "admin"]),
 });
 
@@ -121,7 +121,7 @@ export async function inviteStaff(
   const data = inviteSchema.parse(input);
 
   if (data.barId !== ctx.barId) {
-    throw new Error("Bar tidak valid");
+    throw new Error("Invalid bar");
   }
 
   const email = data.email.toLowerCase().trim();
@@ -327,10 +327,10 @@ export async function resendInvite(
     .innerJoin(profiles, eq(profiles.id, staffRoles.profileId))
     .where(eq(staffRoles.id, staffRoleId));
 
-  if (!row) throw new Error("Staff tidak ditemukan");
-  if (row.barId !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!row) throw new Error("Staff not found");
+  if (row.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (row.passwordHash) {
-    throw new Error("User sudah set password — tidak perlu invite ulang");
+    throw new Error("User has already set a password — no need to re-invite");
   }
 
   return sendStaffInvite({
@@ -361,12 +361,12 @@ export async function updateStaffRole(
     .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.id, data.staffRoleId));
-  if (!existing) throw new Error("Staff role tidak ditemukan");
+  if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
-    throw new Error("Tidak ada akses ke staff role di bar lain");
+    throw new Error("No access to staff role in another bar");
   }
   if (existing.profileId === ctx.profileId) {
-    throw new Error("Tidak bisa ubah role diri sendiri");
+    throw new Error("You cannot change your own role");
   }
 
   await db
@@ -383,12 +383,12 @@ export async function updateStaffRole(
 
 const updateStaffSchema = z.object({
   staffRoleId: z.string().uuid(),
-  displayName: z.string().min(1, "Nama wajib diisi").max(80),
-  email: z.string().email("Email tidak valid").max(120),
+  displayName: z.string().min(1, "Name is required").max(80),
+  email: z.string().email("Invalid email").max(120),
   role: z.enum(["waiter", "cashier", "manager", "admin"]),
   isActive: z.boolean(),
   /** Reset password opsional — kosong = tidak diubah. */
-  password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100).optional(),
 });
 
 /**
@@ -413,17 +413,17 @@ export async function updateStaff(
     })
     .from(staffRoles)
     .where(eq(staffRoles.id, data.staffRoleId));
-  if (!existing) throw new Error("Staff role tidak ditemukan");
+  if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
-    throw new Error("Tidak ada akses ke staff role di bar lain");
+    throw new Error("No access to staff role in another bar");
   }
   const isSelf = existing.profileId === ctx.profileId;
   if (isSelf) {
     if (data.role !== existing.role) {
-      throw new Error("Tidak bisa ubah role diri sendiri");
+      throw new Error("You cannot change your own role");
     }
     if (!data.isActive) {
-      throw new Error("Tidak bisa menonaktifkan diri sendiri");
+      throw new Error("You cannot deactivate yourself");
     }
   }
 
@@ -432,7 +432,7 @@ export async function updateStaff(
     .select({ id: users.id })
     .from(users)
     .where(and(eq(users.email, email), sql`${users.id} <> ${existing.profileId}`));
-  if (dupe) throw new Error("Email sudah dipakai akun lain");
+  if (dupe) throw new Error("Email is already used by another account");
 
   // Hash password kalau di-reset.
   let passwordHash: string | null = null;
@@ -473,12 +473,12 @@ export async function toggleStaffActive(
     .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.id, staffRoleId));
-  if (!existing) throw new Error("Staff role tidak ditemukan");
+  if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
-    throw new Error("Tidak ada akses ke staff role di bar lain");
+    throw new Error("No access to staff role in another bar");
   }
   if (existing.profileId === ctx.profileId && !isActive) {
-    throw new Error("Tidak bisa deactivate diri sendiri");
+    throw new Error("You cannot deactivate yourself");
   }
 
   await db
@@ -497,11 +497,11 @@ const setupPasswordSchema = z
   .object({
     token: z.string().min(20),
     email: z.string().email(),
-    password: z.string().min(6, "Password minimal 6 karakter").max(100),
+    password: z.string().min(6, "Password must be at least 6 characters").max(100),
     confirmPassword: z.string(),
   })
   .refine((d) => d.password === d.confirmPassword, {
-    message: "Konfirmasi password tidak cocok",
+    message: "Password confirmation does not match",
     path: ["confirmPassword"],
   });
 
@@ -529,7 +529,7 @@ export async function setupPasswordWithToken(
     data = setupPasswordSchema.parse(input);
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return { ok: false, error: err.issues[0]?.message ?? "Input invalid" };
+      return { ok: false, error: err.issues[0]?.message ?? "Invalid input" };
     }
     throw err;
   }
@@ -554,7 +554,7 @@ export async function setupPasswordWithToken(
     return {
       ok: false,
       error:
-        "Link invite tidak valid atau sudah kedaluwarsa. Minta admin kirim ulang.",
+        "Invite link is invalid or has expired. Ask your admin to resend it.",
     };
   }
 

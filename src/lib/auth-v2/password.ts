@@ -19,10 +19,10 @@ const BCRYPT_COST = 10;
  */
 export async function hashPassword(plain: string): Promise<string> {
   if (plain.length < 6) {
-    throw new Error("Password minimal 6 karakter");
+    throw new Error("Password must be at least 6 characters");
   }
   if (plain.length > 100) {
-    throw new Error("Password maksimal 100 karakter");
+    throw new Error("Password must be at most 100 characters");
   }
   return bcrypt.hash(plain, BCRYPT_COST);
 }

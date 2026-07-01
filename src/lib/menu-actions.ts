@@ -34,9 +34,9 @@ async function requireAdminForBar(barId: string) {
         eq(staffRoles.isActive, true)
       )
     );
-  if (!staff) throw new Error("Akses admin diperlukan");
+  if (!staff) throw new Error("Admin access required");
   if (staff.role !== "admin" && staff.role !== "manager") {
-    throw new Error("Hanya admin/manager yang bisa kelola menu");
+    throw new Error("Only admin/manager can manage the menu");
   }
   return { profile, role: staff.role };
 }
@@ -205,7 +205,7 @@ export async function createCategory(input: z.infer<typeof categorySchema>) {
     return { id: created.id, slug };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    throw new Error(msg || "Gagal membuat kategori");
+    throw new Error(msg || "Failed to create category");
   }
 }
 
@@ -223,8 +223,8 @@ export async function updateCategory(
     .select({ barId: menuCategories.barId, name: menuCategories.name })
     .from(menuCategories)
     .where(eq(menuCategories.id, data.id));
-  if (!existing) throw new Error("Kategori tidak ditemukan");
-  if (existing.barId !== data.barId) throw new Error("Akses bar tidak valid");
+  if (!existing) throw new Error("Category not found");
+  if (existing.barId !== data.barId) throw new Error("Invalid bar access");
 
   // Kalau nama berubah, regenerate slug. Kalau tidak, slug tetap.
   const trimmedName = data.name.trim();
@@ -246,7 +246,7 @@ export async function updateCategory(
     return { slug };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    throw new Error(msg || "Gagal update kategori");
+    throw new Error(msg || "Failed to update category");
   }
 }
 
@@ -267,7 +267,7 @@ export async function deleteCategory(categoryId: string) {
     .limit(1);
   if (first) {
     throw new Error(
-      "Kategori masih punya item. Pindahkan atau hapus item dulu."
+      "Category still has items. Move or delete the items first."
     );
   }
 
@@ -309,7 +309,7 @@ async function resolveBarIdForCategory(categoryId: string): Promise<string> {
     .select({ barId: menuCategories.barId })
     .from(menuCategories)
     .where(eq(menuCategories.id, categoryId));
-  if (!row) throw new Error("Kategori tidak ditemukan");
+  if (!row) throw new Error("Category not found");
   return row.barId;
 }
 
@@ -345,14 +345,14 @@ export async function createMenuItem(
   const file = formData.get("file");
   if (file instanceof File && file.size > 0) {
     if (file.size > MAX_BYTES) {
-      throw new Error(`Gambar terlalu besar (max ${MAX_BYTES / 1024 / 1024}MB)`);
+      throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024}MB)`);
     }
     const heic = isHeicFile(file);
     const validMime = ACCEPTED_TYPES.includes(
       file.type as (typeof ACCEPTED_TYPES)[number]
     );
     if (!validMime && !heic) {
-      throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+      throw new Error("File format must be JPG, PNG, WebP, or HEIC");
     }
 
     const { default: sharp } = await import("sharp");
@@ -433,7 +433,7 @@ export async function createMenuItem(
  */
 export async function updateMenuItem(formData: FormData): Promise<void> {
   const id = formData.get("id");
-  if (typeof id !== "string") throw new Error("ID item tidak valid");
+  if (typeof id !== "string") throw new Error("Invalid item ID");
 
   const tagsRaw = formData.get("tags");
   const tags =
@@ -462,7 +462,7 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
     })
     .from(menuItems)
     .where(eq(menuItems.id, id));
-  if (!existing) throw new Error("Item tidak ditemukan");
+  if (!existing) throw new Error("Item not found");
 
   const barId = await resolveBarIdForCategory(meta.categoryId);
   await requireAdminForBar(barId);
@@ -471,7 +471,7 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
   if (existing.categoryId !== meta.categoryId) {
     const oldBarId = await resolveBarIdForCategory(existing.categoryId);
     if (oldBarId !== barId) {
-      throw new Error("Tidak boleh pindah item ke bar lain");
+      throw new Error("Cannot move item to another bar");
     }
   }
 
@@ -479,14 +479,14 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
   const file = formData.get("file");
   if (file instanceof File && file.size > 0) {
     if (file.size > MAX_BYTES) {
-      throw new Error(`Gambar terlalu besar (max ${MAX_BYTES / 1024 / 1024}MB)`);
+      throw new Error(`Image is too large (max ${MAX_BYTES / 1024 / 1024}MB)`);
     }
     const heic = isHeicFile(file);
     const validMime = ACCEPTED_TYPES.includes(
       file.type as (typeof ACCEPTED_TYPES)[number]
     );
     if (!validMime && !heic) {
-      throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+      throw new Error("File format must be JPG, PNG, WebP, or HEIC");
     }
 
     const { default: sharp } = await import("sharp");
@@ -574,7 +574,7 @@ export async function toggleItemAvailability(
     .select({ categoryId: menuItems.categoryId })
     .from(menuItems)
     .where(eq(menuItems.id, itemId));
-  if (!existing) throw new Error("Item tidak ditemukan");
+  if (!existing) throw new Error("Item not found");
 
   const barId = await resolveBarIdForCategory(existing.categoryId);
   await requireAdminForBar(barId);

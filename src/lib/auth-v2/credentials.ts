@@ -30,8 +30,8 @@ class AccountDisabledError extends CredentialsSignin {
 }
 
 const credentialsSchema = z.object({
-  email: z.string().email("Email tidak valid"),
-  password: z.string().min(1, "Password wajib"),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(1, "Password is required"),
 });
 
 export const credentialsProvider = CredentialsProvider({

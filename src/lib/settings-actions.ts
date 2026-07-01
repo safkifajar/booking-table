@@ -45,9 +45,9 @@ async function requireAdminForBar(barId: string) {
         eq(staffRoles.isActive, true)
       )
     );
-  if (!staff) throw new Error("Akses admin diperlukan");
+  if (!staff) throw new Error("Admin access required");
   if (staff.role !== "admin" && staff.role !== "manager") {
-    throw new Error("Hanya admin/manager yang bisa edit settings");
+    throw new Error("Only admin/manager can edit settings");
   }
   return { profile, role: staff.role };
 }
@@ -67,7 +67,7 @@ export async function getBarSettings(barId: string): Promise<BarSettings> {
     .from(bars)
     .where(eq(bars.id, barId));
 
-  if (!row) throw new Error("Bar tidak ditemukan");
+  if (!row) throw new Error("Bar not found");
 
   // Deep merge per-day: kalau DB cuma punya { open, close } tanpa `closed`,
   // tetap pakai default `closed=false`. Top-level spread bisa overwrite per
@@ -100,8 +100,8 @@ export async function getBarSettings(barId: string): Promise<BarSettings> {
 const TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 const dayHoursSchema = z.object({
-  open: z.string().regex(TIME_REGEX, "Format jam harus HH:MM (24-jam)"),
-  close: z.string().regex(TIME_REGEX, "Format jam harus HH:MM (24-jam)"),
+  open: z.string().regex(TIME_REGEX, "Time must be HH:MM (24-hour)"),
+  close: z.string().regex(TIME_REGEX, "Time must be HH:MM (24-hour)"),
   closed: z.boolean(),
 });
 

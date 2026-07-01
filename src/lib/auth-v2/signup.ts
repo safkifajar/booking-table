@@ -23,9 +23,9 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { hashPassword } from "./password";
 
 const signupSchema = z.object({
-  email: z.string().email("Email tidak valid").max(255),
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
-  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  email: z.string().email("Invalid email").max(255),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100),
+  displayName: z.string().min(2, "Name must be at least 2 characters").max(40),
   phone: z.string().max(20).optional().or(z.literal("")),
 });
 
@@ -48,7 +48,7 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
   const parsed = signupSchema.safeParse(input);
   if (!parsed.success) {
     const first = parsed.error.issues[0];
-    throw new SignupError("validation", first?.message ?? "Input tidak valid");
+    throw new SignupError("validation", first?.message ?? "Invalid input");
   }
   const data = parsed.data;
   const email = data.email.toLowerCase().trim();
@@ -59,7 +59,7 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
     where: eq(users.email, email),
   });
   if (existing) {
-    throw new SignupError("email_taken", "Email sudah terdaftar");
+    throw new SignupError("email_taken", "Email already registered");
   }
 
   // Hash password
@@ -93,8 +93,8 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
   } catch (err) {
     // Race condition: kalau ada concurrent signup dengan email sama
     if (err instanceof Error && err.message.includes("unique")) {
-      throw new SignupError("email_taken", "Email sudah terdaftar");
+      throw new SignupError("email_taken", "Email already registered");
     }
-    throw new SignupError("db", "Gagal membuat akun. Coba lagi.");
+    throw new SignupError("db", "Failed to create account. Please try again.");
   }
 }

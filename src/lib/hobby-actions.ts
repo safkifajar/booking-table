@@ -71,8 +71,8 @@ export async function getHobbiesList(): Promise<HobbyItem[]> {
 // ============================================================
 
 const addHobbySchema = z.object({
-  name: z.string().min(1, "Nama wajib").max(40),
-  category: z.string().min(1, "Kategori wajib").max(60),
+  name: z.string().min(1, "Name is required").max(40),
+  category: z.string().min(1, "Category is required").max(60),
 });
 
 export async function addHobby(input: z.infer<typeof addHobbySchema>) {
@@ -85,7 +85,7 @@ export async function addHobby(input: z.infer<typeof addHobbySchema>) {
       .values({ name, category: data.category.trim(), sortOrder: 999 });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
-      throw new Error("Hobi ini sudah ada");
+      throw new Error("This hobby already exists");
     }
     throw err;
   }
@@ -111,7 +111,7 @@ export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
       .where(eq(hobbies.id, data.id));
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
-      throw new Error("Nama hobi sudah dipakai");
+      throw new Error("Hobby name is already used");
     }
     throw err;
   }
@@ -128,7 +128,7 @@ export async function deleteHobby(id: string) {
 // CATEGORY CRUD
 // ============================================================
 
-const addCatSchema = z.object({ name: z.string().min(1, "Nama wajib").max(60) });
+const addCatSchema = z.object({ name: z.string().min(1, "Name is required").max(60) });
 
 export async function addHobbyCategory(input: z.infer<typeof addCatSchema>) {
   await requireAdmin();
@@ -139,7 +139,7 @@ export async function addHobbyCategory(input: z.infer<typeof addCatSchema>) {
       .values({ name: data.name.trim(), sortOrder: 999 });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
-      throw new Error("Kategori ini sudah ada");
+      throw new Error("This category already exists");
     }
     throw err;
   }
@@ -161,7 +161,7 @@ export async function updateHobbyCategory(
     .select({ name: hobbyCategories.name })
     .from(hobbyCategories)
     .where(eq(hobbyCategories.id, data.id));
-  if (!old) throw new Error("Kategori tidak ditemukan");
+  if (!old) throw new Error("Category not found");
   const newName = data.name.trim();
 
   await db.transaction(async (tx) => {
@@ -192,7 +192,7 @@ export async function deleteHobbyCategory(id: string) {
     .where(eq(hobbies.category, cat.name));
   if (c > 0) {
     throw new Error(
-      `Masih ada ${c} hobi di kategori ini. Pindah/hapus dulu hobinya.`
+      `There are still ${c} hobbies in this category. Move or delete them first.`
     );
   }
   await db.delete(hobbyCategories).where(eq(hobbyCategories.id, id));

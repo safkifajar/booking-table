@@ -241,7 +241,7 @@ export function OpenTableForm({
       toast.error(message);
       // Slot keburu dibooking orang lain (race) → balik ke denah biar user
       // bisa pilih meja/jam lain dgn data terbaru.
-      if (message.includes("dibooking")) {
+      if (message.toLowerCase().includes("booked")) {
         router.push(`/bar/${barSlug}`);
         return;
       }

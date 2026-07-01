@@ -68,7 +68,7 @@ export async function signUpAction(formData: {
       return { ok: false, error: err.message };
     }
     console.error("[signUpAction] unexpected:", err);
-    return { ok: false, error: "Gagal membuat akun. Coba lagi." };
+    return { ok: false, error: "Failed to create account. Please try again." };
   }
 }
 
@@ -101,16 +101,16 @@ export async function signInAction(formData: {
       return {
         ok: false,
         error:
-          "Status akun Anda tidak aktif. Silakan hubungi admin untuk mengaktifkan akun Anda.",
+          "Your account is inactive. Please contact an admin to reactivate it.",
       };
     }
 
     const message = err instanceof Error ? err.message : "";
     if (message.includes("CredentialsSignin") || message.includes("credentials")) {
-      return { ok: false, error: "Email atau password salah" };
+      return { ok: false, error: "Incorrect email or password" };
     }
     console.error("[signInAction] unexpected:", err);
-    return { ok: false, error: "Gagal sign in. Coba lagi." };
+    return { ok: false, error: "Failed to sign in. Please try again." };
   }
 }
 
@@ -131,7 +131,7 @@ export async function magicLinkAction(formData: {
   } catch (err) {
     if (isRedirectError(err)) throw err;
     console.error("[magicLinkAction] unexpected:", err);
-    return { ok: false, error: "Gagal kirim magic link. Coba lagi." };
+    return { ok: false, error: "Failed to send magic link. Please try again." };
   }
 }
 

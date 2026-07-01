@@ -71,8 +71,8 @@ function resolveUploadsDir(): string {
   if (fromEnv) return fromEnv;
   if (driver === "local" && process.env.NODE_ENV === "production") {
     throw new Error(
-      "UPLOADS_DIR wajib di-set di production (path absolut persistent, mis. " +
-        "/var/lib/booking-table/uploads). Tanpa ini, file upload hilang tiap deploy."
+      "UPLOADS_DIR must be set in production (an absolute persistent path, e.g. " +
+        "/var/lib/booking-table/uploads). Without it, uploaded files are lost on every deploy."
     );
   }
   return process.cwd ? `${process.cwd()}/public/uploads` : "./public/uploads";

@@ -694,9 +694,9 @@ export async function cashierCreatePayment(
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
-  if (!sessionRow) throw new Error("Session tidak ditemukan");
+  if (!sessionRow) throw new Error("Session not found");
   if (sessionRow.bar_id !== ctx.barId) {
-    throw new Error("Akses bar tidak valid");
+    throw new Error("Invalid bar access");
   }
 
   // 2. Get order sesi. Sesi closed yg masih punya sisa tagihan tetap boleh
@@ -707,7 +707,7 @@ export async function cashierCreatePayment(
     .where(eq(orders.sessionId, data.sessionId))
     .orderBy(desc(orders.createdAt))
     .limit(1);
-  if (!order) throw new Error("Order tidak ditemukan");
+  if (!order) throw new Error("Order not found");
 
   // 3. Validate payer is joined member
   const [member] = await db
@@ -724,16 +724,16 @@ export async function cashierCreatePayment(
         eq(sessionMembers.status, "joined")
       )
     );
-  if (!member) throw new Error("Member tidak valid");
+  if (!member) throw new Error("Invalid member");
 
   // 4. Validate cash kalau method cash
   let change: number | null = null;
   if (data.method === "cash") {
     if (!data.cashReceived) {
-      throw new Error("Nominal terima wajib diisi untuk pembayaran tunai");
+      throw new Error("Received amount is required for cash payment");
     }
     if (data.cashReceived < data.amount) {
-      throw new Error("Nominal terima kurang dari total");
+      throw new Error("Received amount is less than the total");
     }
     change = data.cashReceived - data.amount;
   }
@@ -760,7 +760,7 @@ export async function cashierCreatePayment(
     amount: data.amount,
     method: data.method,
     payerName: member.displayName,
-    description: `Bayar meja - ${data.sessionId.slice(0, 8)}`,
+    description: `Table payment - ${data.sessionId.slice(0, 8)}`,
   });
 
   // 7. Update payment dengan hasil gateway (external ref, status awal)
@@ -811,8 +811,8 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(payments.id, paymentId));
 
-  if (!payment) throw new Error("Payment tidak ditemukan");
-  if (payment.barId !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!payment) throw new Error("Payment not found");
+  if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
 
   await db
     .update(payments)
@@ -848,8 +848,8 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(payments.id, paymentId));
 
-  if (!payment) throw new Error("Payment tidak ditemukan");
-  if (payment.barId !== ctx.barId) throw new Error("Akses bar tidak valid");
+  if (!payment) throw new Error("Payment not found");
+  if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
 
   await db
     .update(payments)
@@ -884,9 +884,9 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
-  if (!row) throw new Error("Session tidak ditemukan");
-  if (row.bar_id !== ctx.barId) throw new Error("Akses bar tidak valid");
-  if (row.status === "closed") throw new Error("Meja sudah ditutup");
+  if (!row) throw new Error("Session not found");
+  if (row.bar_id !== ctx.barId) throw new Error("Invalid bar access");
+  if (row.status === "closed") throw new Error("Table is already closed");
 
   const now = new Date();
   await Promise.all([

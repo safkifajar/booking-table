@@ -69,9 +69,9 @@ async function requireAdminForBar(barId: string) {
         eq(staffRoles.isActive, true)
       )
     );
-  if (!staff) throw new Error("Akses admin diperlukan");
+  if (!staff) throw new Error("Admin access required");
   if (staff.role !== "admin" && staff.role !== "manager") {
-    throw new Error("Hanya admin/manager yang bisa kelola banner");
+    throw new Error("Only admin/manager can manage banners");
   }
   return { profile, role: staff.role };
 }
@@ -142,12 +142,12 @@ const bannerMetaSchema = z.object({
   isActive: z.boolean().default(true),
   startsAt: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
   endsAt: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
 });
@@ -171,10 +171,10 @@ export async function createBanner(
   await requireAdminForBar(meta.barId);
 
   const file = formData.get("file");
-  if (!(file instanceof File)) throw new Error("File tidak valid");
-  if (file.size === 0) throw new Error("File kosong");
+  if (!(file instanceof File)) throw new Error("Invalid file");
+  if (file.size === 0) throw new Error("File is empty");
   if (file.size > MAX_BYTES) {
-    throw new Error(`File terlalu besar (max ${MAX_BYTES / 1024 / 1024}MB)`);
+    throw new Error(`File is too large (max ${MAX_BYTES / 1024 / 1024}MB)`);
   }
 
   const heic = isHeicFile(file);
@@ -182,7 +182,7 @@ export async function createBanner(
     file.type as (typeof ACCEPTED_TYPES)[number]
   );
   if (!validMime && !heic) {
-    throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+    throw new Error("File must be JPG, PNG, WebP, or HEIC");
   }
 
   const { default: sharp } = await import("sharp");
@@ -251,12 +251,12 @@ const updateMetaSchema = z.object({
   isActive: z.boolean(),
   startsAt: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
   endsAt: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
 });
@@ -269,7 +269,7 @@ export async function updateBanner(input: z.infer<typeof updateMetaSchema>) {
     .select({ barId: barBanners.barId })
     .from(barBanners)
     .where(eq(barBanners.id, data.id));
-  if (!existing) throw new Error("Banner tidak ditemukan");
+  if (!existing) throw new Error("Banner not found");
 
   await requireAdminForBar(existing.barId);
 
@@ -295,22 +295,22 @@ export async function updateBanner(input: z.infer<typeof updateMetaSchema>) {
  */
 export async function replaceBannerImage(formData: FormData): Promise<void> {
   const id = formData.get("id");
-  if (typeof id !== "string") throw new Error("ID banner tidak valid");
+  if (typeof id !== "string") throw new Error("Invalid banner ID");
 
   const [existing] = await db
     .select({ barId: barBanners.barId, imageUrl: barBanners.imageUrl })
     .from(barBanners)
     .where(eq(barBanners.id, id));
-  if (!existing) throw new Error("Banner tidak ditemukan");
+  if (!existing) throw new Error("Banner not found");
 
   await requireAdminForBar(existing.barId);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("File tidak valid");
+    throw new Error("Invalid file");
   }
   if (file.size > MAX_BYTES) {
-    throw new Error(`File terlalu besar (max ${MAX_BYTES / 1024 / 1024}MB)`);
+    throw new Error(`File is too large (max ${MAX_BYTES / 1024 / 1024}MB)`);
   }
 
   const heic = isHeicFile(file);
@@ -318,7 +318,7 @@ export async function replaceBannerImage(formData: FormData): Promise<void> {
     file.type as (typeof ACCEPTED_TYPES)[number]
   );
   if (!validMime && !heic) {
-    throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+    throw new Error("File must be JPG, PNG, WebP, or HEIC");
   }
 
   const { default: sharp } = await import("sharp");

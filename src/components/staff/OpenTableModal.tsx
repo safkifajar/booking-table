@@ -118,7 +118,7 @@ export function OpenTableModal({
       setSubmitting(false);
       // Slot keburu dibooking (race) → tutup modal, kembali ke daftar meja
       // terkini supaya staff bisa pilih meja/jam lain.
-      if (message.includes("dibooking")) {
+      if (message.toLowerCase().includes("booked")) {
         onClose();
       }
     }

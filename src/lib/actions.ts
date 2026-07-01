@@ -206,8 +206,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .innerJoin(bars, eq(bars.id, floorAreas.barId))
     .where(eq(tables.id, data.tableId));
-  if (!tableRow) throw new Error("Meja tidak ditemukan");
-  if (!tableRow.is_active) throw new Error("Meja sedang tidak aktif");
+  if (!tableRow) throw new Error("Table not found");
+  if (!tableRow.is_active) throw new Error("Table is inactive");
 
   const minSpend = tableRow.min_spend ?? 0;
 
@@ -236,10 +236,10 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     };
 
     if (!resConfig.enabled) {
-      throw new Error("Reservasi tidak aktif untuk bar ini");
+      throw new Error("Reservations are not enabled for this bar");
     }
     if (!reservationEndAt) {
-      throw new Error("Waktu selesai reservasi wajib dipilih");
+      throw new Error("Reservation end time is required");
     }
 
     // Ambil reservasi 'reserved' existing di meja ini untuk cek overlap.
@@ -276,7 +276,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       existing
     );
     if (!validation.ok) {
-      throw new Error(validation.reason ?? "Waktu reservasi tidak valid");
+      throw new Error(validation.reason ?? "Invalid reservation time");
     }
   }
 
@@ -313,10 +313,10 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     for (const item of initialOrder) {
       const menu = menuMap.get(item.menuItemId);
       if (!menu) {
-        throw new Error("Menu item tidak ditemukan");
+        throw new Error("Menu item not found");
       }
       if (!menu.is_available) {
-        throw new Error(`Menu "${menu.name}" sedang tidak tersedia`);
+        throw new Error(`Menu "${menu.name}" is currently unavailable`);
       }
       const subtotal = menu.price * item.quantity;
       totalOrder += subtotal;
@@ -332,7 +332,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // 6. Min spend check
   if (minSpend > 0 && totalOrder < minSpend) {
     throw new Error(
-      `Meja ini ada minimum spend Rp ${minSpend.toLocaleString("id-ID")}. Order kamu baru Rp ${totalOrder.toLocaleString("id-ID")}.`
+      `This table has a minimum spend of Rp ${minSpend.toLocaleString("id-ID")}. Your order is only Rp ${totalOrder.toLocaleString("id-ID")}.`
     );
   }
 
@@ -345,10 +345,10 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
   if (dpRequired) {
     if (resolvedItems.length === 0) {
-      throw new Error("Reservasi wajib dengan minimal 1 item order");
+      throw new Error("A reservation requires at least 1 order item");
     }
     if (!data.dpMethod) {
-      throw new Error("Metode pembayaran DP wajib dipilih");
+      throw new Error("Down payment method is required");
     }
   }
 
@@ -389,7 +389,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         const cap = data.maxGuests ?? tableRow.capacity;
         if (1 + invitees.length > cap) {
           throw new Error(
-            `Melebihi kapasitas meja (${cap}). Kurangi teman yang diajak.`
+            `Exceeds table capacity (${cap}). Invite fewer friends.`
           );
         }
       }
@@ -500,16 +500,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     dpPaymentId = result.dpPaymentId;
   } catch (err) {
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
-      throw new Error("Meja ini sudah ada session/reservasi aktif");
+      throw new Error("This table already has an active session/reservation");
     }
     // Race condition: orang lain membooking slot waktu yg sama lebih dulu.
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
-        "Maaf, slot waktu meja ini baru saja dibooking orang lain. Pilih waktu atau meja lain."
+        "Sorry, this table's time slot was just booked by someone else. Pick another time or table."
       );
     }
     const message = err instanceof Error ? err.message : "";
-    throw new Error(message || "Gagal membuka meja");
+    throw new Error(message || "Failed to open table");
   }
 
   // 9. Call gateway untuk DP (kalau ada). Best-effort: kalau gagal, session
@@ -612,7 +612,7 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
   if (!row) throw new Error("Session not found");
-  if (row.status !== "open") throw new Error("Session sudah tidak terbuka");
+  if (row.status !== "open") throw new Error("Session is no longer open");
 
   // 2. Capacity check
   const [{ count }] = await db
@@ -622,7 +622,7 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
   if (Number(count) >= row.capacity) {
-    throw new Error("Meja sudah penuh");
+    throw new Error("Table is full");
   }
 
   // 3. Upsert member (idempotent via unique constraint session_id+profile_id)
@@ -665,10 +665,10 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
-  if (!row) throw new Error("Session tidak ditemukan");
-  if (row.status !== "open") throw new Error("Session sudah tidak terbuka");
+  if (!row) throw new Error("Session not found");
+  if (row.status !== "open") throw new Error("Session is no longer open");
   if (row.host_id === profile.id) {
-    throw new Error("Kamu adalah host, tidak perlu request");
+    throw new Error("You're the host — no need to request");
   }
 
   // 2. Capacity check (joined only)
@@ -679,7 +679,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
   if (Number(count) >= row.capacity) {
-    throw new Error("Meja sudah penuh");
+    throw new Error("Table is full");
   }
 
   // 3. Existing membership?
@@ -697,7 +697,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
     if (existing.status === "joined") return { status: "joined" as const };
     if (existing.status === "pending") return { status: "pending" as const };
     if (existing.status === "kicked") {
-      throw new Error("Kamu pernah dikeluarkan dari meja ini oleh host");
+      throw new Error("You were removed from this table by the host");
     }
     // 'left' → revert ke pending
     await db
@@ -743,9 +743,9 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
-  if (!row) throw new Error("Session tidak ditemukan");
+  if (!row) throw new Error("Session not found");
   if (row.host_id !== profile.id) {
-    throw new Error("Hanya host yang bisa approve");
+    throw new Error("Only the host can approve");
   }
 
   const [{ count }] = await db
@@ -755,7 +755,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
   if (Number(count) >= row.capacity) {
-    throw new Error("Meja sudah penuh, request tidak bisa di-approve");
+    throw new Error("Table is full — request can't be approved");
   }
 
   // Ambil profileId requester (untuk notif) sebelum update.
@@ -808,9 +808,9 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
-  if (!session) throw new Error("Session tidak ditemukan");
+  if (!session) throw new Error("Session not found");
   if (session.host_id !== profile.id) {
-    throw new Error("Hanya host yang bisa reject");
+    throw new Error("Only the host can reject");
   }
 
   // Profil requester (untuk notif) sebelum delete.
@@ -871,7 +871,7 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
       )
     );
   if (!member || member.invitedBy == null) {
-    throw new Error("Undangan tidak ditemukan atau sudah tidak berlaku");
+    throw new Error("Invite not found or no longer valid");
   }
 
   // Kapasitas
@@ -880,7 +880,7 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
-  if (!row) throw new Error("Session tidak ditemukan");
+  if (!row) throw new Error("Session not found");
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(sessionMembers)
@@ -888,7 +888,7 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
   if (Number(count) >= row.capacity) {
-    throw new Error("Meja sudah penuh");
+    throw new Error("Table is full");
   }
 
   await db
@@ -999,19 +999,19 @@ export async function inviteUsersToSession(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .innerJoin(bars, eq(bars.id, floorAreas.barId))
     .where(eq(tableSessions.id, sessionId));
-  if (!row) throw new Error("Session tidak ditemukan");
+  if (!row) throw new Error("Session not found");
   if (row.host_id !== profile.id) {
-    throw new Error("Hanya host yang bisa mengundang");
+    throw new Error("Only the host can invite");
   }
   if (row.status !== "open") {
-    throw new Error("Meja tidak sedang aktif");
+    throw new Error("Table is not active");
   }
 
   // 2. Resolusi user: dedup, buang host, non-staff, non-guest. + email.
   const uniqueIds = Array.from(new Set(userIds)).filter(
     (id) => id !== profile.id
   );
-  if (uniqueIds.length === 0) throw new Error("Tidak ada user yang dipilih");
+  if (uniqueIds.length === 0) throw new Error("No users selected");
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
   const candidates = await db
     .select({
@@ -1028,7 +1028,7 @@ export async function inviteUsersToSession(
         sql`${profiles.id} NOT IN (${staffIds})`
       )
     );
-  if (candidates.length === 0) throw new Error("User tidak valid");
+  if (candidates.length === 0) throw new Error("Invalid user");
 
   // 3. Buang yang sudah jadi member (joined / undangan pending), lalu cek
   //    kapasitas. Slot terpakai = joined + undangan yg belum dijawab — undangan
@@ -1057,13 +1057,13 @@ export async function inviteUsersToSession(
   );
   const targets = candidates.filter((c) => !occupied.has(c.id));
   if (targets.length === 0) {
-    throw new Error("Semua user sudah ada di meja / sudah diundang");
+    throw new Error("All users are already at the table / invited");
   }
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
   const cap = row.max_guests ?? row.capacity;
   if (joinedCount + pendingInviteCount + targets.length > cap) {
     throw new Error(
-      `Melebihi kapasitas meja (${cap}). Kursi & undangan sudah terisi.`
+      `Exceeds table capacity (${cap}). Seats & invites are already filled.`
     );
   }
 
@@ -1162,12 +1162,12 @@ export async function cancelInvite(memberId: string, sessionId: string) {
         eq(sessionMembers.sessionId, sessionId)
       )
     );
-  if (!info) throw new Error("Undangan tidak ditemukan");
+  if (!info) throw new Error("Invite not found");
   if (info.hostId !== profile.id) {
-    throw new Error("Hanya host yang bisa membatalkan undangan");
+    throw new Error("Only the host can cancel an invite");
   }
   if (info.memberStatus !== "pending" || info.invitedBy == null) {
-    throw new Error("Hanya undangan yang belum dijawab yang bisa dibatalkan");
+    throw new Error("Only unanswered invites can be cancelled");
   }
 
   await db
@@ -1206,12 +1206,12 @@ export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
     })
     .from(sessionInvites)
     .where(eq(sessionInvites.code, code));
-  if (!invite) throw new Error("Kode undangan tidak valid");
+  if (!invite) throw new Error("Invalid invite code");
   if (invite.expires_at < new Date()) {
-    throw new Error("Kode undangan sudah kedaluwarsa");
+    throw new Error("Invite code has expired");
   }
   if (invite.max_uses !== null && invite.use_count >= invite.max_uses) {
-    throw new Error("Kode undangan sudah mencapai batas penggunaan");
+    throw new Error("Invite code has reached its usage limit");
   }
 
   await joinSession({ sessionId: invite.session_id });
@@ -1273,7 +1273,7 @@ export async function closeSession(sessionId: string) {
         and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
       );
     if (!staff) {
-      throw new Error("Hanya host atau staff yang bisa menutup meja");
+      throw new Error("Only the host or staff can close the table");
     }
     staffRoleName = staff.role;
   }
@@ -1307,7 +1307,7 @@ export async function closeSession(sessionId: string) {
 
     if (outstanding > 0) {
       throw new Error(
-        `Belum lunas — sisa Rp ${outstanding.toLocaleString("id-ID")}. Arahkan tamu ke kasir.`
+        `Not fully paid — Rp ${outstanding.toLocaleString("id-ID")} remaining. Direct the guest to the cashier.`
       );
     }
   }
@@ -1374,7 +1374,7 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
         and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
       );
     if (!staff) {
-      throw new Error("Hanya staff yang bisa input atas nama tamu");
+      throw new Error("Only staff can input on behalf of a guest");
     }
 
     // Verify target member ada di session ini
@@ -1389,7 +1389,7 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
         )
       );
     if (!targetMember) {
-      throw new Error("Member tujuan tidak ditemukan di meja ini");
+      throw new Error("Target member not found at this table");
     }
 
     memberId = targetMember.id;
@@ -1406,7 +1406,7 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
           eq(sessionMembers.status, "joined")
         )
       );
-    if (!member) throw new Error("Kamu bukan anggota meja ini");
+    if (!member) throw new Error("You're not a member of this table");
     memberId = member.id;
   }
 
@@ -1415,15 +1415,15 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
     .select({ id: orders.id })
     .from(orders)
     .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
-  if (!order) throw new Error("Order belum dibuka untuk session ini");
+  if (!order) throw new Error("No open order for this session");
 
   // 3. Menu item snapshot
   const [item] = await db
     .select({ price: menuItems.price, is_available: menuItems.isAvailable })
     .from(menuItems)
     .where(eq(menuItems.id, data.menuItemId));
-  if (!item) throw new Error("Menu item tidak ditemukan");
-  if (!item.is_available) throw new Error("Menu item sedang tidak tersedia");
+  if (!item) throw new Error("Menu item not found");
+  if (!item.is_available) throw new Error("Menu item is currently unavailable");
 
   // 4. Insert
   await db.insert(orderItems).values({
@@ -1456,7 +1456,7 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
       eq(sessionMembers.id, orderItems.addedByMemberId)
     )
     .where(eq(orderItems.id, itemId));
-  if (!item) throw new Error("Item tidak ditemukan");
+  if (!item) throw new Error("Item not found");
 
   const [session] = await db
     .select({ host_id: tableSessions.hostId, bar_id: floorAreas.barId })
@@ -1484,7 +1484,7 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     allowed = !!staff;
   }
   if (!allowed) {
-    throw new Error("Hanya yang pesan, host, atau staff yang bisa hapus item");
+    throw new Error("Only the person who ordered, the host, or staff can remove the item");
   }
 
   await db
@@ -1574,7 +1574,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       .innerJoin(tables, eq(tables.id, tableSessions.tableId))
       .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
       .where(eq(tableSessions.id, data.sessionId));
-    if (!sess) throw new Error("Meja tidak ditemukan");
+    if (!sess) throw new Error("Table not found");
 
     const [staff] = await db
       .select({ id: staffRoles.id })
@@ -1586,7 +1586,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
           eq(staffRoles.isActive, true)
         )
       );
-    if (!staff) throw new Error("Bukan member meja ini");
+    if (!staff) throw new Error("Not a member of this table");
 
     // Atribusi ke host member meja.
     const [hostMember] = await db
@@ -1599,7 +1599,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
           eq(sessionMembers.profileId, sess.host_id)
         )
       );
-    if (!hostMember) throw new Error("Host meja tidak ditemukan");
+    if (!hostMember) throw new Error("Table host not found");
     member = hostMember;
   }
 
@@ -1615,7 +1615,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   if (!order) {
     const outstanding =
       (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
-    if (outstanding <= 0) throw new Error("Tagihan sudah lunas");
+    if (outstanding <= 0) throw new Error("The bill is already paid");
     const [anyOrder] = await db
       .select({ id: orders.id })
       .from(orders)
@@ -1624,7 +1624,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       .limit(1);
     order = anyOrder;
   }
-  if (!order) throw new Error("Order tidak ditemukan");
+  if (!order) throw new Error("Order not found");
 
   // 3. Insert payment dengan status='pending'
   const [newPayment] = await db
@@ -1700,7 +1700,7 @@ async function requireStaffAction() {
       and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
     );
   if (!staff) {
-    throw new Error("Akses staff diperlukan");
+    throw new Error("Staff access required");
   }
   return { profile, staff };
 }
@@ -1747,7 +1747,7 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
   const data = submitRatingSchema.parse(input);
 
   if (data.rateeId === profile.id) {
-    throw new Error("Tidak bisa rate diri sendiri");
+    throw new Error("You can't rate yourself");
   }
 
   await db
@@ -1772,19 +1772,19 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
 // ============================================================
 
 const updateProfileSchema = z.object({
-  displayName: z.string().min(2, "Nama minimal 2 karakter").max(40),
+  displayName: z.string().min(2, "Name must be at least 2 characters").max(40),
   phone: z
     .string()
     .max(20)
-    .regex(/^[\d\s+\-()]*$/, "Format nomor WA tidak valid")
+    .regex(/^[\d\s+\-()]*$/, "Invalid WhatsApp number format")
     .optional()
     .or(z.literal("")),
   birthDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
-  bio: z.string().max(280, "Bio maksimal 280 karakter").optional().or(z.literal("")),
+  bio: z.string().max(280, "Max 280 characters").optional().or(z.literal("")),
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
   interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
   socialLink: z.string().max(200).optional().or(z.literal("")),
@@ -1907,11 +1907,11 @@ export async function completeOnboarding(
 const changePasswordSchema = z
   .object({
     currentPassword: z.string().optional(), // optional untuk magic-link users
-    newPassword: z.string().min(6, "Password minimal 6 karakter").max(100),
+    newPassword: z.string().min(6, "Password must be at least 6 characters").max(100),
     confirmPassword: z.string(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
-    message: "Konfirmasi password tidak cocok",
+    message: "Password confirmation does not match",
     path: ["confirmPassword"],
   });
 
@@ -1937,15 +1937,15 @@ export async function changePassword(input: z.infer<typeof changePasswordSchema>
     .select({ passwordHash: users.passwordHash })
     .from(users)
     .where(eq(users.id, profile.id));
-  if (!user) throw new Error("User tidak ditemukan");
+  if (!user) throw new Error("User not found");
 
   // Kalau sudah punya password → wajib verify current
   if (user.passwordHash) {
     if (!data.currentPassword) {
-      throw new Error("Password sekarang wajib diisi");
+      throw new Error("Current password is required");
     }
     const ok = await verifyPassword(data.currentPassword, user.passwordHash);
-    if (!ok) throw new Error("Password sekarang salah");
+    if (!ok) throw new Error("Current password is incorrect");
   }
 
   // Hash + save
@@ -2015,14 +2015,14 @@ export async function uploadAvatar(formData: FormData): Promise<{ avatarUrl: str
   const file = formData.get("file");
 
   if (!(file instanceof File)) {
-    throw new Error("File tidak valid");
+    throw new Error("Invalid file");
   }
   if (file.size === 0) {
-    throw new Error("File kosong");
+    throw new Error("File is empty");
   }
   if (file.size > MAX_AVATAR_BYTES) {
     throw new Error(
-      `File terlalu besar (max ${Math.floor(MAX_AVATAR_BYTES / 1024 / 1024)}MB)`
+      `File is too large (max ${Math.floor(MAX_AVATAR_BYTES / 1024 / 1024)}MB)`
     );
   }
   const heic = isHeicFile(file);
@@ -2030,7 +2030,7 @@ export async function uploadAvatar(formData: FormData): Promise<{ avatarUrl: str
     file.type as (typeof ACCEPTED_AVATAR_TYPES)[number]
   );
   if (!validMime && !heic) {
-    throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+    throw new Error("File must be JPG, PNG, WebP, or HEIC");
   }
 
   const { default: sharp } = await import("sharp");

@@ -37,7 +37,7 @@ function isHeicFile(file: File): boolean {
   return name.endsWith(".heic") || name.endsWith(".heif");
 }
 
-const captionSchema = z.string().max(280, "Caption maks 280 karakter").optional();
+const captionSchema = z.string().max(280, "Max 280 characters").optional();
 const barIdSchema = z.string().uuid();
 
 // ============================================================
@@ -64,11 +64,11 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
   const captionInput = formData.get("caption");
   const barIdInput = formData.get("barId");
 
-  if (!(file instanceof File)) throw new Error("File tidak valid");
-  if (file.size === 0) throw new Error("File kosong");
+  if (!(file instanceof File)) throw new Error("Invalid file");
+  if (file.size === 0) throw new Error("File is empty");
   if (file.size > MAX_STORY_BYTES) {
     throw new Error(
-      `File terlalu besar (max ${Math.floor(MAX_STORY_BYTES / 1024 / 1024)}MB)`
+      `File is too large (max ${Math.floor(MAX_STORY_BYTES / 1024 / 1024)}MB)`
     );
   }
 
@@ -77,7 +77,7 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
     file.type as (typeof ACCEPTED_STORY_TYPES)[number]
   );
   if (!validMime && !heic) {
-    throw new Error("Format file harus JPG, PNG, WebP, atau HEIC");
+    throw new Error("File must be JPG, PNG, WebP, or HEIC");
   }
 
   const caption = captionSchema.parse(
@@ -183,9 +183,9 @@ export async function deleteStory(storyId: string): Promise<void> {
     .from(stories)
     .where(eq(stories.id, storyId));
 
-  if (!story) throw new Error("Story tidak ditemukan");
+  if (!story) throw new Error("Story not found");
   if (story.userId !== profile.id) {
-    throw new Error("Hanya pemilik yang bisa hapus");
+    throw new Error("Only the owner can delete this");
   }
 
   // Hapus file dulu (best-effort), lalu row
@@ -473,9 +473,9 @@ export async function getStoryViewers(storyId: string): Promise<StoryViewer[]> {
     .select({ userId: stories.userId })
     .from(stories)
     .where(eq(stories.id, storyId));
-  if (!story) throw new Error("Story tidak ditemukan");
+  if (!story) throw new Error("Story not found");
   if (story.userId !== profile.id) {
-    throw new Error("Hanya owner yang bisa lihat viewers");
+    throw new Error("Only the owner can view viewers");
   }
 
   const rows = await db

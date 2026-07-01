@@ -64,20 +64,20 @@ export async function adminSignInAction(formData: {
     if (!user) {
       // Constant-time dummy hash verify untuk hindari user enumeration timing
       await verifyPassword(password, "$2b$10$dummy.dummy.dummy.dummy.dummy.dummy.dummy.dummy.dummy.D");
-      return { ok: false, error: "Email atau password salah" };
+      return { ok: false, error: "Incorrect email or password" };
     }
 
     // Step 2: Verify password
     if (!user.passwordHash) {
       return {
         ok: false,
-        error: "Akun ini belum set password. Cek email invite kamu.",
+        error: "This account hasn't set a password. Check your invite email.",
       };
     }
 
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) {
-      return { ok: false, error: "Email atau password salah" };
+      return { ok: false, error: "Incorrect email or password" };
     }
 
     // Step 3: Cek staff role
@@ -91,7 +91,7 @@ export async function adminSignInAction(formData: {
     if (!staff) {
       return {
         ok: false,
-        error: "Akun ini tidak punya akses staff",
+        error: "This account doesn't have staff access",
       };
     }
 
@@ -114,7 +114,7 @@ export async function adminSignInAction(formData: {
   } catch (err) {
     if (isRedirectError(err)) throw err;
     console.error("[adminSignInAction] unexpected:", err);
-    return { ok: false, error: "Login gagal — coba lagi" };
+    return { ok: false, error: "Login failed — please try again" };
   }
 }
 

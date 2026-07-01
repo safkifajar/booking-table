@@ -288,18 +288,18 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
 
-  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id) {
-    throw new Error("Hanya host meja yang bisa pindah meja");
+    throw new Error("Only the host can move the table");
   }
   if (session.tableId === data.targetTableId) {
-    throw new Error("Meja tujuan sama dengan meja sekarang");
+    throw new Error("Destination table is the same as the current one");
   }
 
   // 2. Fase 1: hanya status 'reserved' yg boleh pindah mandiri.
   if (session.status !== "reserved") {
     throw new Error(
-      "Meja sudah aktif. Pindah meja saat aktif butuh persetujuan staff (segera hadir)."
+      "Table is already active. Moving while active needs staff approval (coming soon)."
     );
   }
 
@@ -316,10 +316,10 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
 
-  if (!target) throw new Error("Meja tujuan tidak ditemukan");
-  if (!target.isActive) throw new Error("Meja tujuan tidak aktif");
+  if (!target) throw new Error("Invalid destination table");
+  if (!target.isActive) throw new Error("Destination table is inactive");
   if (target.barId !== session.barId) {
-    throw new Error("Meja tujuan beda bar");
+    throw new Error("Destination table is in a different bar");
   }
 
   // Kapasitas: jumlah anggota joined/left harus muat.
@@ -334,13 +334,13 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
     );
   if (cnt > target.capacity) {
     throw new Error(
-      `Kapasitas meja ${target.label} (${target.capacity}) tak cukup untuk ${cnt} tamu.`
+      `Table ${target.label}'s capacity (${target.capacity}) isn't enough for ${cnt} guests.`
     );
   }
 
   // 4. Hitung jam baru: durasi dikunci = durasi booking awal.
   if (!session.reservationAt || !session.reservationEndAt) {
-    throw new Error("Sesi ini tak punya rentang waktu booking");
+    throw new Error("This session has no booking time range");
   }
   const durationMs =
     session.reservationEndAt.getTime() - session.reservationAt.getTime();
@@ -360,11 +360,11 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
   } catch (err) {
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
       throw new Error(
-        `Slot waktu di meja ${target.label} sudah dibooking. Pilih jam/meja lain.`
+        `Table ${target.label}'s time slot is already booked. Pick another time/table.`
       );
     }
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
-      throw new Error(`Meja ${target.label} sedang dipakai.`);
+      throw new Error(`Table ${target.label} is currently in use.`);
     }
     throw err;
   }
@@ -395,7 +395,7 @@ const moveWithOrderSchema = z.object({
         quantity: z.number().int().min(1).max(99),
       })
     )
-    .min(1, "Tambah minimal 1 item"),
+    .min(1, "Add at least 1 item"),
   paymentMethod: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
 });
 
@@ -420,15 +420,15 @@ export async function moveTableWithOrder(
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, data.sessionId));
-  if (!session) throw new Error("Sesi tidak ditemukan");
+  if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id)
-    throw new Error("Hanya host yang bisa pindah meja");
+    throw new Error("Only the host can move the table");
   if (session.status !== "reserved")
-    throw new Error("Meja sudah aktif. Pindah saat aktif butuh persetujuan staff.");
+    throw new Error("Table is already active. Moving while active needs staff approval.");
   if (session.tableId === data.targetTableId)
-    throw new Error("Meja tujuan sama dengan sekarang");
+    throw new Error("Destination table is the same as the current one");
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("Sesi ini tak punya rentang waktu booking");
+    throw new Error("This session has no booking time range");
   const durationMs =
     session.reservationEndAt.getTime() - session.reservationAt.getTime();
   const newStart = new Date(data.reservationAt);
@@ -447,8 +447,8 @@ export async function moveTableWithOrder(
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
-  if (!target || !target.isActive) throw new Error("Meja tujuan tidak tersedia");
-  if (target.barId !== session.barId) throw new Error("Meja tujuan beda bar");
+  if (!target || !target.isActive) throw new Error("Destination table is unavailable");
+  if (target.barId !== session.barId) throw new Error("Destination table is in a different bar");
   const minSpend = target.minSpend ?? 0;
 
   // 3. Resolve item baru + harga dari DB (jangan percaya harga client).
@@ -465,7 +465,7 @@ export async function moveTableWithOrder(
   let addedTotal = 0;
   const resolved = data.items.map((i) => {
     const m = priceMap.get(i.menuItemId);
-    if (!m || !m.is_available) throw new Error("Item menu tak tersedia");
+    if (!m || !m.is_available) throw new Error("Menu item unavailable");
     addedTotal += m.price * i.quantity;
     return { menuItemId: i.menuItemId, quantity: i.quantity, unitPrice: m.price };
   });
@@ -483,7 +483,7 @@ export async function moveTableWithOrder(
   // 5. Validasi: total akhir wajib >= min-spend.
   if (existingTotal + addedTotal < minSpend) {
     throw new Error(
-      `Belum capai minimum spend meja ${target.label} (${minSpend}). Tambah order lagi.`
+      `Minimum spend for table ${target.label} (${minSpend}) not reached. Add more orders.`
     );
   }
 
@@ -502,7 +502,7 @@ export async function moveTableWithOrder(
             eq(sessionMembers.profileId, profile.id)
           )
         );
-      if (!hostMember) throw new Error("Member host tak ditemukan");
+      if (!hostMember) throw new Error("Host member not found");
 
       // order sesi (ambil atau buat)
       let [order] = await tx
@@ -557,10 +557,10 @@ export async function moveTableWithOrder(
     });
   } catch (err) {
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
-      throw new Error(`Slot meja ${target.label} sudah dibooking. Pilih lain.`);
+      throw new Error(`Table ${target.label}'s slot is already booked. Pick another.`);
     }
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
-      throw new Error(`Meja ${target.label} sedang dipakai.`);
+      throw new Error(`Table ${target.label} is currently in use.`);
     }
     throw err;
   }

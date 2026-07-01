@@ -35,7 +35,7 @@ async function assertAreaInBar(areaId: string, barId: string) {
     .select({ barId: floorAreas.barId })
     .from(floorAreas)
     .where(eq(floorAreas.id, areaId));
-  if (!a || a.barId !== barId) throw new Error("Area tidak ditemukan");
+  if (!a || a.barId !== barId) throw new Error("Area not found");
 }
 
 // ============================================================
@@ -43,7 +43,7 @@ async function assertAreaInBar(areaId: string, barId: string) {
 // ============================================================
 
 const areaSchema = z.object({
-  name: z.string().min(1, "Nama area wajib").max(60),
+  name: z.string().min(1, "Area name is required").max(60),
   canvasWidth: z.number().int().min(200).max(3000),
   canvasHeight: z.number().int().min(200).max(3000),
 });
@@ -128,7 +128,7 @@ export async function deleteArea(areaId: string) {
       .limit(1);
     if (active) {
       throw new Error(
-        "Ada meja di area ini yang sedang dipakai/dibooking — tidak bisa hapus area."
+        "A table in this area is in use/booked — can't delete the area."
       );
     }
   }
@@ -144,7 +144,7 @@ export async function deleteArea(areaId: string) {
 
 const tableSchema = z.object({
   areaId: z.string().uuid(),
-  label: z.string().min(1, "Label wajib").max(20),
+  label: z.string().min(1, "Label is required").max(20),
   shape: z.enum(["round", "square", "rect", "booth"]),
   capacity: z.number().int().min(1).max(50),
   posX: z.number().int().min(0).max(3000),
@@ -163,7 +163,7 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     .select({ id: tables.id })
     .from(tables)
     .where(and(eq(tables.areaId, data.areaId), eq(tables.label, data.label)));
-  if (clash) throw new Error(`Label "${data.label}" sudah ada di area ini`);
+  if (clash) throw new Error(`Label "${data.label}" already exists in this area`);
 
   const size = tableSize(data.shape, data.capacity);
   await db.insert(tables).values({
@@ -196,7 +196,7 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
     .select({ areaId: tables.areaId })
     .from(tables)
     .where(eq(tables.id, data.id));
-  if (!row) throw new Error("Meja tidak ditemukan");
+  if (!row) throw new Error("Table not found");
   await assertAreaInBar(row.areaId, bar.id);
 
   // Label unik per area (kecuali diri sendiri).
@@ -205,7 +205,7 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
     .from(tables)
     .where(and(eq(tables.areaId, row.areaId), eq(tables.label, data.label)));
   if (clashes.some((c) => c.id !== data.id)) {
-    throw new Error(`Label "${data.label}" sudah ada di area ini`);
+    throw new Error(`Label "${data.label}" already exists in this area`);
   }
 
   const size = tableSize(data.shape, data.capacity);
@@ -233,7 +233,7 @@ export async function deleteTable(tableId: string) {
     .select({ areaId: tables.areaId })
     .from(tables)
     .where(eq(tables.id, tableId));
-  if (!row) throw new Error("Meja tidak ditemukan");
+  if (!row) throw new Error("Table not found");
   await assertAreaInBar(row.areaId, bar.id);
 
   // Tolak kalau ada session aktif.
@@ -249,7 +249,7 @@ export async function deleteTable(tableId: string) {
     .limit(1);
   if (active) {
     throw new Error(
-      "Meja sedang dipakai/dibooking — tidak bisa dihapus. Tunggu sampai selesai."
+      "Table is in use/booked — can't delete. Wait until it's finished."
     );
   }
 

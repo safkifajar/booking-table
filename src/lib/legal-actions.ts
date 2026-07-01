@@ -56,7 +56,7 @@ export async function getPublicLegalDoc(
 
 const upsertSchema = z.object({
   key: z.enum(["privacy", "terms"]),
-  title: z.string().min(1, "Judul wajib").max(120),
+  title: z.string().min(1, "Title is required").max(120),
   content: z.string().max(50000),
 });
 

@@ -50,9 +50,9 @@ async function requireAdminForBar(barId: string) {
         eq(staffRoles.isActive, true)
       )
     );
-  if (!staff) throw new Error("Akses admin diperlukan");
+  if (!staff) throw new Error("Admin access required");
   if (staff.role !== "admin" && staff.role !== "manager") {
-    throw new Error("Hanya admin/manager yang bisa import menu");
+    throw new Error("Only admin/manager can import the menu");
   }
   return { profile, role: staff.role };
 }
@@ -114,14 +114,14 @@ async function parseTableFile(
   const isExcel = lower.endsWith(".xlsx") || lower.endsWith(".xls");
   const isCsv = lower.endsWith(".csv");
   if (!isExcel && !isCsv) {
-    throw new Error("Format file harus CSV (.csv) atau Excel (.xlsx)");
+    throw new Error("File format must be CSV (.csv) or Excel (.xlsx)");
   }
 
   // Dynamic import untuk tidak bloat bundle
   const xlsx = await import("xlsx");
   const workbook = xlsx.read(buffer, { type: "buffer" });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) throw new Error("File kosong atau tidak punya sheet");
+  if (!sheet) throw new Error("File is empty or has no sheet");
 
   const rows = xlsx.utils.sheet_to_json<ParsedRow>(sheet, {
     raw: false,
@@ -169,25 +169,25 @@ export async function importCategories(
   formData: FormData
 ): Promise<ImportCategoriesResult> {
   const barId = formData.get("barId");
-  if (typeof barId !== "string") throw new Error("barId wajib");
+  if (typeof barId !== "string") throw new Error("barId is required");
   await requireAdminForBar(barId);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("File CSV/Excel wajib di-upload");
+    throw new Error("A CSV/Excel file must be uploaded");
   }
   if (file.size > 5 * 1024 * 1024) {
-    throw new Error("File terlalu besar (max 5MB)");
+    throw new Error("File is too large (max 5MB)");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const rows = await parseTableFile(buffer, file.name);
 
   if (rows.length === 0) {
-    throw new Error("File tidak punya data (header saja)");
+    throw new Error("File has no data (header only)");
   }
   if (rows.length > 200) {
-    throw new Error("Maksimal 200 kategori per import");
+    throw new Error("Maximum 200 categories per import");
   }
 
   // Validate & prepare
@@ -204,13 +204,13 @@ export async function importCategories(
     const rowNum = i + 2; // +2: 1-based + skip header
     const name = (row.name ?? row.Name ?? "").toString().trim();
     if (!name) {
-      throw new Error(`Baris ${rowNum}: kolom "name" wajib diisi`);
+      throw new Error(`Row ${rowNum}: column "name" is required`);
     }
     if (name.length > 60) {
-      throw new Error(`Baris ${rowNum}: nama maksimal 60 karakter`);
+      throw new Error(`Row ${rowNum}: name can be at most 60 characters`);
     }
     if (seenNames.has(name.toLowerCase())) {
-      throw new Error(`Baris ${rowNum}: nama "${name}" duplikat di file`);
+      throw new Error(`Row ${rowNum}: name "${name}" is duplicated in the file`);
     }
     seenNames.add(name.toLowerCase());
 
@@ -274,15 +274,15 @@ export async function importMenuItems(
   formData: FormData
 ): Promise<ImportItemsResult> {
   const barId = formData.get("barId");
-  if (typeof barId !== "string") throw new Error("barId wajib");
+  if (typeof barId !== "string") throw new Error("barId is required");
   await requireAdminForBar(barId);
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    throw new Error("File wajib di-upload");
+    throw new Error("A file must be uploaded");
   }
   if (file.size > 100 * 1024 * 1024) {
-    throw new Error("File terlalu besar (max 100MB)");
+    throw new Error("File is too large (max 100MB)");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -307,10 +307,10 @@ export async function importMenuItems(
 
   const rows = await parseTableFile(csvBuffer, csvFilename);
   if (rows.length === 0) {
-    throw new Error("File tidak punya data (header saja)");
+    throw new Error("File has no data (header only)");
   }
   if (rows.length > 1000) {
-    throw new Error("Maksimal 1000 item per import");
+    throw new Error("Maximum 1000 items per import");
   }
 
   // Load categories untuk match by name
@@ -333,25 +333,25 @@ export async function importMenuItems(
     const name = (row.name ?? row.Name ?? "").toString().trim();
 
     if (!categoryName) {
-      throw new Error(`Baris ${rowNum}: kolom "category_name" wajib`);
+      throw new Error(`Row ${rowNum}: column "category_name" is required`);
     }
     if (!name) {
-      throw new Error(`Baris ${rowNum}: kolom "name" wajib`);
+      throw new Error(`Row ${rowNum}: column "name" is required`);
     }
     if (name.length > 80) {
-      throw new Error(`Baris ${rowNum}: nama maksimal 80 karakter`);
+      throw new Error(`Row ${rowNum}: name can be at most 80 characters`);
     }
 
     const categoryId = categoryByName.get(categoryName.toLowerCase());
     if (!categoryId) {
       throw new Error(
-        `Baris ${rowNum}: kategori "${categoryName}" tidak ditemukan. Buat dulu di tab Kategori.`
+        `Row ${rowNum}: category "${categoryName}" not found. Create it first in the Categories tab.`
       );
     }
 
     const price = normalizePrice(row.price);
     if (price < 0 || price > 10_000_000) {
-      throw new Error(`Baris ${rowNum}: harga tidak valid (${row.price})`);
+      throw new Error(`Row ${rowNum}: invalid price (${row.price})`);
     }
 
     const description = (row.description ?? "").toString().trim() || null;
@@ -365,18 +365,18 @@ export async function importMenuItems(
     if (imageRef) {
       if (!isZip) {
         throw new Error(
-          `Baris ${rowNum}: kolom image hanya bisa dipakai kalau upload ZIP`
+          `Row ${rowNum}: the image column can only be used when uploading a ZIP`
         );
       }
       const found = imageMap.get(imageRef.toLowerCase());
       if (!found) {
         throw new Error(
-          `Baris ${rowNum}: file image "${imageRef}" tidak ditemukan di ZIP`
+          `Row ${rowNum}: image file "${imageRef}" not found in the ZIP`
         );
       }
       if (found.byteLength > MAX_IMAGE_BYTES) {
         throw new Error(
-          `Baris ${rowNum}: image "${imageRef}" terlalu besar (max 10MB)`
+          `Row ${rowNum}: image "${imageRef}" is too large (max 10MB)`
         );
       }
       imageBuffer = found;
@@ -522,7 +522,7 @@ async function extractZip(buffer: Buffer): Promise<ZipExtractResult> {
   }
 
   if (!csvBuffer) {
-    throw new Error("ZIP tidak punya file CSV/Excel di root");
+    throw new Error("ZIP has no CSV/Excel file in the root");
   }
   return { csvBuffer, csvFilename, imageMap };
 }

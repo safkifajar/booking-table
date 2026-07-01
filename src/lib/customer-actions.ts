@@ -162,9 +162,9 @@ export async function listCustomers(
 // ============================================================
 
 const createSchema = z.object({
-  name: z.string().min(1, "Nama wajib").max(80),
-  email: z.string().email("Email tidak valid").max(120),
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+  name: z.string().min(1, "Name is required").max(80),
+  email: z.string().email("Invalid email").max(120),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100),
   phone: z.string().max(20).optional(),
 });
 
@@ -177,7 +177,7 @@ export async function createCustomer(input: z.infer<typeof createSchema>) {
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, email));
-  if (existing) throw new Error("Email sudah terdaftar");
+  if (existing) throw new Error("Email is already registered");
 
   const passwordHash = await hashPassword(data.password);
 
@@ -212,11 +212,11 @@ const updateSchema = z.object({
   phone: z.string().max(20).optional(),
   birthDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal tidak valid")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
     .optional()
     .or(z.literal("")),
   /** Password baru (opsional) — kalau diisi, reset password customer. */
-  password: z.string().min(6, "Password minimal 6 karakter").max(100).optional(),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100).optional(),
   /** Status aktif. false = tak bisa login. */
   isActive: z.boolean(),
   gender: z.enum(["male", "female"]).optional().or(z.literal("")),
@@ -234,14 +234,14 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, data.id));
-  if (staff) throw new Error("User ini staff — kelola di Manage Staff");
+  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
 
   // Email unik (kecuali milik sendiri).
   const [clash] = await db
     .select({ id: users.id })
     .from(users)
     .where(and(eq(users.email, email), sql`${users.id} <> ${data.id}`));
-  if (clash) throw new Error("Email sudah dipakai user lain");
+  if (clash) throw new Error("Email is already used by another user");
 
   // Reset password kalau diisi.
   const passwordHash = data.password
@@ -280,7 +280,7 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
 
 const setPasswordSchema = z.object({
   id: z.string().uuid(),
-  password: z.string().min(6, "Password minimal 6 karakter").max(100),
+  password: z.string().min(6, "Password must be at least 6 characters").max(100),
 });
 
 export async function setCustomerPassword(
@@ -294,7 +294,7 @@ export async function setCustomerPassword(
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, data.id));
-  if (staff) throw new Error("User ini staff — kelola di Manage Staff");
+  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
 
   const passwordHash = await hashPassword(data.password);
   await db
@@ -317,7 +317,7 @@ export async function deleteCustomer(id: string) {
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, id));
-  if (staff) throw new Error("User ini staff — kelola di Manage Staff");
+  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
 
   // Cek history: kalau pernah jadi member session ATAU host session, tolak
   // (cegah relasi rusak). Admin bisa biarkan akun-nya.
@@ -333,7 +333,7 @@ export async function deleteCustomer(id: string) {
     .limit(1);
   if (asMember || asHost) {
     throw new Error(
-      "Customer ini punya riwayat kunjungan — tidak bisa dihapus (jaga data transaksi)."
+      "This customer has visit history — can't be deleted (to preserve transaction data)."
     );
   }
 

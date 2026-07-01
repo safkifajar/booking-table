@@ -101,7 +101,7 @@ export async function saveSubscription(
   input: z.infer<typeof subscriptionSchema>
 ): Promise<void> {
   const profile = await getCurrentProfile();
-  if (!profile) throw new Error("Harus login");
+  if (!profile) throw new Error("You must be logged in");
   const data = subscriptionSchema.parse(input);
 
   await db
