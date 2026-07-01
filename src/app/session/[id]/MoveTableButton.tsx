@@ -16,6 +16,7 @@ import {
 import {
   requestMoveTable,
   requestMoveTableWithOrder,
+  cancelMyMoveRequest,
 } from "@/lib/move-approval-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
@@ -40,7 +41,7 @@ export function MoveTableButton({
   status: string;
   menu: MenuPickerCategory[];
   existingOrderTotal: number;
-  pendingMove: { toLabel: string; reservationAt: string } | null;
+  pendingMove: { id?: string; toLabel: string; reservationAt: string } | null;
 }) {
   const router = useRouter();
   // Aktif (open/locked) → request + approval. reserved → pindah langsung.
@@ -48,9 +49,11 @@ export function MoveTableButton({
   // Badge "menunggu approval" — sumber utama dari server prop (realtime ikut
   // router.refresh). State lokal cuma utk optimistic sesaat setelah submit.
   const [optimisticPending, setOptimisticPending] = React.useState<{
+    id?: string;
     toLabel: string;
     reservationAt: string;
   } | null>(null);
+  const [cancelling, setCancelling] = React.useState(false);
   const pending = pendingMove ?? optimisticPending;
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -85,6 +88,21 @@ export function MoveTableButton({
       setTargets([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCancelPending() {
+    if (!pending?.id) return;
+    setCancelling(true);
+    try {
+      await cancelMyMoveRequest(pending.id);
+      toast.success("Move request cancelled");
+      setOptimisticPending(null);
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to cancel request"));
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -153,12 +171,22 @@ export function MoveTableButton({
   return (
     <>
       {pending ? (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2 flex-wrap">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          <span>
+          <span className="flex-1 min-w-0">
             Waiting for staff approval — moving to table{" "}
             <strong>{pending.toLabel}</strong>.
           </span>
+          {pending.id && (
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={handleCancelPending}
+              className="shrink-0 underline hover:no-underline disabled:opacity-50"
+            >
+              {cancelling ? "Cancelling…" : "Cancel"}
+            </button>
+          )}
         </div>
       ) : (
         <Button

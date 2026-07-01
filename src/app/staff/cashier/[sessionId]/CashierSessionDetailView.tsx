@@ -571,7 +571,7 @@ function PaymentModal({
       <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
         <Card className="max-w-sm p-6 text-center">
           <p className="text-sm">
-            No members joined. Can't accept payment.
+            No members joined. Can&apos;t accept payment.
           </p>
           <Button onClick={onClose} variant="outline" className="mt-3 w-full">
             Close

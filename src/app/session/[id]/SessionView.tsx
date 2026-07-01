@@ -148,7 +148,7 @@ interface SessionViewProps {
    */
   openedByStaff: { id: string; display_name: string } | null;
   /** Request pindah meja yg menunggu approval (badge realtime). */
-  pendingMove: { toLabel: string; reservationAt: string } | null;
+  pendingMove: { id?: string; toLabel: string; reservationAt: string } | null;
 }
 
 export function SessionView(props: SessionViewProps) {
@@ -1450,7 +1450,7 @@ function RequestJoinButton({
             Waiting for host approval
           </p>
           <p className="text-xs text-muted-foreground">
-            You'll join the table once {hostName} approves.
+            You&apos;ll join the table once {hostName} approves.
           </p>
         </div>
       </div>

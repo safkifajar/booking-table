@@ -611,7 +611,7 @@ function BookingsView({ bookings }: { bookings: WaiterBookingItem[] }) {
         <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
         <p className="text-sm font-medium mb-1">No scheduled bookings yet</p>
         <p className="text-xs text-muted-foreground">
-          Reservations that haven't started yet will appear here.
+          Reservations that haven&apos;t started yet will appear here.
         </p>
       </Card>
     );

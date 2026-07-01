@@ -83,7 +83,7 @@ export function ForgotForm() {
               <div>
                 <p className="font-medium mb-1">Link sent</p>
                 <p className="text-xs text-muted-foreground">
-                  If it doesn't arrive in your inbox within a few minutes, check
+                  If it doesn&apos;t arrive in your inbox within a few minutes, check
                   your Spam folder. The link is valid for 10 minutes.
                 </p>
               </div>

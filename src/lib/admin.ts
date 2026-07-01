@@ -607,6 +607,8 @@ export interface TransactionMoveHistory {
   status: string;
   /** Waktu resolusi (approved/rejected) atau dibuat kalau belum. */
   at: string;
+  /** Nama staff yg approve/reject (null = belum diproses / staff dihapus). */
+  by_staff_name: string | null;
 }
 
 export interface TransactionDetail {
@@ -765,6 +767,7 @@ export async function getTransactionDetail(
   // Move history — riwayat pindah meja (dari→ke), terlama dulu, utk chain.
   const ftAlias = aliasedTable(tables, "mv_from");
   const ttAlias = aliasedTable(tables, "mv_to");
+  const byStaffProfile = aliasedTable(profiles, "mv_by");
   const moveRows = await db
     .select({
       id: tableMoveRequests.id,
@@ -773,10 +776,12 @@ export async function getTransactionDetail(
       status: tableMoveRequests.status,
       created_at: tableMoveRequests.createdAt,
       resolved_at: tableMoveRequests.resolvedAt,
+      by_staff_name: byStaffProfile.displayName,
     })
     .from(tableMoveRequests)
     .innerJoin(ftAlias, eq(ftAlias.id, tableMoveRequests.fromTableId))
     .innerJoin(ttAlias, eq(ttAlias.id, tableMoveRequests.toTableId))
+    .leftJoin(byStaffProfile, eq(byStaffProfile.id, tableMoveRequests.resolvedBy))
     .where(eq(tableMoveRequests.sessionId, sessionId))
     .orderBy(tableMoveRequests.createdAt);
 
@@ -823,6 +828,7 @@ export async function getTransactionDetail(
     to_label: m.to_label,
     status: m.status,
     at: (m.resolved_at ?? m.created_at).toISOString(),
+    by_staff_name: m.by_staff_name,
   }));
 
   return {

@@ -558,7 +558,7 @@ function InviteStaffModal({
             <MailCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <div className="text-xs text-muted-foreground leading-relaxed">
               The employee will receive an email with a link to set their
-              password. They don't need to register manually in the app.
+              password. They don&apos;t need to register manually in the app.
             </div>
           </div>
 
@@ -816,7 +816,7 @@ function EditStaffModal({
           <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
             <p className="text-xs font-medium">Reset password (optional)</p>
             <p className="text-[11px] text-muted-foreground -mt-1">
-              Leave blank if you don't want to change the password.
+              Leave blank if you don&apos;t want to change the password.
             </p>
             <input
               type="password"

@@ -358,9 +358,10 @@ export async function requestMoveTableWithOrder(
 /** Request pindah pending milik sesi (badge status di UI customer). */
 export async function getMyPendingMove(
   sessionId: string
-): Promise<{ toLabel: string; reservationAt: string } | null> {
+): Promise<{ id: string; toLabel: string; reservationAt: string } | null> {
   const [row] = await db
     .select({
+      id: tableMoveRequests.id,
       toLabel: tables.label,
       reservationAt: tableMoveRequests.reservationAt,
     })
@@ -374,8 +375,53 @@ export async function getMyPendingMove(
     )
     .limit(1);
   return row
-    ? { toLabel: row.toLabel, reservationAt: row.reservationAt.toISOString() }
+    ? {
+        id: row.id,
+        toLabel: row.toLabel,
+        reservationAt: row.reservationAt.toISOString(),
+      }
     : null;
+}
+
+/**
+ * Host membatalkan request pindah miliknya yang masih pending. Hanya host sesi
+ * & hanya kalau status masih pending. Notif staff supaya panel mereka update.
+ */
+export async function cancelMyMoveRequest(requestId: string) {
+  const profile = await requireProfile();
+
+  const [req] = await db
+    .select({
+      id: tableMoveRequests.id,
+      sessionId: tableMoveRequests.sessionId,
+      status: tableMoveRequests.status,
+      requestedBy: tableMoveRequests.requestedBy,
+      hostId: tableSessions.hostId,
+      barId: floorAreas.barId,
+    })
+    .from(tableMoveRequests)
+    .innerJoin(tableSessions, eq(tableSessions.id, tableMoveRequests.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(tableMoveRequests.id, requestId));
+  if (!req) throw new Error("Request not found");
+  if (req.hostId !== profile.id)
+    throw new Error("Only the host can cancel this request");
+  if (req.status !== "pending")
+    throw new Error("Request already processed");
+
+  await db
+    .update(tableMoveRequests)
+    .set({ status: "cancelled", resolvedAt: new Date() })
+    .where(eq(tableMoveRequests.id, requestId));
+
+  await Promise.allSettled([
+    notify(channels.session(req.sessionId)),
+    notify(channels.staff(req.barId)),
+  ]);
+  revalidatePath(`/session/${req.sessionId}`);
+  revalidatePath("/staff/waiter");
+  revalidatePath("/staff/cashier");
 }
 
 export interface MoveRequestRow {

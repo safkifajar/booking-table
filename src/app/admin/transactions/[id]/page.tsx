@@ -236,6 +236,11 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       {mv.status}
                     </Badge>
                   )}
+                  {mv.by_staff_name && (
+                    <span className="text-xs text-muted-foreground">
+                      by {mv.by_staff_name}
+                    </span>
+                  )}
                 </li>
               ))}
             </ol>

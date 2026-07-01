@@ -112,7 +112,7 @@ function HereTab({
     return (
       <div className="rounded-lg border border-dashed border-border py-10 text-center">
         <p className="text-sm text-muted-foreground">
-          No one's hanging out right now.
+          No one&apos;s hanging out right now.
         </p>
         <p className="text-xs text-muted-foreground/70 mt-1">
           Check the All members tab to see who you can reach out to.

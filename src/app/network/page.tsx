@@ -72,7 +72,7 @@ export default async function NetworkPage() {
           <h1 className="text-xl font-bold tracking-tight">Network</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          See who's at SOHO right now & explore other members to hang out with.
+          See who&apos;s at SOHO right now & explore other members to hang out with.
         </p>
 
         <NetworkView

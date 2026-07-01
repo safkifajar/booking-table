@@ -163,7 +163,7 @@ export function ProfileForm({
         <CardHeader>
           <CardTitle>Identity</CardTitle>
           <CardDescription>
-            Basic info for your account. Email can't be changed from here.
+            Basic info for your account. Email can&apos;t be changed from here.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
