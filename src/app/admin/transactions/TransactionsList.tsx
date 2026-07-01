@@ -21,6 +21,11 @@ function isPaid(t: AdminTransaction): boolean {
   return t.subtotal === 0 || t.paid_total >= t.subtotal;
 }
 
+/** Transaksi masih berjalan (belum ditutup). */
+function isActiveTx(t: AdminTransaction): boolean {
+  return t.status === "open" || t.status === "locked";
+}
+
 export function TransactionsList({
   transactions,
 }: {
@@ -124,6 +129,14 @@ export function TransactionsList({
                   <Badge variant="default" className="text-[10px]">
                     {t.table_label}
                   </Badge>
+                  {isActiveTx(t) && (
+                    <Badge
+                      variant="default"
+                      className="text-[9px] px-1.5 bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    >
+                      Ongoing
+                    </Badge>
+                  )}
                   <span className="text-[10px] text-muted-foreground truncate">
                     {t.area_name}
                   </span>
@@ -192,6 +205,14 @@ export function TransactionsList({
                     <Badge variant="default" className="text-[10px]">
                       {t.table_label}
                     </Badge>
+                    {isActiveTx(t) && (
+                      <Badge
+                        variant="default"
+                        className="text-[9px] px-1.5 bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                      >
+                        Ongoing
+                      </Badge>
+                    )}
                     <span className="text-[10px] text-muted-foreground truncate">
                       {t.area_name}
                     </span>
