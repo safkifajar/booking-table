@@ -14,7 +14,7 @@ import type { RatableMember } from "@/types/db";
 
 const TAG_OPTIONS = [
   "good vibes",
-  "ramah",
+  "friendly",
   "fun",
   "respectful",
   "good host",
@@ -39,12 +39,12 @@ export function RateForm({ sessionId, sessionTitle, tableLabel, members }: Props
       <main className="flex-1 flex items-center justify-center px-4 py-8">
         <Card className="max-w-md w-full text-center p-8">
           <Sparkles className="h-10 w-10 mx-auto text-primary/60 mb-3" />
-          <h2 className="text-lg font-semibold mb-2">Sesi solo</h2>
+          <h2 className="text-lg font-semibold mb-2">Solo session</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Tidak ada anggota lain di meja ini untuk di-rate.
+            There are no other members at this table to rate.
           </p>
           <Button asChild variant="gold" className="w-full">
-            <Link href="/">Kembali ke beranda</Link>
+            <Link href="/">Back to home</Link>
           </Button>
         </Card>
       </main>
@@ -65,7 +65,7 @@ export function RateForm({ sessionId, sessionTitle, tableLabel, members }: Props
               <Badge variant="default" className="text-[10px]">
                 {tableLabel}
               </Badge>
-              <span className="text-xs text-muted-foreground">Rate teman semeja</span>
+              <span className="text-xs text-muted-foreground">Rate your tablemates</span>
             </div>
             <h1 className="text-base sm:text-lg font-semibold">
               {sessionTitle ?? "Open Table"}
@@ -77,10 +77,10 @@ export function RateForm({ sessionId, sessionTitle, tableLabel, members }: Props
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
           <CardHeader>
-            <CardTitle>Bagaimana vibe-nya malam ini?</CardTitle>
+            <CardTitle>How was the vibe tonight?</CardTitle>
             <CardDescription>
-              Berikan rating bintang & tag positif untuk anggota lain. Kamu hanya rate
-              sekali per orang, dan rating ditampilkan sebagai agregat di profil mereka.
+              Give star ratings & positive tags to other members. You only rate
+              each person once, and ratings are shown as an aggregate on their profile.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -92,14 +92,14 @@ export function RateForm({ sessionId, sessionTitle, tableLabel, members }: Props
         {allDone ? (
           <Card className="p-6 text-center border-primary/30">
             <Check className="h-8 w-8 mx-auto text-primary mb-2" />
-            <p className="text-sm font-medium mb-3">Semua rating sudah kamu kasih</p>
+            <p className="text-sm font-medium mb-3">You&apos;ve rated everyone</p>
             <Button asChild variant="gold" className="w-full">
-              <Link href="/">Selesai</Link>
+              <Link href="/">Done</Link>
             </Button>
           </Card>
         ) : (
           <Button asChild variant="outline" className="w-full">
-            <Link href="/">Lewati sisanya</Link>
+            <Link href="/">Skip the rest</Link>
           </Button>
         )}
       </div>
@@ -128,7 +128,7 @@ function MemberRateCard({
 
   async function handleSubmit() {
     if (stars === 0) {
-      toast.error("Pilih bintang dulu");
+      toast.error("Pick a star rating first");
       return;
     }
     setLoading(true);
@@ -140,9 +140,9 @@ function MemberRateCard({
         tags,
       });
       setSubmitted(true);
-      toast.success(`Rating untuk ${member.display_name} terkirim`);
+      toast.success(`Rating for ${member.display_name} sent`);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim rating"));
+      toast.error(getActionErrorMessage(err, "Failed to send rating"));
     } finally {
       setLoading(false);
     }
@@ -164,7 +164,7 @@ function MemberRateCard({
           <h3 className="font-semibold">{member.display_name}</h3>
           {submitted && (
             <p className="text-xs text-primary flex items-center gap-1">
-              <Check className="h-3 w-3" /> Rating terkirim
+              <Check className="h-3 w-3" /> Rating sent
             </p>
           )}
         </div>
@@ -184,7 +184,7 @@ function MemberRateCard({
                   onMouseEnter={() => setHoverStars(n)}
                   onMouseLeave={() => setHoverStars(0)}
                   className="transition-transform hover:scale-110 active:scale-95"
-                  aria-label={`${n} bintang`}
+                  aria-label={`${n} stars`}
                 >
                   <Star
                     className={cn(
@@ -202,7 +202,7 @@ function MemberRateCard({
           {/* Tags */}
           <div className="mb-4">
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Tag positif <span className="font-normal lowercase">(opsional, maks 5)</span>
+              Positive tags <span className="font-normal lowercase">(optional, max 5)</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
               {TAG_OPTIONS.map((t) => {
@@ -233,7 +233,7 @@ function MemberRateCard({
             disabled={loading || stars === 0}
             onClick={handleSubmit}
           >
-            {loading ? "Mengirim..." : "Kirim Rating"}
+            {loading ? "Sending..." : "Send Rating"}
           </Button>
         </>
       )}

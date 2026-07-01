@@ -30,13 +30,13 @@ export function JoinForm(props: Props) {
     props.memberCount >= props.table.capacity;
 
   const reason = props.invite.isExpired
-    ? "Link undangan sudah kedaluwarsa"
+    ? "This invite link has expired"
     : props.invite.isMaxedOut
-      ? "Link undangan sudah mencapai batas pemakaian"
+      ? "This invite link has reached its usage limit"
       : props.session.status !== "open"
-        ? "Meja sudah ditutup"
+        ? "This table is already closed"
         : props.memberCount >= props.table.capacity
-          ? "Meja sudah penuh"
+          ? "This table is already full"
           : null;
 
   async function handleJoin() {
@@ -45,7 +45,7 @@ export function JoinForm(props: Props) {
       await joinByCode({ code: props.code });
       // redirects on success
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal join"));
+      toast.error(getActionErrorMessage(err, "Failed to join"));
       setLoading(false);
     }
   }
@@ -84,7 +84,7 @@ export function JoinForm(props: Props) {
         {/* Table info */}
         <div className="rounded-md bg-muted/40 border border-border p-3 space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Meja</span>
+            <span className="text-muted-foreground">Table</span>
             <Badge variant="default">{props.table.label}</Badge>
           </div>
           <div className="flex justify-between">
@@ -92,7 +92,7 @@ export function JoinForm(props: Props) {
             <span>{props.table.areaName}</span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">Sudah ada</span>
+            <span className="text-muted-foreground">Already in</span>
             <span className="flex items-center gap-1">
               <Users className="h-3.5 w-3.5" /> {props.memberCount} / {props.table.capacity}
             </span>
@@ -123,12 +123,12 @@ export function JoinForm(props: Props) {
             onClick={handleJoin}
             disabled={loading}
           >
-            {loading ? "Bergabung..." : "Join Table"}
+            {loading ? "Joining..." : "Join Table"}
           </Button>
         )}
 
         <Button asChild variant="ghost" size="sm" className="w-full">
-          <Link href="/">Lihat meja lain</Link>
+          <Link href="/">Browse other tables</Link>
         </Button>
       </CardContent>
     </Card>

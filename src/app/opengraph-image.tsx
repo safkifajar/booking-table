@@ -89,25 +89,25 @@ export default async function OG() {
             <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Open
             </span>
-            <span>Buka meja</span>
+            <span>Open table</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Invite
             </span>
-            <span>Ajak teman</span>
+            <span>Invite friends</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Order
             </span>
-            <span>Pesan bareng</span>
+            <span>Order together</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 36, color: "#e11d2a", fontWeight: 700 }}>
               Split
             </span>
-            <span>Bayar patungan</span>
+            <span>Split the bill</span>
           </div>
         </div>
       </div>

@@ -33,12 +33,12 @@ export function PreviewCTA(props: Props) {
       const result = await requestJoinSession({ sessionId: props.sessionId });
       setStatus(result.status);
       if (result.status === "pending") {
-        toast.success(`Request dikirim ke ${props.hostName}`);
+        toast.success(`Request sent to ${props.hostName}`);
       } else if (result.status === "joined") {
-        toast.success("Kamu sudah jadi member meja ini");
+        toast.success("You're already a member of this table");
       }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+      toast.error(getActionErrorMessage(err, "Failed to send request"));
     } finally {
       setLoading(false);
     }
@@ -50,10 +50,10 @@ export function PreviewCTA(props: Props) {
     return (
       <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
         <CardContent className="p-5 text-center space-y-3">
-          <p className="text-sm">Ini meja kamu sendiri.</p>
+          <p className="text-sm">This is your own table.</p>
           <Button asChild variant="gold" className="w-full">
             <Link href={`/session/${props.sessionId}`}>
-              Buka session <ArrowRight className="h-4 w-4" />
+              Open session <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </CardContent>
@@ -68,15 +68,15 @@ export function PreviewCTA(props: Props) {
         <CardContent className="p-5 text-center space-y-3">
           <Clock className="h-8 w-8 mx-auto text-amber-400" />
           <div>
-            <p className="font-medium text-sm">Menunggu approval host</p>
+            <p className="font-medium text-sm">Waiting for host approval</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Request kamu sudah dikirim ke{" "}
-              <span className="text-amber-400">{props.hostName}</span>. Kamu akan
-              masuk meja begitu di-approve.
+              Your request has been sent to{" "}
+              <span className="text-amber-400">{props.hostName}</span>. You&apos;ll
+              join the table as soon as it&apos;s approved.
             </p>
           </div>
           <Button asChild variant="outline" className="w-full">
-            <Link href={`/bar/${props.barSlug}`}>Lihat meja lain dulu</Link>
+            <Link href={`/bar/${props.barSlug}`}>Browse other tables</Link>
           </Button>
         </CardContent>
       </Card>
@@ -89,9 +89,9 @@ export function PreviewCTA(props: Props) {
       <Card className="bg-gradient-to-br from-red-500/10 to-transparent border-red-500/30">
         <CardContent className="p-5 text-center space-y-3">
           <Lock className="h-8 w-8 mx-auto text-red-400" />
-          <p className="text-sm font-medium">Kamu sebelumnya dikeluarkan dari meja ini</p>
+          <p className="text-sm font-medium">You were removed from this table before</p>
           <Button asChild variant="outline" className="w-full">
-            <Link href={`/bar/${props.barSlug}`}>Lihat meja lain</Link>
+            <Link href={`/bar/${props.barSlug}`}>Browse other tables</Link>
           </Button>
         </CardContent>
       </Card>
@@ -105,22 +105,22 @@ export function PreviewCTA(props: Props) {
         <UserPlus className="h-8 w-8 mx-auto text-primary/60" />
         <div>
           <p className="font-medium text-sm">
-            {status === "left" ? "Mau gabung lagi?" : "Mau gabung meja ini?"}
+            {status === "left" ? "Want to join again?" : "Want to join this table?"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Kirim request ke <span className="text-primary">{props.hostName}</span>.
-            Kamu masuk setelah host approve.
+            Send a request to <span className="text-primary">{props.hostName}</span>.
+            You&apos;ll join once the host approves.
           </p>
         </div>
         {full && (
           <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-2 text-xs text-amber-300">
-            Meja sudah penuh ({props.memberCount}/{props.capacity}). Tunggu kursi
-            kosong dulu.
+            This table is full ({props.memberCount}/{props.capacity}). Wait for a
+            seat to open up.
           </div>
         )}
         <div className="flex flex-col sm:flex-row gap-2 pt-1">
           <Button asChild variant="outline" className="flex-1">
-            <Link href={`/bar/${props.barSlug}`}>Lihat meja lain</Link>
+            <Link href={`/bar/${props.barSlug}`}>Browse other tables</Link>
           </Button>
           {props.loggedIn ? (
             <Button
@@ -129,14 +129,14 @@ export function PreviewCTA(props: Props) {
               onClick={handleRequest}
               disabled={loading || full}
             >
-              {loading ? "Mengirim..." : "Request Join"}
+              {loading ? "Sending..." : "Request Join"}
             </Button>
           ) : (
             <Button asChild variant="gold" className="flex-1">
               <Link
                 href={`/auth?next=${encodeURIComponent(`/session/${props.sessionId}/preview`)}`}
               >
-                Masuk untuk request
+                Sign in to request
               </Link>
             </Button>
           )}
