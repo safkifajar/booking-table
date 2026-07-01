@@ -74,17 +74,17 @@ function OperatingHoursSection({
       return next;
     });
     setDirty(true);
-    toast.success("Senin di-copy ke semua hari");
+    toast.success("Monday copied to all days");
   }
 
   async function handleSave() {
     setSaving(true);
     try {
       await updateOperatingHours(barId, hours);
-      toast.success("Jam operasional disimpan");
+      toast.success("Operating hours saved");
       setDirty(false);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
     } finally {
       setSaving(false);
     }
@@ -98,9 +98,9 @@ function OperatingHoursSection({
             <Clock className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">Jam Operasional</h2>
+            <h2 className="text-base font-semibold">Operating Hours</h2>
             <p className="text-xs text-muted-foreground">
-              Atur jam buka & tutup per hari
+              Set open & close times per day
             </p>
           </div>
         </div>
@@ -111,7 +111,7 @@ function OperatingHoursSection({
           onClick={applyToAll}
           className="text-xs"
         >
-          Copy Senin ke semua
+          Copy Monday to all
         </Button>
       </div>
 
@@ -128,8 +128,8 @@ function OperatingHoursSection({
 
       <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">
         <p className="text-[11px] text-muted-foreground">
-          Tip: jam tutup setelah tengah malam, tulis seperti 02:00 (misal sampai
-          dini hari).
+          Tip: for a closing time after midnight, write it like 02:00 (e.g.
+          until early morning).
         </p>
         <Button
           type="button"
@@ -141,12 +141,12 @@ function OperatingHoursSection({
           {saving ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Menyimpan...
+              Saving...
             </>
           ) : (
             <>
               <Save className="h-3.5 w-3.5" />
-              Simpan
+              Save
             </>
           )}
         </Button>
@@ -182,7 +182,7 @@ function DayRow({
           onChange={(e) => onChange({ closed: e.target.checked })}
           className="h-3.5 w-3.5 accent-primary"
         />
-        <span>Tutup</span>
+        <span>Closed</span>
       </label>
 
       <div className="flex items-center gap-1.5 flex-1 justify-end">
@@ -230,10 +230,10 @@ function ReservationSection({
     setSaving(true);
     try {
       await updateReservationConfig(barId, config);
-      toast.success("Konfigurasi reservasi disimpan");
+      toast.success("Reservation settings saved");
       setDirty(false);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
     } finally {
       setSaving(false);
     }
@@ -246,9 +246,9 @@ function ReservationSection({
           <CalendarCheck className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h2 className="text-base font-semibold">Reservasi</h2>
+          <h2 className="text-base font-semibold">Reservations</h2>
           <p className="text-xs text-muted-foreground">
-            Aturan booking meja oleh customer
+            Rules for table bookings by customers
           </p>
         </div>
       </div>
@@ -256,9 +256,9 @@ function ReservationSection({
       {/* Enable toggle */}
       <label className="flex items-center justify-between gap-3 p-3 rounded-md border border-border bg-muted/10 mb-4 cursor-pointer">
         <div>
-          <div className="text-sm font-medium">Aktifkan Reservasi</div>
+          <div className="text-sm font-medium">Enable Reservations</div>
           <div className="text-[11px] text-muted-foreground">
-            Customer bisa book meja terlebih dulu (untuk tanggal/jam tertentu)
+            Customers can book a table in advance (for a specific date/time)
           </div>
         </div>
         <input
@@ -277,18 +277,18 @@ function ReservationSection({
       >
         <ConfigField
           label="Booking window"
-          hint="Berapa hari ke depan customer bisa book"
+          hint="How many days ahead customers can book"
           value={config.bookingWindowDays}
-          unit="hari"
+          unit="days"
           min={1}
           max={30}
           onChange={(v) => patch({ bookingWindowDays: v })}
         />
         <ConfigField
           label="Min. lead time"
-          hint="Booking minimal berapa menit sebelum waktu booking"
+          hint="Minimum minutes before the booking time"
           value={config.minLeadTimeMinutes}
-          unit="menit"
+          unit="minutes"
           min={0}
           max={1440}
           step={15}
@@ -298,7 +298,7 @@ function ReservationSection({
           <div className="flex items-baseline justify-between">
             <label className="text-sm font-medium">Slot interval</label>
             <span className="text-[10px] text-muted-foreground">
-              jarak antar slot waktu booking
+              spacing between booking time slots
             </span>
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -314,7 +314,7 @@ function ReservationSection({
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
               >
-                {opt} mnt
+                {opt} min
               </button>
             ))}
           </div>
@@ -322,7 +322,7 @@ function ReservationSection({
 
         <ConfigField
           label="Minimum DP"
-          hint="Persentase dari total order initial. 0 = tidak perlu DP, 50 = wajib bayar setengah, 100 = full prepayment."
+          hint="Percentage of the initial order total. 0 = no deposit, 50 = pay half, 100 = full prepayment."
           value={config.minDownPaymentPercent}
           unit="%"
           min={0}
@@ -335,8 +335,8 @@ function ReservationSection({
       <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">
         <p className="text-[11px] text-muted-foreground">
           {config.enabled
-            ? "Customer bisa booking lewat /reserve nanti."
-            : "Fitur reservasi tidak aktif. Customer cuma bisa open-table walk-in."}
+            ? "Customers can book via /reserve later."
+            : "Reservations are off. Customers can only open-table walk-in."}
         </p>
         <Button
           type="button"
@@ -348,12 +348,12 @@ function ReservationSection({
           {saving ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Menyimpan...
+              Saving...
             </>
           ) : (
             <>
               <Save className="h-3.5 w-3.5" />
-              Simpan
+              Save
             </>
           )}
         </Button>

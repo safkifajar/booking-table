@@ -42,17 +42,17 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
-              Transaksi Pembayaran
+              Payment Transactions
             </h2>
             <p className="text-xs text-muted-foreground">
-              {payments.length} pembayaran · {formatIDR(paidTotal)} terbayar
+              {payments.length} payments · {formatIDR(paidTotal)} paid
             </p>
           </div>
           <ExportButton
             filename={`payments-${range.preset}-${new Date().toISOString().split("T")[0]}.csv`}
             rows={payments.map((p) => ({
               id: p.id.slice(0, 8).toUpperCase(),
-              datetime: new Date(p.at).toLocaleString("id-ID"),
+              datetime: new Date(p.at).toLocaleString("en-US"),
               payer: p.paid_by_name,
               table: p.table_label,
               area: p.area_name,
@@ -62,15 +62,15 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
               amount: p.amount,
             }))}
             headers={[
-              "ID Pembayaran",
-              "Waktu",
-              "Pembayar",
-              "Meja",
+              "Payment ID",
+              "Time",
+              "Payer",
+              "Table",
               "Area",
-              "Metode",
+              "Method",
               "Status",
               "Split",
-              "Nominal",
+              "Amount",
             ]}
           />
         </div>
@@ -79,9 +79,9 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
         {payments.length === 0 && (
           <Card className="p-8 text-center border-dashed">
             <CreditCard className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
-            <p className="text-sm">Belum ada pembayaran di periode ini.</p>
+            <p className="text-sm">No payments in this period yet.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Coba pilih rentang tanggal yang lebih lebar.
+              Try selecting a wider date range.
             </p>
           </Card>
         )}

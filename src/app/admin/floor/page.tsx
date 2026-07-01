@@ -19,10 +19,10 @@ export default async function AdminFloorPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Kelola Denah</h1>
+        <h1 className="text-2xl font-bold">Manage Floor Plan</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Atur letak meja per area: tarik meja untuk pindah posisi, tambah/hapus
-          meja & area, atur kapasitas, bentuk, dan ukuran.
+          Arrange tables per area: drag a table to move it, add/remove tables &
+          areas, set capacity, shape, and size.
         </p>
       </div>
 

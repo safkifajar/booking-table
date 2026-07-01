@@ -65,15 +65,15 @@ function DocEditor({
 
   async function handleSave() {
     if (!title.trim()) {
-      toast.error("Judul wajib diisi");
+      toast.error("Title is required");
       return;
     }
     setSaving(true);
     try {
       await upsertLegalDoc({ key: doc.key, title: title.trim(), content });
-      toast.success("Dokumen tersimpan");
+      toast.success("Document saved");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal menyimpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
     } finally {
       setSaving(false);
     }
@@ -84,13 +84,13 @@ function DocEditor({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] text-muted-foreground">
           {doc.updated_at
-            ? `Terakhir diperbarui ${new Date(doc.updated_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}`
-            : "Belum pernah disimpan"}
+            ? `Last updated ${new Date(doc.updated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`
+            : "Never saved"}
         </p>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href={publicPath} target="_blank">
-              <ExternalLink className="h-3.5 w-3.5" /> Lihat publik
+              <ExternalLink className="h-3.5 w-3.5" /> View public
             </Link>
           </Button>
           <Button
@@ -113,7 +113,7 @@ function DocEditor({
 
       <div>
         <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-          Judul
+          Title
         </label>
         <input
           type="text"
@@ -126,7 +126,7 @@ function DocEditor({
 
       <div>
         <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-          Konten (Markdown)
+          Content (Markdown)
         </label>
         {preview ? (
           <div className="min-h-[300px] rounded-md border border-border bg-card p-4">
@@ -137,13 +137,13 @@ function DocEditor({
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={16}
-            placeholder={"## Judul Bagian\n\nIsi paragraf...\n\n- Poin 1\n- Poin 2"}
+            placeholder={"## Section Title\n\nParagraph content...\n\n- Point 1\n- Point 2"}
             className="w-full rounded-md bg-input border border-border text-sm p-3 font-mono leading-relaxed focus:outline-none focus:border-primary/60 resize-y"
           />
         )}
         <p className="text-[11px] text-muted-foreground mt-1.5">
-          Mendukung Markdown: <code># Heading</code>, <code>**tebal**</code>,{" "}
-          <code>- list</code>, <code>[teks](url)</code>.
+          Supports Markdown: <code># Heading</code>, <code>**bold**</code>,{" "}
+          <code>- list</code>, <code>[text](url)</code>.
         </p>
       </div>
 
@@ -151,10 +151,10 @@ function DocEditor({
         <Button variant="gold" onClick={handleSave} disabled={saving}>
           {saving ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
             </>
           ) : (
-            "Simpan"
+            "Save"
           )}
         </Button>
       </div>

@@ -49,7 +49,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
       <div className="flex items-center justify-between mb-6 print:hidden">
         <Button asChild variant="ghost" size="sm">
           <Link href="/admin/transactions">
-            <ArrowLeft className="h-4 w-4" /> Kembali
+            <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
         <InvoicePrintButton />
@@ -87,31 +87,31 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <div className="font-medium">{host.display_name}</div>
           </div>
           <div>
-            <div className="text-muted-foreground print:text-black/60 mb-1">Sesi</div>
+            <div className="text-muted-foreground print:text-black/60 mb-1">Session</div>
             <div className="font-medium">{session.title ?? "Open Table"}</div>
           </div>
           <div>
-            <div className="text-muted-foreground print:text-black/60 mb-1">Mulai</div>
-            <div>{startedAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}</div>
+            <div className="text-muted-foreground print:text-black/60 mb-1">Started</div>
+            <div>{startedAt.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</div>
           </div>
           <div>
-            <div className="text-muted-foreground print:text-black/60 mb-1">Selesai</div>
+            <div className="text-muted-foreground print:text-black/60 mb-1">Ended</div>
             <div>
               {closedAt
-                ? closedAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })
+                ? closedAt.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })
                 : "—"}
             </div>
           </div>
           <div>
-            <div className="text-muted-foreground print:text-black/60 mb-1">Lokasi</div>
+            <div className="text-muted-foreground print:text-black/60 mb-1">Location</div>
             <div className="flex items-center gap-1">
               <MapPin className="h-3 w-3" /> {area.name} · {table.shape}
             </div>
           </div>
           <div>
-            <div className="text-muted-foreground print:text-black/60 mb-1">Anggota</div>
+            <div className="text-muted-foreground print:text-black/60 mb-1">Members</div>
             <div className="flex items-center gap-1">
-              <Users className="h-3 w-3" /> {memberCount ?? 0} orang
+              <Users className="h-3 w-3" /> {memberCount ?? 0} people
               {durationMin !== null && (
                 <span className="ml-2 flex items-center gap-1 text-muted-foreground print:text-black/60">
                   <Clock className="h-3 w-3" /> {durationMin}m
@@ -124,25 +124,25 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         {/* Daftar anggota meja — klik untuk lihat detail customer (sembunyi saat print) */}
         <div className="border-t border-border pt-4 print:hidden">
           <div className="flex items-center gap-1.5 text-sm font-semibold mb-3">
-            <Users className="h-4 w-4" /> Anggota Meja
+            <Users className="h-4 w-4" /> Table Members
             <span className="font-normal text-muted-foreground">
               ({members.length})
             </span>
           </div>
           {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Belum ada anggota.</p>
+            <p className="text-sm text-muted-foreground">No members yet.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {members.map((m) => {
                 const roleLabel =
-                  m.role === "host" ? "Host" : m.is_guest ? "Tamu" : "Member";
+                  m.role === "host" ? "Host" : m.is_guest ? "Guest" : "Member";
                 const statusLabel =
                   m.status === "joined"
                     ? null
                     : m.status === "left"
-                      ? "keluar"
+                      ? "left"
                       : m.status === "kicked"
-                        ? "dikeluarkan"
+                        ? "removed"
                         : m.status === "pending"
                           ? "pending"
                           : m.status;
@@ -171,7 +171,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       <span className="text-[11px] text-muted-foreground">
                         {roleLabel}
                         {statusLabel && ` · ${statusLabel}`}
-                        {!m.is_customer && " · tanpa akun"}
+                        {!m.is_customer && " · no account"}
                       </span>
                     </div>
                   </>
@@ -207,7 +207,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 <th className="text-left py-2 w-12">#</th>
                 <th className="text-left py-2">Item</th>
                 <th className="text-right py-2 w-12">Qty</th>
-                <th className="text-right py-2 w-24">Harga</th>
+                <th className="text-right py-2 w-24">Price</th>
                 <th className="text-right py-2 w-28">Total</th>
               </tr>
             </thead>
@@ -239,7 +239,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               {items.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                    Tidak ada item.
+                    No items.
                   </td>
                 </tr>
               )}
@@ -254,14 +254,14 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             <span className="font-semibold tabular-nums">{formatIDR(subtotal)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground print:text-black/70">Terbayar</span>
+            <span className="text-muted-foreground print:text-black/70">Paid</span>
             <span className="font-semibold tabular-nums text-emerald-400 print:text-black">
               {formatIDR(totalPaid)}
             </span>
           </div>
           {subtotal - totalPaid > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground print:text-black/70">Sisa</span>
+              <span className="text-muted-foreground print:text-black/70">Remaining</span>
               <span className="font-semibold tabular-nums text-amber-400 print:text-black">
                 {formatIDR(subtotal - totalPaid)}
               </span>
@@ -279,7 +279,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         {payments.length > 0 && (
           <div className="pt-4 mt-4 border-t border-border print:border-black/20">
             <h3 className="text-[10px] uppercase tracking-widest text-muted-foreground print:text-black/60 mb-2">
-              Pembayaran
+              Payments
             </h3>
             <div className="space-y-1.5 text-xs">
               {payments.map((p) => (
@@ -298,14 +298,14 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       </span>
                       <span>
                         {p.paid_at
-                          ? new Date(p.paid_at).toLocaleString("id-ID", {
+                          ? new Date(p.paid_at).toLocaleString("en-US", {
                               day: "numeric",
                               month: "short",
                               year: "numeric",
                               hour: "2-digit",
                               minute: "2-digit",
                             })
-                          : "Belum dibayar"}
+                          : "Not paid yet"}
                       </span>
                     </div>
                   </div>
@@ -326,10 +326,10 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         {/* Footer */}
         <div className="pt-6 mt-6 border-t border-border print:border-black/20 text-center">
           <p className="text-xs text-muted-foreground print:text-black/60">
-            Terima kasih sudah berkunjung
+            Thank you for visiting
           </p>
           <p className="text-[10px] text-muted-foreground/60 print:text-black/40 mt-1">
-            Cetak via booking-table · {new Date().toLocaleDateString("id-ID")}
+            Printed via booking-table · {new Date().toLocaleDateString("en-US")}
           </p>
         </div>
       </Card>

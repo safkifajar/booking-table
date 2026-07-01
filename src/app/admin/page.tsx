@@ -63,7 +63,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
       const dayKey = fmtDate(new Date(t));
       const found = byDayMap.get(dayKey);
       chartData.push({
-        label: new Date(t).toLocaleDateString("id-ID", {
+        label: new Date(t).toLocaleDateString("en-US", {
           day: "numeric",
           month: "short",
         }),
@@ -103,29 +103,29 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
             <StatCard
               icon={<Receipt className="h-4 w-4" />}
-              label="Transaksi"
-              value={summary.transaction_count.toLocaleString("id-ID")}
+              label="Transactions"
+              value={summary.transaction_count.toLocaleString("en-US")}
               sub={
                 summary.transaction_count > 0
-                  ? `${formatIDR(summary.avg_bill)} / transaksi`
+                  ? `${formatIDR(summary.avg_bill)} / transaction`
                   : undefined
               }
               deltaPct={summary.delta_transaction_pct}
             />
             <StatCard
               icon={<Users className="h-4 w-4" />}
-              label="Pengunjung"
-              value={summary.unique_visitors.toLocaleString("id-ID")}
-              sub="unique customer"
+              label="Visitors"
+              value={summary.unique_visitors.toLocaleString("en-US")}
+              sub="unique customers"
               deltaPct={summary.delta_visitors_pct}
             />
             <StatCard
               icon={<Utensils className="h-4 w-4" />}
-              label="Items terjual"
-              value={summary.total_items.toLocaleString("id-ID")}
+              label="Items sold"
+              value={summary.total_items.toLocaleString("en-US")}
               sub={
                 summary.transaction_count > 0
-                  ? `${summary.avg_items_per_transaction} per transaksi`
+                  ? `${summary.avg_items_per_transaction} per transaction`
                   : undefined
               }
             />
@@ -138,12 +138,12 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold">
-                  {isMultiDay ? "Penjualan per hari" : "Penjualan per jam"}
+                  {isMultiDay ? "Sales per day" : "Sales per hour"}
                 </h2>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   {isMultiDay
-                    ? `${chartData.length} hari · ${range.label.toLowerCase()}`
-                    : "Jam operasional 16:00 — 03:00"}
+                    ? `${chartData.length} days · ${range.label.toLowerCase()}`
+                    : "Operating hours 16:00 — 03:00"}
                 </p>
               </div>
             </div>
@@ -153,9 +153,9 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
           <div className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-semibold">Metode bayar</h2>
+                <h2 className="text-sm font-semibold">Payment methods</h2>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Uang diterima per metode
+                  Money received per method
                 </p>
               </div>
               <Wallet className="h-4 w-4 text-primary/50" />
@@ -168,9 +168,9 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
         <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold">Top 10 item paling laris</h2>
+              <h2 className="text-sm font-semibold">Top 10 best sellers</h2>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Berdasarkan revenue di periode ini
+                Based on revenue for this period
               </p>
             </div>
             <Utensils className="h-4 w-4 text-primary/50" />
@@ -220,7 +220,7 @@ function HeroDelta({ pct, prev }: { pct: number | null; prev: number }) {
   if (pct === null) {
     return (
       <div className="text-xs text-primary/80">
-        Pertama kali ada penjualan di periode ini
+        First sales in this period
       </div>
     );
   }
@@ -228,7 +228,7 @@ function HeroDelta({ pct, prev }: { pct: number | null; prev: number }) {
     return (
       <div className="text-xs text-muted-foreground inline-flex items-center gap-1">
         <Minus className="h-3 w-3" />
-        Sama dengan periode sebelumnya
+        Same as previous period
       </div>
     );
   }
@@ -249,7 +249,7 @@ function HeroDelta({ pct, prev }: { pct: number | null; prev: number }) {
         {pct}%
       </span>
       <span className="text-muted-foreground font-normal">
-        vs {formatIDR(prev)} periode lalu
+        vs {formatIDR(prev)} last period
       </span>
     </div>
   );

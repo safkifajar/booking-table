@@ -15,12 +15,12 @@ type Preset =
   | "custom";
 
 const PRESETS: { value: Preset; label: string }[] = [
-  { value: "today", label: "Hari ini" },
-  { value: "yesterday", label: "Kemarin" },
-  { value: "last7", label: "7 hari" },
-  { value: "last30", label: "30 hari" },
-  { value: "this_month", label: "Bulan ini" },
-  { value: "last_month", label: "Bulan lalu" },
+  { value: "today", label: "Today" },
+  { value: "yesterday", label: "Yesterday" },
+  { value: "last7", label: "7 days" },
+  { value: "last30", label: "30 days" },
+  { value: "this_month", label: "This month" },
+  { value: "last_month", label: "Last month" },
 ];
 
 /**
@@ -149,8 +149,8 @@ export function DateRangeFilter({
               type="date"
               value={fromValue}
               onChange={(e) => onFromChange(e.target.value)}
-              placeholder="Dari"
-              aria-label="Tanggal mulai"
+              placeholder="From"
+              aria-label="Start date"
               className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
             />
             <span className="text-muted-foreground text-xs">→</span>
@@ -158,8 +158,8 @@ export function DateRangeFilter({
               type="date"
               value={toValue}
               onChange={(e) => onToChange(e.target.value)}
-              placeholder="Sampai"
-              aria-label="Tanggal selesai"
+              placeholder="To"
+              aria-label="End date"
               className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
             />
           </div>

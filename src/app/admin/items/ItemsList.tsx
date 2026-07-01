@@ -66,7 +66,7 @@ export function ItemsList({ items, totalRevenue }: Props) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari item..."
+            placeholder="Search items..."
             className="w-full h-9 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           />
         </div>
@@ -76,7 +76,7 @@ export function ItemsList({ items, totalRevenue }: Props) {
       {categories.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
           <CategoryChip
-            label="Semua"
+            label="All"
             count={items.length}
             active={activeCategory === "all"}
             onClick={() => setActiveCategory("all")}
@@ -99,11 +99,11 @@ export function ItemsList({ items, totalRevenue }: Props) {
       {/* Result summary */}
       <div className="text-xs text-muted-foreground">
         {filtered.length === items.length ? (
-          <>Menampilkan {filtered.length} item</>
+          <>Showing {filtered.length} items</>
         ) : (
           <>
-            {filtered.length} dari {items.length} item
-            {query && <> · pencarian &quot;{query}&quot;</>}
+            {filtered.length} of {items.length} items
+            {query && <> · search &quot;{query}&quot;</>}
           </>
         )}
       </div>

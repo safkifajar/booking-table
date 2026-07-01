@@ -19,9 +19,9 @@ export default async function AdminMenuPage() {
           <div className="text-xs uppercase tracking-widest text-primary/70 mb-1">
             Menu Management
           </div>
-          <h1 className="text-2xl font-semibold">Menu & Kategori</h1>
+          <h1 className="text-2xl font-semibold">Menu & Categories</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Kelola menu items dan kategori untuk {bar.name}.
+            Manage menu items and categories for {bar.name}.
           </p>
         </div>
 

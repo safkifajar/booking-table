@@ -56,25 +56,25 @@ const ROLE_META: Record<
     label: "Admin",
     icon: <Shield className="h-3.5 w-3.5" />,
     color: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-    description: "Akses penuh — manage menu, banner, staff, lihat semua laporan",
+    description: "Full access — manage menu, banners, staff, view all reports",
   },
   manager: {
     label: "Manager",
     icon: <Briefcase className="h-3.5 w-3.5" />,
     color: "text-purple-400 bg-purple-500/10 border-purple-500/30",
-    description: "Manage menu + banner + payment + close meja + laporan",
+    description: "Manage menu + banners + payments + close tables + reports",
   },
   cashier: {
-    label: "Kasir",
+    label: "Cashier",
     icon: <User className="h-3.5 w-3.5" />,
     color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
-    description: "Terima payment + close meja + lihat shift sendiri",
+    description: "Accept payments + close tables + view own shift",
   },
   waiter: {
     label: "Waiter",
     icon: <ChefHat className="h-3.5 w-3.5" />,
     color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
-    description: "Queue order management + bantu pesan di meja",
+    description: "Queue order management + help order at tables",
   },
 };
 
@@ -104,7 +104,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
         emailSent: result.emailSent,
       });
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim ulang"));
+      toast.error(getActionErrorMessage(err, "Failed to resend"));
     } finally {
       setResending(null);
     }
@@ -115,27 +115,27 @@ export function StaffManager({ barId, initialStaff }: Props) {
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
-          {staff.length} staff terdaftar ·{" "}
-          {staff.filter((s) => s.isActive).length} aktif ·{" "}
+          {staff.length} staff registered ·{" "}
+          {staff.filter((s) => s.isActive).length} active ·{" "}
           {staff.filter((s) => !s.hasPassword).length} pending setup
         </div>
         <Button variant="gold" size="sm" onClick={() => setInviting(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Invite Staff Baru
+          Invite New Staff
         </Button>
       </div>
 
       {staff.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Shield className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium mb-1">Belum ada staff</p>
+          <p className="text-sm font-medium mb-1">No staff yet</p>
           <p className="text-xs text-muted-foreground mb-4">
-            Invite staff pertama dengan input email + nama + role. Email setup
-            password akan dikirim otomatis.
+            Invite your first staff with email + name + role. A password setup
+            email will be sent automatically.
           </p>
           <Button variant="outline" onClick={() => setInviting(true)}>
             <Plus className="h-4 w-4" />
-            Invite Staff Baru
+            Invite New Staff
           </Button>
         </Card>
       ) : (
@@ -144,11 +144,11 @@ export function StaffManager({ barId, initialStaff }: Props) {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Nama</th>
+                  <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Email</th>
                   <th className="px-4 py-3 font-medium w-40">Role</th>
                   <th className="px-4 py-3 font-medium w-28">Status</th>
-                  <th className="px-4 py-3 font-medium w-36 text-right">Aksi</th>
+                  <th className="px-4 py-3 font-medium w-36 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -172,7 +172,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
                           {!row.hasPassword && (
                             <div className="text-[10px] text-amber-400 flex items-center gap-0.5 mt-0.5">
                               <Mail className="h-2.5 w-2.5" />
-                              Belum set password
+                              Password not set
                             </div>
                           )}
                         </div>
@@ -200,7 +200,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
                         variant={row.isActive ? "default" : "secondary"}
                         className="text-[10px]"
                       >
-                        {row.isActive ? "Aktif" : "Nonaktif"}
+                        {row.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </td>
 
@@ -221,7 +221,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
                             onClick={() => handleResend(row)}
                             disabled={resending === row.id}
                             className="text-amber-400 hover:text-amber-300"
-                            title="Kirim ulang email setup password"
+                            title="Resend password setup email"
                           >
                             {resending === row.id ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -258,7 +258,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
 
             if (!isNewUser) {
               toast.success(
-                `${newRow.displayName} sudah punya akun — role di-assign langsung tanpa email.`
+                `${newRow.displayName} already has an account — role assigned directly without email.`
               );
               return;
             }
@@ -325,15 +325,15 @@ function InviteSuccessModal({
     try {
       await navigator.clipboard.writeText(info.setupUrl);
       setCopied(true);
-      toast.success("URL ter-copy");
+      toast.success("URL copied");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Gagal copy — copy manual dari field");
+      toast.error("Failed to copy — copy manually from the field");
     }
   }
 
   function handleWhatsApp() {
-    const message = `Halo ${info.displayName}, kamu di-invite jadi staff SOHO Social House. Klik link berikut untuk set password & login:\n\n${info.setupUrl}\n\nLink valid 7 hari.`;
+    const message = `Hi ${info.displayName}, you've been invited to be a staff member at SOHO Social House. Click the link below to set your password & log in:\n\n${info.setupUrl}\n\nLink valid for 7 days.`;
     const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank");
   }
@@ -346,13 +346,13 @@ function InviteSuccessModal({
             <div className="h-8 w-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
               <CheckCircle2 className="h-4 w-4 text-emerald-400" />
             </div>
-            <h2 className="font-semibold">Invite Berhasil Dibuat</h2>
+            <h2 className="font-semibold">Invite Created Successfully</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted/60 transition"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -362,7 +362,7 @@ function InviteSuccessModal({
           {/* Recipient info */}
           <div>
             <p className="text-sm">
-              Untuk <strong>{info.displayName}</strong> ({info.email})
+              For <strong>{info.displayName}</strong> ({info.email})
             </p>
           </div>
 
@@ -379,16 +379,17 @@ function InviteSuccessModal({
               <div className="flex items-start gap-2">
                 <MailCheck className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
-                  Email berhasil dikirim. Pastikan karyawan cek inbox/spam.
+                  Email sent successfully. Make sure the employee checks their
+                  inbox/spam.
                 </span>
               </div>
             ) : (
               <div className="flex items-start gap-2">
                 <Mail className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
-                  Email gagal dikirim (domain belum verified di Resend). Tidak
-                  masalah — copy URL di bawah & kirim manual ke karyawan via
-                  WhatsApp/SMS/dll.
+                  Email failed to send (domain not yet verified in Resend). No
+                  problem — copy the URL below & send it manually to the
+                  employee via WhatsApp/SMS/etc.
                 </span>
               </div>
             )}
@@ -398,7 +399,7 @@ function InviteSuccessModal({
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
               <LinkIcon className="h-3 w-3" />
-              Setup URL (valid 7 hari)
+              Setup URL (valid 7 days)
             </label>
             <div className="flex gap-2">
               <input
@@ -429,7 +430,8 @@ function InviteSuccessModal({
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5">
-              Kasih URL ini ke karyawan supaya mereka bisa set password & login.
+              Give this URL to the employee so they can set their password & log
+              in.
             </p>
           </div>
 
@@ -450,7 +452,7 @@ function InviteSuccessModal({
               onClick={onClose}
               className="flex-1"
             >
-              Selesai
+              Done
             </Button>
           </div>
         </div>
@@ -495,11 +497,11 @@ function InviteStaffModal({
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = displayName.trim();
     if (!cleanEmail.includes("@")) {
-      toast.error("Email tidak valid");
+      toast.error("Invalid email");
       return;
     }
     if (cleanName.length < 2) {
-      toast.error("Nama minimal 2 karakter");
+      toast.error("Name must be at least 2 characters");
       return;
     }
 
@@ -529,7 +531,7 @@ function InviteStaffModal({
         result.setupUrl
       );
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal invite staff"));
+      toast.error(getActionErrorMessage(err, "Failed to invite staff"));
       setLoading(false);
     }
   }
@@ -538,13 +540,13 @@ function InviteStaffModal({
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <Card className="w-full max-w-lg my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="font-semibold">Invite Staff Baru</h2>
+          <h2 className="font-semibold">Invite New Staff</h2>
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
             className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted/60 transition"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -555,15 +557,15 @@ function InviteStaffModal({
           <div className="flex items-start gap-2 p-3 rounded-md bg-primary/[0.05] border border-primary/20">
             <MailCheck className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <div className="text-xs text-muted-foreground leading-relaxed">
-              Karyawan akan dapat email berisi link untuk set password. Mereka
-              tidak perlu daftar manual di app.
+              The employee will receive an email with a link to set their
+              password. They don't need to register manually in the app.
             </div>
           </div>
 
           {/* Email */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Email karyawan
+              Employee email
             </label>
             <input
               type="email"
@@ -579,7 +581,7 @@ function InviteStaffModal({
           {/* Display name */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Nama panggilan
+              Nickname
             </label>
             <input
               type="text"
@@ -588,7 +590,7 @@ function InviteStaffModal({
               required
               minLength={2}
               maxLength={40}
-              placeholder="cth: Andi"
+              placeholder="e.g. Andi"
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
           </div>
@@ -596,7 +598,7 @@ function InviteStaffModal({
           {/* Role picker */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Pilih role
+              Select role
             </label>
             <div className="grid grid-cols-2 gap-2">
               {(["waiter", "cashier", "manager", "admin"] as Role[]).map((r) => {
@@ -644,18 +646,18 @@ function InviteStaffModal({
               onClick={onClose}
               disabled={loading}
             >
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="gold" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Mengirim invite...
+                  Sending invite...
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Kirim Invite
+                  Send Invite
                 </>
               )}
             </Button>
@@ -692,11 +694,11 @@ function EditStaffModal({
     // Validasi reset password (kalau diisi).
     if (password || confirmPassword) {
       if (password.length < 6) {
-        toast.error("Password minimal 6 karakter");
+        toast.error("Password must be at least 6 characters");
         return;
       }
       if (password !== confirmPassword) {
-        toast.error("Konfirmasi password tidak cocok");
+        toast.error("Password confirmation does not match");
         return;
       }
     }
@@ -710,7 +712,7 @@ function EditStaffModal({
         isActive,
         password: password || undefined,
       });
-      toast.success("Data staff diperbarui");
+      toast.success("Staff details updated");
       onSaved({
         ...row,
         displayName: displayName.trim(),
@@ -721,7 +723,7 @@ function EditStaffModal({
         hasPassword: password ? true : row.hasPassword,
       });
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal memperbarui staff"));
+      toast.error(getActionErrorMessage(err, "Failed to update staff"));
       setSaving(false);
     }
   }
@@ -735,7 +737,7 @@ function EditStaffModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
-              Nama
+              Name
             </label>
             <input
               type="text"
@@ -801,7 +803,7 @@ function EditStaffModal({
                   : "border-border text-muted-foreground hover:bg-muted/50"
               )}
             >
-              <span>{isActive ? "Aktif" : "Nonaktif"}</span>
+              <span>{isActive ? "Active" : "Inactive"}</span>
               {isActive ? (
                 <ToggleRight className="h-5 w-5" />
               ) : (
@@ -812,15 +814,15 @@ function EditStaffModal({
 
           {/* Reset password (opsional) */}
           <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-            <p className="text-xs font-medium">Reset password (opsional)</p>
+            <p className="text-xs font-medium">Reset password (optional)</p>
             <p className="text-[11px] text-muted-foreground -mt-1">
-              Kosongkan kalau tidak ingin mengubah password.
+              Leave blank if you don't want to change the password.
             </p>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password baru"
+              placeholder="New password"
               minLength={6}
               maxLength={100}
               autoComplete="new-password"
@@ -830,7 +832,7 @@ function EditStaffModal({
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Konfirmasi password baru"
+              placeholder="Confirm new password"
               minLength={6}
               maxLength={100}
               autoComplete="new-password"
@@ -839,11 +841,11 @@ function EditStaffModal({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-              Batal
+              Cancel
             </Button>
             <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Simpan
+              Save
             </Button>
           </DialogFooter>
         </form>

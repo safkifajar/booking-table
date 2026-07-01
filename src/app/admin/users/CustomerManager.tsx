@@ -82,34 +82,34 @@ export function CustomerManager({
 
   async function handleDelete(row: AdminCustomerRow) {
     const ok = await confirm({
-      title: `Hapus ${row.name}?`,
+      title: `Delete ${row.name}?`,
       description:
-        "Akun customer ini akan dihapus permanen. Hanya bisa kalau belum punya riwayat kunjungan.",
-      confirmText: "Hapus",
+        "This customer account will be permanently deleted. Only possible if they have no visit history.",
+      confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
     setDeleting(row.id);
     try {
       await deleteCustomer(row.id);
-      toast.success(`${row.name} dihapus`);
+      toast.success(`${row.name} deleted`);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus customer"));
+      toast.error(getActionErrorMessage(err, "Failed to delete customer"));
     } finally {
       setDeleting(null);
     }
   }
 
   function exportCsv() {
-    const header = ["Nama", "Email", "Nomor WA", "Kunjungan", "Daftar"];
+    const header = ["Name", "Email", "WhatsApp number", "Visits", "Registered"];
     const lines = initialRows.map((r) =>
       [
         r.name,
         r.email,
         r.phone ?? "",
         r.visit_count,
-        new Date(r.created_at).toLocaleDateString("id-ID"),
+        new Date(r.created_at).toLocaleDateString("en-US"),
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
@@ -134,7 +134,7 @@ export function CustomerManager({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari nama atau email…"
+            placeholder="Search name or email…"
             className="w-full h-10 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           />
         </form>
@@ -142,14 +142,14 @@ export function CustomerManager({
           <Download className="h-4 w-4" /> Export
         </Button>
         <Button variant="gold" onClick={() => setEditTarget({ mode: "create" })}>
-          <UserPlus className="h-4 w-4" /> Tambah Customer
+          <UserPlus className="h-4 w-4" /> Add Customer
         </Button>
       </div>
 
       {/* List */}
       {initialRows.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground border-dashed">
-          {query ? `Tidak ada customer cocok "${query}".` : "Belum ada customer."}
+          {query ? `No customer matches "${query}".` : "No customers yet."}
         </Card>
       ) : (
         <Card className="divide-y divide-border">
@@ -178,7 +178,7 @@ export function CustomerManager({
                           : "bg-red-500/15 text-red-400 border-red-500/30"
                       )}
                     >
-                      {r.is_active ? "Aktif" : "Nonaktif"}
+                      {r.is_active ? "Active" : "Inactive"}
                     </Badge>
                     {r.rating_count > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] text-primary">
@@ -191,7 +191,7 @@ export function CustomerManager({
                     )}
                     {r.visit_count > 0 && (
                       <Badge variant="secondary" className="text-[10px]">
-                        {r.visit_count}× kunjungan
+                        {r.visit_count}× visits
                       </Badge>
                     )}
                   </div>
@@ -205,7 +205,7 @@ export function CustomerManager({
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Hapus"
+                  aria-label="Delete"
                   disabled={deleting === r.id}
                   onClick={() => handleDelete(r)}
                 >
@@ -224,7 +224,7 @@ export function CustomerManager({
       {/* Pagination — gaya seragam dgn admin lain (komponen page 0-based) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Per halaman:</span>
+          <span>Per page:</span>
           <select
             value={pageSize}
             onChange={(e) => pushParams({ size: Number(e.target.value), page: 1 })}
@@ -235,7 +235,7 @@ export function CustomerManager({
             <option value={50}>50</option>
             <option value={100}>100</option>
           </select>
-          <span className="ml-1 hidden sm:inline">· {total} customer</span>
+          <span className="ml-1 hidden sm:inline">· {total} customers</span>
         </label>
         {totalPages > 1 && (
           <Pagination
@@ -291,11 +291,11 @@ function CustomerFormDialog({
     // Validasi password (edit: opsional; kalau diisi harus cocok & min 6).
     if (isEdit && (password || confirmPassword)) {
       if (password.length < 6) {
-        toast.error("Password baru minimal 6 karakter");
+        toast.error("New password must be at least 6 characters");
         return;
       }
       if (password !== confirmPassword) {
-        toast.error("Konfirmasi password tidak cocok");
+        toast.error("Password confirmation does not match");
         return;
       }
     }
@@ -313,7 +313,7 @@ function CustomerFormDialog({
           interestedIn: interestedIn || undefined,
         });
         toast.success(
-          password ? "Customer & password diperbarui" : "Customer diperbarui"
+          password ? "Customer & password updated" : "Customer updated"
         );
       } else {
         await createCustomer({
@@ -322,11 +322,11 @@ function CustomerFormDialog({
           password,
           phone: phone.trim() || undefined,
         });
-        toast.success("Customer dibuat");
+        toast.success("Customer created");
       }
       onSaved();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan customer"));
+      toast.error(getActionErrorMessage(err, "Failed to save customer"));
       setSaving(false);
     }
   }
@@ -335,17 +335,17 @@ function CustomerFormDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Customer" : "Tambah Customer"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit Customer" : "Add Customer"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Nama">
+          <Field label="Name">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={80}
-              placeholder="mis. Budi Santoso"
+              placeholder="e.g. Budi Santoso"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
@@ -356,17 +356,17 @@ function CustomerFormDialog({
               onChange={(e) => setEmail(e.target.value)}
               required
               maxLength={120}
-              placeholder="mis. budi@email.com"
+              placeholder="e.g. budi@email.com"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
-          <Field label="Nomor WA (opsional)">
+          <Field label="WhatsApp number (optional)">
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               maxLength={20}
-              placeholder="mis. 081234567890"
+              placeholder="e.g. 081234567890"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
@@ -379,34 +379,34 @@ function CustomerFormDialog({
                 required
                 minLength={6}
                 maxLength={100}
-                placeholder="Minimal 6 karakter"
+                placeholder="At least 6 characters"
                 className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
               />
             </Field>
           ) : (
             <div className="rounded-md border border-border p-3 space-y-3">
               <p className="text-xs text-muted-foreground">
-                Reset password (opsional) — isi kalau customer lupa password.
-                Kosongkan kalau tidak diubah.
+                Reset password (optional) — fill in if the customer forgot their
+                password. Leave blank if unchanged.
               </p>
-              <Field label="Password baru">
+              <Field label="New password">
                 <input
                   type="text"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   minLength={6}
                   maxLength={100}
-                  placeholder="Minimal 6 karakter"
+                  placeholder="At least 6 characters"
                   className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
                 />
               </Field>
-              <Field label="Konfirmasi password baru">
+              <Field label="Confirm new password">
                 <input
                   type="text"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   maxLength={100}
-                  placeholder="Ulangi password baru"
+                  placeholder="Repeat new password"
                   className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
                 />
               </Field>
@@ -414,11 +414,11 @@ function CustomerFormDialog({
           )}
 
           {/* Jenis kelamin (opsional) */}
-          <Field label="Jenis kelamin (opsional)">
+          <Field label="Gender (optional)">
             <div className="flex gap-2">
               {([
-                { value: "male", label: "Pria" },
-                { value: "female", label: "Wanita" },
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -440,12 +440,12 @@ function CustomerFormDialog({
           </Field>
 
           {/* Tertarik pada (opsional) */}
-          <Field label="Tertarik pada (opsional)">
+          <Field label="Interested in (optional)">
             <div className="flex gap-2">
               {([
-                { value: "male", label: "Pria" },
-                { value: "female", label: "Wanita" },
-                { value: "both", label: "Keduanya" },
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+                { value: "both", label: "Both" },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -468,7 +468,7 @@ function CustomerFormDialog({
 
           {/* Status aktif (edit) — paling bawah; nonaktif = tak bisa login */}
           {isEdit && (
-            <Field label="Status akun">
+            <Field label="Account status">
               <button
                 type="button"
                 onClick={() => setIsActive((v) => !v)}
@@ -479,9 +479,9 @@ function CustomerFormDialog({
                     : "border-red-500/30 bg-red-500/10 text-red-400"
                 )}
               >
-                <span>{isActive ? "Aktif" : "Nonaktif"}</span>
+                <span>{isActive ? "Active" : "Inactive"}</span>
                 <span className="text-xs opacity-70">
-                  {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
+                  {isActive ? "Tap to deactivate" : "Tap to activate"}
                 </span>
               </button>
             </Field>
@@ -489,17 +489,17 @@ function CustomerFormDialog({
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="gold" disabled={saving}>
               {saving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
                 </>
               ) : isEdit ? (
-                "Simpan"
+                "Save"
               ) : (
-                "Buat Akun"
+                "Create Account"
               )}
             </Button>
           </DialogFooter>

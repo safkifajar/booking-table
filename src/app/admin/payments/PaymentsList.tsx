@@ -68,7 +68,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Cari ID, pembayar, atau meja…"
+            placeholder="Search ID, payer, or table…"
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
@@ -79,9 +79,9 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
             setPage(0);
           }}
           className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
-          aria-label="Filter metode"
+          aria-label="Filter method"
         >
-          <option value="all">Semua metode</option>
+          <option value="all">All methods</option>
           {METHODS.map((m) => (
             <option key={m} value={m}>
               {m.toUpperCase()}
@@ -97,7 +97,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
           className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
           aria-label="Filter status"
         >
-          <option value="all">Semua status</option>
+          <option value="all">All statuses</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -108,9 +108,9 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
 
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
-          <p className="text-sm">Tidak ada pembayaran yang cocok.</p>
+          <p className="text-sm">No matching payments.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Coba ubah kata kunci atau filter.
+            Try changing your keyword or filters.
           </p>
         </Card>
       ) : (
@@ -118,10 +118,10 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
           {/* Header row (desktop) */}
           <div className="hidden md:grid grid-cols-[90px_1fr_150px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
             <span>ID</span>
-            <span>Pembayar / Meja</span>
-            <span>Metode</span>
-            <span>Waktu</span>
-            <span className="text-right">Nominal</span>
+            <span>Payer / Table</span>
+            <span>Method</span>
+            <span>Time</span>
+            <span className="text-right">Amount</span>
             <span></span>
           </div>
 
@@ -142,7 +142,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                       {p.paid_by_name}
                     </p>
                     <p className="text-[11px] text-muted-foreground truncate">
-                      Meja {p.table_label} · {p.area_name}
+                      Table {p.table_label} · {p.area_name}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -157,13 +157,13 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                     </Badge>
                   </div>
                   <div className="text-[11px] text-muted-foreground tabular-nums">
-                    {new Date(p.at).toLocaleDateString("id-ID", {
+                    {new Date(p.at).toLocaleDateString("en-US", {
                       day: "numeric",
                       month: "short",
                       year: "numeric",
                     })}
                     <span className="block opacity-70">
-                      {new Date(p.at).toLocaleTimeString("id-ID", {
+                      {new Date(p.at).toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
@@ -183,7 +183,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                         {p.paid_by_name}
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">
-                        Meja {p.table_label} · {p.area_name}
+                        Table {p.table_label} · {p.area_name}
                       </p>
                     </div>
                     <span className="font-mono text-[10px] text-muted-foreground shrink-0">
@@ -207,7 +207,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                         {formatIDR(p.amount)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
-                        {new Date(p.at).toLocaleString("id-ID", {
+                        {new Date(p.at).toLocaleString("en-US", {
                           day: "numeric",
                           month: "short",
                           hour: "2-digit",
@@ -227,7 +227,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
       {filtered.length > 0 && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Per halaman:</span>
+            <span>Per page:</span>
             <select
               value={pageSize}
               onChange={(e) => {

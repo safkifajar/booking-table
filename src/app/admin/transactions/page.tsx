@@ -45,17 +45,17 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Receipt className="h-5 w-5 text-primary" />
-              Transaksi
+              Transactions
             </h2>
             <p className="text-xs text-muted-foreground">
-              {transactions.length} transaksi · {formatIDR(totalRevenue)} total
+              {transactions.length} transactions · {formatIDR(totalRevenue)} total
             </p>
           </div>
           <ExportButton
             filename={`transactions-${range.preset}-${new Date().toISOString().split("T")[0]}.csv`}
             rows={transactions.map((t) => ({
               id: t.session_id.slice(0, 8).toUpperCase(),
-              date: new Date(t.closed_at ?? t.started_at).toLocaleString("id-ID"),
+              date: new Date(t.closed_at ?? t.started_at).toLocaleString("en-US"),
               table: t.table_label,
               area: t.area_name,
               host: t.host_name,
@@ -67,17 +67,17 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
               paid_total: t.paid_total,
             }))}
             headers={[
-              "ID Transaksi",
-              "Tanggal",
-              "Meja",
+              "Transaction ID",
+              "Date",
+              "Table",
               "Area",
               "Host",
-              "Judul Sesi",
-              "Anggota",
-              "Item",
-              "Durasi (mnt)",
+              "Session Title",
+              "Members",
+              "Items",
+              "Duration (min)",
               "Subtotal",
-              "Total Bayar",
+              "Total Paid",
             ]}
           />
         </div>
@@ -86,13 +86,13 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
         <div className="grid grid-cols-2 gap-3">
           <StatCard
             icon={<CheckCircle2 className="h-4 w-4" />}
-            label="Sudah Lunas"
-            value={`${payStatus.paid_count.toLocaleString("id-ID")} transaksi`}
+            label="Paid"
+            value={`${payStatus.paid_count.toLocaleString("en-US")} transactions`}
           />
           <StatCard
             icon={<AlertCircle className="h-4 w-4" />}
-            label="Belum Lunas"
-            value={`${payStatus.unpaid_count.toLocaleString("id-ID")} transaksi`}
+            label="Unpaid"
+            value={`${payStatus.unpaid_count.toLocaleString("en-US")} transactions`}
           />
         </div>
 
@@ -100,9 +100,9 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
         {transactions.length === 0 && (
           <Card className="p-8 text-center border-dashed">
             <Receipt className="h-10 w-10 mx-auto text-muted-foreground/40 mb-2" />
-            <p className="text-sm">Belum ada transaksi di periode ini.</p>
+            <p className="text-sm">No transactions in this period yet.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Coba pilih rentang tanggal yang lebih lebar.
+              Try selecting a wider date range.
             </p>
           </Card>
         )}

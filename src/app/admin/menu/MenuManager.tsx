@@ -118,7 +118,7 @@ export function MenuManager({
         />
         <TabButton
           icon={<Layers className="h-3.5 w-3.5" />}
-          label="Kategori"
+          label="Categories"
           active={tab === "categories"}
           onClick={() => setTab("categories")}
           badge={categories.length}
@@ -148,10 +148,10 @@ export function MenuManager({
           onEdit={setEditingItem}
           onDelete={async (item) => {
             const ok = await confirm({
-              title: "Hapus item ini?",
-              description: `"${item.name}" akan dihapus permanen.`,
-              confirmText: "Hapus",
-              cancelText: "Batal",
+              title: "Delete this item?",
+              description: `"${item.name}" will be permanently deleted.`,
+              confirmText: "Delete",
+              cancelText: "Cancel",
               variant: "danger",
             });
             if (!ok) return;
@@ -159,9 +159,9 @@ export function MenuManager({
             try {
               await deleteMenuItem(item.id);
               setItems((arr) => arr.filter((i) => i.id !== item.id));
-              toast.success("Item dihapus");
+              toast.success("Item deleted");
             } catch (err) {
-              toast.error(getActionErrorMessage(err, "Gagal hapus item"));
+              toast.error(getActionErrorMessage(err, "Failed to delete item"));
             } finally {
               setDeletingId(null);
             }
@@ -184,7 +184,7 @@ export function MenuManager({
                   i.id === item.id ? { ...i, isAvailable: item.isAvailable } : i
                 )
               );
-              toast.error(getActionErrorMessage(err, "Gagal update"));
+              toast.error(getActionErrorMessage(err, "Failed to update"));
             }
           }}
         />
@@ -196,10 +196,10 @@ export function MenuManager({
           onEdit={setEditingCategory}
           onDelete={async (cat) => {
             const ok = await confirm({
-              title: "Hapus kategori ini?",
-              description: `"${cat.name}" akan dihapus. Item di dalamnya harus dipindah dulu.`,
-              confirmText: "Hapus",
-              cancelText: "Batal",
+              title: "Delete this category?",
+              description: `"${cat.name}" will be deleted. Move its items out first.`,
+              confirmText: "Delete",
+              cancelText: "Cancel",
               variant: "danger",
             });
             if (!ok) return;
@@ -207,9 +207,9 @@ export function MenuManager({
             try {
               await deleteCategory(cat.id);
               setCategories((arr) => arr.filter((c) => c.id !== cat.id));
-              toast.success("Kategori dihapus");
+              toast.success("Category deleted");
             } catch (err) {
-              toast.error(getActionErrorMessage(err, "Gagal hapus kategori"));
+              toast.error(getActionErrorMessage(err, "Failed to delete category"));
             } finally {
               setDeletingId(null);
             }
@@ -332,7 +332,7 @@ function ItemsTab({
             onChange={(e) => setFilterCategoryId(e.target.value)}
             className="h-9 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           >
-            <option value="all">Semua kategori ({allItemCount})</option>
+            <option value="all">All categories ({allItemCount})</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} ({c.itemCount})
@@ -341,8 +341,8 @@ function ItemsTab({
           </select>
           <div className="text-xs text-muted-foreground">
             {filteredCount === 0
-              ? "0 item"
-              : `${startIndex + 1}–${endIndex} dari ${filteredCount} item`}
+              ? "0 items"
+              : `${startIndex + 1}–${endIndex} of ${filteredCount} items`}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -353,8 +353,8 @@ function ItemsTab({
             disabled={categories.length === 0}
             title={
               categories.length === 0
-                ? "Bikin kategori dulu sebelum import"
-                : "Import items dari Excel/CSV/ZIP"
+                ? "Create a category before importing"
+                : "Import items from Excel/CSV/ZIP"
             }
           >
             <Upload className="h-3.5 w-3.5" />
@@ -367,12 +367,12 @@ function ItemsTab({
             disabled={categories.length === 0}
             title={
               categories.length === 0
-                ? "Bikin kategori dulu sebelum tambah item"
-                : "Tambah item baru"
+                ? "Create a category before adding an item"
+                : "Add new item"
             }
           >
             <Plus className="h-3.5 w-3.5" />
-            Item Baru
+            New Item
           </Button>
         </div>
       </div>
@@ -382,13 +382,13 @@ function ItemsTab({
           <UtensilsCrossed className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium mb-1">
             {allItemCount === 0
-              ? "Belum ada menu item"
-              : "Tidak ada item di kategori ini"}
+              ? "No menu items yet"
+              : "No items in this category"}
           </p>
           <p className="text-xs text-muted-foreground">
             {categories.length === 0
-              ? "Bikin kategori dulu untuk mulai."
-              : "Klik 'Item Baru' untuk tambah."}
+              ? "Create a category to get started."
+              : "Click 'New Item' to add one."}
           </p>
         </Card>
       ) : (
@@ -400,10 +400,10 @@ function ItemsTab({
                 <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="text-left p-3">Item</th>
-                    <th className="text-left p-3">Kategori</th>
-                    <th className="text-right p-3">Harga</th>
+                    <th className="text-left p-3">Category</th>
+                    <th className="text-right p-3">Price</th>
                     <th className="text-center p-3">Status</th>
-                    <th className="text-right p-3">Aksi</th>
+                    <th className="text-right p-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,17 +460,17 @@ function ItemsTab({
                               ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
                               : "bg-muted text-muted-foreground hover:bg-muted/70"
                           )}
-                          title="Klik untuk toggle"
+                          title="Click to toggle"
                         >
                           {item.isAvailable ? (
                             <>
                               <Eye className="h-2.5 w-2.5" />
-                              Tersedia
+                              Available
                             </>
                           ) : (
                             <>
                               <EyeOff className="h-2.5 w-2.5" />
-                              Habis
+                              Sold out
                             </>
                           )}
                         </button>
@@ -549,12 +549,12 @@ function ItemsTab({
                         {item.isAvailable ? (
                           <>
                             <Eye className="h-2.5 w-2.5" />
-                            Tersedia
+                            Available
                           </>
                         ) : (
                           <>
                             <EyeOff className="h-2.5 w-2.5" />
-                            Habis
+                            Sold out
                           </>
                         )}
                       </button>
@@ -592,7 +592,7 @@ function ItemsTab({
           {/* Page size + pagination control */}
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Per halaman:</span>
+              <span>Per page:</span>
               <select
                 value={pageSize}
                 onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -670,7 +670,7 @@ function CategoriesTab({
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
-          {categories.length} kategori
+          {categories.length} categories
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={onImport}>
@@ -679,7 +679,7 @@ function CategoriesTab({
           </Button>
           <Button variant="gold" size="sm" onClick={onCreate}>
             <Plus className="h-3.5 w-3.5" />
-            Kategori Baru
+            New Category
           </Button>
         </div>
       </div>
@@ -687,9 +687,9 @@ function CategoriesTab({
       {categories.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Layers className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium mb-1">Belum ada kategori</p>
+          <p className="text-sm font-medium mb-1">No categories yet</p>
           <p className="text-xs text-muted-foreground">
-            Bikin kategori untuk mulai add menu item.
+            Create a category to start adding menu items.
           </p>
         </Card>
       ) : (
@@ -697,10 +697,10 @@ function CategoriesTab({
           <table className="w-full text-sm">
             <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="text-left p-3">Nama</th>
+                <th className="text-left p-3">Name</th>
                 <th className="text-center p-3">Items</th>
                 <th className="text-center p-3">Status</th>
-                <th className="text-right p-3">Aksi</th>
+                <th className="text-right p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -717,11 +717,11 @@ function CategoriesTab({
                         variant="default"
                         className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]"
                       >
-                        Aktif
+                        Active
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="text-[10px]">
-                        Non-aktif
+                        Inactive
                       </Badge>
                     )}
                   </td>
@@ -744,8 +744,8 @@ function CategoriesTab({
                         disabled={c.itemCount > 0 || deletingId === c.id}
                         title={
                           c.itemCount > 0
-                            ? "Pindahkan item dulu sebelum hapus kategori"
-                            : "Hapus kategori"
+                            ? "Move items out before deleting the category"
+                            : "Delete category"
                         }
                       >
                         {deletingId === c.id ? (
@@ -856,23 +856,23 @@ function ItemFormModal({
         prepMinutes,
         sortOrder: initial?.sortOrder ?? 0,
       });
-      toast.success(mode === "create" ? "Item ditambahkan" : "Item disimpan");
+      toast.success(mode === "create" ? "Item added" : "Item saved");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSubmitting(false);
     }
   }
 
   return (
     <ModalShell
-      title={mode === "create" ? "Item Baru" : "Edit Item"}
+      title={mode === "create" ? "New Item" : "Edit Item"}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         {/* Image upload */}
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Foto (opsional, 1:1)
+            Photo (optional, 1:1)
           </label>
           <div className="flex items-center gap-3">
             <div className="relative h-24 w-24 rounded-md bg-muted/40 border border-border overflow-hidden shrink-0">
@@ -899,7 +899,7 @@ function ItemFormModal({
                 className="block w-full text-xs file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-primary file:text-primary-foreground file:text-xs file:font-medium hover:file:bg-primary/90 file:cursor-pointer"
               />
               <p className="text-[10px] text-muted-foreground">
-                JPG/PNG/WebP/HEIC max 10MB. Akan di-resize 800×800 webp.
+                JPG/PNG/WebP/HEIC max 10MB. Will be resized to 800×800 webp.
               </p>
             </div>
           </div>
@@ -907,7 +907,7 @@ function ItemFormModal({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Kategori
+            Category
           </label>
           <select
             value={categoryId}
@@ -915,7 +915,7 @@ function ItemFormModal({
             className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary"
             required
           >
-            <option value="">— Pilih kategori —</option>
+            <option value="">— Select category —</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -926,13 +926,13 @@ function ItemFormModal({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Nama item
+            Item name
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="cth: SOHO Sunset"
+            placeholder="e.g. SOHO Sunset"
             maxLength={80}
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
             required
@@ -941,7 +941,7 @@ function ItemFormModal({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Deskripsi (opsional)
+            Description (optional)
           </label>
           <textarea
             value={description}
@@ -955,14 +955,14 @@ function ItemFormModal({
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Harga (Rp)
+            Price (Rp)
           </label>
           <MoneyInput value={price} onChange={setPrice} />
         </div>
 
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Tags (pisah koma)
+            Tags (comma separated)
           </label>
           <div className="relative">
             <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -983,7 +983,7 @@ function ItemFormModal({
             onChange={(e) => setIsAvailable(e.target.checked)}
             className="h-4 w-4 accent-primary"
           />
-          <span>Tersedia (tampil di menu customer)</span>
+          <span>Available (shown in customer menu)</span>
         </label>
 
         <div className="sticky bottom-0 -mx-4 -mb-4 p-4 bg-background border-t border-border">
@@ -997,12 +997,12 @@ function ItemFormModal({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menyimpan...
+                Saving...
               </>
             ) : mode === "create" ? (
-              "Tambah Item"
+              "Add Item"
             ) : (
-              "Simpan Perubahan"
+              "Save Changes"
             )}
           </Button>
         </div>
@@ -1063,29 +1063,29 @@ function CategoryFormModal({
         itemCount: initial?.itemCount ?? 0,
       });
       toast.success(
-        mode === "create" ? "Kategori ditambahkan" : "Kategori disimpan"
+        mode === "create" ? "Category added" : "Category saved"
       );
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSubmitting(false);
     }
   }
 
   return (
     <ModalShell
-      title={mode === "create" ? "Kategori Baru" : "Edit Kategori"}
+      title={mode === "create" ? "New Category" : "Edit Category"}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Nama kategori
+            Category name
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="cth: Signature Cocktails"
+            placeholder="e.g. Signature Cocktails"
             maxLength={60}
             autoFocus
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
@@ -1100,7 +1100,7 @@ function CategoryFormModal({
             onChange={(e) => setIsActive(e.target.checked)}
             className="h-4 w-4 accent-primary"
           />
-          <span>Aktif (tampil di menu customer)</span>
+          <span>Active (shown in customer menu)</span>
         </label>
 
         <div className="sticky bottom-0 -mx-4 -mb-4 p-4 bg-background border-t border-border">
@@ -1114,12 +1114,12 @@ function CategoryFormModal({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menyimpan...
+                Saving...
               </>
             ) : mode === "create" ? (
-              "Tambah Kategori"
+              "Add Category"
             ) : (
-              "Simpan Perubahan"
+              "Save Changes"
             )}
           </Button>
         </div>
@@ -1186,25 +1186,25 @@ function ImportModal({
         const r = await importMenuItems(formData);
         setResult(r);
         toast.success(
-          `${r.inserted} item berhasil di-import${
-            r.imagesUploaded > 0 ? ` (+${r.imagesUploaded} foto)` : ""
+          `${r.inserted} items imported${
+            r.imagesUploaded > 0 ? ` (+${r.imagesUploaded} photos)` : ""
           }`
         );
       } else {
         const r = await importCategories(formData);
         setResult(r);
-        toast.success(`${r.inserted} kategori berhasil di-import`);
+        toast.success(`${r.inserted} categories imported`);
       }
       setSubmitting(false);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal import"));
+      toast.error(getActionErrorMessage(err, "Failed to import"));
       setSubmitting(false);
     }
   }
 
   return (
     <ModalShell
-      title={isItems ? "Import Items" : "Import Kategori"}
+      title={isItems ? "Import Items" : "Import Categories"}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
@@ -1212,13 +1212,12 @@ function ImportModal({
           <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
             <div className="text-2xl mb-2">✓</div>
             <p className="text-sm font-medium text-emerald-400">
-              {result.inserted} {isItems ? "item" : "kategori"} berhasil
-              di-import
+              {result.inserted} {isItems ? "items" : "categories"} imported
             </p>
             {result.imagesUploaded !== undefined &&
               result.imagesUploaded > 0 && (
                 <p className="text-xs text-emerald-400/70 mt-1">
-                  + {result.imagesUploaded} foto ter-upload
+                  + {result.imagesUploaded} photos uploaded
                 </p>
               )}
           </div>
@@ -1226,40 +1225,40 @@ function ImportModal({
           <>
             {/* Instructions */}
             <div className="rounded-md bg-muted/40 border border-border p-3 text-xs space-y-2">
-              <p className="font-medium">Format file:</p>
+              <p className="font-medium">File format:</p>
               {isItems ? (
                 <ul className="text-muted-foreground space-y-1 list-disc list-inside">
                   <li>
-                    <strong>CSV/Excel</strong>: kolom{" "}
+                    <strong>CSV/Excel</strong>: columns{" "}
                     <code className="text-[10px] bg-muted px-1 rounded">
                       category_name, name, description, price, tags,
                       is_available, image
                     </code>
                   </li>
                   <li>
-                    <strong>ZIP</strong>: kalau mau include foto. ZIP berisi
-                    CSV/Excel + file foto. Kolom{" "}
+                    <strong>ZIP</strong>: to include photos. A ZIP containing
+                    CSV/Excel + photo files. Fill the{" "}
                     <code className="text-[10px] bg-muted px-1 rounded">
                       image
                     </code>{" "}
-                    isi dengan nama file (mis. <code>americano.jpg</code>).
+                    column with the file name (e.g. <code>americano.jpg</code>).
                   </li>
                   <li>
-                    Kategori harus sudah ada di sistem (match by nama, case
-                    insensitive).
+                    Categories must already exist in the system (matched by
+                    name, case insensitive).
                   </li>
                   <li>Max 1000 items per import.</li>
                 </ul>
               ) : (
                 <ul className="text-muted-foreground space-y-1 list-disc list-inside">
                   <li>
-                    Kolom:{" "}
+                    Columns:{" "}
                     <code className="text-[10px] bg-muted px-1 rounded">
                       name, is_active
                     </code>
                   </li>
-                  <li>Slug auto-generate dari nama.</li>
-                  <li>Max 200 kategori per import.</li>
+                  <li>Slug auto-generated from the name.</li>
+                  <li>Max 200 categories per import.</li>
                 </ul>
               )}
             </div>
@@ -1273,13 +1272,13 @@ function ImportModal({
               className="w-full"
             >
               <Download className="h-3.5 w-3.5" />
-              Download Template CSV
+              Download CSV Template
             </Button>
 
             {/* File picker */}
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-                Pilih file
+                Select file
               </label>
               <input
                 type="file"
@@ -1314,7 +1313,7 @@ function ImportModal({
               className="w-full"
               onClick={onSuccess}
             >
-              Selesai
+              Done
             </Button>
           ) : (
             <Button
@@ -1327,12 +1326,12 @@ function ImportModal({
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Mengimport...
+                  Importing...
                 </>
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  Mulai Import
+                  Start Import
                 </>
               )}
             </Button>
@@ -1367,7 +1366,7 @@ function ModalShell({
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>

@@ -31,13 +31,13 @@ interface CustomerData {
 const TABS = [
   { key: "detail", label: "Detail" },
   { key: "review", label: "Review" },
-  { key: "history", label: "Riwayat" },
-  { key: "password", label: "Ubah Password" },
+  { key: "history", label: "History" },
+  { key: "password", label: "Change Password" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
 function genderLabel(g: string): string {
-  return g === "male" ? "Pria" : g === "female" ? "Wanita" : "—";
+  return g === "male" ? "Male" : g === "female" ? "Female" : "—";
 }
 /** Umur (tahun penuh) dari tanggal lahir ISO. */
 function ageFrom(iso: string): number {
@@ -58,16 +58,16 @@ function socialHref(v: string): string {
 }
 function birthDateLabel(iso: string | null): string {
   if (!iso) return "—";
-  const tgl = new Date(iso).toLocaleDateString("id-ID", { dateStyle: "long" });
-  return `${tgl} · ${ageFrom(iso)} thn`;
+  const tgl = new Date(iso).toLocaleDateString("en-US", { dateStyle: "long" });
+  return `${tgl} · ${ageFrom(iso)} yrs`;
 }
 function interestLabel(v: string): string {
   return v === "male"
-    ? "Pria"
+    ? "Male"
     : v === "female"
-      ? "Wanita"
+      ? "Female"
       : v === "both"
-        ? "Keduanya"
+        ? "Both"
         : "—";
 }
 
@@ -107,7 +107,7 @@ export function CustomerDetailTabs({
       {tab === "review" && (
         <div>
           <h2 className="text-sm font-semibold mb-2">
-            Review dari pengunjung lain{" "}
+            Reviews from other visitors{" "}
             <span className="text-muted-foreground font-normal">
               ({reviews.length})
             </span>
@@ -118,14 +118,15 @@ export function CustomerDetailTabs({
       {tab === "history" && (
         <div>
           <h2 className="text-sm font-semibold mb-2">
-            Riwayat Open Table{" "}
+            Open Table History{" "}
             <span className="text-muted-foreground font-normal">
               ({history.length})
             </span>
           </h2>
           <CustomerHistory history={history} />
           <p className="text-[11px] text-muted-foreground mt-2">
-            Ketuk satu riwayat untuk lihat detail: siapa di meja & pesanan apa.
+            Tap a history entry to see details: who was at the table & what was
+            ordered.
           </p>
         </div>
       )}
@@ -143,33 +144,33 @@ function DetailTab({ customer }: { customer: CustomerData }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold">Informasi Customer</h2>
+        <h2 className="text-sm font-semibold">Customer Information</h2>
         <Button size="sm" variant="gold" onClick={() => setEditing(true)}>
           <Pencil className="h-4 w-4" /> Edit
         </Button>
       </div>
       <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-        <Row label="Nama" value={customer.name} />
+        <Row label="Name" value={customer.name} />
         <Row
           label="Email"
           value={customer.email}
           icon={<Mail className="h-3.5 w-3.5" />}
         />
         <Row
-          label="Nomor WA"
+          label="WhatsApp number"
           value={customer.phone || "—"}
           icon={<Phone className="h-3.5 w-3.5" />}
         />
-        <Row label="Tanggal lahir" value={birthDateLabel(customer.birthDate)} />
+        <Row label="Date of birth" value={birthDateLabel(customer.birthDate)} />
         <Row
           label="Status"
-          value={customer.isActive ? "Aktif" : "Nonaktif"}
+          value={customer.isActive ? "Active" : "Inactive"}
           valueClass={customer.isActive ? "text-emerald-400" : "text-red-400"}
         />
-        <Row label="Jenis kelamin" value={genderLabel(customer.gender)} />
-        <Row label="Tertarik pada" value={interestLabel(customer.interestedIn)} />
+        <Row label="Gender" value={genderLabel(customer.gender)} />
+        <Row label="Interested in" value={interestLabel(customer.interestedIn)} />
         <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-2">
-          <dt className="text-muted-foreground">Media sosial</dt>
+          <dt className="text-muted-foreground">Social media</dt>
           <dd className="font-medium text-right min-w-0">
             {customer.socialLink ? (
               <a
@@ -195,7 +196,7 @@ function DetailTab({ customer }: { customer: CustomerData }) {
       )}
       {customer.hobbies.length > 0 && (
         <div className="mt-4 pt-4 border-t border-border">
-          <div className="text-xs text-muted-foreground mb-1.5">Hobi & minat</div>
+          <div className="text-xs text-muted-foreground mb-1.5">Hobbies & interests</div>
           <HobbyBadges hobbies={customer.hobbies} max={20} />
         </div>
       )}
@@ -254,7 +255,7 @@ function EditForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length < 1) {
-      toast.error("Nama wajib diisi");
+      toast.error("Name is required");
       return;
     }
     setSaving(true);
@@ -270,11 +271,11 @@ function EditForm({
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
       });
-      toast.success("Customer diperbarui");
+      toast.success("Customer updated");
       router.refresh();
       onDone();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan customer"));
+      toast.error(getActionErrorMessage(err, "Failed to save customer"));
       setSaving(false);
     }
   }
@@ -285,7 +286,7 @@ function EditForm({
       className="rounded-xl border border-border bg-card p-5 space-y-3"
     >
       <h2 className="text-sm font-semibold mb-1">Edit Customer</h2>
-      <Field label="Nama">
+      <Field label="Name">
         <input
           type="text"
           value={name}
@@ -305,17 +306,17 @@ function EditForm({
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
-      <Field label="Nomor WA (opsional)">
+      <Field label="WhatsApp number (optional)">
         <input
           type="tel"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={20}
-          placeholder="mis. 081234567890"
+          placeholder="e.g. 081234567890"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
-      <Field label="Tanggal lahir (opsional)">
+      <Field label="Date of birth (optional)">
         <input
           type="date"
           value={birthDate}
@@ -324,40 +325,40 @@ function EditForm({
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
-      <Field label="Media sosial (opsional)">
+      <Field label="Social media (optional)">
         <input
           type="text"
           value={socialLink}
           onChange={(e) => setSocialLink(e.target.value)}
           maxLength={200}
-          placeholder="cth: instagram.com/username atau @username"
+          placeholder="e.g. instagram.com/username or @username"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
 
-      <Field label="Jenis kelamin (opsional)">
+      <Field label="Gender (optional)">
         <Segmented
           options={[
-            { value: "male", label: "Pria" },
-            { value: "female", label: "Wanita" },
+            { value: "male", label: "Male" },
+            { value: "female", label: "Female" },
           ]}
           value={gender}
           onChange={(v) => setGender(v as Gender)}
         />
       </Field>
-      <Field label="Tertarik pada (opsional)">
+      <Field label="Interested in (optional)">
         <Segmented
           options={[
-            { value: "male", label: "Pria" },
-            { value: "female", label: "Wanita" },
-            { value: "both", label: "Keduanya" },
+            { value: "male", label: "Male" },
+            { value: "female", label: "Female" },
+            { value: "both", label: "Both" },
           ]}
           value={interestedIn}
           onChange={(v) => setInterestedIn(v as InterestedIn)}
         />
       </Field>
 
-      <Field label="Status akun">
+      <Field label="Account status">
         <button
           type="button"
           onClick={() => setIsActive((v) => !v)}
@@ -368,24 +369,24 @@ function EditForm({
               : "border-red-500/30 bg-red-500/10 text-red-400"
           )}
         >
-          <span>{isActive ? "Aktif" : "Nonaktif"}</span>
+          <span>{isActive ? "Active" : "Inactive"}</span>
           <span className="text-xs opacity-70">
-            {isActive ? "Ketuk untuk nonaktifkan" : "Ketuk untuk aktifkan"}
+            {isActive ? "Tap to deactivate" : "Tap to activate"}
           </span>
         </button>
       </Field>
 
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" variant="outline" onClick={onDone}>
-          Batal
+          Cancel
         </Button>
         <Button type="submit" variant="gold" disabled={saving}>
           {saving ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
             </>
           ) : (
-            "Simpan"
+            "Save"
           )}
         </Button>
       </div>
@@ -402,21 +403,21 @@ function PasswordTab({ customerId }: { customerId: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 6) {
-      toast.error("Password minimal 6 karakter");
+      toast.error("Password must be at least 6 characters");
       return;
     }
     if (password !== confirm) {
-      toast.error("Konfirmasi password tidak cocok");
+      toast.error("Password confirmation does not match");
       return;
     }
     setSaving(true);
     try {
       await setCustomerPassword({ id: customerId, password });
-      toast.success("Password customer diperbarui");
+      toast.success("Customer password updated");
       setPassword("");
       setConfirm("");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal ubah password"));
+      toast.error(getActionErrorMessage(err, "Failed to change password"));
     } finally {
       setSaving(false);
     }
@@ -427,27 +428,27 @@ function PasswordTab({ customerId }: { customerId: string }) {
       onSubmit={handleSubmit}
       className="rounded-xl border border-border bg-card p-5 space-y-3 max-w-md"
     >
-      <h2 className="text-sm font-semibold mb-1">Ubah Password</h2>
+      <h2 className="text-sm font-semibold mb-1">Change Password</h2>
       <p className="text-xs text-muted-foreground">
-        Set password baru untuk customer ini. Customer bisa login dengan
-        password baru ini.
+        Set a new password for this customer. The customer can log in with this
+        new password.
       </p>
-      <Field label="Password baru">
+      <Field label="New password">
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           minLength={6}
-          placeholder="Minimal 6 karakter"
+          placeholder="At least 6 characters"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
-      <Field label="Konfirmasi password">
+      <Field label="Confirm password">
         <input
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          placeholder="Ulangi password baru"
+          placeholder="Repeat new password"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
@@ -455,10 +456,10 @@ function PasswordTab({ customerId }: { customerId: string }) {
         <Button type="submit" variant="gold" disabled={saving}>
           {saving ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
             </>
           ) : (
-            "Simpan Password"
+            "Save Password"
           )}
         </Button>
       </div>

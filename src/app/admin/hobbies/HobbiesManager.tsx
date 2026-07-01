@@ -44,14 +44,14 @@ export function HobbiesManager({
       <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit mb-4">
         <TabButton
           icon={<Sparkles className="h-3.5 w-3.5" />}
-          label="Hobi & Minat"
+          label="Hobbies & Interests"
           active={tab === "hobbies"}
           onClick={() => setTab("hobbies")}
           badge={hobbiesList.length}
         />
         <TabButton
           icon={<Layers className="h-3.5 w-3.5" />}
-          label="Kategori"
+          label="Categories"
           active={tab === "categories"}
           onClick={() => setTab("categories")}
           badge={categories.length}
@@ -142,19 +142,19 @@ function HobbiesTab({
 
   async function handleDelete(h: HobbyItem) {
     const ok = await confirm({
-      title: "Hapus hobi?",
-      description: `"${h.name}" dihapus dari pilihan. Customer yg sudah memilihnya tetap menyimpannya.`,
-      confirmText: "Hapus",
+      title: "Delete hobby?",
+      description: `"${h.name}" will be removed from the options. Customers who already picked it keep it.`,
+      confirmText: "Delete",
       variant: "destructive",
     });
     if (!ok) return;
     setDeletingId(h.id);
     try {
       await deleteHobby(h.id);
-      toast.success("Hobi dihapus");
+      toast.success("Hobby deleted");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus"));
+      toast.error(getActionErrorMessage(err, "Failed to delete"));
     } finally {
       setDeletingId(null);
     }
@@ -171,12 +171,12 @@ function HobbiesTab({
               setQuery(e.target.value);
               setPage(0);
             }}
-            placeholder="Cari hobi / kategori…"
+            placeholder="Search hobby / category…"
             className="w-full h-10 pl-8 pr-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
           />
         </div>
         <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
-          <Plus className="h-4 w-4" /> Tambah Hobi
+          <Plus className="h-4 w-4" /> Add Hobby
         </Button>
       </div>
 
@@ -184,9 +184,9 @@ function HobbiesTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-              <th className="text-left px-4 py-2.5">Nama</th>
-              <th className="text-left px-4 py-2.5">Kategori</th>
-              <th className="text-right px-4 py-2.5 w-24">Aksi</th>
+              <th className="text-left px-4 py-2.5">Name</th>
+              <th className="text-left px-4 py-2.5">Category</th>
+              <th className="text-right px-4 py-2.5 w-24">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -225,7 +225,7 @@ function HobbiesTab({
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
-                  {q ? "Tidak ada hobi yang cocok." : "Belum ada hobi."}
+                  {q ? "No matching hobbies." : "No hobbies yet."}
                 </td>
               </tr>
             )}
@@ -285,19 +285,19 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
 
   async function handleDelete(c: HobbyCategory) {
     const ok = await confirm({
-      title: "Hapus kategori?",
-      description: `Kategori "${c.name}" akan dihapus.`,
-      confirmText: "Hapus",
+      title: "Delete category?",
+      description: `Category "${c.name}" will be deleted.`,
+      confirmText: "Delete",
       variant: "destructive",
     });
     if (!ok) return;
     setDeletingId(c.id);
     try {
       await deleteHobbyCategory(c.id);
-      toast.success("Kategori dihapus");
+      toast.success("Category deleted");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus"));
+      toast.error(getActionErrorMessage(err, "Failed to delete"));
     } finally {
       setDeletingId(null);
     }
@@ -314,12 +314,12 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
               setQuery(e.target.value);
               setPage(0);
             }}
-            placeholder="Cari kategori…"
+            placeholder="Search category…"
             className="w-full h-10 pl-8 pr-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
           />
         </div>
         <Button variant="gold" size="sm" onClick={() => setFormMode({ mode: "create" })}>
-          <Plus className="h-4 w-4" /> Tambah Kategori
+          <Plus className="h-4 w-4" /> Add Category
         </Button>
       </div>
 
@@ -327,8 +327,8 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-              <th className="text-left px-4 py-2.5">Nama Kategori</th>
-              <th className="text-right px-4 py-2.5 w-24">Aksi</th>
+              <th className="text-left px-4 py-2.5">Category Name</th>
+              <th className="text-right px-4 py-2.5 w-24">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -366,7 +366,7 @@ function CategoriesTab({ categories }: { categories: HobbyCategory[] }) {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
-                  {q ? "Tidak ada kategori yang cocok." : "Belum ada kategori."}
+                  {q ? "No matching categories." : "No categories yet."}
                 </td>
               </tr>
             )}
@@ -424,7 +424,7 @@ function HobbyFormModal({
     e.preventDefault();
     if (!name.trim() || submitting) return;
     if (!category) {
-      toast.error("Pilih kategori dulu");
+      toast.error("Select a category first");
       return;
     }
     setSubmitting(true);
@@ -434,26 +434,26 @@ function HobbyFormModal({
       } else {
         await updateHobby({ id: initial!.id, name: name.trim(), category });
       }
-      toast.success(mode === "create" ? "Hobi ditambahkan" : "Hobi disimpan");
+      toast.success(mode === "create" ? "Hobby added" : "Hobby saved");
       onSaved();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSubmitting(false);
     }
   }
 
   return (
-    <ModalShell title={mode === "create" ? "Hobi Baru" : "Edit Hobi"} onClose={onClose}>
+    <ModalShell title={mode === "create" ? "New Hobby" : "Edit Hobby"} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Nama hobi
+            Hobby name
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="cth: panjat tebing"
+            placeholder="e.g. rock climbing"
             maxLength={40}
             autoFocus
             required
@@ -462,14 +462,14 @@ function HobbyFormModal({
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Kategori
+            Category
           </label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
           >
-            {categories.length === 0 && <option value="">— belum ada —</option>}
+            {categories.length === 0 && <option value="">— none yet —</option>}
             {categories.map((c) => (
               <option key={c.id} value={c.name}>
                 {c.name}
@@ -487,12 +487,12 @@ function HobbyFormModal({
           >
             {submitting ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...
+                <Loader2 className="h-4 w-4 animate-spin" /> Saving...
               </>
             ) : mode === "create" ? (
-              "Tambah Hobi"
+              "Add Hobby"
             ) : (
-              "Simpan Perubahan"
+              "Save Changes"
             )}
           </Button>
         </div>
@@ -525,29 +525,29 @@ function CategoryFormModal({
       } else {
         await updateHobbyCategory({ id: initial!.id, name: name.trim() });
       }
-      toast.success(mode === "create" ? "Kategori ditambahkan" : "Kategori disimpan");
+      toast.success(mode === "create" ? "Category added" : "Category saved");
       onSaved();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSubmitting(false);
     }
   }
 
   return (
     <ModalShell
-      title={mode === "create" ? "Kategori Baru" : "Edit Kategori"}
+      title={mode === "create" ? "New Category" : "Edit Category"}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Nama kategori
+            Category name
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="cth: Olahraga"
+            placeholder="e.g. Sports"
             maxLength={60}
             autoFocus
             required
@@ -564,12 +564,12 @@ function CategoryFormModal({
           >
             {submitting ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...
+                <Loader2 className="h-4 w-4 animate-spin" /> Saving...
               </>
             ) : mode === "create" ? (
-              "Tambah Kategori"
+              "Add Category"
             ) : (
-              "Simpan Perubahan"
+              "Save Changes"
             )}
           </Button>
         </div>
@@ -595,7 +595,7 @@ function PaginationBar({
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>Per halaman:</span>
+        <span>Per page:</span>
         <select
           value={pageSize}
           onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -638,7 +638,7 @@ function ModalShell({
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>

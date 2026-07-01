@@ -80,10 +80,10 @@ export default async function AdminQrPage() {
             <div className="text-xs uppercase tracking-widest text-primary/70 mb-1">
               QR Table
             </div>
-            <h1 className="text-2xl font-semibold">QR Meja</h1>
+            <h1 className="text-2xl font-semibold">Table QR</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Print & tempel QR di tiap meja. Customer scan → langsung ke meja
-              yang benar (buka / gabung / lihat status).
+              Print & stick a QR on each table. Customer scans → goes straight
+              to the right table (open / join / view status).
             </p>
           </div>
           <QrPageActions />
@@ -91,9 +91,9 @@ export default async function AdminQrPage() {
 
         {grouped.length === 0 || tablesList.length === 0 ? (
           <Card className="p-8 text-center border-dashed">
-            <p className="text-sm">Belum ada meja.</p>
+            <p className="text-sm">No tables yet.</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Tambah meja dulu di Kelola Denah.
+              Add tables first in Manage Floor Plan.
             </p>
           </Card>
         ) : (
@@ -169,7 +169,7 @@ function QrCard({
         {qrUrl}
       </div>
       <div className="mt-2 text-[10px] text-primary print:text-black/70 italic">
-        Scan untuk buka / gabung meja
+        Scan to open / join table
       </div>
     </Card>
   );

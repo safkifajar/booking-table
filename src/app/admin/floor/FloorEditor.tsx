@@ -41,9 +41,9 @@ import type { FloorArea, BarTable, TableShape } from "@/types/db";
 type AreaWithTables = { area: FloorArea; tables: BarTable[] };
 
 const SHAPES: { value: TableShape; label: string }[] = [
-  { value: "round", label: "Bulat" },
-  { value: "square", label: "Kotak" },
-  { value: "rect", label: "Persegi panjang" },
+  { value: "round", label: "Round" },
+  { value: "square", label: "Square" },
+  { value: "rect", label: "Rectangle" },
   { value: "booth", label: "Booth" },
 ];
 
@@ -67,19 +67,19 @@ export function FloorEditor({ initialAreas }: Props) {
 
   async function handleDeleteArea(area: FloorArea) {
     const ok = await confirm({
-      title: `Hapus area "${area.name}"?`,
+      title: `Delete area "${area.name}"?`,
       description:
-        "Semua meja di area ini ikut terhapus. Tidak bisa kalau ada meja yang sedang dipakai.",
-      confirmText: "Hapus",
+        "All tables in this area will be deleted too. Not possible if any table is in use.",
+      confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
     try {
       await deleteArea(area.id);
-      toast.success("Area dihapus");
+      toast.success("Area deleted");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus area"));
+      toast.error(getActionErrorMessage(err, "Failed to delete area"));
     }
   }
 
@@ -88,10 +88,10 @@ export function FloorEditor({ initialAreas }: Props) {
       <Card className="p-8 text-center space-y-3 border-dashed">
         <LayoutGrid className="h-8 w-8 mx-auto text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Belum ada area. Buat area dulu (mis. Indoor Lounge, Rooftop).
+          No areas yet. Create an area first (e.g. Indoor Lounge, Rooftop).
         </p>
         <Button variant="gold" onClick={() => setAreaModal("new")}>
-          <Plus className="h-4 w-4" /> Buat Area
+          <Plus className="h-4 w-4" /> Create Area
         </Button>
         {areaModal && (
           <AreaDialog
@@ -267,11 +267,11 @@ function AreaWorkspace({
     try {
       await flushDraft(); // pastikan draft terbaru tersimpan dulu
       await publishPositions(area.id);
-      toast.success("Posisi dipublish — tampilan customer diperbarui");
+      toast.success("Positions published — customer view updated");
       setHasDraft(false);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal publish posisi"));
+      toast.error(getActionErrorMessage(err, "Failed to publish positions"));
     } finally {
       setPublishing(false);
     }
@@ -284,20 +284,20 @@ function AreaWorkspace({
 
   async function handleDeleteTable(t: BarTable) {
     const ok = await confirm({
-      title: `Hapus meja ${t.label}?`,
-      description: "Meja dihapus permanen. Tidak bisa kalau sedang dipakai.",
-      confirmText: "Hapus",
+      title: `Delete table ${t.label}?`,
+      description: "Table will be permanently deleted. Not possible if in use.",
+      confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
     try {
       await flushDraft();
       await deleteTable(t.id);
-      toast.success(`Meja ${t.label} dihapus`);
+      toast.success(`Table ${t.label} deleted`);
       setSelectedTableId(null);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus meja"));
+      toast.error(getActionErrorMessage(err, "Failed to delete table"));
     }
   }
 
@@ -310,7 +310,7 @@ function AreaWorkspace({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">
           {area.name} · {area.canvas_width}×{area.canvas_height} ·{" "}
-          {tables.length} meja
+          {tables.length} tables
         </span>
         <SaveStatusBadge status={status} published={!hasDraft} />
         <div className="flex-1" />
@@ -318,10 +318,10 @@ function AreaWorkspace({
           <Pencil className="h-4 w-4" /> Edit Area
         </Button>
         <Button variant="ghost" size="sm" onClick={onDeleteArea}>
-          <Trash2 className="h-4 w-4 text-red-400" /> Hapus Area
+          <Trash2 className="h-4 w-4 text-red-400" /> Delete Area
         </Button>
         <Button variant="outline" size="sm" onClick={() => openTableDialog("new")}>
-          <Plus className="h-4 w-4" /> Tambah Meja
+          <Plus className="h-4 w-4" /> Add Table
         </Button>
         <Button
           variant="gold"
@@ -334,7 +334,7 @@ function AreaWorkspace({
           ) : (
             <Save className="h-4 w-4" />
           )}
-          Simpan Posisi
+          Save Positions
         </Button>
       </div>
 
@@ -353,9 +353,9 @@ function AreaWorkspace({
             {selectedTable.label}
           </Badge>
           <span className="text-sm text-muted-foreground capitalize">
-            {selectedTable.shape} · {selectedTable.capacity} kursi
+            {selectedTable.shape} · {selectedTable.capacity} seats
             {selectedTable.min_spend
-              ? ` · min ${selectedTable.min_spend.toLocaleString("id-ID")}`
+              ? ` · min ${selectedTable.min_spend.toLocaleString("en-US")}`
               : ""}
           </span>
           <div className="flex-1" />
@@ -371,12 +371,12 @@ function AreaWorkspace({
             size="sm"
             onClick={() => handleDeleteTable(selectedTable)}
           >
-            <Trash2 className="h-4 w-4 text-red-400" /> Hapus
+            <Trash2 className="h-4 w-4 text-red-400" /> Delete
           </Button>
         </Card>
       ) : (
         <p className="text-xs text-muted-foreground text-center">
-          Tap meja di denah untuk pilih & edit. Tarik untuk pindah posisi.
+          Tap a table on the plan to select & edit. Drag to move it.
         </p>
       )}
 
@@ -553,7 +553,7 @@ function EditorCanvas({
                 fill="rgba(255,255,255,0.4)"
                 style={{ pointerEvents: "none", userSelect: "none" }}
               >
-                {t.capacity} kursi
+                {t.capacity} seats
               </text>
             </g>
           );
@@ -610,7 +610,7 @@ function TableDialog({
           posX: Math.round((canvas.w - size.width) / 2),
           posY: Math.round((canvas.h - size.height) / 2),
         });
-        toast.success("Meja dibuat");
+        toast.success("Table created");
       } else {
         await updateTable({
           id: t!.id,
@@ -618,11 +618,11 @@ function TableDialog({
           posX: t!.pos_x,
           posY: t!.pos_y,
         });
-        toast.success("Meja diperbarui");
+        toast.success("Table updated");
       }
       onSaved();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan meja"));
+      toast.error(getActionErrorMessage(err, "Failed to save table"));
       setSaving(false);
     }
   }
@@ -634,7 +634,7 @@ function TableDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isNew ? "Tambah Meja" : `Edit Meja ${t!.label}`}</DialogTitle>
+          <DialogTitle>{isNew ? "Add Table" : `Edit Table ${t!.label}`}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -644,11 +644,11 @@ function TableDialog({
                 onChange={(e) => setLabel(e.target.value)}
                 required
                 maxLength={20}
-                placeholder="mis. T1"
+                placeholder="e.g. T1"
                 className={inputCls}
               />
             </Field>
-            <Field label="Kapasitas (kursi)">
+            <Field label="Capacity (seats)">
               <input
                 type="number"
                 value={capacity}
@@ -660,7 +660,7 @@ function TableDialog({
               />
             </Field>
           </div>
-          <Field label="Bentuk">
+          <Field label="Shape">
             <select
               value={shape}
               onChange={(e) => setShape(e.target.value as TableShape)}
@@ -673,7 +673,7 @@ function TableDialog({
               ))}
             </select>
           </Field>
-          <Field label="Rotasi ° (0 = normal)">
+          <Field label="Rotation ° (0 = normal)">
             <input
               type="number"
               value={rotation}
@@ -684,9 +684,9 @@ function TableDialog({
             />
           </Field>
           <p className="text-xs text-muted-foreground -mt-1">
-            Ukuran meja otomatis menyesuaikan jumlah kursi & bentuk.
+            Table size adjusts automatically to the seat count & shape.
           </p>
-          <Field label="Min spend (Rp, 0 = tidak ada)">
+          <Field label="Min spend (Rp, 0 = none)">
             <input
               type="number"
               value={minSpend}
@@ -697,11 +697,11 @@ function TableDialog({
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="gold" disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {isNew ? "Buat" : "Simpan"}
+              {isNew ? "Create" : "Save"}
             </Button>
           </DialogFooter>
         </form>
@@ -742,14 +742,14 @@ function AreaDialog({
       };
       if (isNew) {
         await createArea(common);
-        toast.success("Area dibuat");
+        toast.success("Area created");
       } else {
         await updateArea({ id: a!.id, ...common });
-        toast.success("Area diperbarui");
+        toast.success("Area updated");
       }
       onSaved();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan area"));
+      toast.error(getActionErrorMessage(err, "Failed to save area"));
       setSaving(false);
     }
   }
@@ -761,21 +761,21 @@ function AreaDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isNew ? "Tambah Area" : `Edit Area`}</DialogTitle>
+          <DialogTitle>{isNew ? "Add Area" : `Edit Area`}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Nama area">
+          <Field label="Area name">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={60}
-              placeholder="mis. Indoor Lounge"
+              placeholder="e.g. Indoor Lounge"
               className={inputCls}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Lebar kanvas">
+            <Field label="Canvas width">
               <input
                 type="number"
                 value={w}
@@ -786,7 +786,7 @@ function AreaDialog({
                 className={inputCls}
               />
             </Field>
-            <Field label="Tinggi kanvas">
+            <Field label="Canvas height">
               <input
                 type="number"
                 value={h}
@@ -800,11 +800,11 @@ function AreaDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="gold" disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {isNew ? "Buat" : "Simpan"}
+              {isNew ? "Create" : "Save"}
             </Button>
           </DialogFooter>
         </form>
@@ -824,21 +824,21 @@ function SaveStatusBadge({
   if (status === "saving") {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 className="h-3 w-3 animate-spin" /> Menyimpan…
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
       </span>
     );
   }
   if (status === "unsaved") {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-amber-400">
-        <CloudOff className="h-3 w-3" /> Belum disimpan
+        <CloudOff className="h-3 w-3" /> Not saved
       </span>
     );
   }
   if (status === "error") {
     return (
       <span className="inline-flex items-center gap-1 text-xs text-red-400">
-        <CloudOff className="h-3 w-3" /> Gagal simpan
+        <CloudOff className="h-3 w-3" /> Failed to save
       </span>
     );
   }
@@ -846,7 +846,7 @@ function SaveStatusBadge({
   return (
     <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
       <Check className="h-3 w-3" />
-      {published ? "Tersimpan & dipublish" : "Draft tersimpan"}
+      {published ? "Saved & published" : "Draft saved"}
     </span>
   );
 }

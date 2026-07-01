@@ -42,10 +42,10 @@ export function BannerManager({ barId, initialBanners }: Props) {
 
   async function handleDelete(banner: AdminBanner) {
     const ok = await confirm({
-      title: "Hapus banner ini?",
-      description: `Banner "${banner.title ?? "(tanpa judul)"}" akan dihapus permanent dari list dan tidak tampil lagi di landing.`,
-      confirmText: "Hapus",
-      cancelText: "Batal",
+      title: "Delete this banner?",
+      description: `Banner "${banner.title ?? "(untitled)"}" will be permanently removed from the list and no longer shown on the landing page.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
       variant: "danger",
     });
     if (!ok) return;
@@ -54,9 +54,9 @@ export function BannerManager({ barId, initialBanners }: Props) {
     try {
       await deleteBanner(banner.id);
       setBanners((arr) => arr.filter((b) => b.id !== banner.id));
-      toast.success("Banner dihapus");
+      toast.success("Banner deleted");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus banner"));
+      toast.error(getActionErrorMessage(err, "Failed to delete banner"));
     } finally {
       setDeletingId(null);
     }
@@ -67,24 +67,24 @@ export function BannerManager({ barId, initialBanners }: Props) {
       {/* Toolbar: count kiri + tombol kanan */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
-          {banners.length} banner total
+          {banners.length} banners total
         </div>
         <Button variant="gold" size="sm" onClick={() => setCreating(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Banner Baru
+          New Banner
         </Button>
       </div>
 
       {banners.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <ImageIcon className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium mb-1">Belum ada banner</p>
+          <p className="text-sm font-medium mb-1">No banners yet</p>
           <p className="text-xs text-muted-foreground mb-4">
-            Upload banner pertama supaya tampil di landing page.
+            Upload your first banner to show it on the landing page.
           </p>
           <Button variant="outline" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
-            Banner Baru
+            New Banner
           </Button>
         </Card>
       ) : (
@@ -93,12 +93,12 @@ export function BannerManager({ barId, initialBanners }: Props) {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-medium w-16">Foto</th>
-                  <th className="px-4 py-3 font-medium">Judul & Deskripsi</th>
+                  <th className="px-4 py-3 font-medium w-16">Photo</th>
+                  <th className="px-4 py-3 font-medium">Title & Description</th>
                   <th className="px-4 py-3 font-medium w-24">Status</th>
-                  <th className="px-4 py-3 font-medium w-20 text-center">Urutan</th>
-                  <th className="px-4 py-3 font-medium w-44">Periode</th>
-                  <th className="px-4 py-3 font-medium w-40 text-right">Aksi</th>
+                  <th className="px-4 py-3 font-medium w-20 text-center">Order</th>
+                  <th className="px-4 py-3 font-medium w-44">Period</th>
+                  <th className="px-4 py-3 font-medium w-40 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -193,7 +193,7 @@ function BannerRow({
       {/* Judul + deskripsi */}
       <td className="px-4 py-2.5 align-middle min-w-0">
         <div className="font-medium text-sm truncate">
-          {banner.title ?? <span className="text-muted-foreground italic">(tanpa judul)</span>}
+          {banner.title ?? <span className="text-muted-foreground italic">(untitled)</span>}
         </div>
         {banner.subtitle && (
           <div className="text-xs text-muted-foreground truncate mt-0.5 max-w-md">
@@ -208,7 +208,7 @@ function BannerRow({
           variant={showing ? "default" : "secondary"}
           className="text-[10px] px-1.5 py-0.5"
         >
-          {showing ? "Tampil" : !banner.isActive ? "Mati" : "Diluar Periode"}
+          {showing ? "Live" : !banner.isActive ? "Off" : "Out of Period"}
         </Badge>
       </td>
 
@@ -229,7 +229,7 @@ function BannerRow({
             </span>
           </div>
         ) : (
-          <span className="text-muted-foreground/60">Selalu tampil</span>
+          <span className="text-muted-foreground/60">Always shown</span>
         )}
       </td>
 
@@ -311,7 +311,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > 10 * 1024 * 1024) {
-      toast.error("File terlalu besar (max 10MB)");
+      toast.error("File too large (max 10MB)");
       return;
     }
     setFile(f);
@@ -331,7 +331,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isEdit && !file) {
-      toast.error("Pilih foto banner dulu");
+      toast.error("Select a banner photo first");
       return;
     }
 
@@ -354,7 +354,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           fd.append("file", file);
           await replaceBannerImage(fd);
         }
-        toast.success("Banner ter-update");
+        toast.success("Banner updated");
 
         // Build updated banner shape buat callback
         onSaved({
@@ -383,7 +383,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         if (endsAt) fd.append("endsAt", endsAt);
 
         const { id } = await createBanner(fd);
-        toast.success("Banner ter-upload");
+        toast.success("Banner uploaded");
 
         onSaved({
           id,
@@ -398,7 +398,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         });
       }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSaving(false);
     }
   }
@@ -408,14 +408,14 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
       <Card className="w-full max-w-lg my-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold">
-            {isEdit ? "Edit banner" : "Banner baru"}
+            {isEdit ? "Edit banner" : "New banner"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
             className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted/60 transition"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -425,7 +425,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           {/* Image preview + picker */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Foto banner *
+              Banner photo *
             </label>
             {previewUrl ? (
               <div className="relative aspect-[16/9] rounded-md overflow-hidden bg-zinc-900">
@@ -441,7 +441,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition flex items-center justify-center text-white text-sm font-medium"
                 >
-                  Ganti foto
+                  Change photo
                 </button>
               </div>
             ) : (
@@ -451,7 +451,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
                 className="w-full aspect-[16/9] border-2 border-dashed border-border rounded-md flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/40 hover:text-foreground transition"
               >
                 <ImageIcon className="h-8 w-8" />
-                <span className="text-sm">Pilih foto</span>
+                <span className="text-sm">Select photo</span>
                 <span className="text-xs text-muted-foreground/70">
                   JPG, PNG, WebP, HEIC
                 </span>
@@ -466,23 +466,23 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
             />
             {/* Hint detail: rasio, rekomendasi resolusi, format, ukuran max */}
             <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground/70">
-              <li>• Rasio 16:9 (landscape) — rekomendasi 1920×1080 px</li>
-              <li>• Format: JPG, PNG, WebP, atau HEIC</li>
-              <li>• Ukuran maksimal 10 MB</li>
+              <li>• Ratio 16:9 (landscape) — recommended 1920×1080 px</li>
+              <li>• Format: JPG, PNG, WebP, or HEIC</li>
+              <li>• Maximum size 10 MB</li>
             </ul>
           </div>
 
           {/* Title */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Judul (opsional, max 80)
+              Title (optional, max 80)
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value.slice(0, 80))}
               maxLength={80}
-              placeholder="cth: Happy Hour Setiap Jumat"
+              placeholder="e.g. Happy Hour Every Friday"
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
           </div>
@@ -490,14 +490,14 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           {/* Subtitle */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Deskripsi (opsional, max 200)
+              Description (optional, max 200)
             </label>
             <textarea
               value={subtitle}
               onChange={(e) => setSubtitle(e.target.value.slice(0, 200))}
               maxLength={200}
               rows={2}
-              placeholder="cth: Beli 1 gratis 1 mocktail, jam 17-19"
+              placeholder="e.g. Buy 1 get 1 free mocktail, 5-7pm"
               className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition resize-none text-sm"
             />
           </div>
@@ -506,7 +506,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                Urutan (kecil = atas)
+                Order (lower = top)
               </label>
               <input
                 type="number"
@@ -531,7 +531,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
                     : "bg-muted/40 border-border text-muted-foreground"
                 )}
               >
-                {isActive ? "Aktif" : "Mati"}
+                {isActive ? "Active" : "Off"}
               </button>
             </div>
           </div>
@@ -540,7 +540,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                Mulai (opsional)
+                Start (optional)
               </label>
               <input
                 type="date"
@@ -551,7 +551,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                Sampai (opsional)
+                End (optional)
               </label>
               <input
                 type="date"
@@ -570,18 +570,18 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
               onClick={onClose}
               disabled={saving}
             >
-              Batal
+              Cancel
             </Button>
             <Button type="submit" variant="gold" disabled={saving}>
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Menyimpan...
+                  Saving...
                 </>
               ) : isEdit ? (
-                "Simpan perubahan"
+                "Save changes"
               ) : (
-                "Buat banner"
+                "Create banner"
               )}
             </Button>
           </div>

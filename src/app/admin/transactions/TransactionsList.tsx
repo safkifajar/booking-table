@@ -69,7 +69,7 @@ export function TransactionsList({
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Cari ID transaksi, meja, atau nama host…"
+            placeholder="Search transaction ID, table, or host name…"
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
@@ -82,17 +82,17 @@ export function TransactionsList({
           className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
           aria-label="Filter status"
         >
-          <option value="all">Semua status</option>
-          <option value="paid">Lunas</option>
-          <option value="unpaid">Belum lunas</option>
+          <option value="all">All statuses</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
         </select>
       </div>
 
       {filtered.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
-          <p className="text-sm">Tidak ada transaksi yang cocok.</p>
+          <p className="text-sm">No matching transactions.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Coba kata kunci lain (ID, meja, atau host).
+            Try a different keyword (ID, table, or host).
           </p>
         </Card>
       ) : (
@@ -100,10 +100,10 @@ export function TransactionsList({
         {/* Header row (desktop) */}
         <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
           <span>ID</span>
-          <span>Meja</span>
+          <span>Table</span>
           <span>Detail</span>
-          <span className="text-center">Pengunjung</span>
-          <span>Waktu</span>
+          <span className="text-center">Visitors</span>
+          <span>Time</span>
           <span className="text-right">Subtotal</span>
           <span></span>
         </div>
@@ -148,13 +148,13 @@ export function TransactionsList({
                 </div>
 
                 <div className="text-[11px] text-muted-foreground tabular-nums">
-                  {new Date(t.closed_at ?? t.started_at).toLocaleDateString("id-ID", {
+                  {new Date(t.closed_at ?? t.started_at).toLocaleDateString("en-US", {
                     day: "numeric",
                     month: "short",
                     year: "numeric",
                   })}
                   <span className="block opacity-70">
-                    {new Date(t.closed_at ?? t.started_at).toLocaleTimeString("id-ID", {
+                    {new Date(t.closed_at ?? t.started_at).toLocaleTimeString("en-US", {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
@@ -168,15 +168,15 @@ export function TransactionsList({
                   {/* subtotal 0 = tak ada tagihan → jangan tampil "belum lunas" */}
                   {t.subtotal === 0 ? null : t.paid_total >= t.subtotal ? (
                     <Badge variant="success" className="mt-0.5 text-[9px] px-1.5">
-                      Lunas
+                      Paid
                     </Badge>
                   ) : (
                     <div className="mt-0.5">
                       <Badge variant="warning" className="text-[9px] px-1.5">
-                        Belum lunas
+                        Unpaid
                       </Badge>
                       <div className="text-[10px] text-amber-400 tabular-nums">
-                        sisa {formatIDR(t.subtotal - t.paid_total)}
+                        remaining {formatIDR(t.subtotal - t.paid_total)}
                       </div>
                     </div>
                   )}
@@ -201,7 +201,7 @@ export function TransactionsList({
                       #{txId(t.session_id)}
                     </span>
                     <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {new Date(t.closed_at ?? t.started_at).toLocaleDateString("id-ID", {
+                      {new Date(t.closed_at ?? t.started_at).toLocaleDateString("en-US", {
                         day: "numeric",
                         month: "short",
                       })}
@@ -232,11 +232,11 @@ export function TransactionsList({
                     </div>
                     {t.subtotal === 0 ? null : t.paid_total >= t.subtotal ? (
                       <Badge variant="success" className="mt-0.5 text-[9px] px-1.5">
-                        Lunas
+                        Paid
                       </Badge>
                     ) : (
                       <Badge variant="warning" className="mt-0.5 text-[9px] px-1.5">
-                        Belum lunas · {formatIDR(t.subtotal - t.paid_total)}
+                        Unpaid · {formatIDR(t.subtotal - t.paid_total)}
                       </Badge>
                     )}
                   </div>
@@ -252,7 +252,7 @@ export function TransactionsList({
       {filtered.length > 0 && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Per halaman:</span>
+            <span>Per page:</span>
             <select
               value={pageSize}
               onChange={(e) => {
