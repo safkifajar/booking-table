@@ -726,6 +726,33 @@ export async function cashierCreatePayment(
     );
   if (!member) throw new Error("Invalid member");
 
+  // 3b. Cap ke sisa tagihan (outstanding = subtotal - paid). Cegah overpayment
+  //     yg bikin paid_revenue (basis subtotal) desync dari total payments.
+  const [billAgg] = await db
+    .select({
+      subtotal: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+    })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
+  const [paidAgg] = await db
+    .select({
+      paid: sql<number>`coalesce(sum(${payments.amount}), 0)::int`,
+    })
+    .from(payments)
+    .where(and(eq(payments.orderId, order.id), eq(payments.status, "paid")));
+  const outstanding = Math.max(
+    0,
+    Number(billAgg?.subtotal ?? 0) - Number(paidAgg?.paid ?? 0)
+  );
+  if (outstanding <= 0) {
+    throw new Error("This bill is already fully paid");
+  }
+  if (data.amount > outstanding) {
+    throw new Error(
+      `Amount exceeds the outstanding balance (${outstanding})`
+    );
+  }
+
   // 4. Validate cash kalau method cash
   let change: number | null = null;
   if (data.method === "cash") {

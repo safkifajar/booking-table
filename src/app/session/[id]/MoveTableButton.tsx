@@ -126,11 +126,12 @@ export function MoveTableButton({
   async function submitActiveRequest(t: MoveTargetTable) {
     setMoving(true);
     try {
-      await requestMoveTable({ sessionId, targetTableId: t.id });
+      const res = await requestMoveTable({ sessionId, targetTableId: t.id });
       toast.success("Move request sent — waiting for staff approval");
       setOpen(false);
       setConfirmMinSpend(null);
       setOptimisticPending({
+        id: res?.requestId,
         toLabel: t.label,
         reservationAt: new Date().toISOString(),
       });
@@ -237,8 +238,9 @@ export function MoveTableButton({
                   <button
                     key={t.id}
                     type="button"
+                    disabled={moving}
                     onClick={() => handlePick(t)}
-                    className="w-full flex items-center gap-3 rounded-lg border border-border p-3 text-left transition hover:bg-muted/40"
+                    className="w-full flex items-center gap-3 rounded-lg border border-border p-3 text-left transition hover:bg-muted/40 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     <div className="h-9 w-9 rounded-md bg-muted/60 flex items-center justify-center shrink-0">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -327,9 +329,10 @@ export function MoveTableButton({
           existingOrderTotal={existingOrderTotal}
           needsApproval={needsApproval}
           onBack={() => setOrderStep(null)}
-          onDone={() => {
+          onDone={(requestId) => {
             if (needsApproval) {
               setOptimisticPending({
+                id: requestId,
                 toLabel: orderStep.target.label,
                 reservationAt:
                   orderStep.slotIso || new Date().toISOString(),
@@ -486,7 +489,7 @@ function MoveOrderModal({
   existingOrderTotal: number;
   needsApproval: boolean;
   onBack: () => void;
-  onDone: () => void;
+  onDone: (requestId?: string) => void;
 }) {
   const [cart, setCart] = React.useState<Map<string, number>>(new Map());
   const [method, setMethod] = React.useState<PayMethod>("qris");
@@ -535,23 +538,24 @@ function MoveOrderModal({
     try {
       if (needsApproval) {
         // Mode aktif: tak kirim jam (server set sekarang→jam selesai).
-        await requestMoveTableWithOrder({
+        const res = await requestMoveTableWithOrder({
           sessionId,
           targetTableId: target.id,
           items,
           paymentMethod: method,
         });
         toast.success("Payment successful — move request waiting for approval");
-      } else {
-        await moveTableWithOrder({
-          sessionId,
-          targetTableId: target.id,
-          reservationAt: slotIso,
-          items,
-          paymentMethod: method,
-        });
-        toast.success(`Payment successful & moved to table ${target.label}`);
+        onDone(res?.requestId);
+        return;
       }
+      await moveTableWithOrder({
+        sessionId,
+        targetTableId: target.id,
+        reservationAt: slotIso,
+        items,
+        paymentMethod: method,
+      });
+      toast.success(`Payment successful & moved to table ${target.label}`);
       onDone();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to move"));

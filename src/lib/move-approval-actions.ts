@@ -74,14 +74,41 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
       )
     );
   if (pendingExisting) throw new Error("There's already a pending move request");
+  if (session.tableId === data.targetTableId)
+    throw new Error("Destination table is the same as the current one");
 
   const [target] = await db
-    .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
+    .select({
+      id: tables.id,
+      label: tables.label,
+      minSpend: tables.minSpend,
+      barId: floorAreas.barId,
+    })
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
     throw new Error("Invalid destination table");
+
+  // Min-spend: enforce server-side. Kalau meja tujuan ber-min-spend & order
+  // sekarang belum cukup → tolak (client harus lewat requestMoveTableWithOrder).
+  const minSpend = target.minSpend ?? 0;
+  if (minSpend > 0) {
+    const [existing] = await db
+      .select({
+        total: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(
+        and(eq(orders.sessionId, session.id), ne(orderItems.status, "void"))
+      );
+    if (Number(existing?.total ?? 0) < minSpend) {
+      throw new Error(
+        `Table ${target.label} has a minimum spend. Add an order before requesting the move.`
+      );
+    }
+  }
 
   // Pertahankan JAM BOOKING ASLI (tak reset, tak pakai sisa). Pindah hanya ganti
   // meja; rentang waktu ikut apa adanya supaya jadwal meja lama tak jadi "kosong"
@@ -91,15 +118,18 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   if (Date.now() >= newEnd.getTime())
     throw new Error("Booking time is over — can't move");
 
-  await db.insert(tableMoveRequests).values({
-    sessionId: session.id,
-    requestedBy: profile.id,
-    fromTableId: session.tableId,
-    toTableId: data.targetTableId,
-    reservationAt: newStart,
-    reservationEndAt: newEnd,
-    status: "pending",
-  });
+  const [inserted] = await db
+    .insert(tableMoveRequests)
+    .values({
+      sessionId: session.id,
+      requestedBy: profile.id,
+      fromTableId: session.tableId,
+      toTableId: data.targetTableId,
+      reservationAt: newStart,
+      reservationEndAt: newEnd,
+      status: "pending",
+    })
+    .returning({ id: tableMoveRequests.id });
 
   // Notif ke semua staff bar (in-app + push) + channel staff realtime.
   const staff = await db
@@ -127,6 +157,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
+  return { requestId: inserted.id };
 }
 
 const requestWithOrderSchema = z.object({
@@ -200,6 +231,8 @@ export async function requestMoveTableWithOrder(
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
     throw new Error("Invalid destination table");
+  if (session.tableId === data.targetTableId)
+    throw new Error("Destination table is the same as the current one");
   const minSpend = target.minSpend ?? 0;
 
   // Resolve harga item dari DB.
@@ -243,8 +276,7 @@ export async function requestMoveTableWithOrder(
     throw new Error("Booking time is over — can't move");
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.
-  let paymentId: string | null = null;
-  paymentId = await db.transaction(async (tx) => {
+  const tx = await db.transaction(async (tx) => {
     const [hostMember] = await tx
       .select({ id: sessionMembers.id })
       .from(sessionMembers)
@@ -291,17 +323,21 @@ export async function requestMoveTableWithOrder(
       })
       .returning({ id: payments.id });
 
-    await tx.insert(tableMoveRequests).values({
-      sessionId: session.id,
-      requestedBy: profile.id,
-      fromTableId: session.tableId,
-      toTableId: data.targetTableId,
-      reservationAt: newStart,
-      reservationEndAt: newEnd,
-      status: "pending",
-    });
-    return pay.id;
+    const [reqRow] = await tx
+      .insert(tableMoveRequests)
+      .values({
+        sessionId: session.id,
+        requestedBy: profile.id,
+        fromTableId: session.tableId,
+        toTableId: data.targetTableId,
+        reservationAt: newStart,
+        reservationEndAt: newEnd,
+        status: "pending",
+      })
+      .returning({ id: tableMoveRequests.id });
+    return { payId: pay.id, requestId: reqRow.id };
   });
+  const paymentId: string | null = tx.payId;
 
   // Charge gateway (best-effort).
   if (paymentId) {
@@ -353,6 +389,7 @@ export async function requestMoveTableWithOrder(
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
+  return { requestId: tx.requestId };
 }
 
 /** Request pindah pending milik sesi (badge status di UI customer). */
@@ -660,6 +697,8 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
     throw new Error("Invalid destination table");
+  if (session.tableId === data.targetTableId)
+    throw new Error("Destination table is the same as the current one");
 
   // Jam booking dipertahankan apa adanya.
   const newStart = session.reservationAt;

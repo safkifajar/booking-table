@@ -310,6 +310,7 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
       label: tables.label,
       capacity: tables.capacity,
       isActive: tables.isActive,
+      minSpend: tables.minSpend,
       barId: floorAreas.barId,
     })
     .from(tables)
@@ -336,6 +337,27 @@ export async function moveTable(input: z.infer<typeof moveSchema>) {
     throw new Error(
       `Table ${target.label}'s capacity (${target.capacity}) isn't enough for ${cnt} guests.`
     );
+  }
+
+  // Min-spend: enforce di server (jangan andalkan client memilih varian
+  // *WithOrder). Kalau meja tujuan punya min-spend & order sekarang belum cukup,
+  // tolak — caller harus lewat moveTableWithOrder (tambah order + bayar).
+  const minSpend = target.minSpend ?? 0;
+  if (minSpend > 0) {
+    const [existing] = await db
+      .select({
+        total: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(
+        and(eq(orders.sessionId, session.id), ne(orderItems.status, "void"))
+      );
+    if (Number(existing?.total ?? 0) < minSpend) {
+      throw new Error(
+        `Table ${target.label} has a minimum spend. Add an order before moving.`
+      );
+    }
   }
 
   // 4. Hitung jam baru: durasi dikunci = durasi booking awal.
