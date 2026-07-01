@@ -40,7 +40,7 @@ type NavItem = NavLeaf | NavGroup;
 const NAV: NavItem[] = [
   {
     type: "group",
-    label: "Laporan",
+    label: "Reports",
     icon: <ChartBar className="h-4 w-4" />,
     children: [
       {
@@ -52,13 +52,13 @@ const NAV: NavItem[] = [
       {
         type: "leaf",
         href: "/admin/transactions",
-        label: "Transaksi",
+        label: "Transactions",
         icon: <Receipt className="h-4 w-4" />,
       },
       {
         type: "leaf",
         href: "/admin/payments",
-        label: "Pembayaran",
+        label: "Payments",
         icon: <CreditCard className="h-4 w-4" />,
       },
       {
@@ -71,7 +71,7 @@ const NAV: NavItem[] = [
   },
   {
     type: "group",
-    label: "Konten",
+    label: "Content",
     icon: <Settings className="h-4 w-4" />,
     children: [
       {
@@ -83,25 +83,25 @@ const NAV: NavItem[] = [
       {
         type: "leaf",
         href: "/admin/banners",
-        label: "Banner Promo",
+        label: "Promo Banners",
         icon: <ImageIcon className="h-4 w-4" />,
       },
       {
         type: "leaf",
         href: "/admin/floor",
-        label: "Kelola Denah",
+        label: "Floor Plan",
         icon: <LayoutGrid className="h-4 w-4" />,
       },
       {
         type: "leaf",
         href: "/admin/qr",
-        label: "QR Meja",
+        label: "Table QR",
         icon: <QrCode className="h-4 w-4" />,
       },
       {
         type: "leaf",
         href: "/admin/hobbies",
-        label: "Hobi & Minat",
+        label: "Hobbies & Interests",
         icon: <Sparkles className="h-4 w-4" />,
       },
       {
@@ -114,7 +114,7 @@ const NAV: NavItem[] = [
   },
   {
     type: "group",
-    label: "Pengaturan",
+    label: "Settings",
     icon: <Settings className="h-4 w-4" />,
     children: [
       {
@@ -274,7 +274,7 @@ export function AdminMobileNav() {
     {
       type: "leaf",
       href: "/admin/transactions",
-      label: "Transaksi",
+      label: "Transactions",
       icon: <Receipt className="h-4 w-4" />,
     },
     {
