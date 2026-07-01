@@ -81,7 +81,7 @@ export function MoveTableButton({
     try {
       setTargets(await getMoveTargets(sessionId));
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal memuat meja"));
+      toast.error(getActionErrorMessage(err, "Failed to load tables"));
       setTargets([]);
     } finally {
       setLoading(false);
@@ -109,7 +109,7 @@ export function MoveTableButton({
     setMoving(true);
     try {
       await requestMoveTable({ sessionId, targetTableId: t.id });
-      toast.success("Request pindah dikirim — menunggu persetujuan staff");
+      toast.success("Move request sent — waiting for staff approval");
       setOpen(false);
       setConfirmMinSpend(null);
       setOptimisticPending({
@@ -118,7 +118,7 @@ export function MoveTableButton({
       });
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+      toast.error(getActionErrorMessage(err, "Failed to send request"));
     } finally {
       setMoving(false);
     }
@@ -139,12 +139,12 @@ export function MoveTableButton({
         targetTableId: t.id,
         reservationAt: slotIso,
       });
-      toast.success(`Berhasil pindah ke meja ${t.label}`);
+      toast.success(`Moved to table ${t.label}`);
       setOpen(false);
       setSlotTarget(null);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal pindah meja"));
+      toast.error(getActionErrorMessage(err, "Failed to move table"));
     } finally {
       setMoving(false);
     }
@@ -156,7 +156,7 @@ export function MoveTableButton({
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
           <span>
-            Menunggu persetujuan staff — pindah ke meja{" "}
+            Waiting for staff approval — moving to table{" "}
             <strong>{pending.toLabel}</strong>.
           </span>
         </div>
@@ -168,7 +168,7 @@ export function MoveTableButton({
           onClick={openModal}
         >
           <ArrowRightLeft className="h-4 w-4" />{" "}
-          {needsApproval ? "Request Pindah Meja" : "Pindah Meja"}
+          {needsApproval ? "Request Table Move" : "Move Table"}
         </Button>
       )}
 
@@ -183,12 +183,12 @@ export function MoveTableButton({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-              <h2 className="text-sm font-semibold">Pindah ke meja lain</h2>
+              <h2 className="text-sm font-semibold">Move to another table</h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-                aria-label="Tutup"
+                aria-label="Close"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -197,8 +197,8 @@ export function MoveTableButton({
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
                 {needsApproval
-                  ? "Hanya meja yg kapasitasnya cukup & kosong di jam booking kamu. Jam booking tetap sama — pindah hanya ganti meja & perlu persetujuan staff."
-                  : "Hanya meja yg kapasitasnya cukup. Durasi booking tetap sama; kamu pilih jam mulai di langkah berikutnya."}
+                  ? "Only tables with enough capacity and free during your booking time. Your booking time stays the same — moving only changes the table and needs staff approval."
+                  : "Only tables with enough capacity. The booking duration stays the same; you pick the start time in the next step."}
               </p>
               {loading ? (
                 <div className="py-10 text-center">
@@ -216,9 +216,9 @@ export function MoveTableButton({
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">Meja {t.label}</div>
+                      <div className="text-sm font-medium">Table {t.label}</div>
                       <div className="text-xs text-muted-foreground">
-                        {t.area_name} · {t.capacity} kursi
+                        {t.area_name} · {t.capacity} seats
                       </div>
                       {t.min_spend > 0 && (
                         <div className="text-[11px] text-amber-400 mt-0.5">
@@ -230,7 +230,7 @@ export function MoveTableButton({
                 ))
               ) : (
                 <div className="py-10 text-center text-sm text-muted-foreground">
-                  Tak ada meja tersedia.
+                  No tables available.
                 </div>
               )}
             </div>
@@ -242,13 +242,13 @@ export function MoveTableButton({
       {confirmMinSpend && (
         <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm bg-card border border-border rounded-2xl p-5 text-center">
-            <h3 className="text-base font-bold mb-1">Meja ada minimum spend</h3>
+            <h3 className="text-base font-bold mb-1">Table has a minimum spend</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Meja {confirmMinSpend.label} punya minimum spend{" "}
+              Table {confirmMinSpend.label} has a minimum spend of{" "}
               <span className="text-amber-400 font-semibold">
                 {formatIDR(confirmMinSpend.min_spend)}
               </span>
-              . Kamu perlu tambah order & bayar dulu untuk pindah ke sini.
+              . You need to add an order and pay first to move here.
             </p>
             <div className="flex gap-2">
               <Button
@@ -256,7 +256,7 @@ export function MoveTableButton({
                 className="flex-1"
                 onClick={() => setConfirmMinSpend(null)}
               >
-                Batal
+                Cancel
               </Button>
               <Button
                 variant="gold"
@@ -271,7 +271,7 @@ export function MoveTableButton({
                   setConfirmMinSpend(null);
                 }}
               >
-                Lanjut
+                Continue
               </Button>
             </div>
           </div>
@@ -364,16 +364,16 @@ function SlotPickStep({
       <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div>
-            <h2 className="text-sm font-semibold">Pilih jam · Meja {target.label}</h2>
+            <h2 className="text-sm font-semibold">Pick a time · Table {target.label}</h2>
             <p className="text-[11px] text-muted-foreground">
-              Durasi tetap sama dgn booking awal
+              Duration stays the same as the original booking
             </p>
           </div>
           <button
             type="button"
             onClick={onBack}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Kembali"
+            aria-label="Back"
           >
             <X className="h-4 w-4" />
           </button>
@@ -386,9 +386,9 @@ function SlotPickStep({
           ) : data.slots.length > 0 ? (
             <div className="space-y-3">
               <div className="rounded-md border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
-                Durasi pindah meja{" "}
-                <strong>sama dengan booking sebelumnya ({durasiLabel(data.durationMinutes)})</strong>
-                . Cukup pilih jam mulai — jam selesai otomatis mengikuti.
+                Move duration{" "}
+                <strong>matches your previous booking ({durasiLabel(data.durationMinutes)})</strong>
+                . Just pick a start time — the end time follows automatically.
               </div>
               <SlotRangePicker
                 slots={data.slots}
@@ -406,7 +406,7 @@ function SlotPickStep({
             </div>
           ) : (
             <div className="py-10 text-center text-sm text-muted-foreground">
-              Tak ada jam tersedia di meja ini.
+              No times available at this table.
             </div>
           )}
         </div>
@@ -414,8 +414,8 @@ function SlotPickStep({
           <div className="p-4 border-t border-border shrink-0 space-y-2">
             {rangeConflict && (
               <p className="text-[11px] text-amber-400">
-                Rentang jam ini bentrok dengan booking lain di meja tujuan. Pilih
-                jam mulai lain.
+                This time range conflicts with another booking at the target
+                table. Pick a different start time.
               </p>
             )}
             <Button
@@ -427,10 +427,10 @@ function SlotPickStep({
             >
               {moving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Memproses…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Processing…
                 </>
               ) : (
-                "Lanjut"
+                "Continue"
               )}
             </Button>
           </div>
@@ -493,14 +493,14 @@ function MoveOrderModal({
 
   async function handleSubmit() {
     if (!enough) {
-      toast.error("Belum capai minimum spend");
+      toast.error("Minimum spend not reached");
       return;
     }
     const items = Array.from(cart.entries())
       .filter(([, q]) => q > 0)
       .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
     if (items.length === 0) {
-      toast.error("Tambah minimal 1 item");
+      toast.error("Add at least 1 item");
       return;
     }
     setSubmitting(true);
@@ -513,7 +513,7 @@ function MoveOrderModal({
           items,
           paymentMethod: method,
         });
-        toast.success("Bayar berhasil — request pindah menunggu persetujuan");
+        toast.success("Payment successful — move request waiting for approval");
       } else {
         await moveTableWithOrder({
           sessionId,
@@ -522,11 +522,11 @@ function MoveOrderModal({
           items,
           paymentMethod: method,
         });
-        toast.success(`Bayar berhasil & pindah ke meja ${target.label}`);
+        toast.success(`Payment successful & moved to table ${target.label}`);
       }
       onDone();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal pindah"));
+      toast.error(getActionErrorMessage(err, "Failed to move"));
       setSubmitting(false);
     }
   }
@@ -538,16 +538,16 @@ function MoveOrderModal({
       <div className="w-full sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div>
-            <h2 className="text-sm font-semibold">Meja {target.label} · min spend</h2>
+            <h2 className="text-sm font-semibold">Table {target.label} · min spend</h2>
             <p className="text-[11px] text-muted-foreground">
-              Min. {formatIDR(target.min_spend)} — tambah order & bayar dulu
+              Min. {formatIDR(target.min_spend)} — add an order & pay first
             </p>
           </div>
           <button
             type="button"
             onClick={onBack}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Kembali"
+            aria-label="Back"
           >
             <X className="h-4 w-4" />
           </button>

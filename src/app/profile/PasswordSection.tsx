@@ -35,15 +35,15 @@ export function PasswordSection({ hasPassword }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (newPassword.length < 6) {
-      toast.error("Password baru minimal 6 karakter");
+      toast.error("New password must be at least 6 characters");
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("Konfirmasi password tidak cocok");
+      toast.error("Password confirmation doesn't match");
       return;
     }
     if (hasPassword && !currentPassword) {
-      toast.error("Password sekarang wajib diisi");
+      toast.error("Current password is required");
       return;
     }
 
@@ -56,12 +56,12 @@ export function PasswordSection({ hasPassword }: Props) {
       });
       toast.success(
         hasPassword
-          ? "Password berhasil diubah"
-          : "Password berhasil di-set. Sekarang kamu bisa sign in dengan email + password."
+          ? "Password changed successfully"
+          : "Password set successfully. You can now sign in with email + password."
       );
       resetForm();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal ubah password"));
+      toast.error(getActionErrorMessage(err, "Failed to change password"));
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export function PasswordSection({ hasPassword }: Props) {
           {hasPassword ? (
             <>
               <Lock className="h-4 w-4 text-primary" />
-              Ubah Password
+              Change Password
             </>
           ) : (
             <>
@@ -85,8 +85,8 @@ export function PasswordSection({ hasPassword }: Props) {
         </CardTitle>
         <CardDescription>
           {hasPassword
-            ? "Pakai password yang kuat dan unik. Min 6 karakter."
-            : "Kamu signin via magic link. Set password supaya bisa login juga pakai email + password."}
+            ? "Use a strong, unique password. Min 6 characters."
+            : "You signed in via magic link. Set a password so you can also sign in with email + password."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -94,7 +94,7 @@ export function PasswordSection({ hasPassword }: Props) {
           {/* Current password — hanya kalau hasPassword */}
           {hasPassword && (
             <PasswordField
-              label="Password sekarang"
+              label="Current password"
               value={currentPassword}
               onChange={setCurrentPassword}
               show={showCurrent}
@@ -104,7 +104,7 @@ export function PasswordSection({ hasPassword }: Props) {
           )}
 
           <PasswordField
-            label={hasPassword ? "Password baru" : "Password"}
+            label={hasPassword ? "New password" : "Password"}
             value={newPassword}
             onChange={setNewPassword}
             show={showNew}
@@ -114,7 +114,7 @@ export function PasswordSection({ hasPassword }: Props) {
           />
 
           <PasswordField
-            label="Konfirmasi password"
+            label="Confirm password"
             value={confirmPassword}
             onChange={setConfirmPassword}
             show={showNew}
@@ -123,7 +123,7 @@ export function PasswordSection({ hasPassword }: Props) {
             minLength={6}
             error={
               confirmPassword.length > 0 && confirmPassword !== newPassword
-                ? "Tidak cocok dengan password baru"
+                ? "Doesn't match the new password"
                 : null
             }
           />
@@ -136,9 +136,9 @@ export function PasswordSection({ hasPassword }: Props) {
               disabled={loading || !newPassword || !confirmPassword}
             >
               {loading
-                ? "Menyimpan..."
+                ? "Saving..."
                 : hasPassword
-                  ? "Ubah Password"
+                  ? "Change Password"
                   : "Set Password"}
             </Button>
           </div>
@@ -189,7 +189,7 @@ function PasswordField({
           type="button"
           onClick={onToggleShow}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          aria-label={show ? "Sembunyikan" : "Tampilkan"}
+          aria-label={show ? "Hide" : "Show"}
         >
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>

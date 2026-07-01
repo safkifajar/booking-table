@@ -83,7 +83,7 @@ export default async function ProfileSessionsPage() {
 
   return (
     <main className="flex-1 pb-12">
-      <ProfileSubpageHeader title="Riwayat Session" eyebrow="Profile" />
+      <ProfileSubpageHeader title="Session History" eyebrow="Profile" />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         {rows.length === 0 ? (
@@ -108,13 +108,13 @@ export default async function ProfileSessionsPage() {
 function usageLabel(session: SessionRow): string {
   const start = session.reservation_at ?? session.started_at;
   const end = session.reservation_end_at;
-  const tgl = new Intl.DateTimeFormat("id-ID", {
+  const tgl = new Intl.DateTimeFormat("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(start);
   const jam = (d: Date) =>
-    new Intl.DateTimeFormat("id-ID", {
+    new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     }).format(d);
@@ -149,7 +149,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
           {session.is_host && (
             <span
               className="inline-flex items-center gap-0.5 text-[10px] text-primary"
-              aria-label="Kamu host"
+              aria-label="You are the host"
             >
               <Crown className="h-3 w-3" />
               Host
@@ -171,7 +171,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
             <>
               <span>·</span>
               <span className="inline-flex items-center gap-1 text-orange-400 font-medium">
-                Belum lunas {formatIDR(session.outstanding)}
+                Unpaid {formatIDR(session.outstanding)}
               </span>
             </>
           )}
@@ -201,7 +201,7 @@ function StatusBadge({
   if (status === "open") {
     return (
       <span className="inline-flex items-center gap-1 text-emerald-400">
-        <Users className="h-3 w-3" /> Sedang berlangsung
+        <Users className="h-3 w-3" /> In progress
       </span>
     );
   }
@@ -215,30 +215,30 @@ function StatusBadge({
   if (status === "overdue") {
     return (
       <span className="inline-flex items-center gap-1 text-orange-400">
-        <Users className="h-3 w-3" /> Lewat waktu
+        <Users className="h-3 w-3" /> Overdue
       </span>
     );
   }
   if (status === "cancelled") {
-    return <span className="text-muted-foreground">Dibatalkan</span>;
+    return <span className="text-muted-foreground">Cancelled</span>;
   }
   // closed
   if (!isHost && memberStatus === "kicked") {
-    return <span className="text-red-400/80">Dikeluarkan</span>;
+    return <span className="text-red-400/80">Removed</span>;
   }
   if (!isHost && memberStatus === "left") {
-    return <span className="text-muted-foreground">Keluar lebih awal</span>;
+    return <span className="text-muted-foreground">Left early</span>;
   }
-  return <span className="text-muted-foreground">Selesai</span>;
+  return <span className="text-muted-foreground">Done</span>;
 }
 
 function EmptyState() {
   return (
     <div className="rounded-xl border border-dashed border-border p-8 text-center">
       <History className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-      <h2 className="text-sm font-medium mb-1">Belum ada riwayat</h2>
+      <h2 className="text-sm font-medium mb-1">No history yet</h2>
       <p className="text-xs text-muted-foreground">
-        Setelah kamu buka atau gabung meja, riwayat session akan tampil di sini.
+        Once you open or join a table, your session history will appear here.
       </p>
     </div>
   );

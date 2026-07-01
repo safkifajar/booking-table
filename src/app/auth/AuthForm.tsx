@@ -66,7 +66,7 @@ export function AuthForm() {
         href="/"
         className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#f0e6d2]/60 hover:text-[#f0e6d2] transition"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Kembali ke beranda
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to home
       </Link>
     </div>
   );
@@ -74,16 +74,16 @@ export function AuthForm() {
 
 function titleFor(mode: Mode): string {
   if (mode === "signin") return "Sign in";
-  if (mode === "signup") return "Bikin akun baru";
-  if (mode === "magic") return "Sign in dengan email";
+  if (mode === "signup") return "Create a new account";
+  if (mode === "magic") return "Sign in with email";
   return "Welcome";
 }
 
 function descFor(mode: Mode): string {
-  if (mode === "signin") return "Masuk dengan email & password kamu.";
-  if (mode === "signup") return "Daftar sekali, login kapan saja.";
-  if (mode === "magic") return "Kami kirimkan magic link — tinggal klik.";
-  return "Pilih cara masuk untuk reserve meja atau join malam ini.";
+  if (mode === "signin") return "Sign in with your email & password.";
+  if (mode === "signup") return "Sign up once, sign in anytime.";
+  if (mode === "magic") return "We'll send you a magic link — just click it.";
+  return "Choose how to sign in to reserve a table or join tonight.";
 }
 
 // ============================================================
@@ -106,7 +106,7 @@ function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
         className="w-full"
         onClick={() => setMode("signup")}
       >
-        Bikin Akun Baru
+        Create New Account
       </Button>
       {/* Magic Link di-hide sementara. Aktifkan lagi kalau dibutuhkan:
       <div className="relative py-2">
@@ -153,10 +153,10 @@ function PasswordForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.includes("@")) return toast.error("Email tidak valid");
-    if (password.length < 6) return toast.error("Password minimal 6 karakter");
+    if (!email.includes("@")) return toast.error("Invalid email");
+    if (password.length < 6) return toast.error("Password must be at least 6 characters");
     if (mode === "signup" && displayName.trim().length < 2)
-      return toast.error("Nama minimal 2 karakter");
+      return toast.error("Name must be at least 2 characters");
 
     setLoading(true);
     try {
@@ -179,7 +179,7 @@ function PasswordForm({
       // Kalau sukses, sudah redirect — tidak perlu setLoading(false)
     } catch (err) {
       // NEXT_REDIRECT akan di-handle Next.js, tidak sampai sini
-      const message = err instanceof Error ? err.message : "Gagal masuk";
+      const message = err instanceof Error ? err.message : "Sign in failed";
       toast.error(message);
       setLoading(false);
     }
@@ -190,7 +190,7 @@ function PasswordForm({
       {mode === "signup" && (
         <input
           type="text"
-          placeholder="Nama panggilan"
+          placeholder="Nickname"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           autoFocus
@@ -203,7 +203,7 @@ function PasswordForm({
       {mode === "signup" && (
         <input
           type="tel"
-          placeholder="Nomor WA (cth: 0812...)"
+          placeholder="WhatsApp number (e.g. 0812...)"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           maxLength={20}
@@ -223,7 +223,7 @@ function PasswordForm({
       <div className="relative">
         <input
           type={showPassword ? "text" : "password"}
-          placeholder="Password (min 6 karakter)"
+          placeholder="Password (min 6 characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -244,24 +244,24 @@ function PasswordForm({
       <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
         {loading
           ? mode === "signup"
-            ? "Membuat akun..."
-            : "Masuk..."
+            ? "Creating account..."
+            : "Signing in..."
           : mode === "signup"
-            ? "Bikin Akun"
+            ? "Create Account"
             : "Sign In"}
       </Button>
 
       {mode === "signup" && (
         <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-          Dengan mendaftar, kamu menyetujui{" "}
+          By signing up, you agree to our{" "}
           <Link href="/terms" target="_blank" className="text-primary hover:underline">
-            Syarat &amp; Ketentuan
+            Terms &amp; Conditions
           </Link>{" "}
-          dan{" "}
+          and{" "}
           <Link href="/privacy" target="_blank" className="text-primary hover:underline">
-            Kebijakan Privasi
-          </Link>{" "}
-          kami.
+            Privacy Policy
+          </Link>
+          .
         </p>
       )}
 
@@ -271,14 +271,14 @@ function PasswordForm({
           onClick={onBack}
           className="text-muted-foreground hover:text-foreground"
         >
-          ← Pilihan lain
+          ← Other options
         </button>
         <button
           type="button"
           onClick={onSwitch}
           className="text-primary hover:underline"
         >
-          {mode === "signin" ? "Belum punya akun? Daftar" : "Sudah punya akun? Masuk"}
+          {mode === "signin" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
         </button>
       </div>
     </form>
@@ -303,7 +303,7 @@ function MagicLinkForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.includes("@")) return toast.error("Email tidak valid");
+    if (!email.includes("@")) return toast.error("Invalid email");
     setLoading(true);
     try {
       const result = await magicLinkAction({ email, next });
@@ -313,7 +313,7 @@ function MagicLinkForm({
         toast.error(result.error);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gagal kirim email";
+      const message = err instanceof Error ? err.message : "Failed to send email";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -324,7 +324,7 @@ function MagicLinkForm({
     return (
       <div className="space-y-3">
         <div className="rounded-md bg-primary/10 border border-primary/30 p-3 text-sm">
-          Link dikirim{email && ` ke ${email}`}. Buka email & klik link untuk masuk. Bisa tutup tab ini.
+          Link sent{email && ` to ${email}`}. Open your email & click the link to sign in. You can close this tab.
         </div>
         <button
           onClick={() => {
@@ -333,7 +333,7 @@ function MagicLinkForm({
           }}
           className="block w-full text-xs text-muted-foreground hover:text-foreground"
         >
-          Pakai email lain
+          Use a different email
         </button>
       </div>
     );
@@ -351,14 +351,14 @@ function MagicLinkForm({
         className={inputCls}
       />
       <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
-        {loading ? "Mengirim..." : "Kirim Magic Link"}
+        {loading ? "Sending..." : "Send Magic Link"}
       </Button>
       <button
         type="button"
         onClick={onBack}
         className="block w-full text-xs text-muted-foreground hover:text-foreground"
       >
-        ← Pilihan lain
+        ← Other options
       </button>
     </form>
   );

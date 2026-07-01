@@ -16,9 +16,9 @@ import type {
 } from "@/types/db";
 
 function visibilityLabel(v: SessionVisibility): string {
-  if (v === "public") return "Publik";
-  if (v === "friends") return "Teman";
-  return "Undangan";
+  if (v === "public") return "Public";
+  if (v === "friends") return "Friends";
+  return "Invite only";
 }
 
 type Tab = "here" | "all";
@@ -45,7 +45,7 @@ export function NetworkView({
       {/* Tab switcher */}
       <div className="flex gap-1 rounded-lg bg-muted/40 p-1 mb-4">
         <TabButton active={tab === "here"} onClick={() => setTab("here")}>
-          Lagi di SOHO
+          At SOHO now
           {activeUsers.length > 0 && (
             <span className="ml-1.5 text-xs opacity-70">
               {activeUsers.length}
@@ -53,7 +53,7 @@ export function NetworkView({
           )}
         </TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
-          Semua member
+          All members
         </TabButton>
       </div>
 
@@ -112,10 +112,10 @@ function HereTab({
     return (
       <div className="rounded-lg border border-dashed border-border py-10 text-center">
         <p className="text-sm text-muted-foreground">
-          Belum ada yang nongkrong sekarang.
+          No one's hanging out right now.
         </p>
         <p className="text-xs text-muted-foreground/70 mt-1">
-          Cek tab Semua member untuk lihat siapa yang bisa diajak.
+          Check the All members tab to see who you can reach out to.
         </p>
       </div>
     );
@@ -229,7 +229,7 @@ function AllMembersTab({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cari member berdasarkan nama…"
+            placeholder="Search members by name…"
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
@@ -243,7 +243,7 @@ function AllMembersTab({
                 ? "border-primary bg-primary/15 text-primary font-medium"
                 : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
             )}
-            aria-label="Filter hobi"
+            aria-label="Filter by hobby"
           >
             <SlidersHorizontal className="h-4 w-4" />
             <span>Filter</span>
@@ -268,7 +268,7 @@ function AllMembersTab({
               <button
                 type="button"
                 onClick={() => removeHobby(h)}
-                aria-label={`Hapus filter ${h}`}
+                aria-label={`Remove filter ${h}`}
                 className="hover:text-primary/70"
               >
                 <X className="h-3 w-3" />
@@ -280,7 +280,7 @@ function AllMembersTab({
             onClick={() => setSelectedHobbies([])}
             className="text-xs text-muted-foreground hover:text-foreground ml-1"
           >
-            Hapus semua
+            Clear all
           </button>
         </div>
       )}
@@ -297,8 +297,8 @@ function AllMembersTab({
       {initialLoaded && items.length === 0 && !loading && (
         <p className="text-sm text-muted-foreground py-8 text-center">
           {trimmed.length > 0 || selectedHobbies.length > 0
-            ? "Tidak ada member yang cocok dengan filter."
-            : "Belum ada member."}
+            ? "No members match the filter."
+            : "No members yet."}
         </p>
       )}
 
@@ -325,7 +325,7 @@ function AllMembersTab({
       )}
       {!hasMore && items.length > 0 && (
         <p className="text-center text-xs text-muted-foreground/60 py-4">
-          Semua member sudah tampil.
+          All members shown.
         </p>
       )}
     </div>
@@ -362,7 +362,7 @@ function UserRow({
           <p className="font-medium text-sm truncate">{name}</p>
           {isMe && (
             <span className="text-[10px] px-1 py-0 rounded border border-border text-muted-foreground">
-              kamu
+              you
             </span>
           )}
         </div>
@@ -399,19 +399,19 @@ function ActiveUserRow({
           )}
           {isMe && (
             <span className="text-[10px] px-1 py-0 rounded border border-border text-muted-foreground">
-              kamu
+              you
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Meja {user.table_label} · {visibilityLabel(user.visibility)}
+          Table {user.table_label} · {visibilityLabel(user.visibility)}
         </p>
       </Link>
       {/* Gabung: meja public, bukan diri sendiri, & viewer belum di meja itu.
           Kalau viewer sudah di sesi yg sama → tampilkan "Semeja". */}
       {!isMe && alreadyInSession ? (
         <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
-          Semeja
+          Same table
         </span>
       ) : (
         !isMe &&
@@ -420,7 +420,7 @@ function ActiveUserRow({
             href={`/session/${user.session_id}?from=${encodeURIComponent("/network")}`}
             className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
           >
-            Gabung
+            Join
           </Link>
         )
       )}

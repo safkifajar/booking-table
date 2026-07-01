@@ -113,7 +113,7 @@ export function ProfileForm({
     e.preventDefault();
     const name = displayName.trim();
     if (name.length < 2) {
-      toast.error("Nama minimal 2 karakter");
+      toast.error("Name must be at least 2 characters");
       return;
     }
     setLoading(true);
@@ -137,12 +137,12 @@ export function ProfileForm({
         hideSocial,
         hobbies,
       });
-      toast.success("Profil tersimpan");
+      toast.success("Profile saved");
       // Langsung balik ke halaman profil (data terbaru).
       router.push("/profile");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal simpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setLoading(false);
     }
   }
@@ -161,9 +161,9 @@ export function ProfileForm({
       {/* IDENTITAS */}
       <Card>
         <CardHeader>
-          <CardTitle>Identitas</CardTitle>
+          <CardTitle>Identity</CardTitle>
           <CardDescription>
-            Info dasar akunmu. Email tidak bisa diubah dari sini.
+            Basic info for your account. Email can't be changed from here.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -184,7 +184,7 @@ export function ProfileForm({
           {/* Display name */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Nama tampilan *
+              Display name *
             </label>
             <input
               type="text"
@@ -200,13 +200,13 @@ export function ProfileForm({
           {/* Phone */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Phone className="h-3 w-3" /> Nomor WA
+              <Phone className="h-3 w-3" /> WhatsApp number
             </label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="cth: 081234567890"
+              placeholder="e.g. 081234567890"
               maxLength={20}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
@@ -215,7 +215,7 @@ export function ProfileForm({
           {/* Birth date */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Cake className="h-3 w-3" /> Tanggal lahir
+              <Cake className="h-3 w-3" /> Date of birth
             </label>
             <input
               type="date"
@@ -229,40 +229,40 @@ export function ProfileForm({
           {/* Jenis kelamin */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Users className="h-3 w-3" /> Jenis kelamin
+              <Users className="h-3 w-3" /> Gender
             </label>
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value as Gender)}
               className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
             >
-              <option value="">Tidak disebut</option>
-              <option value="male">Pria</option>
-              <option value="female">Wanita</option>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
             </select>
           </div>
 
           {/* Tertarik pada */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Heart className="h-3 w-3" /> Tertarik pada
+              <Heart className="h-3 w-3" /> Interested in
             </label>
             <select
               value={interestedIn}
               onChange={(e) => setInterestedIn(e.target.value as InterestedIn)}
               className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
             >
-              <option value="">Tidak disebut</option>
-              <option value="male">Pria</option>
-              <option value="female">Wanita</option>
-              <option value="both">Keduanya</option>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="both">Both</option>
             </select>
           </div>
 
           {/* Media sosial */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <LinkIcon className="h-3 w-3" /> Media sosial
+              <LinkIcon className="h-3 w-3" /> Social media
             </label>
             <input
               type="text"
@@ -273,20 +273,20 @@ export function ProfileForm({
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
             <p className="text-[10px] text-muted-foreground mt-1">
-              Opsional — IG, TikTok, linktree, dll.
+              Optional — IG, TikTok, linktree, etc.
             </p>
           </div>
 
           {/* Alamat (ketik bebas) */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <MapPin className="h-3 w-3" /> Alamat
+              <MapPin className="h-3 w-3" /> Address
             </label>
             <input
               type="text"
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              placeholder="cth: Purwokerto Utara"
+              placeholder="e.g. North Purwokerto"
               maxLength={120}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
@@ -295,14 +295,14 @@ export function ProfileForm({
           {/* Looking for */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Heart className="h-3 w-3" /> Mencari
+              <Heart className="h-3 w-3" /> Looking for
             </label>
             <select
               value={lookingFor}
               onChange={(e) => setLookingFor(e.target.value)}
               className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
             >
-              <option value="">Tidak disebut</option>
+              <option value="">Prefer not to say</option>
               {LOOKING_FOR_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -314,13 +314,13 @@ export function ProfileForm({
           {/* Music preference */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Music className="h-3 w-3" /> Preferensi musik
+              <Music className="h-3 w-3" /> Favorite music
             </label>
             <input
               type="text"
               value={musicPref}
               onChange={(e) => setMusicPref(e.target.value)}
-              placeholder="cth: pop, jazz, hip-hop"
+              placeholder="e.g. pop, jazz, hip-hop"
               maxLength={120}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
@@ -330,26 +330,26 @@ export function ProfileForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                <Utensils className="h-3 w-3" /> Makanan favorit
+                <Utensils className="h-3 w-3" /> Favorite food
               </label>
               <input
                 type="text"
                 value={favFood}
                 onChange={(e) => setFavFood(e.target.value)}
-                placeholder="cth: nasi goreng"
+                placeholder="e.g. fried rice"
                 maxLength={120}
                 className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
               />
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                <Wine className="h-3 w-3" /> Minuman favorit
+                <Wine className="h-3 w-3" /> Favorite drink
               </label>
               <input
                 type="text"
                 value={favDrink}
                 onChange={(e) => setFavDrink(e.target.value)}
-                placeholder="cth: kopi, mojito"
+                placeholder="e.g. coffee, mojito"
                 maxLength={120}
                 className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
               />
@@ -360,7 +360,7 @@ export function ProfileForm({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <FileText className="h-3 w-3" /> Bio singkat
+                <FileText className="h-3 w-3" /> Short bio
               </label>
               <span
                 className={cn(
@@ -374,7 +374,7 @@ export function ProfileForm({
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="Cerita singkat tentang kamu, max 280 karakter"
+              placeholder="A short story about yourself, max 280 characters"
               maxLength={280}
               rows={3}
               className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition resize-none text-sm"
@@ -388,21 +388,21 @@ export function ProfileForm({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            Hobi & Minat
+            Hobbies & Interests
           </CardTitle>
           <CardDescription>
-            Bantu host & teman semeja kenal kamu — vibe match jadi gampang. Pilih
-            dari pilihan yang tersedia. Maks 15 hobi.
+            Help your host & tablemates get to know you — easier vibe matching.
+            Pick from the available options. Max 15 hobbies.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
             <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Hobi kamu ({hobbies.length})
+              Your hobbies ({hobbies.length})
             </p>
             {hobbies.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                Belum ada. Pilih dari daftar di bawah.
+                None yet. Pick from the list below.
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5">
@@ -457,34 +457,34 @@ export function ProfileForm({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-4 w-4 text-primary" />
-            Privasi
+            Privacy
           </CardTitle>
           <CardDescription>
-            Atur apa yang boleh dilihat pengunjung lain di profilmu.
+            Control what other visitors can see on your profile.
           </CardDescription>
         </CardHeader>
         <CardContent className="divide-y divide-border">
           <PrivacyToggle
-            label="Sembunyikan riwayat kunjungan"
-            desc="Daftar meja yang pernah kamu ikuti"
+            label="Hide visit history"
+            desc="List of tables you've joined"
             checked={hideHistory}
             onChange={setHideHistory}
           />
           <PrivacyToggle
-            label="Sembunyikan lokasi saat ini"
-            desc="Status 'lagi di meja' & muncul di Lagi di SOHO"
+            label="Hide current location"
+            desc="'At a table' status & appearing in At SOHO now"
             checked={hideLocation}
             onChange={setHideLocation}
           />
           <PrivacyToggle
-            label="Sembunyikan umur"
-            desc="Umur dari tanggal lahir"
+            label="Hide age"
+            desc="Age from date of birth"
             checked={hideAge}
             onChange={setHideAge}
           />
           <PrivacyToggle
-            label="Sembunyikan media sosial"
-            desc="Link IG/TikTok/dll"
+            label="Hide social media"
+            desc="IG/TikTok/etc. link"
             checked={hideSocial}
             onChange={setHideSocial}
           />
@@ -494,7 +494,7 @@ export function ProfileForm({
       {/* Submit */}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="submit" variant="gold" size="lg" disabled={loading}>
-          {loading ? "Menyimpan..." : "Simpan Profil"}
+          {loading ? "Saving..." : "Save Profile"}
         </Button>
       </div>
     </form>

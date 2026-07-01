@@ -33,7 +33,7 @@ export function ForgotForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.includes("@")) {
-      toast.error("Email tidak valid");
+      toast.error("Invalid email");
       return;
     }
     setLoading(true);
@@ -45,7 +45,7 @@ export function ForgotForm() {
         toast.error(result.error);
       }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim email"));
+      toast.error(getActionErrorMessage(err, "Failed to send email"));
     } finally {
       setLoading(false);
     }
@@ -67,12 +67,12 @@ export function ForgotForm() {
           </span>
         </div>
         <CardTitle className="text-2xl">
-          {sent ? "Cek email kamu" : "Lupa password?"}
+          {sent ? "Check your email" : "Forgot password?"}
         </CardTitle>
         <CardDescription>
           {sent
-            ? `Kami sudah kirim magic link ke ${email}. Klik link untuk langsung masuk — kamu bisa update password setelah login.`
-            : "Tidak apa-apa. Kami kirim magic link ke email kamu — klik, langsung masuk, set password baru kalau perlu di Profile."}
+            ? `We've sent a magic link to ${email}. Click the link to sign in instantly — you can update your password after signing in.`
+            : "No worries. We'll send a magic link to your email — click it, sign in instantly, and set a new password if needed in Profile."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -81,15 +81,15 @@ export function ForgotForm() {
             <div className="rounded-md bg-primary/10 border border-primary/30 p-3 text-sm flex items-start gap-2">
               <Check className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium mb-1">Link terkirim</p>
+                <p className="font-medium mb-1">Link sent</p>
                 <p className="text-xs text-muted-foreground">
-                  Kalau tidak masuk inbox dalam beberapa menit, cek folder Spam.
-                  Link berlaku 10 menit.
+                  If it doesn't arrive in your inbox within a few minutes, check
+                  your Spam folder. The link is valid for 10 minutes.
                 </p>
               </div>
             </div>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/auth">Kembali ke Sign In</Link>
+              <Link href="/auth">Back to Sign In</Link>
             </Button>
             <button
               type="button"
@@ -99,7 +99,7 @@ export function ForgotForm() {
               }}
               className="block w-full text-xs text-muted-foreground hover:text-foreground"
             >
-              Pakai email lain
+              Use a different email
             </button>
           </>
         ) : (
@@ -108,7 +108,7 @@ export function ForgotForm() {
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="email"
-                placeholder="email@kamu.com"
+                placeholder="email@you.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoFocus
@@ -123,13 +123,13 @@ export function ForgotForm() {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Mengirim..." : "Kirim Magic Link"}
+              {loading ? "Sending..." : "Send Magic Link"}
             </Button>
             <Link
               href="/auth"
               className="block text-center text-xs text-muted-foreground hover:text-foreground"
             >
-              ← Kembali ke Sign In
+              ← Back to Sign In
             </Link>
           </form>
         )}

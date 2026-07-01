@@ -222,7 +222,7 @@ export function SessionView(props: SessionViewProps) {
           <div className="flex">
             <TabButton
               icon={<Users className="h-4 w-4" />}
-              label="Meja"
+              label="Table"
               active={tab === "vibe"}
               onClick={() => setTab("vibe")}
               badge={props.members.filter((m) => m.status === "joined").length}
@@ -257,7 +257,7 @@ export function SessionView(props: SessionViewProps) {
             {canInteract && (
               <TabButton
                 icon={<Wallet className="h-4 w-4" />}
-                label="Bayar"
+                label="Pay"
                 active={tab === "pay"}
                 onClick={() => setTab("pay")}
               />
@@ -272,11 +272,11 @@ export function SessionView(props: SessionViewProps) {
           <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
             <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="text-sm">
-              <p className="font-medium">Meja sudah ditutup</p>
+              <p className="font-medium">Table closed</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {props.session.status === "overdue"
-                  ? "Pesanan dikunci. Selesaikan pembayaran yang tersisa di tab Bill."
-                  : "Pesanan dikunci. Terima kasih sudah nongkrong di SOHO."}
+                  ? "Orders are locked. Settle the remaining payment in the Bill tab."
+                  : "Orders are locked. Thanks for hanging out at SOHO."}
               </p>
             </div>
           </div>
@@ -365,7 +365,7 @@ function SessionHeader(props: SessionViewProps) {
             <div className="flex items-center gap-1 mt-0.5">
               <Sparkles className="h-3 w-3 text-primary/70" />
               <span className="text-[10px] text-primary/70">
-                Walk-in · Dibuka oleh {props.openedByStaff.display_name}
+                Walk-in · Opened by {props.openedByStaff.display_name}
               </span>
             </div>
           )}
@@ -528,7 +528,7 @@ function VibeTab(
       <Card className="p-5">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Di Meja ({joined.length}/{props.table.capacity})
+            At table ({joined.length}/{props.table.capacity})
           </h2>
           <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground" />
         </div>
@@ -537,7 +537,7 @@ function VibeTab(
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
             <Clock className="h-3.5 w-3.5 shrink-0" />
             <span>
-              Booking {formatTime(props.session.reservation_at)}
+              Booked {formatTime(props.session.reservation_at)}
               {props.session.reservation_end_at &&
                 `–${formatTime(props.session.reservation_end_at)}`}
             </span>
@@ -559,7 +559,7 @@ function VibeTab(
                   )}
                   {m.profile.id === props.myProfileId && (
                     <Badge variant="outline" className="text-[10px] px-1 py-0">
-                      kamu
+                      you
                     </Badge>
                   )}
                   {m.rating && m.rating.rating_count > 0 && (
@@ -574,7 +574,7 @@ function VibeTab(
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>
-                    Join <RelativeTime date={m.joined_at} />
+                    Joined <RelativeTime date={m.joined_at} />
                   </span>
                   {m.rating?.top_tags && m.rating.top_tags.length > 0 && (
                     <>
@@ -618,10 +618,10 @@ function VibeTab(
                 </div>
                 <div className="text-left">
                   <p className="text-sm font-medium text-primary">
-                    Tambah Tamu
+                    Add Guest
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {slotsAvailable} kursi kosong
+                    {slotsAvailable} empty seats
                   </p>
                 </div>
               </button>
@@ -631,9 +631,9 @@ function VibeTab(
                   <UserPlus className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm">{slotsAvailable} kursi kosong</p>
+                  <p className="text-sm">{slotsAvailable} empty seats</p>
                   <p className="text-xs text-muted-foreground">
-                    Bagikan link invite
+                    Share invite link
                   </p>
                 </div>
               </div>
@@ -654,10 +654,10 @@ function VibeTab(
                 </div>
                 <div>
                   <p className="text-sm font-medium text-primary">
-                    Ajak / Undang teman
+                    Invite friends
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Pilih user untuk gabung langsung atau via undangan
+                    Pick a user to join directly or via invite
                   </p>
                 </div>
               </button>
@@ -667,11 +667,11 @@ function VibeTab(
                   <Users className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">Meja sudah penuh</p>
+                  <p className="text-sm font-medium">Table is full</p>
                   <p className="text-xs text-muted-foreground">
                     {invitedPending.length > 0
-                      ? `${joined.length} di meja + ${invitedPending.length} menunggu konfirmasi (kapasitas ${props.table.capacity})`
-                      : `Semua ${props.table.capacity} kursi terisi`}
+                      ? `${joined.length} at table + ${invitedPending.length} awaiting confirmation (capacity ${props.table.capacity})`
+                      : `All ${props.table.capacity} seats taken`}
                   </p>
                 </div>
               </div>
@@ -728,10 +728,10 @@ function AddGuestModal({
     setSubmitting(true);
     try {
       await staffAddGuestToTable(sessionId, clean);
-      toast.success(`Tamu "${clean}" ditambahkan`);
+      toast.success(`Guest "${clean}" added`);
       onClose();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal tambah tamu"));
+      toast.error(getActionErrorMessage(err, "Failed to add guest"));
       setSubmitting(false);
     }
   }
@@ -751,9 +751,9 @@ function AddGuestModal({
               <UserPlus className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold">Tambah Tamu ke Meja</h2>
+              <h2 className="text-sm font-semibold">Add Guest to Table</h2>
               <p className="text-[11px] text-muted-foreground">
-                {remainingSlots} kursi kosong
+                {remainingSlots} empty seats
               </p>
             </div>
           </div>
@@ -761,7 +761,7 @@ function AddGuestModal({
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -773,14 +773,14 @@ function AddGuestModal({
               htmlFor="guestName"
               className="text-xs font-medium text-muted-foreground block mb-1.5"
             >
-              Nama tamu
+              Guest name
             </label>
             <input
               id="guestName"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="cth: Bu Sari"
+              placeholder="e.g. Ms. Sari"
               maxLength={80}
               autoFocus
               className="w-full px-3 py-2 bg-muted/50 border border-border rounded-md text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary"
@@ -797,12 +797,12 @@ function AddGuestModal({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menambahkan...
+                Adding...
               </>
             ) : (
               <>
                 <UserPlus className="h-4 w-4" />
-                Tambah Tamu
+                Add Guest
               </>
             )}
           </Button>
@@ -836,13 +836,13 @@ function InviteToSessionModal({
       });
       toast.success(
         mode === "friends"
-          ? `${res.invited} teman bergabung`
-          : `Undangan dikirim ke ${res.invited} user`
+          ? `${res.invited} friends joined`
+          : `Invite sent to ${res.invited} users`
       );
       onClose();
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal mengundang"));
+      toast.error(getActionErrorMessage(err, "Failed to invite"));
       setSubmitting(false);
     }
   }
@@ -861,13 +861,13 @@ function InviteToSessionModal({
             <div className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
               <UserPlus className="h-4 w-4 text-primary" />
             </div>
-            <h2 className="text-sm font-semibold">Ajak / Undang ke Meja</h2>
+            <h2 className="text-sm font-semibold">Invite to Table</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -892,8 +892,8 @@ function InviteToSessionModal({
                   mode === "friends" ? "text-primary" : "text-muted-foreground"
                 )}
               />
-              <p className="text-sm font-medium">Teman</p>
-              <p className="text-[11px] text-muted-foreground">Langsung gabung</p>
+              <p className="text-sm font-medium">Friends</p>
+              <p className="text-[11px] text-muted-foreground">Join directly</p>
             </button>
             <button
               type="button"
@@ -911,8 +911,8 @@ function InviteToSessionModal({
                   mode === "invite" ? "text-primary" : "text-muted-foreground"
                 )}
               />
-              <p className="text-sm font-medium">Undang</p>
-              <p className="text-[11px] text-muted-foreground">Perlu diterima</p>
+              <p className="text-sm font-medium">Invite</p>
+              <p className="text-[11px] text-muted-foreground">Needs acceptance</p>
             </button>
           </div>
 
@@ -934,14 +934,14 @@ function InviteToSessionModal({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Mengirim...
+                Sending...
               </>
             ) : (
               <>
                 <UserPlus className="h-4 w-4" />
                 {mode === "friends"
-                  ? `Ajak ${selected.length || ""} teman`
-                  : `Undang ${selected.length || ""} user`}
+                  ? `Invite ${selected.length || ""} friends`
+                  : `Invite ${selected.length || ""} users`}
               </>
             )}
           </Button>
@@ -969,7 +969,7 @@ function MenuTab({
   if (!canInteract) {
     return (
       <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
-        Join meja dulu untuk pesan.
+        Join the table first to order.
       </Card>
     );
   }
@@ -981,7 +981,7 @@ function MenuTab({
           menu={menu}
           onSave={async (cart) => {
             if (!hostMemberId) {
-              toast.error("Meja belum punya host — tak bisa simpan pesanan");
+              toast.error("Table has no host yet — can't save the order");
               return;
             }
             // Pesanan waiter masuk ke meja (atribusi ke host), bukan per-orang.
@@ -993,7 +993,7 @@ function MenuTab({
                 onBehalfOfMemberId: hostMemberId,
               });
             }
-            toast.success("Pesanan disimpan ke meja");
+            toast.success("Order saved to table");
           }}
         />
       ) : (
@@ -1002,9 +1002,9 @@ function MenuTab({
           onAdd={async (menuItemId, quantity, notes) => {
             try {
               await addOrderItem({ sessionId, menuItemId, quantity, notes });
-              toast.success("Pesanan ditambahkan");
+              toast.success("Order added");
             } catch (err) {
-              toast.error(getActionErrorMessage(err, "Gagal menambah"));
+              toast.error(getActionErrorMessage(err, "Failed to add"));
             }
           }}
         />
@@ -1036,7 +1036,7 @@ function BillTab({
       <Card className="p-6 text-center border-dashed">
         <Receipt className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          Belum ada pesanan. Buka tab Menu untuk mulai pesan.
+          No orders yet. Open the Menu tab to start ordering.
         </p>
       </Card>
     );
@@ -1075,7 +1075,7 @@ function BillTab({
               <span className="text-sm font-medium">
                 {g.name}
                 {profileId === myProfileId && (
-                  <span className="text-muted-foreground"> · kamu</span>
+                  <span className="text-muted-foreground"> · you</span>
                 )}
               </span>
             </div>
@@ -1098,9 +1098,9 @@ function BillTab({
                     <p className="text-xs text-muted-foreground truncate">{i.notes}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {i.status === "sent" && "Dipesan"}
-                    {i.status === "preparing" && "Sedang disiapkan"}
-                    {i.status === "served" && "Diantar"}
+                    {i.status === "sent" && "Ordered"}
+                    {i.status === "preparing" && "Preparing"}
+                    {i.status === "served" && "Served"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1112,15 +1112,15 @@ function BillTab({
                         setRemovingId(i.id);
                         try {
                           await removeOrderItem(i.id, sessionId);
-                          toast.success("Item dihapus");
+                          toast.success("Item removed");
                         } catch (err) {
-                          toast.error(getActionErrorMessage(err, "Gagal"));
+                          toast.error(getActionErrorMessage(err, "Failed"));
                         } finally {
                           setRemovingId(null);
                         }
                       }}
                       className="text-muted-foreground hover:text-red-400 disabled:opacity-50"
-                      aria-label="Hapus"
+                      aria-label="Remove"
                     >
                       {removingId === i.id ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1191,18 +1191,18 @@ function SplitTab({
           // — saat real gateway (Xendit/Midtrans), itu jadi valid scannable QR.
           if (result.qrString && result.status === "pending") {
             // TODO: tampilkan QR dialog dengan poll status via /api/payments/[id]/status
-            toast.info("Scan QR untuk bayar (fitur QR display coming soon)");
+            toast.info("Scan the QR to pay (QR display coming soon)");
             return;
           }
 
           // Mock atau cash → status langsung paid
           if (result.status === "paid") {
-            toast.success("Pembayaran berhasil");
+            toast.success("Payment successful");
           } else {
-            toast.info("Pembayaran sedang diproses");
+            toast.info("Payment is being processed");
           }
         } catch (err) {
-          toast.error(getActionErrorMessage(err, "Gagal membayar"));
+          toast.error(getActionErrorMessage(err, "Payment failed"));
         }
       }}
     />
@@ -1230,9 +1230,9 @@ function PendingRequests({
     setLoadingId(memberId);
     try {
       await approveJoinRequest(memberId, sessionId);
-      toast.success(`${name} berhasil di-approve`);
+      toast.success(`${name} approved`);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal approve"));
+      toast.error(getActionErrorMessage(err, "Failed to approve"));
     } finally {
       setLoadingId(null);
     }
@@ -1240,19 +1240,19 @@ function PendingRequests({
 
   async function reject(memberId: string, name: string) {
     const ok = await confirm({
-      title: `Tolak request ${name}?`,
-      description: "Request akan dihapus. Orang bisa request lagi nanti.",
-      confirmText: "Tolak",
-      cancelText: "Batal",
+      title: `Reject ${name}'s request?`,
+      description: "The request will be removed. They can request again later.",
+      confirmText: "Reject",
+      cancelText: "Cancel",
       variant: "destructive",
     });
     if (!ok) return;
     setLoadingId(memberId);
     try {
       await rejectJoinRequest(memberId, sessionId);
-      toast.success("Request ditolak");
+      toast.success("Request rejected");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal reject"));
+      toast.error(getActionErrorMessage(err, "Failed to reject"));
     } finally {
       setLoadingId(null);
     }
@@ -1262,7 +1262,7 @@ function PendingRequests({
     <Card className="p-5 border-amber-500/40 bg-amber-500/5">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">
         <UserPlus className="h-4 w-4" />
-        Request masuk ({pending.length})
+        Join requests ({pending.length})
       </h2>
       <div className="space-y-3">
         {pending.map((m) => (
@@ -1342,20 +1342,20 @@ function InvitedPending({
 
   async function cancel(memberId: string, name: string) {
     const ok = await confirm({
-      title: `Batalkan undangan ${name}?`,
+      title: `Cancel invite for ${name}?`,
       description:
-        "Undangan akan dihapus. Kamu bisa mengundang mereka lagi nanti.",
-      confirmText: "Batalkan undangan",
-      cancelText: "Tidak",
+        "The invite will be removed. You can invite them again later.",
+      confirmText: "Cancel invite",
+      cancelText: "No",
       variant: "destructive",
     });
     if (!ok) return;
     setLoadingId(memberId);
     try {
       await cancelInvite(memberId, sessionId);
-      toast.success("Undangan dibatalkan");
+      toast.success("Invite cancelled");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal batalkan undangan"));
+      toast.error(getActionErrorMessage(err, "Failed to cancel invite"));
     } finally {
       setLoadingId(null);
     }
@@ -1365,7 +1365,7 @@ function InvitedPending({
     <Card className="p-5 border-border bg-muted/20">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
         <Clock className="h-4 w-4" />
-        Menunggu konfirmasi ({invited.length})
+        Awaiting confirmation ({invited.length})
       </h2>
       <div className="space-y-3">
         {invited.map((m) => (
@@ -1379,7 +1379,7 @@ function InvitedPending({
                 {m.profile.display_name}
               </p>
               <p className="text-xs text-muted-foreground">
-                Diundang · belum dijawab
+                Invited · not answered yet
               </p>
             </div>
             <Button
@@ -1394,7 +1394,7 @@ function InvitedPending({
               ) : (
                 <>
                   <X className="h-4 w-4" />
-                  <span className="hidden sm:inline">Batalkan</span>
+                  <span className="hidden sm:inline">Cancel</span>
                 </>
               )}
             </Button>
@@ -1427,13 +1427,13 @@ function RequestJoinButton({
       const res = await requestJoinSession({ sessionId });
       if (res.status === "pending") {
         setPending(true);
-        toast.success(`Request dikirim ke ${hostName}`);
+        toast.success(`Request sent to ${hostName}`);
       } else if (res.status === "joined") {
-        toast.success("Kamu sudah jadi member meja ini");
+        toast.success("You're already a member of this table");
         router.refresh();
       }
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal kirim request"));
+      toast.error(getActionErrorMessage(err, "Failed to send request"));
     } finally {
       setLoading(false);
     }
@@ -1447,10 +1447,10 @@ function RequestJoinButton({
         </div>
         <div>
           <p className="text-sm font-medium text-amber-400">
-            Menunggu approval host
+            Waiting for host approval
           </p>
           <p className="text-xs text-muted-foreground">
-            Kamu masuk meja begitu {hostName} approve.
+            You'll join the table once {hostName} approves.
           </p>
         </div>
       </div>
@@ -1473,12 +1473,12 @@ function RequestJoinButton({
       </div>
       <div>
         <p className="text-sm font-medium text-primary">
-          {full ? "Meja penuh" : "Minta gabung meja ini"}
+          {full ? "Table is full" : "Request to join this table"}
         </p>
         <p className="text-xs text-muted-foreground">
           {full
-            ? "Tunggu kursi kosong dulu"
-            : `Kirim request ke ${hostName}, masuk setelah di-approve`}
+            ? "Wait for an empty seat first"
+            : `Send a request to ${hostName}, join once approved`}
         </p>
       </div>
     </button>
@@ -1512,12 +1512,12 @@ function SessionFooter({
 
   async function handleClose() {
     const ok = await confirm({
-      title: "Tutup meja ini?",
+      title: "Close this table?",
       description: isStaff
-        ? "Pesanan akan dikunci. Tamu tidak bisa tambah order lagi."
-        : "Setelah ditutup, pesanan dikunci dan kalian diarahkan ke halaman rating.",
-      confirmText: "Tutup meja",
-      cancelText: "Belum dulu",
+        ? "Orders will be locked. Guests can no longer add orders."
+        : "Once closed, orders are locked and you'll be taken to the rating page.",
+      confirmText: "Close table",
+      cancelText: "Not yet",
       variant: "danger",
     });
     if (!ok) return;
@@ -1526,27 +1526,27 @@ function SessionFooter({
       await closeSession(sessionId);
       // sukses → redirect (rate/dashboard); biarkan tetap loading.
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal"));
+      toast.error(getActionErrorMessage(err, "Failed"));
       setActing(false);
     }
   }
 
   async function handleLeave() {
     const ok = await confirm({
-      title: "Keluar dari meja ini?",
+      title: "Leave this table?",
       description:
-        "Bagian bill yang sudah kamu pesan tetap muncul untuk anggota lain. Kamu bisa join lagi via link invite kalau berubah pikiran.",
-      confirmText: "Keluar",
-      cancelText: "Tetap di meja",
+        "The bill items you've ordered stay visible to other members. You can join again via the invite link if you change your mind.",
+      confirmText: "Leave",
+      cancelText: "Stay at table",
       variant: "destructive",
     });
     if (!ok) return;
     setActing(true);
     try {
       await leaveSession(sessionId);
-      toast.success("Kamu meninggalkan meja");
+      toast.success("You left the table");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal"));
+      toast.error(getActionErrorMessage(err, "Failed"));
       setActing(false);
     }
   }
@@ -1556,7 +1556,7 @@ function SessionFooter({
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <div>
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
-            {remaining > 0 ? "Belum terbayar" : "Lunas"}
+            {remaining > 0 ? "Unpaid" : "Paid"}
           </div>
           <div className="text-lg font-bold text-primary">
             {formatIDR(remaining)}{" "}
@@ -1577,7 +1577,7 @@ function SessionFooter({
               disabled={acting || (isStaff && !isLunas)}
               title={
                 isStaff && !isLunas
-                  ? "Meja belum lunas — arahkan tamu ke kasir"
+                  ? "Table not fully paid — direct the guest to the cashier"
                   : undefined
               }
             >
@@ -1586,7 +1586,7 @@ function SessionFooter({
               ) : (
                 <Lock className="h-4 w-4" />
               )}
-              Tutup meja{isStaff && !isLunas ? " (belum lunas)" : ""}
+              Close table{isStaff && !isLunas ? " (not paid)" : ""}
             </Button>
           ) : (
             <Button
@@ -1601,7 +1601,7 @@ function SessionFooter({
               ) : (
                 <LogOut className="h-4 w-4" />
               )}
-              Keluar
+              Leave
             </Button>
           ))}
       </div>

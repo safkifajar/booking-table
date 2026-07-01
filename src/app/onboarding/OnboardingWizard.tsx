@@ -142,11 +142,11 @@ export function OnboardingWizard({
       } catch {
         /* abaikan */
       }
-      toast.success("Profil lengkap! Selamat datang 🎉");
+      toast.success("Profile complete! Welcome 🎉");
       router.push(next || "/");
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal menyimpan"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
       setSaving(false);
     }
   }
@@ -167,20 +167,20 @@ export function OnboardingWizard({
       </div>
 
       <p className="text-xs text-muted-foreground mb-1">
-        Langkah {step} dari 3
+        Step {step} of 3
       </p>
       <h1 className="text-xl font-bold mb-1">
-        {step === 2 ? `Halo, ${initialName} 👋` : "Minat & preferensi"}
+        {step === 2 ? `Hi, ${initialName} 👋` : "Interests & preferences"}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 2
-          ? "Lengkapi data diri kamu."
-          : "Biar gampang nemu vibe yang cocok di SOHO."}
+          ? "Fill in your personal details."
+          : "So it's easy to find the right vibe at SOHO."}
       </p>
 
       {step === 2 ? (
         <div className="space-y-4">
-          <Field label="Tanggal lahir">
+          <Field label="Date of birth">
             <input
               type="date"
               value={birthDate}
@@ -189,40 +189,40 @@ export function OnboardingWizard({
               className={inputCls}
             />
           </Field>
-          <Field label="Jenis kelamin">
+          <Field label="Gender">
             <select
               value={gender}
               onChange={(e) => setGender(e.target.value)}
               className={inputCls}
             >
-              <option value="">Tidak disebut</option>
-              <option value="male">Pria</option>
-              <option value="female">Wanita</option>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
             </select>
           </Field>
-          <Field label="Tertarik pada">
+          <Field label="Interested in">
             <select
               value={interestedIn}
               onChange={(e) => setInterestedIn(e.target.value)}
               className={inputCls}
             >
-              <option value="">Tidak disebut</option>
-              <option value="male">Pria</option>
-              <option value="female">Wanita</option>
-              <option value="both">Keduanya</option>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="both">Both</option>
             </select>
           </Field>
-          <Field label="Alamat">
+          <Field label="Address">
             <input
               type="text"
               value={area}
               onChange={(e) => setArea(e.target.value)}
-              placeholder="cth: Purwokerto Utara"
+              placeholder="e.g. North Purwokerto"
               maxLength={120}
               className={inputCls}
             />
           </Field>
-          <Field label="Media sosial">
+          <Field label="Social media">
             <input
               type="text"
               value={socialLink}
@@ -239,18 +239,18 @@ export function OnboardingWizard({
             className="w-full"
             onClick={() => setStep(3)}
           >
-            Lanjut <ArrowRight className="h-4 w-4" />
+            Continue <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
       ) : (
         <div className="space-y-4">
-          <Field label="Mencari">
+          <Field label="Looking for">
             <select
               value={lookingFor}
               onChange={(e) => setLookingFor(e.target.value)}
               className={inputCls}
             >
-              <option value="">Tidak disebut</option>
+              <option value="">Prefer not to say</option>
               {LOOKING_FOR.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -259,7 +259,7 @@ export function OnboardingWizard({
             </select>
           </Field>
 
-          <Field label="Hobi & minat (pilih beberapa)">
+          <Field label="Hobbies & interests (pick a few)">
             <div className="space-y-3">
               {hobbyGroups.map((cat) => (
                 <div key={cat.category}>
@@ -288,18 +288,18 @@ export function OnboardingWizard({
             </div>
           </Field>
 
-          <Field label="Preferensi musik">
+          <Field label="Favorite music">
             <input
               type="text"
               value={musicPref}
               onChange={(e) => setMusicPref(e.target.value)}
-              placeholder="cth: pop, jazz"
+              placeholder="e.g. pop, jazz"
               maxLength={120}
               className={inputCls}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Makanan favorit">
+            <Field label="Favorite food">
               <input
                 type="text"
                 value={favFood}
@@ -308,7 +308,7 @@ export function OnboardingWizard({
                 className={inputCls}
               />
             </Field>
-            <Field label="Minuman favorit">
+            <Field label="Favorite drink">
               <input
                 type="text"
                 value={favDrink}
@@ -318,13 +318,13 @@ export function OnboardingWizard({
               />
             </Field>
           </div>
-          <Field label="Bio singkat">
+          <Field label="Short bio">
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
               maxLength={280}
-              placeholder="Cerita singkat tentang kamu"
+              placeholder="A short story about yourself"
               className={cn(inputCls, "h-auto py-2 resize-none")}
             />
           </Field>
@@ -336,7 +336,7 @@ export function OnboardingWizard({
               onClick={() => setStep(2)}
               disabled={saving}
             >
-              <ArrowLeft className="h-4 w-4" /> Kembali
+              <ArrowLeft className="h-4 w-4" /> Back
             </Button>
             <Button
               variant="gold"
@@ -347,10 +347,10 @@ export function OnboardingWizard({
             >
               {saving ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
+                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
                 </>
               ) : (
-                "Selesai & Masuk"
+                "Finish & Enter"
               )}
             </Button>
           </div>

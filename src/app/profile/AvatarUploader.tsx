@@ -40,7 +40,7 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
 
     // Client-side pre-check (server tetap validate ulang)
     if (file.size > MAX_MB * 1024 * 1024) {
-      toast.error(`File terlalu besar (max ${MAX_MB}MB)`);
+      toast.error(`File too large (max ${MAX_MB}MB)`);
       e.target.value = "";
       return;
     }
@@ -48,7 +48,7 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
     const name = file.name.toLowerCase();
     const isHeic = name.endsWith(".heic") || name.endsWith(".heif");
     if (!ACCEPTED_MIME.has(file.type) && !isHeic) {
-      toast.error("Format harus JPG, PNG, WebP, atau HEIC");
+      toast.error("Format must be JPG, PNG, WebP, or HEIC");
       e.target.value = "";
       return;
     }
@@ -59,9 +59,9 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
       formData.append("file", file);
       const result = await uploadAvatar(formData);
       setAvatarUrl(result.avatarUrl);
-      toast.success("Foto profil tersimpan");
+      toast.success("Profile photo saved");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal upload foto"));
+      toast.error(getActionErrorMessage(err, "Failed to upload photo"));
     } finally {
       setUploading(false);
       // Reset input value supaya bisa pilih file yang sama lagi kalau gagal
@@ -73,11 +73,11 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
     if (!avatarUrl) return;
 
     const ok = await confirm({
-      title: "Hapus foto profil?",
+      title: "Delete profile photo?",
       description:
-        "Foto akan dihapus dan kamu kembali ke avatar default (inisial nama). Kamu bisa upload foto baru kapan saja.",
-      confirmText: "Hapus",
-      cancelText: "Batal",
+        "Your photo will be removed and you'll return to the default avatar (your name initials). You can upload a new photo anytime.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
       variant: "danger",
     });
     if (!ok) return;
@@ -86,9 +86,9 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
     try {
       await deleteAvatar();
       setAvatarUrl(null);
-      toast.success("Foto profil dihapus");
+      toast.success("Profile photo deleted");
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal hapus foto"));
+      toast.error(getActionErrorMessage(err, "Failed to delete photo"));
     } finally {
       setDeleting(false);
     }
@@ -124,7 +124,7 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
             disabled={busy}
           >
             <Camera className="h-4 w-4" />
-            {avatarUrl ? "Ganti foto" : "Upload foto"}
+            {avatarUrl ? "Change photo" : "Upload photo"}
           </Button>
           {avatarUrl && (
             <Button
@@ -140,12 +140,12 @@ export function AvatarUploader({ initialAvatarUrl, displayName }: Props) {
               ) : (
                 <Trash2 className="h-4 w-4" />
               )}
-              Hapus
+              Delete
             </Button>
           )}
         </div>
         <p className="text-[10px] text-muted-foreground">
-          JPG, PNG, WebP, atau HEIC (iPhone). Max {MAX_MB}MB. Otomatis di-resize ke 256×256.
+          JPG, PNG, WebP, or HEIC (iPhone). Max {MAX_MB}MB. Automatically resized to 256×256.
         </p>
       </div>
 

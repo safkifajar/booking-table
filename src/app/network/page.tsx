@@ -33,7 +33,7 @@ export default async function NetworkPage() {
   if (!bar) {
     return (
       <main className="flex-1 flex items-center justify-center px-4 py-16">
-        <p className="text-sm text-muted-foreground">Bar tidak ditemukan</p>
+        <p className="text-sm text-muted-foreground">Bar not found</p>
       </main>
     );
   }
@@ -72,8 +72,7 @@ export default async function NetworkPage() {
           <h1 className="text-xl font-bold tracking-tight">Network</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Lihat siapa yang lagi di SOHO & jelajahi member lain buat diajak
-          nongkrong.
+          See who's at SOHO right now & explore other members to hang out with.
         </p>
 
         <NetworkView

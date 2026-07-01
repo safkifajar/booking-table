@@ -65,11 +65,11 @@ export function ProfileMenuList() {
     if (pushState.active) {
       // Matikan — konfirmasi dulu.
       const ok = await confirm({
-        title: "Matikan notifikasi?",
+        title: "Turn off notifications?",
         description:
-          "Kamu tidak akan terima notifikasi (undangan meja, dll) di perangkat ini. Bisa diaktifkan lagi kapan saja.",
-        confirmText: "Matikan",
-        cancelText: "Batal",
+          "You won't receive notifications (table invites, etc.) on this device. You can turn them back on anytime.",
+        confirmText: "Turn off",
+        cancelText: "Cancel",
         variant: "danger",
       });
       if (!ok) return;
@@ -77,10 +77,10 @@ export function ProfileMenuList() {
       try {
         const endpoint = await unsubscribePush();
         if (endpoint) await removeSubscription(endpoint);
-        toast.success("Notifikasi dimatikan untuk perangkat ini");
+        toast.success("Notifications turned off for this device");
         setPushState((s) => ({ ...s, active: false, busy: false }));
       } catch (err) {
-        toast.error(getActionErrorMessage(err, "Gagal matikan notifikasi"));
+        toast.error(getActionErrorMessage(err, "Failed to turn off notifications"));
         setPushState((s) => ({ ...s, busy: false }));
       }
     } else {
@@ -91,17 +91,17 @@ export function ProfileMenuList() {
         if (!sub) {
           toast.error(
             notificationPermission() === "denied"
-              ? "Izin notifikasi diblokir. Aktifkan dari pengaturan browser."
-              : "Izin notifikasi ditolak"
+              ? "Notification permission blocked. Enable it from your browser settings."
+              : "Notification permission denied"
           );
           setPushState((s) => ({ ...s, busy: false }));
           return;
         }
         await saveSubscription(sub);
-        toast.success("Notifikasi diaktifkan untuk perangkat ini");
+        toast.success("Notifications enabled for this device");
         setPushState((s) => ({ ...s, active: true, busy: false }));
       } catch (err) {
-        toast.error(getActionErrorMessage(err, "Gagal aktifkan notifikasi"));
+        toast.error(getActionErrorMessage(err, "Failed to enable notifications"));
         setPushState((s) => ({ ...s, busy: false }));
       }
     }
@@ -109,11 +109,11 @@ export function ProfileMenuList() {
 
   async function handleLogout() {
     const ok = await confirm({
-      title: "Keluar dari akun?",
+      title: "Sign out of your account?",
       description:
-        "Kamu akan dikeluarkan dari aplikasi. Bisa masuk lagi kapan saja pakai email + password atau magic link.",
-      confirmText: "Keluar",
-      cancelText: "Batal",
+        "You'll be signed out of the app. You can sign back in anytime with email + password or a magic link.",
+      confirmText: "Sign out",
+      cancelText: "Cancel",
       variant: "danger",
     });
     if (!ok) return;
@@ -121,7 +121,7 @@ export function ProfileMenuList() {
     try {
       await signOutAction();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal keluar"));
+      toast.error(getActionErrorMessage(err, "Failed to sign out"));
       setSigningOut(false);
     }
   }
@@ -134,25 +134,25 @@ export function ProfileMenuList() {
           href="/profile/account"
           icon={<User className="h-4 w-4" />}
           label="Account"
-          description="Nama, nomor WA, tanggal lahir, bio, hobi"
+          description="Name, WhatsApp number, date of birth, bio, hobbies"
         />
         <MenuItem
           href="/profile/password"
           icon={<KeyRound className="h-4 w-4" />}
           label="Change Password"
-          description="Ubah atau set password baru"
+          description="Change or set a new password"
         />
         <MenuItem
           href="/profile/sessions"
           icon={<History className="h-4 w-4" />}
-          label="Riwayat Session"
-          description="Meja yang pernah kamu ikuti"
+          label="Session History"
+          description="Tables you've joined"
         />
         <MenuItem
           href="/profile/stories"
           icon={<Camera className="h-4 w-4" />}
-          label="Story Saya"
-          description="Story aktif yang kamu upload"
+          label="My Story"
+          description="Active stories you've uploaded"
         />
       </MenuGroup>
 
@@ -174,11 +174,11 @@ export function ProfileMenuList() {
               )}
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block text-sm font-medium">Notifikasi</span>
+              <span className="block text-sm font-medium">Notifications</span>
               <span className="block text-xs text-muted-foreground truncate">
                 {pushState.active
-                  ? "Aktif di perangkat ini"
-                  : "Nonaktif di perangkat ini"}
+                  ? "On for this device"
+                  : "Off for this device"}
               </span>
             </span>
             {/* Switch: geser kanan = aktif (emas), kiri = mati (abu) */}
@@ -187,7 +187,7 @@ export function ProfileMenuList() {
               role="switch"
               aria-checked={pushState.active}
               aria-label={
-                pushState.active ? "Matikan notifikasi" : "Aktifkan notifikasi"
+                pushState.active ? "Turn off notifications" : "Turn on notifications"
               }
               onClick={handleTogglePush}
               disabled={pushState.busy}
@@ -218,14 +218,14 @@ export function ProfileMenuList() {
         <MenuItem
           href="/privacy"
           icon={<Shield className="h-4 w-4" />}
-          label="Kebijakan Privasi"
-          description="Bagaimana kami mengelola data kamu"
+          label="Privacy Policy"
+          description="How we handle your data"
         />
         <MenuItem
           href="/terms"
           icon={<FileText className="h-4 w-4" />}
-          label="Syarat & Ketentuan"
-          description="Ketentuan penggunaan layanan"
+          label="Terms & Conditions"
+          description="Terms of service usage"
         />
       </MenuGroup>
 
@@ -242,7 +242,7 @@ export function ProfileMenuList() {
           </span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-medium text-red-400">
-              {signingOut ? "Keluar..." : "Logout"}
+              {signingOut ? "Signing out..." : "Logout"}
             </span>
           </span>
         </button>

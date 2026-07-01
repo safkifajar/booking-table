@@ -30,7 +30,7 @@ function formatTime(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-const HARI_SHORT = ["MIN", "SEN", "SEL", "RAB", "KAM", "JUM", "SAB"];
+const HARI_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 /** groupKey tanggal selaras dgn slot: "today" | "tomorrow" | "YYYY-MM-DD". */
 function dateGroupKey(date: Date): string {
@@ -84,9 +84,9 @@ function groupKeyToParts(gk: string): { dayLabel: string; dateNum: number } {
 
 /** Label tipe meja (visibility) untuk slot booking. */
 function visibilityLabel(v?: SessionVisibility): string {
-  if (v === "public") return "Publik";
-  if (v === "friends") return "Teman";
-  if (v === "invite_only") return "Undangan";
+  if (v === "public") return "Public";
+  if (v === "friends") return "Friends";
+  if (v === "invite_only") return "Invite";
   return "";
 }
 
@@ -291,7 +291,7 @@ export function BarFloorView({
         <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit mb-4">
           <MainTabButton
             icon={<MapIcon className="h-3.5 w-3.5" />}
-            label="Denah"
+            label="Floor"
             active={mainTab === "floor"}
             onClick={() => setMainTab("floor")}
           />
@@ -492,7 +492,7 @@ function BookingSchedule({
   return (
     <div className="mt-6 space-y-3">
       <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80">
-        Jadwal Booking
+        Booking Schedule
       </h2>
 
       {/* Strip tanggal */}
@@ -532,10 +532,10 @@ function BookingSchedule({
               new Date(r.reservation_end_at).getTime() <= nowMs;
             const inUse = r.status === "open" || r.status === "locked";
             const statusLabel = ended
-              ? "Selesai"
+              ? "Done"
               : inUse
-                ? "Sedang dipakai"
-                : "Dibooking";
+                ? "In use"
+                : "Booked";
             const statusColor = ended
               ? "text-muted-foreground/60"
               : inUse
@@ -569,7 +569,7 @@ function BookingSchedule({
         </Card>
       ) : (
         <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
-          Belum ada booking di tanggal ini.
+          No bookings on this date yet.
         </Card>
       )}
     </div>
@@ -757,11 +757,11 @@ function TableSheet({
               </span>
             </div>
             <h2 className="text-lg sm:text-xl font-semibold">
-              {isOpen ? "Meja sedang digunakan" : "Jadwal meja"}
+              {isOpen ? "Table in use" : "Table schedule"}
             </h2>
             {isOpen && session ? (
               <p className="text-sm text-muted-foreground mt-0.5">
-                Saat ini dipakai oleh host{" "}
+                Currently used by host{" "}
                 <span className="text-foreground font-medium">
                   {session.host_name}
                 </span>
@@ -769,7 +769,7 @@ function TableSheet({
               </p>
             ) : (
               <p className="text-sm text-muted-foreground mt-0.5">
-                Pilih jam buat nongkrong di meja ini ✨
+                Pick a time to hang out at this table ✨
               </p>
             )}
             {(table.min_spend ?? 0) > 0 && (
@@ -783,7 +783,7 @@ function TableSheet({
             className="text-muted-foreground hover:text-foreground text-sm shrink-0"
             aria-label="Close"
           >
-            Tutup
+            Close
           </button>
         </div>
 
@@ -795,8 +795,8 @@ function TableSheet({
             <>
               {isOpen && (
                 <div className="mb-3 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-xs text-primary">
-                  Meja ini sedang dipakai sekarang (host {session?.host_name}).
-                  Kamu tetap bisa booking untuk jam lain.
+                  This table is in use right now (host {session?.host_name}).
+                  You can still book it for another time.
                 </div>
               )}
               {/* Strip tanggal */}
@@ -841,14 +841,14 @@ function TableSheet({
                     const picked = selRange.has(h.startIso);
                     const visLabel = visibilityLabel(h.visibility);
                     const status = picked
-                      ? "Dipilih ✓"
+                      ? "Selected ✓"
                       : h.past
                         ? h.booked
-                          ? `Selesai${h.host ? ` · a/n ${h.host}` : ""}`
-                          : "Lewat"
+                          ? `Done${h.host ? ` · by ${h.host}` : ""}`
+                          : "Past"
                         : h.booked
-                          ? `${h.inUse ? "Sedang dipakai" : "Dibooking"}${h.host ? ` · a/n ${h.host}` : ""}`
-                          : "Tersedia";
+                          ? `${h.inUse ? "In use" : "Booked"}${h.host ? ` · by ${h.host}` : ""}`
+                          : "Available";
                     const timeColor = picked
                       ? "text-primary"
                       : h.past
@@ -934,14 +934,14 @@ function TableSheet({
                 </div>
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                  Belum ada booking di tanggal ini.
+                  No bookings on this date yet.
                 </div>
               )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Meja ini sedang dipakai. Hanya bisa di-join lewat link invite
-              dari host.
+              This table is in use. You can only join via an invite link from
+              the host.
             </p>
           )}
         </div>
@@ -950,7 +950,7 @@ function TableSheet({
         {selStart && (
           <div className="border-t border-border p-4 sm:p-5 shrink-0">
             <p className="text-xs text-muted-foreground mb-2 text-center">
-              Terpilih: {formatTime(selStart)}–{formatTime(effEnd)}
+              Selected: {formatTime(selStart)}–{formatTime(effEnd)}
             </p>
             <Button
               variant="gold"
@@ -967,10 +967,10 @@ function TableSheet({
               {navigating ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Membuka...
+                  Opening...
                 </>
               ) : (
-                "Booking jam ini"
+                "Book this time"
               )}
             </Button>
           </div>

@@ -24,9 +24,9 @@ interface PageProps {
 }
 
 function visibilityLabel(v: SessionVisibility): string {
-  if (v === "public") return "Publik";
-  if (v === "friends") return "Teman";
-  return "Undangan";
+  if (v === "public") return "Public";
+  if (v === "friends") return "Friends";
+  return "Invite only";
 }
 
 function ageFrom(iso: string): number {
@@ -97,7 +97,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             {profile.display_name}
             {isMe && (
               <span className="ml-2 text-xs font-normal text-muted-foreground align-middle">
-                (kamu)
+                (you)
               </span>
             )}
           </h1>
@@ -106,8 +106,8 @@ export default async function NetworkProfilePage({ params }: PageProps) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {profile.visit_count > 0
-              ? `${profile.visit_count}× nongkrong di SOHO`
-              : "Belum pernah nongkrong"}
+              ? `${profile.visit_count}× hung out at SOHO`
+              : "Never hung out yet"}
           </p>
 
           {/* Umur + media sosial (kalau diisi) */}
@@ -116,7 +116,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               {profile.birth_date && (
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <Cake className="h-3.5 w-3.5" />
-                  {ageFrom(profile.birth_date)} tahun
+                  {ageFrom(profile.birth_date)} yrs
                 </span>
               )}
               {profile.social_link && (
@@ -143,19 +143,19 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             <div className="flex items-center gap-2 text-sm">
               <MapPin className="h-4 w-4 text-primary shrink-0" />
               <span className="flex-1">
-                Lagi di meja{" "}
+                At table{" "}
                 <span className="font-semibold">{active.table_label}</span> ·{" "}
                 {visibilityLabel(active.visibility)}
               </span>
               {!isMe && alreadySemeja ? (
                 <span className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
-                  Semeja
+                  Same table
                 </span>
               ) : (
                 !isMe &&
                 active.visibility === "public" && (
                   <span className="shrink-0 rounded-full border border-primary/50 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                    Gabung
+                    Join
                   </span>
                 )
               )}
@@ -168,7 +168,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
         {profile.bio && (
           <section>
             <h2 className="text-sm font-semibold text-muted-foreground mb-1.5">
-              Tentang
+              About
             </h2>
             <p className="text-sm whitespace-pre-line">{profile.bio}</p>
           </section>
@@ -178,7 +178,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
         {profile.hobbies.length > 0 && (
           <section>
             <h2 className="text-sm font-semibold text-muted-foreground mb-2">
-              Hobi & minat
+              Hobbies & interests
             </h2>
             <HobbyBadges hobbies={profile.hobbies} max={20} />
           </section>
@@ -188,7 +188,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
         {profile.rating.top_tags && profile.rating.top_tags.length > 0 && (
           <section>
             <h2 className="text-sm font-semibold text-muted-foreground mb-2">
-              Kata teman nongkrong
+              What hangout buddies say
             </h2>
             <HobbyBadges hobbies={profile.rating.top_tags} max={10} />
           </section>
@@ -198,7 +198,7 @@ export default async function NetworkProfilePage({ params }: PageProps) {
         {!profile.hide_history && (
           <section>
             <h2 className="text-sm font-semibold text-muted-foreground mb-2">
-              Riwayat nongkrong
+              Hangout history
             </h2>
             <TableHistoryList entries={history} />
           </section>

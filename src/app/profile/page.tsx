@@ -27,7 +27,7 @@ export default async function ProfilePage() {
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
-            <Link href="/" aria-label="Kembali ke beranda">
+            <Link href="/" aria-label="Back to home">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
@@ -67,7 +67,7 @@ export default async function ProfilePage() {
               <div>
                 <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
                   <Sparkles className="h-3 w-3 text-primary/70" />
-                  Hobi & minat
+                  Hobbies & interests
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {profile.hobbies.map((h) => (

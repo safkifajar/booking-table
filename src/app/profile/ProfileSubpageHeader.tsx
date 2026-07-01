@@ -18,7 +18,7 @@ export function ProfileSubpageHeader({ title, eyebrow }: Props) {
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
         <Button asChild variant="ghost" size="icon">
-          <Link href="/profile" aria-label="Kembali ke Profile">
+          <Link href="/profile" aria-label="Back to Profile">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>

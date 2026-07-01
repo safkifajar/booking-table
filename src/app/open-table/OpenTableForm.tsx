@@ -237,7 +237,7 @@ export function OpenTableForm({
       });
       // openTable redirects on success
     } catch (err) {
-      const message = getActionErrorMessage(err, "Gagal membuka meja");
+      const message = getActionErrorMessage(err, "Failed to open table");
       toast.error(message);
       // Slot keburu dibooking orang lain (race) → balik ke denah biar user
       // bisa pilih meja/jam lain dgn data terbaru.
@@ -260,14 +260,14 @@ export function OpenTableForm({
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <span className="text-xs tracking-[0.3em] uppercase text-primary/70 font-medium">
-            Buka Meja
+            Open Table
           </span>
         </div>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-2xl">Meja {table.label}</CardTitle>
+            <CardTitle className="text-2xl">Table {table.label}</CardTitle>
             <CardDescription className="mt-1">
-              {areaName} · {table.shape} · kapasitas {table.capacity}
+              {areaName} · {table.shape} · capacity {table.capacity}
               {table.min_spend > 0 && ` · min ${formatIDR(table.min_spend)}`}
             </CardDescription>
           </div>
@@ -293,20 +293,20 @@ export function OpenTableForm({
             />
           ) : (
             <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              Reservasi belum tersedia saat ini. Coba lagi nanti atau hubungi bar.
+              Reservations are not available right now. Try again later or contact the bar.
             </div>
           )}
 
           {/* Visibility */}
           <div>
             <label className="block text-sm font-medium mb-2">
-              Siapa yang bisa join?
+              Who can join?
             </label>
             <div className="grid grid-cols-3 gap-2">
               <VisibilityOption
                 icon={<Globe className="h-4 w-4" />}
                 label="Public"
-                desc="Siapa saja"
+                desc="Anyone"
                 active={visibility === "public"}
                 onClick={() => {
                   setVisibility("public");
@@ -316,14 +316,14 @@ export function OpenTableForm({
               <VisibilityOption
                 icon={<UserPlus className="h-4 w-4" />}
                 label="Friends"
-                desc="Teman saja"
+                desc="Friends only"
                 active={visibility === "friends"}
                 onClick={() => setVisibility("friends")}
               />
               <VisibilityOption
                 icon={<Lock className="h-4 w-4" />}
                 label="Invite"
-                desc="Undang user"
+                desc="Invite users"
                 active={visibility === "invite_only"}
                 onClick={() => setVisibility("invite_only")}
               />
@@ -343,7 +343,7 @@ export function OpenTableForm({
           <div>
             <label className="block text-sm font-medium mb-2">
               Vibe{" "}
-              <span className="text-muted-foreground font-normal">(maks 5)</span>
+              <span className="text-muted-foreground font-normal">(max 5)</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {VIBE_OPTIONS.map((v) => {
@@ -371,15 +371,15 @@ export function OpenTableForm({
           {menu.length > 0 && (
             <div>
               <label className="block text-sm font-medium mb-2">
-                Order awal{" "}
+                Initial order{" "}
                 {orderRequired ? (
                   <span className="text-primary font-normal text-xs">
-                    (wajib
+                    (required
                     {hasMinSpend && ` · min ${formatIDR(table.min_spend)}`})
                   </span>
                 ) : (
                   <span className="text-muted-foreground font-normal text-xs">
-                    (opsional)
+                    (optional)
                   </span>
                 )}
               </label>
@@ -392,7 +392,7 @@ export function OpenTableForm({
                 >
                   <span className="flex items-center gap-2">
                     <UtensilsCrossed className="h-4 w-4" />
-                    Pilih menu untuk order awal
+                    Pick menu items for the initial order
                   </span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -429,7 +429,7 @@ export function OpenTableForm({
                     className="w-full p-2.5 text-xs font-medium text-primary hover:bg-primary/5 transition border-t border-border flex items-center justify-center gap-1"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Ubah / tambah order
+                    Edit / add order
                   </button>
                 </div>
               )}
@@ -437,8 +437,7 @@ export function OpenTableForm({
               {/* Min spend warning */}
               {hasMinSpend && cartTotal > 0 && minSpendShortfall > 0 && (
                 <p className="text-xs text-amber-400 mt-1.5">
-                  Kurang {formatIDR(minSpendShortfall)} untuk capai minimum
-                  spend.
+                  {formatIDR(minSpendShortfall)} short of the minimum spend.
                 </p>
               )}
             </div>
@@ -448,7 +447,7 @@ export function OpenTableForm({
           {cartItemCount > 0 && (
             <div className="rounded-md bg-muted/40 border border-border p-3 space-y-1.5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Total order</span>
+                <span className="text-muted-foreground">Order total</span>
                 <span className="font-semibold tabular-nums">
                   {formatIDR(cartTotal)}
                 </span>
@@ -475,23 +474,23 @@ export function OpenTableForm({
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Memproses...
+                Processing...
               </>
             ) : dpRequired ? (
-              `Bayar DP ${formatIDR(dpAmount)} & Reservasi`
+              `Pay deposit ${formatIDR(dpAmount)} & Reserve`
             ) : (
-              "Buat Reservasi"
+              "Create Reservation"
             )}
           </Button>
 
           {!canSubmit && !loading && (
             <p className="text-xs text-center text-muted-foreground -mt-2">
               {!selectedSlot
-                ? "Pilih jam dulu"
+                ? "Pick a time first"
                 : orderRequired && cartItemCount === 0
-                  ? "Order awal wajib diisi"
+                  ? "Initial order is required"
                   : hasMinSpend && cartTotal < table.min_spend
-                    ? `Belum capai minimum spend ${formatIDR(table.min_spend)}`
+                    ? `Minimum spend ${formatIDR(table.min_spend)} not reached`
                     : ""}
             </p>
           )}
@@ -578,12 +577,12 @@ function MenuPickerModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
-          <h2 className="text-sm font-semibold">Pilih Order Awal</h2>
+          <h2 className="text-sm font-semibold">Select Initial Order</h2>
           <button
             type="button"
             onClick={onClose}
             className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center"
-            aria-label="Tutup"
+            aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
@@ -614,7 +613,7 @@ function MenuPickerModal({
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {activeCategory?.items.length === 0 ? (
             <p className="text-center text-xs text-muted-foreground py-8">
-              Belum ada menu di kategori ini.
+              No menu items in this category yet.
             </p>
           ) : (
             activeCategory?.items.map((item) => {
@@ -632,7 +631,7 @@ function MenuPickerModal({
                         setPhoto({ src: item.image_url!, alt: item.name })
                       }
                       className="h-12 w-12 shrink-0 rounded-md overflow-hidden border border-border"
-                      aria-label={`Perbesar foto ${item.name}`}
+                      aria-label={`Enlarge photo of ${item.name}`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -706,8 +705,8 @@ function MenuPickerModal({
             disabled={itemCount === 0}
           >
             {itemCount === 0
-              ? "Pilih minimal 1 item"
-              : `Konfirmasi · ${itemCount} item · ${formatIDR(total)}`}
+              ? "Pick at least 1 item"
+              : `Confirm · ${itemCount} items · ${formatIDR(total)}`}
           </Button>
         </div>
       </div>

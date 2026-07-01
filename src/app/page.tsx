@@ -19,10 +19,10 @@ import { UnpaidBanner } from "@/components/UnpaidBanner";
 
 /** Sapaan kontekstual berdasar jam (WIB / waktu server). */
 function greeting(hour: number): string {
-  if (hour < 11) return "Selamat pagi";
-  if (hour < 15) return "Selamat siang";
-  if (hour < 18) return "Selamat sore";
-  return "Selamat malam";
+  if (hour < 11) return "Good morning";
+  if (hour < 15) return "Good afternoon";
+  if (hour < 18) return "Good evening";
+  return "Good night";
 }
 
 export default async function HomePage() {
@@ -40,7 +40,7 @@ export default async function HomePage() {
   if (!bar) {
     return (
       <main className="flex-1 flex items-center justify-center px-4 py-16">
-        <p className="text-sm text-muted-foreground">Bar tidak ditemukan</p>
+        <p className="text-sm text-muted-foreground">Bar not found</p>
       </main>
     );
   }
@@ -119,13 +119,13 @@ export default async function HomePage() {
         {isAnon && (
           <div className="mx-4 sm:mx-6 my-4 rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-transparent p-4 flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold">Gabung untuk lihat lebih</div>
+              <div className="text-sm font-semibold">Join to see more</div>
               <div className="text-xs text-muted-foreground">
-                Sign in untuk join meja, share story, dan kenalan dengan vibe SOHO.
+                Sign in to join tables, share stories, and get to know the SOHO vibe.
               </div>
             </div>
             <Button asChild size="sm" variant="gold">
-              <Link href="/auth?next=/">Masuk</Link>
+              <Link href="/auth?next=/">Sign in</Link>
             </Button>
           </div>
         )}
@@ -140,7 +140,7 @@ export default async function HomePage() {
               </h2>
               {activeSessions.length > 0 && (
                 <span className="text-[10px] text-muted-foreground">
-                  · {activeSessions.length} meja
+                  · {activeSessions.length} tables
                 </span>
               )}
             </div>
@@ -148,7 +148,7 @@ export default async function HomePage() {
               href={`/bar/${barSlug}`}
               className="text-xs text-primary hover:underline flex items-center gap-0.5"
             >
-              Lihat semua
+              See all
               <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
@@ -164,7 +164,7 @@ export default async function HomePage() {
               href={`/bar/${barSlug}`}
               className="mt-3 flex items-center justify-center gap-1 rounded-lg border border-border py-2.5 text-sm font-medium text-primary hover:bg-primary/[0.06] transition"
             >
-              Lihat semua ({activeSessions.length} meja)
+              See all ({activeSessions.length} tables)
               <ChevronRight className="h-4 w-4" />
             </Link>
           )}
@@ -175,7 +175,7 @@ export default async function HomePage() {
               <Button asChild variant="outline" className="w-full" size="default">
                 <Link href={`/bar/${barSlug}`}>
                   <Plus className="h-3.5 w-3.5" />
-                  <span className="text-xs">Buka meja sendiri</span>
+                  <span className="text-xs">Open your own table</span>
                 </Link>
               </Button>
             </div>
@@ -186,7 +186,7 @@ export default async function HomePage() {
         {banners.length > 0 && (
           <section className="px-4 sm:px-6 pt-6">
             <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
-              Promo & Event
+Promos & Events
             </h2>
             <BannerCarousel banners={banners} />
           </section>

@@ -43,7 +43,7 @@ export default async function ProfileStoriesPage() {
 
   return (
     <main className="flex-1 pb-12">
-      <ProfileSubpageHeader title="Story Saya" eyebrow="Profile" />
+      <ProfileSubpageHeader title="My Story" eyebrow="Profile" />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         {rows.length === 0 ? (
@@ -51,7 +51,7 @@ export default async function ProfileStoriesPage() {
         ) : (
           <div>
             <p className="text-xs text-muted-foreground mb-4">
-              {rows.length} story aktif · Expire dalam 24 jam dari upload
+              {rows.length} active stories · Expires 24 hours after upload
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {rows.map((s) => (
@@ -83,7 +83,7 @@ function StoryCard({
     Math.floor((story.expiresAt.getTime() - Date.now()) / 60_000)
   );
   const expireLabel =
-    expireMinutes < 60 ? `${expireMinutes}m` : `${Math.floor(expireMinutes / 60)}j`;
+    expireMinutes < 60 ? `${expireMinutes}m` : `${Math.floor(expireMinutes / 60)}h`;
 
   return (
     <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900 group">
@@ -126,10 +126,10 @@ function EmptyState() {
   return (
     <div className="rounded-xl border border-dashed border-border p-8 text-center">
       <Camera className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-      <h2 className="text-sm font-medium mb-1">Belum ada story</h2>
+      <h2 className="text-sm font-medium mb-1">No story yet</h2>
       <p className="text-xs text-muted-foreground">
-        Upload story dari beranda — klik bubble &quot;Story-mu&quot; di story bar
-        untuk mulai.
+        Upload a story from the home page — tap the &quot;Your story&quot; bubble
+        in the story bar to get started.
       </p>
     </div>
   );

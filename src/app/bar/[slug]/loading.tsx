@@ -19,7 +19,7 @@ export default function Loading() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* Floor map placeholder */}
         <div className="rounded-xl border border-border bg-card aspect-[3/2] flex items-center justify-center">
-          <div className="text-sm text-muted-foreground">Memuat denah meja...</div>
+          <div className="text-sm text-muted-foreground">Loading floor map...</div>
         </div>
       </div>
     </main>
