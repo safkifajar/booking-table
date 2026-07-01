@@ -22,6 +22,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   lt,
   ne,
   sql,
@@ -976,29 +977,32 @@ export async function getShiftReport(
   // Future: tambah field payments.processed_by_id = cashier user, filter per
   // cashier supaya shift report per-cashier.
 
-  const sessionRows = await db
+  // Basis shift report = UANG YANG DITERIMA di rentang shift (payments.paid_at),
+  // bukan sesi yg closed. Ini menangkap pelunasan-belakangan (bayar sisa hari ini
+  // utk sesi yg di-close kemarin) & mencocokkan cash drawer dgn kas fisik.
+  const payRows = await db
     .select({
-      session_id: tableSessions.id,
-      closed_at: tableSessions.closedAt,
-      table_label: tables.label,
-      area_name: floorAreas.name,
-      host_name: profiles.displayName,
+      session_id: orders.sessionId,
+      method: payments.method,
+      amount: payments.amount,
+      paid_at: payments.paidAt,
     })
-    .from(tableSessions)
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
-    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        eq(tableSessions.status, "closed"),
-        gte(tableSessions.closedAt, from),
-        lt(tableSessions.closedAt, to)
+        eq(payments.status, "paid"),
+        isNotNull(payments.paidAt),
+        gte(payments.paidAt, from),
+        lt(payments.paidAt, to)
       )
-    )
-    .orderBy(desc(tableSessions.closedAt));
+    );
 
-  if (sessionRows.length === 0) {
+  if (payRows.length === 0) {
     return {
       summary: {
         transaction_count: 0,
@@ -1010,9 +1014,50 @@ export async function getShiftReport(
     };
   }
 
-  const sessionIds = sessionRows.map((s) => s.session_id);
+  // Agregasi per sesi (uang diterima di shift ini).
+  type PayAcc = {
+    paid_total: number;
+    cash_total: number;
+    noncash_total: number;
+    methods: Set<string>;
+    last_paid_at: Date;
+  };
+  const payMap = new Map<string, PayAcc>();
+  for (const r of payRows) {
+    const acc = payMap.get(r.session_id) ?? {
+      paid_total: 0,
+      cash_total: 0,
+      noncash_total: 0,
+      methods: new Set<string>(),
+      last_paid_at: r.paid_at as Date,
+    };
+    const amount = Number(r.amount);
+    acc.paid_total += amount;
+    if (r.method === "cash") acc.cash_total += amount;
+    else acc.noncash_total += amount;
+    acc.methods.add(r.method);
+    if ((r.paid_at as Date) > acc.last_paid_at)
+      acc.last_paid_at = r.paid_at as Date;
+    payMap.set(r.session_id, acc);
+  }
 
-  // Subtotal per session
+  const sessionIds = Array.from(payMap.keys());
+
+  // Info sesi (label/area/host) + subtotal (utk konteks tampilan).
+  const sessionRows = await db
+    .select({
+      session_id: tableSessions.id,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      host_name: profiles.displayName,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .where(inArray(tableSessions.id, sessionIds));
+  const infoMap = new Map(sessionRows.map((s) => [s.session_id, s]));
+
   const billRows = await db
     .select({
       session_id: orders.sessionId,
@@ -1029,62 +1074,24 @@ export async function getShiftReport(
     billRows.map((b) => [b.session_id, Number(b.subtotal)])
   );
 
-  // Payment summary per session
-  const payRows = await db
-    .select({
-      session_id: orders.sessionId,
-      method: payments.method,
-      total: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+  const transactions: ShiftTransaction[] = Array.from(payMap.entries())
+    .map(([sessionId, pay]) => {
+      const info = infoMap.get(sessionId);
+      return {
+        session_id: sessionId,
+        // "closed_at" di sini = waktu pembayaran terakhir di shift (kapan uang masuk).
+        closed_at: pay.last_paid_at.toISOString(),
+        table_label: info?.table_label ?? "-",
+        area_name: info?.area_name ?? "-",
+        host_name: info?.host_name ?? "-",
+        subtotal: billMap.get(sessionId) ?? 0,
+        paid_total: pay.paid_total,
+        cash_total: pay.cash_total,
+        noncash_total: pay.noncash_total,
+        payment_methods: Array.from(pay.methods),
+      };
     })
-    .from(payments)
-    .innerJoin(orders, eq(orders.id, payments.orderId))
-    .where(
-      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
-    )
-    .groupBy(orders.sessionId, payments.method);
-
-  type PayAcc = {
-    paid_total: number;
-    cash_total: number;
-    noncash_total: number;
-    methods: Set<string>;
-  };
-  const payMap = new Map<string, PayAcc>();
-  for (const r of payRows) {
-    const acc = payMap.get(r.session_id) ?? {
-      paid_total: 0,
-      cash_total: 0,
-      noncash_total: 0,
-      methods: new Set<string>(),
-    };
-    const amount = Number(r.total);
-    acc.paid_total += amount;
-    if (r.method === "cash") acc.cash_total += amount;
-    else acc.noncash_total += amount;
-    acc.methods.add(r.method);
-    payMap.set(r.session_id, acc);
-  }
-
-  const transactions: ShiftTransaction[] = sessionRows.map((s) => {
-    const pay = payMap.get(s.session_id) ?? {
-      paid_total: 0,
-      cash_total: 0,
-      noncash_total: 0,
-      methods: new Set<string>(),
-    };
-    return {
-      session_id: s.session_id,
-      closed_at: (s.closed_at ?? new Date()).toISOString(),
-      table_label: s.table_label,
-      area_name: s.area_name,
-      host_name: s.host_name,
-      subtotal: billMap.get(s.session_id) ?? 0,
-      paid_total: pay.paid_total,
-      cash_total: pay.cash_total,
-      noncash_total: pay.noncash_total,
-      payment_methods: Array.from(pay.methods),
-    };
-  });
+    .sort((a, b) => b.closed_at.localeCompare(a.closed_at));
 
   const summary: ShiftSummary = {
     transaction_count: transactions.length,
