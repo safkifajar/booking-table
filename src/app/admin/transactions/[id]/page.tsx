@@ -4,7 +4,14 @@ import { requireAdmin, getTransactionDetail } from "@/lib/admin";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, MapPin, Clock, Users, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  Clock,
+  Users,
+  ChevronRight,
+  ArrowRightLeft,
+} from "lucide-react";
 import { formatIDR, initials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { InvoicePrintButton } from "./InvoicePrintButton";
@@ -199,6 +206,42 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           )}
         </div>
 
+        {/* Move history — riwayat pindah meja (kalau pernah pindah) */}
+        {detail.move_history.length > 0 && (
+          <div className="border-t border-border print:border-black/20 pt-4">
+            <div className="flex items-center gap-2 text-sm font-semibold mb-3">
+              <ArrowRightLeft className="h-4 w-4" /> Table Moves
+              <span className="text-xs font-normal text-muted-foreground">
+                ({detail.move_history.length})
+              </span>
+            </div>
+            <ol className="space-y-2">
+              {detail.move_history.map((mv) => (
+                <li
+                  key={mv.id}
+                  className="flex items-center gap-2 text-sm flex-wrap"
+                >
+                  <span className="tabular-nums text-xs text-muted-foreground">
+                    {new Date(mv.at).toLocaleString("en-US", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                  <span className="font-medium">
+                    Table {mv.from_label} →{" "}
+                    <span className="text-primary">{mv.to_label}</span>
+                  </span>
+                  {mv.status !== "approved" && (
+                    <Badge variant="secondary" className="text-[10px] capitalize">
+                      {mv.status}
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
         {/* Items table */}
         <div className="border-t border-border print:border-black/20 pt-4">
           <table className="w-full text-sm">
@@ -307,6 +350,11 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                             })
                           : "Not paid yet"}
                       </span>
+                      {p.at_table && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <MapPin className="h-2.5 w-2.5" /> Table {p.at_table}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <span className="tabular-nums shrink-0">

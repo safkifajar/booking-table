@@ -24,6 +24,7 @@ import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { tableMoveRequests } from "@/lib/db/schema/move-requests";
 import { requireAdmin as requireAdminAuth } from "@/lib/auth-v2/current";
 import type { PaymentMethod } from "@/types/db";
 
@@ -580,6 +581,8 @@ export interface TransactionDetailPayment {
   split_mode: string;
   paid_at: string | null;
   paid_by_name: string;
+  /** Meja saat pembayaran ini (ter-infer dari riwayat pindah). null = tak ada pindah. */
+  at_table: string | null;
 }
 
 export interface TransactionDetailMember {
@@ -591,6 +594,15 @@ export interface TransactionDetailMember {
   is_guest: boolean;
   /** Customer terdaftar (is_guest=false & bukan staff) → punya halaman detail. */
   is_customer: boolean;
+}
+
+export interface TransactionMoveHistory {
+  id: string;
+  from_label: string;
+  to_label: string;
+  status: string;
+  /** Waktu resolusi (approved/rejected) atau dibuat kalau belum. */
+  at: string;
 }
 
 export interface TransactionDetail {
@@ -613,6 +625,8 @@ export interface TransactionDetail {
   payments: TransactionDetailPayment[];
   subtotal: number;
   total_paid: number;
+  /** Riwayat pindah meja (dari→ke), terlama dulu. Kosong = tak pernah pindah. */
+  move_history: TransactionMoveHistory[];
 }
 
 export async function getTransactionDetail(
@@ -687,6 +701,7 @@ export async function getTransactionDetail(
           status: payments.status,
           split_mode: payments.splitMode,
           paid_at: payments.paidAt,
+          created_at: payments.createdAt,
           paid_by_name: profiles.displayName,
         })
         .from(payments)
@@ -743,20 +758,68 @@ export async function getTransactionDetail(
     added_by_name: i.added_by_name,
   }));
 
-  const paymentsList: TransactionDetailPayment[] = paymentsRaw.map((p) => ({
-    id: p.id,
-    amount: p.amount,
-    method: p.method,
-    status: p.status,
-    split_mode: p.split_mode,
-    paid_at: p.paid_at ? p.paid_at.toISOString() : null,
-    paid_by_name: p.paid_by_name,
-  }));
+  // Move history — riwayat pindah meja (dari→ke), terlama dulu, utk chain.
+  const ftAlias = aliasedTable(tables, "mv_from");
+  const ttAlias = aliasedTable(tables, "mv_to");
+  const moveRows = await db
+    .select({
+      id: tableMoveRequests.id,
+      from_label: ftAlias.label,
+      to_label: ttAlias.label,
+      status: tableMoveRequests.status,
+      created_at: tableMoveRequests.createdAt,
+      resolved_at: tableMoveRequests.resolvedAt,
+    })
+    .from(tableMoveRequests)
+    .innerJoin(ftAlias, eq(ftAlias.id, tableMoveRequests.fromTableId))
+    .innerJoin(ttAlias, eq(ttAlias.id, tableMoveRequests.toTableId))
+    .where(eq(tableMoveRequests.sessionId, sessionId))
+    .orderBy(tableMoveRequests.createdAt);
+
+  // Chain pindah yg BERHASIL (approved), utk infer meja saat tiap pembayaran.
+  // Tiap approved move: sebelum `resolved_at` meja = from, sesudah = to.
+  const approvedMoves = moveRows
+    .filter((m) => m.status === "approved")
+    .map((m) => ({
+      at: (m.resolved_at ?? m.created_at).getTime(),
+      to: m.to_label,
+    }));
+  /** Meja yg berlaku pada waktu `ts` (ms): to_label dari move approved terakhir
+   *  yg <= ts, else meja terkini table_label kalau belum ada move. */
+  function tableAt(ts: number): string {
+    let label = moveRows[0]?.from_label ?? sessionRow.table_label;
+    for (const mv of approvedMoves) {
+      if (mv.at <= ts) label = mv.to;
+    }
+    return label;
+  }
+
+  const paymentsList: TransactionDetailPayment[] = paymentsRaw.map((p) => {
+    const ts = (p.paid_at ?? p.created_at).getTime();
+    return {
+      id: p.id,
+      amount: p.amount,
+      method: p.method,
+      status: p.status,
+      split_mode: p.split_mode,
+      paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+      paid_by_name: p.paid_by_name,
+      at_table: moveRows.length > 0 ? tableAt(ts) : null,
+    };
+  });
 
   const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0);
   const totalPaid = paymentsList
     .filter((p) => p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
+
+  const moveHistory: TransactionMoveHistory[] = moveRows.map((m) => ({
+    id: m.id,
+    from_label: m.from_label,
+    to_label: m.to_label,
+    status: m.status,
+    at: (m.resolved_at ?? m.created_at).toISOString(),
+  }));
 
   return {
     session_id: sessionRow.id,
@@ -778,6 +841,7 @@ export async function getTransactionDetail(
     payments: paymentsList,
     subtotal,
     total_paid: totalPaid,
+    move_history: moveHistory,
   };
 }
 
