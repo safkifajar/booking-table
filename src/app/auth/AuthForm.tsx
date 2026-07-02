@@ -270,7 +270,12 @@ function PasswordForm({
         </button>
       </div>
 
-      <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full bg-[#f0e6d2] text-[#8d1312] hover:bg-white text-base font-semibold h-14 rounded-full disabled:opacity-60"
+        disabled={loading}
+      >
         {loading
           ? mode === "signup"
             ? "Creating account..."
@@ -372,7 +377,12 @@ function MagicLinkForm({
         required
         className={inputCls}
       />
-      <Button type="submit" variant="gold" size="lg" className="w-full" disabled={loading}>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full bg-[#f0e6d2] text-[#8d1312] hover:bg-white text-base font-semibold h-14 rounded-full disabled:opacity-60"
+        disabled={loading}
+      >
         {loading ? "Sending..." : "Send Magic Link"}
       </Button>
       <button
