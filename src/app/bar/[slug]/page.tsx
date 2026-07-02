@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, getMenuByBar } from "@/lib/queries";
 import { db } from "@/lib/db/client";
@@ -175,6 +175,10 @@ export default async function BarPage({ params }: PageProps) {
     getCurrentProfile(),
     getMenuByBar(bar.id),
   ]);
+  // Login tp belum onboarding → wizard (mulai layar gender).
+  if (profile && !profile.onboarded) {
+    redirect(`/onboarding?next=${encodeURIComponent(`/bar/${slug}`)}`);
+  }
 
   return (
     <>

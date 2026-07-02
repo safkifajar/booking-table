@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
-import { getCurrentUser } from "@/lib/auth-v2/current";
+import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { getMenuByBar } from "@/lib/queries";
 import {
   DEFAULT_OPERATING_HOURS,
@@ -30,6 +30,12 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
   const user = await getCurrentUser();
   if (!user) {
     redirect(`/auth?next=${encodeURIComponent(`/open-table?tableId=${tableId}`)}`);
+  }
+  const profile = await getCurrentProfile();
+  if (profile && !profile.onboarded) {
+    redirect(
+      `/onboarding?next=${encodeURIComponent(`/open-table?tableId=${tableId}`)}`
+    );
   }
 
   // Single join: table → area → bar (+ settings)

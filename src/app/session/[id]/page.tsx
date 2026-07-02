@@ -43,6 +43,10 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
   }
+  if (!profile.onboarded)
+    redirect(
+      `/onboarding?next=${encodeURIComponent(`/session/${id}`)}`
+    );
 
   // Promote reservasi yg jamnya sudah tiba → 'open' (lazy, supaya status fresh
   // saat buka session — denah & tombol gabung bergantung status open).

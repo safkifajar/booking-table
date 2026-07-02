@@ -19,6 +19,8 @@ export default async function ProfilePage() {
   if (!profile) {
     redirect("/auth?next=/profile");
   }
+  // Belum selesai onboarding → paksa ke wizard (mulai layar gender).
+  if (!profile.onboarded) redirect("/onboarding");
 
   const user = await getCurrentUser();
 
