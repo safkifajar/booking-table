@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { DatePicker } from "@/components/ui/date-picker";
 import { FramedCupIllustration } from "./OnboardingIllustration";
-import { Select } from "@/components/ui/select";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import { PhotoUploader } from "./PhotoUploader";
 import { PromptPicker } from "./PromptPicker";
@@ -18,11 +17,6 @@ import { EDUCATION_OPTIONS } from "@/lib/education";
 import { RELIGION_OPTIONS } from "@/lib/religion";
 import { HeightWheel } from "./HeightWheel";
 
-const LOOKING_FOR = [
-  { value: "relationship", label: "Relationship" },
-  { value: "casual", label: "Casual Date" },
-  { value: "friendship", label: "Friendship" },
-];
 
 // Opsi gender — value disimpan (cocok enum DB male/female), label ditampilkan.
 // "" = prefer not to say. (CMB-style: satu pertanyaan, list pilihan.)
@@ -74,7 +68,8 @@ export function OnboardingWizard({
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
   // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
-  // photos → prompts → interests → education → height → religion → details.
+  // photos → prompts → interests → education → height → religion → address →
+  // social (finish).
   const [step2Screen, setStep2Screen] = React.useState<
     | "dob"
     | "gender"
@@ -86,7 +81,8 @@ export function OnboardingWizard({
     | "education"
     | "height"
     | "religion"
-    | "details"
+    | "address"
+    | "social"
   >("dob");
   // photos disimpan di server (bukan draft sessionStorage). Init dari server.
   const [photos, setPhotos] = React.useState<string[]>(initialPhotos);
@@ -144,11 +140,15 @@ export function OnboardingWizard({
             d.step2Screen === "education" ||
             d.step2Screen === "height" ||
             d.step2Screen === "religion" ||
-            d.step2Screen === "details"
+            d.step2Screen === "address" ||
+            d.step2Screen === "social"
           ) {
             setStep2Screen(d.step2Screen);
+          } else if (d.step2Screen === "details") {
+            // Draft lama: layar "details" digantikan address+social.
+            setStep2Screen("address");
           } else if (typeof d.interestedIn === "string") {
-            setStep2Screen("details");
+            setStep2Screen("address");
           } else if (typeof d.gender === "string") {
             setStep2Screen("interested");
           } else if (d.birthDate) {
@@ -286,6 +286,8 @@ async function handleFinish() {
     "education",
     "height",
     "religion",
+    "address",
+    "social",
   ] as const;
   const isChoiceScreen =
     step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
@@ -341,8 +343,18 @@ async function handleFinish() {
       {step === 2 && step2Screen === "religion" && (
         <button
           type="button"
-          onClick={() => setStep2Screen("details")}
+          onClick={() => setStep2Screen("address")}
           className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
+        >
+          Skip
+        </button>
+      )}
+      {step === 2 && step2Screen === "social" && (
+        <button
+          type="button"
+          onClick={handleFinish}
+          disabled={saving}
+          className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline disabled:opacity-50"
         >
           Skip
         </button>
@@ -396,7 +408,11 @@ async function handleFinish() {
                             ? "How tall are you?"
                             : step2Screen === "religion"
                               ? "What's your religion?"
-                              : `Hi, ${initialName} 👋`}
+                              : step2Screen === "address"
+                                ? "Where are you based?"
+                                : step2Screen === "social"
+                                  ? "Add your Instagram"
+                                  : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -421,7 +437,11 @@ async function handleFinish() {
                             ? "Optional — just another little detail about you."
                             : step2Screen === "religion"
                               ? "Optional — share it if you'd like, or skip."
-                              : "Fill in your personal details."}
+                              : step2Screen === "address"
+                                ? "Just your area — it helps people find their crowd at SOHO."
+                                : step2Screen === "social"
+                                  ? "Optional — let people connect with you off the floor."
+                                  : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -743,7 +763,7 @@ async function handleFinish() {
                 variant="gold"
                 size="lg"
                 className="w-full rounded-full h-14"
-                onClick={() => setStep2Screen("details")}
+                onClick={() => setStep2Screen("address")}
               >
                 {religion ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
@@ -751,146 +771,78 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 ? (
-        <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() => setStep2Screen("religion")}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
-          </button>
-          <Field label="Address">
-            <input
-              type="text"
-              value={area}
-              onChange={(e) => setArea(e.target.value)}
-              placeholder="e.g. North Purwokerto"
-              maxLength={120}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Social media">
-            <input
-              type="text"
-              value={socialLink}
-              onChange={(e) => setSocialLink(e.target.value)}
-              placeholder="@namauser"
-              maxLength={200}
-              className={inputCls}
-            />
-          </Field>
+      ) : step === 2 && step2Screen === "address" ? (
+        /* Step 2 · layar ADDRESS — area/alamat (CMB-style, satu field) */
+        <div className="pb-28">
+          <input
+            type="text"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            placeholder="e.g. North Purwokerto"
+            maxLength={120}
+            autoFocus
+            className="w-full border-b border-border bg-transparent pb-3 text-lg focus:outline-none focus:border-primary/60 transition placeholder:text-muted-foreground/50"
+          />
 
-          <Button
-            variant="gold"
-            size="lg"
-            className="w-full"
-            onClick={() => setStep(3)}
-          >
-            Continue <ArrowRight className="h-4 w-4" />
-          </Button>
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={() => setStep2Screen("social")}
+              >
+                {area.trim() ? "Next" : "Skip for now"}{" "}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="space-y-4">
-          <Field label="Looking for">
-            <Select
-              value={lookingFor}
-              onChange={setLookingFor}
-              options={[
-                { value: "", label: "Prefer not to say" },
-                ...LOOKING_FOR.map((o) => ({ value: o.value, label: o.label })),
-              ]}
-            />
-          </Field>
-
-          <Field label="Favorite music">
+        /* Step 2 · layar SOCIAL — Instagram (CMB-style, terakhir → Finish) */
+        <div className="pb-28">
+          <div className="flex items-center border-b border-border pb-3">
+            <span className="text-lg text-muted-foreground/70 mr-1">@</span>
             <input
               type="text"
-              value={musicPref}
-              onChange={(e) => setMusicPref(e.target.value)}
-              placeholder="e.g. pop, jazz"
-              maxLength={120}
-              className={inputCls}
+              value={socialLink.replace(/^@/, "")}
+              onChange={(e) => {
+                // Simpan sbg handle "@username" biar socialHref → link Instagram.
+                const handle = e.target.value.replace(/^@+/, "").trim();
+                setSocialLink(handle ? `@${handle}` : "");
+              }}
+              placeholder="username"
+              maxLength={200}
+              autoFocus
+              inputMode="text"
+              autoCapitalize="none"
+              className="flex-1 min-w-0 bg-transparent text-lg focus:outline-none placeholder:text-muted-foreground/50"
             />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Favorite food">
-              <input
-                type="text"
-                value={favFood}
-                onChange={(e) => setFavFood(e.target.value)}
-                maxLength={120}
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Favorite drink">
-              <input
-                type="text"
-                value={favDrink}
-                onChange={(e) => setFavDrink(e.target.value)}
-                maxLength={120}
-                className={inputCls}
-              />
-            </Field>
           </div>
-          <Field label="Short bio">
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={3}
-              maxLength={280}
-              placeholder="A short story about yourself"
-              className={cn(inputCls, "h-auto py-2 resize-none")}
-            />
-          </Field>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setStep(2)}
-              disabled={saving}
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Button>
-            <Button
-              variant="gold"
-              size="lg"
-              className="flex-1"
-              onClick={handleFinish}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
-                </>
-              ) : (
-                "Finish & Enter"
-              )}
-            </Button>
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={handleFinish}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  <>
+                    Finish &amp; Enter <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-const inputCls =
-  "w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition";
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-        {label}
-      </label>
-      {children}
     </div>
   );
 }
