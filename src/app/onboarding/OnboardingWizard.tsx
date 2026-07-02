@@ -454,12 +454,16 @@ async function handleFinish() {
                     setGender(o.value);
                     setGenderPicked(true);
                   }}
-                  className={cn(
-                    "w-full flex items-center justify-between py-4 text-left transition border-b border-border",
-                    active ? "text-primary" : "hover:text-foreground"
-                  )}
+                  className="w-full flex items-center justify-between py-4 text-left transition border-b border-border"
                 >
-                  <span className="text-base font-medium">{o.label}</span>
+                  <span
+                    className={cn(
+                      "text-base font-medium",
+                      active ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {o.label}
+                  </span>
                   <span
                     className={cn(
                       "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
@@ -503,12 +507,16 @@ async function handleFinish() {
                     setInterestedIn(o.value);
                     setInterestedPicked(true);
                   }}
-                  className={cn(
-                    "w-full flex items-center justify-between py-4 text-left transition border-b border-border",
-                    active ? "text-primary" : "hover:text-foreground"
-                  )}
+                  className="w-full flex items-center justify-between py-4 text-left transition border-b border-border"
                 >
-                  <span className="text-base font-medium">{o.label}</span>
+                  <span
+                    className={cn(
+                      "text-base font-medium",
+                      active ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {o.label}
+                  </span>
                   <span
                     className={cn(
                       "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
