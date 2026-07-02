@@ -44,10 +44,10 @@ export function OnboardingWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
-  // Step 2 dibagi jadi beberapa layar CMB-style: gender → interested → details.
+  // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → details.
   const [step2Screen, setStep2Screen] = React.useState<
-    "gender" | "interested" | "details"
-  >("gender");
+    "dob" | "gender" | "interested" | "details"
+  >("dob");
   const [genderPicked, setGenderPicked] = React.useState(false);
   const [interestedPicked, setInterestedPicked] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -85,12 +85,18 @@ export function OnboardingWizard({
           if (typeof d.gender === "string") setGenderPicked(true);
           if (typeof d.interestedIn === "string") setInterestedPicked(true);
           // Lanjut dari layar terakhir yg tersimpan; fallback infer dari isian.
-          if (d.step2Screen === "interested" || d.step2Screen === "details") {
+          if (
+            d.step2Screen === "gender" ||
+            d.step2Screen === "interested" ||
+            d.step2Screen === "details"
+          ) {
             setStep2Screen(d.step2Screen);
           } else if (typeof d.interestedIn === "string") {
             setStep2Screen("details");
           } else if (typeof d.gender === "string") {
             setStep2Screen("interested");
+          } else if (d.birthDate) {
+            setStep2Screen("gender");
           }
           setArea(d.area ?? "");
           setSocialLink(d.socialLink ?? "");
@@ -189,11 +195,13 @@ export function OnboardingWizard({
 
   const showChoiceBack =
     step === 2 &&
-    (step2Screen === "gender" || step2Screen === "interested");
+    (step2Screen === "dob" ||
+      step2Screen === "gender" ||
+      step2Screen === "interested");
 
   return (
     <div className={cn("w-full max-w-md mx-auto", showChoiceBack && "pt-12")}>
-      {/* Back panah — pojok kiri-atas layar (di layar gender/interested). */}
+      {/* Back panah — pojok kiri-atas (di layar dob/gender/interested). */}
       {showChoiceBack && (
         <button
           type="button"
@@ -201,18 +209,22 @@ export function OnboardingWizard({
           onClick={() =>
             step2Screen === "interested"
               ? setStep2Screen("gender")
-              : router.back()
+              : step2Screen === "gender"
+                ? setStep2Screen("dob")
+                : router.back()
           }
           className="fixed left-4 top-4 z-20 inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      {/* Progress + step label — disembunyikan di layar 1-pertanyaan (gender/
-          interested) ala CMB. */}
+      {/* Progress + step label — disembunyikan di layar 1-pertanyaan
+          (dob/gender/interested) ala CMB. */}
       {!(
         step === 2 &&
-        (step2Screen === "gender" || step2Screen === "interested")
+        (step2Screen === "dob" ||
+          step2Screen === "gender" ||
+          step2Screen === "interested")
       ) && (
         <>
           <div className="flex items-center gap-2 mb-6">
@@ -235,24 +247,53 @@ export function OnboardingWizard({
       <h1 className="text-xl font-bold mb-1">
         {step === 3
           ? "Interests & preferences"
-          : step2Screen === "gender"
-            ? "What's your gender?"
-            : step2Screen === "interested"
-              ? "Who are you interested in?"
-              : `Hi, ${initialName} 👋`}
+          : step2Screen === "dob"
+            ? "When's your birthday?"
+            : step2Screen === "gender"
+              ? "What's your gender?"
+              : step2Screen === "interested"
+                ? "Who are you interested in?"
+                : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
           ? "So it's easy to find the right vibe at SOHO."
-          : step2Screen === "gender"
-            ? "Your gender stays hidden and can't be changed later."
-            : step2Screen === "interested"
-              ? "So we can connect you with the right people."
-              : "Fill in your personal details."}
+          : step2Screen === "dob"
+            ? "We use it to confirm you're of legal age."
+            : step2Screen === "gender"
+              ? "Your gender stays hidden and can't be changed later."
+              : step2Screen === "interested"
+                ? "So we can connect you with the right people."
+                : "Fill in your personal details."}
       </p>
 
-      {/* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */}
-      {step === 2 && step2Screen === "gender" ? (
+      {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
+      {step === 2 && step2Screen === "dob" ? (
+        <div className="pb-28">
+          <input
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            max={new Date().toISOString().slice(0, 10)}
+            className={inputCls}
+          />
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                disabled={!birthDate}
+                onClick={() => setStep2Screen("gender")}
+              >
+                Next <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : /* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */
+      step === 2 && step2Screen === "gender" ? (
         <div className="space-y-1 pb-28">
           <div>
             {GENDER_OPTIONS.map((o) => {
@@ -358,15 +399,6 @@ export function OnboardingWizard({
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </button>
-          <Field label="Date of birth">
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
-              className={inputCls}
-            />
-          </Field>
           <Field label="Address">
             <input
               type="text"
