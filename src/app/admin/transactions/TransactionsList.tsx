@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Users, Clock, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
+import { Select } from "@/components/ui/select";
 import type { AdminTransaction } from "@/lib/admin";
 
 /** ID transaksi ringkas dari session_id (8 char pertama, uppercase). */
@@ -78,19 +79,20 @@ export function TransactionsList({
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
-        <select
+        <Select
           value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as StatusFilter);
+          onChange={(v) => {
+            setStatus(v as StatusFilter);
             setPage(0);
           }}
-          className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
-          aria-label="Filter status"
-        >
-          <option value="all">All statuses</option>
-          <option value="paid">Paid</option>
-          <option value="unpaid">Unpaid</option>
-        </select>
+          options={[
+            { value: "all", label: "All statuses" },
+            { value: "paid", label: "Paid" },
+            { value: "unpaid", label: "Unpaid" },
+          ]}
+          ariaLabel="Filter status"
+          className="shrink-0 w-40"
+        />
       </div>
 
       {filtered.length === 0 ? (
@@ -274,19 +276,20 @@ export function TransactionsList({
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+            <Select
+              value={String(pageSize)}
+              onChange={(v) => {
+                setPageSize(Number(v));
                 setPage(0);
               }}
-              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+              options={[
+                { value: "10", label: "10" },
+                { value: "25", label: "25" },
+                { value: "50", label: "50" },
+                { value: "100", label: "100" },
+              ]}
+              className="w-20"
+            />
           </label>
           {totalPages > 1 && (
             <Pagination

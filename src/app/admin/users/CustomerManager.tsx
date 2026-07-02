@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { Select } from "@/components/ui/select";
 import {
   Search,
   UserPlus,
@@ -225,16 +226,17 @@ export function CustomerManager({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Per page:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => pushParams({ size: Number(e.target.value), page: 1 })}
-            className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <Select
+            value={String(pageSize)}
+            onChange={(v) => pushParams({ size: Number(v), page: 1 })}
+            options={[
+              { value: "10", label: "10" },
+              { value: "25", label: "25" },
+              { value: "50", label: "50" },
+              { value: "100", label: "100" },
+            ]}
+            ariaLabel="Per page"
+          />
           <span className="ml-1 hidden sm:inline">· {total} customers</span>
         </label>
         {totalPages > 1 && (

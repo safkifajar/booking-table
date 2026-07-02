@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /**
@@ -167,19 +168,14 @@ export function SessionListFilters({
             <label className="block text-xs font-medium mb-1.5">
               Payment Status
             </label>
-            <select
+            <Select
               value={filter.pay}
-              onChange={(e) =>
-                onFilter({ ...filter, pay: e.target.value as PayFilter })
-              }
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            >
-              {(["all", "paid", "unpaid"] as PayFilter[]).map((p) => (
-                <option key={p} value={p}>
-                  {PAY_LABELS[p]}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onFilter({ ...filter, pay: v as PayFilter })}
+              options={(["all", "paid", "unpaid"] as PayFilter[]).map((p) => ({
+                value: p,
+                label: PAY_LABELS[p],
+              }))}
+            />
           </div>
 
           {/* Tanggal: range + opsi "Semua tanggal" */}

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { Search, ArrowRight } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
@@ -72,38 +73,32 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
-        <select
+        <Select
           value={method}
-          onChange={(e) => {
-            setMethod(e.target.value);
+          onChange={(v) => {
+            setMethod(v);
             setPage(0);
           }}
-          className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
-          aria-label="Filter method"
-        >
-          <option value="all">All methods</option>
-          {METHODS.map((m) => (
-            <option key={m} value={m}>
-              {m.toUpperCase()}
-            </option>
-          ))}
-        </select>
-        <select
+          options={[
+            { value: "all", label: "All methods" },
+            ...METHODS.map((m) => ({ value: m, label: m.toUpperCase() })),
+          ]}
+          className="shrink-0 min-w-[140px]"
+          ariaLabel="Filter method"
+        />
+        <Select
           value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
+          onChange={(v) => {
+            setStatus(v);
             setPage(0);
           }}
-          className="shrink-0 h-[42px] px-3 rounded-lg border border-border bg-muted/30 text-sm focus:outline-none focus:border-primary/60"
-          aria-label="Filter status"
-        >
-          <option value="all">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: "all", label: "All statuses" },
+            ...STATUSES.map((s) => ({ value: s, label: s })),
+          ]}
+          className="shrink-0 min-w-[140px]"
+          ariaLabel="Filter status"
+        />
       </div>
 
       {filtered.length === 0 ? (
@@ -228,19 +223,20 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
+            <Select
+              value={String(pageSize)}
+              onChange={(v) => {
+                setPageSize(Number(v));
                 setPage(0);
               }}
-              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+              options={[
+                { value: "10", label: "10" },
+                { value: "25", label: "25" },
+                { value: "50", label: "50" },
+                { value: "100", label: "100" },
+              ]}
+              ariaLabel="Per page"
+            />
           </label>
           {totalPages > 1 && (
             <Pagination

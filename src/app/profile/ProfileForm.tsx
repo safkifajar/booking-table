@@ -22,6 +22,7 @@ import {
   Wine,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
@@ -230,15 +231,15 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Users className="h-3 w-3" /> Gender
             </label>
-            <select
+            <Select
               value={gender}
-              onChange={(e) => setGender(e.target.value as Gender)}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            >
-              <option value="">Prefer not to say</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
+              onChange={(v) => setGender(v as Gender)}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+              ]}
+            />
           </div>
 
           {/* Tertarik pada */}
@@ -246,16 +247,16 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Heart className="h-3 w-3" /> Interested in
             </label>
-            <select
+            <Select
               value={interestedIn}
-              onChange={(e) => setInterestedIn(e.target.value as InterestedIn)}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            >
-              <option value="">Prefer not to say</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="both">Both</option>
-            </select>
+              onChange={(v) => setInterestedIn(v as InterestedIn)}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+                { value: "both", label: "Both" },
+              ]}
+            />
           </div>
 
           {/* Media sosial */}
@@ -296,18 +297,14 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Heart className="h-3 w-3" /> Looking for
             </label>
-            <select
+            <Select
               value={lookingFor}
-              onChange={(e) => setLookingFor(e.target.value)}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
-            >
-              <option value="">Prefer not to say</option>
-              {LOOKING_FOR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={setLookingFor}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...LOOKING_FOR_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+              ]}
+            />
           </div>
 
           {/* Music preference */}

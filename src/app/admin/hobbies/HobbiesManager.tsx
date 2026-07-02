@@ -15,6 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { Pagination } from "@/components/admin/Pagination";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
@@ -464,18 +465,16 @@ function HobbyFormModal({
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
             Category
           </label>
-          <select
+          <Select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
-          >
-            {categories.length === 0 && <option value="">— none yet —</option>}
-            {categories.map((c) => (
-              <option key={c.id} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={setCategory}
+            options={
+              categories.length === 0
+                ? [{ value: "", label: "— none yet —" }]
+                : categories.map((c) => ({ value: c.name, label: c.name }))
+            }
+            ariaLabel="Category"
+          />
         </div>
         <div className="sticky bottom-0 -mx-4 -mb-4 p-4 bg-background border-t border-border">
           <Button
@@ -596,16 +595,17 @@ function PaginationBar({
     <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>Per page:</span>
-        <select
-          value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-        >
-          <option value={10}>10</option>
-          <option value={25}>25</option>
-          <option value={50}>50</option>
-          <option value={100}>100</option>
-        </select>
+        <Select
+          value={String(pageSize)}
+          onChange={(v) => onPageSizeChange(Number(v))}
+          options={[
+            { value: "10", label: "10" },
+            { value: "25", label: "25" },
+            { value: "50", label: "50" },
+            { value: "100", label: "100" },
+          ]}
+          ariaLabel="Per page"
+        />
       </label>
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} onChange={onPageChange} />

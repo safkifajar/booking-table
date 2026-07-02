@@ -22,6 +22,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Pagination } from "@/components/admin/Pagination";
 import {
@@ -327,18 +328,18 @@ function ItemsTab({
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <select
+          <Select
             value={filterCategoryId}
-            onChange={(e) => setFilterCategoryId(e.target.value)}
-            className="h-9 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-          >
-            <option value="all">All categories ({allItemCount})</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.itemCount})
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setFilterCategoryId(v as string | "all")}
+            options={[
+              { value: "all", label: `All categories (${allItemCount})` },
+              ...categories.map((c) => ({
+                value: c.id,
+                label: `${c.name} (${c.itemCount})`,
+              })),
+            ]}
+            ariaLabel="Filter category"
+          />
           <div className="text-xs text-muted-foreground">
             {filteredCount === 0
               ? "0 items"
@@ -593,16 +594,17 @@ function ItemsTab({
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Per page:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
+              <Select
+                value={String(pageSize)}
+                onChange={(v) => onPageSizeChange(Number(v))}
+                options={[
+                  { value: "10", label: "10" },
+                  { value: "25", label: "25" },
+                  { value: "50", label: "50" },
+                  { value: "100", label: "100" },
+                ]}
+                ariaLabel="Per page"
+              />
             </label>
             {totalPages > 1 && (
               <Pagination
@@ -909,19 +911,16 @@ function ItemFormModal({
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
             Category
           </label>
-          <select
+          <Select
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary"
-            required
-          >
-            <option value="">— Select category —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+            options={[
+              { value: "", label: "— Select category —" },
+              ...categories.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            placeholder="— Select category —"
+            ariaLabel="Category"
+          />
         </div>
 
         <div>

@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
 
@@ -431,18 +432,14 @@ export function OnboardingWizard({
       ) : (
         <div className="space-y-4">
           <Field label="Looking for">
-            <select
+            <Select
               value={lookingFor}
-              onChange={(e) => setLookingFor(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Prefer not to say</option>
-              {LOOKING_FOR.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={setLookingFor}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...LOOKING_FOR.map((o) => ({ value: o.value, label: o.label })),
+              ]}
+            />
           </Field>
 
           <Field label="Hobbies & interests (pick a few)">

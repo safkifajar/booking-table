@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Search } from "lucide-react";
 import { Pagination } from "@/components/admin/Pagination";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { TopItem } from "@/lib/admin";
 
@@ -120,16 +121,17 @@ export function ItemsList({ items, totalRevenue }: Props) {
         <div className="flex items-center justify-between gap-3 flex-wrap pt-3 border-t border-border">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Per halaman:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            <Select
+              value={String(pageSize)}
+              onChange={(v) => setPageSize(Number(v))}
+              options={[
+                { value: "10", label: "10" },
+                { value: "25", label: "25" },
+                { value: "50", label: "50" },
+                { value: "100", label: "100" },
+              ]}
+              ariaLabel="Per halaman"
+            />
           </label>
           {totalPages > 1 && (
             <Pagination

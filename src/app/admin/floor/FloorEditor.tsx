@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -661,17 +662,12 @@ function TableDialog({
             </Field>
           </div>
           <Field label="Shape">
-            <select
+            <Select
               value={shape}
-              onChange={(e) => setShape(e.target.value as TableShape)}
-              className={inputCls}
-            >
-              {SHAPES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setShape(v as TableShape)}
+              options={SHAPES.map((s) => ({ value: s.value, label: s.label }))}
+              ariaLabel="Shape"
+            />
           </Field>
           <Field label="Rotation ° (0 = normal)">
             <input

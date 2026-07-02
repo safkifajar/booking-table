@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   cashierCreatePayment,
@@ -704,21 +705,18 @@ function PaymentModal({
                 <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-2">
                   Payer
                 </label>
-                <select
+                <Select
                   value={selectedMember?.member_id ?? ""}
-                  onChange={(e) =>
+                  onChange={(v) =>
                     setSelectedMember(
-                      detail.members.find((m) => m.member_id === e.target.value)
+                      detail.members.find((m) => m.member_id === v)
                     )
                   }
-                  className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-                >
-                  {detail.members.map((m) => (
-                    <option key={m.member_id} value={m.member_id}>
-                      {m.display_name} {m.is_host && "(Host)"}
-                    </option>
-                  ))}
-                </select>
+                  options={detail.members.map((m) => ({
+                    value: m.member_id,
+                    label: `${m.display_name} ${m.is_host ? "(Host)" : ""}`,
+                  }))}
+                />
               </div>
 
               <div>
