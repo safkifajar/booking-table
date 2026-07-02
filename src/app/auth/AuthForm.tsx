@@ -29,7 +29,16 @@ export function AuthForm() {
   }
 
   return (
-    <div className="auth-shell w-full max-w-sm mx-auto flex flex-col items-center text-center">
+    <div className="auth-shell relative w-full max-w-sm mx-auto flex flex-col items-center text-center">
+      <button
+        type="button"
+        onClick={() => setMode("choose")}
+        aria-label="Back"
+        className="fixed left-4 top-4 z-20 inline-flex items-center justify-center h-10 w-10 rounded-full text-[#f0e6d2]/80 hover:text-[#f0e6d2] hover:bg-[#f0e6d2]/10 transition"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
+
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-soho.jpeg"
@@ -45,7 +54,6 @@ export function AuthForm() {
           <PasswordForm
             mode="signin"
             next={next}
-            onBack={() => setMode("choose")}
             onSwitch={() => setMode("signup")}
           />
         )}
@@ -53,7 +61,6 @@ export function AuthForm() {
           <PasswordForm
             mode="signup"
             next={next}
-            onBack={() => setMode("choose")}
             onSwitch={() => setMode("signin")}
           />
         )}
@@ -137,12 +144,10 @@ function descFor(mode: Mode): string {
 function PasswordForm({
   mode,
   next,
-  onBack,
   onSwitch,
 }: {
   mode: "signin" | "signup";
   next: string;
-  onBack: () => void;
   onSwitch: () => void;
 }) {
   const [email, setEmail] = React.useState("");
@@ -266,15 +271,7 @@ function PasswordForm({
         </p>
       )}
 
-      <div className="flex items-center justify-between text-xs">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+      <div className="text-center text-xs">
         <button
           type="button"
           onClick={onSwitch}
