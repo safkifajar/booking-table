@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   jsonb,
+  integer,
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -46,6 +47,8 @@ export const profiles = pgTable(
     lookingFor: text("looking_for"),
     /** Pendidikan terakhir (mis. 'bachelor'). Opsional. */
     education: text("education"),
+    /** Tinggi badan dalam cm (mis. 170). Opsional. */
+    heightCm: integer("height_cm"),
     /** Preferensi musik (teks bebas). */
     musicPref: text("music_pref"),
     /** Makanan favorit (teks bebas). */

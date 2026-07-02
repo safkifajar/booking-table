@@ -273,6 +273,8 @@ export interface PublicProfile {
   social_link: string | null;
   /** Pendidikan terakhir (mis. 'bachelor'). Opsional. */
   education: string | null;
+  /** Tinggi badan dalam cm. Opsional. */
+  height_cm: number | null;
   /** Privacy: true = riwayat kunjungan disembunyikan dari viewer (bukan pemilik). */
   hide_history: boolean;
   hobbies: string[];

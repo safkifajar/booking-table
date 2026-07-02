@@ -8,6 +8,7 @@ import {
   Cake,
   Link as LinkIcon,
   GraduationCap,
+  Ruler,
 } from "lucide-react";
 import { educationLabel } from "@/lib/education";
 import { RatingStars } from "@/components/network/RatingStars";
@@ -118,8 +119,9 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               : "Never hung out yet"}
           </p>
 
-          {/* Umur + pendidikan + media sosial (kalau diisi) */}
+          {/* Umur + tinggi + pendidikan + media sosial (kalau diisi) */}
           {(profile.birth_date ||
+            profile.height_cm ||
             profile.education ||
             profile.social_link) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm">
@@ -127,6 +129,12 @@ export default async function NetworkProfilePage({ params }: PageProps) {
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <Cake className="h-3.5 w-3.5" />
                   {ageFrom(profile.birth_date)} yrs
+                </span>
+              )}
+              {profile.height_cm && (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Ruler className="h-3.5 w-3.5" />
+                  {profile.height_cm} cm
                 </span>
               )}
               {educationLabel(profile.education) && (

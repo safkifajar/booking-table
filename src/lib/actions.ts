@@ -1804,6 +1804,7 @@ const updateProfileSchema = z.object({
     ])
     .optional()
     .or(z.literal("")),
+  heightCm: z.number().int().min(120).max(230).nullable().optional(),
   musicPref: z.string().max(120).optional().or(z.literal("")),
   favFood: z.string().max(120).optional().or(z.literal("")),
   favDrink: z.string().max(120).optional().or(z.literal("")),
@@ -1837,6 +1838,7 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       area: data.area || null,
       lookingFor: data.lookingFor || null,
       education: data.education || null,
+      ...(data.heightCm !== undefined ? { heightCm: data.heightCm } : {}),
       musicPref: data.musicPref?.trim() || null,
       favFood: data.favFood?.trim() || null,
       favDrink: data.favDrink?.trim() || null,
@@ -1883,6 +1885,7 @@ const onboardingSchema = z.object({
     ])
     .optional()
     .or(z.literal("")),
+  heightCm: z.number().int().min(120).max(230).nullable().optional(),
   musicPref: z.string().max(120).optional().or(z.literal("")),
   favFood: z.string().max(120).optional().or(z.literal("")),
   favDrink: z.string().max(120).optional().or(z.literal("")),
@@ -1922,6 +1925,7 @@ export async function completeOnboarding(
       socialLink: data.socialLink?.trim() || null,
       lookingFor: data.lookingFor || null,
       education: data.education || null,
+      heightCm: data.heightCm ?? null,
       musicPref: data.musicPref?.trim() || null,
       favFood: data.favFood?.trim() || null,
       favDrink: data.favDrink?.trim() || null,

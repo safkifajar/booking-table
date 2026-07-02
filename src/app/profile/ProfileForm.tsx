@@ -21,6 +21,7 @@ import {
   Utensils,
   Wine,
   GraduationCap,
+  Ruler,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
@@ -51,6 +52,7 @@ interface Props {
   initialArea: string;
   initialLookingFor: string;
   initialEducation: string;
+  initialHeightCm: number | null;
   initialMusicPref: string;
   initialFavFood: string;
   initialFavDrink: string;
@@ -74,6 +76,7 @@ export function ProfileForm({
   initialArea,
   initialLookingFor,
   initialEducation,
+  initialHeightCm,
   initialMusicPref,
   initialFavFood,
   initialFavDrink,
@@ -96,6 +99,9 @@ export function ProfileForm({
   const [area, setArea] = React.useState(initialArea);
   const [lookingFor, setLookingFor] = React.useState(initialLookingFor);
   const [education, setEducation] = React.useState(initialEducation);
+  const [heightCm, setHeightCm] = React.useState(
+    initialHeightCm != null ? String(initialHeightCm) : ""
+  );
   const [musicPref, setMusicPref] = React.useState(initialMusicPref);
   const [favFood, setFavFood] = React.useState(initialFavFood);
   const [favDrink, setFavDrink] = React.useState(initialFavDrink);
@@ -144,6 +150,9 @@ export function ProfileForm({
             | "doctorate"
             | "other"
             | "") || undefined,
+        heightCm: heightCm.trim()
+          ? Math.min(230, Math.max(120, parseInt(heightCm, 10) || 120))
+          : null,
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
@@ -336,6 +345,23 @@ export function ProfileForm({
                   label: o.label,
                 })),
               ]}
+            />
+          </div>
+
+          {/* Height */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Ruler className="h-3 w-3" /> Height (cm)
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={120}
+              max={230}
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              placeholder="e.g. 170"
+              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
           </div>
 

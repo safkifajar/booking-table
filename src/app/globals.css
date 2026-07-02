@@ -92,6 +92,15 @@ button:disabled,
   background: var(--primary);
 }
 
+/* Utility: sembunyikan scrollbar (mis. wheel picker) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Utility: gold gradient text */
 .text-gold-gradient {
   background: linear-gradient(135deg, #ff4d57 0%, #e11d2a 50%, #b3141f 100%);

@@ -32,6 +32,7 @@ export default async function ProfileAccountPage() {
           initialArea={profile.area ?? ""}
           initialLookingFor={profile.lookingFor ?? ""}
           initialEducation={profile.education ?? ""}
+          initialHeightCm={profile.heightCm ?? null}
           initialMusicPref={profile.musicPref ?? ""}
           initialFavFood={profile.favFood ?? ""}
           initialFavDrink={profile.favDrink ?? ""}
