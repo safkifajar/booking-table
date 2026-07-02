@@ -10,9 +10,10 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { FramedCupIllustration } from "./OnboardingIllustration";
 import { Select } from "@/components/ui/select";
 import { cn, getActionErrorMessage } from "@/lib/utils";
-import type { HobbyGroup } from "@/lib/hobbies";
 import { PhotoUploader } from "./PhotoUploader";
 import { PromptPicker } from "./PromptPicker";
+import { InterestPicker } from "./InterestPicker";
+import { MAX_INTERESTS } from "./interests";
 
 const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
@@ -62,17 +63,15 @@ export function OnboardingWizard({
   next,
   initialName,
   initialPhotos,
-  hobbyGroups,
 }: {
   next: string;
   initialName: string;
   initialPhotos: string[];
-  hobbyGroups: HobbyGroup[];
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
   // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
-  // photos → details.
+  // photos → prompts → interests → details.
   const [step2Screen, setStep2Screen] = React.useState<
     | "dob"
     | "gender"
@@ -80,6 +79,7 @@ export function OnboardingWizard({
     | "intro"
     | "photos"
     | "prompts"
+    | "interests"
     | "details"
   >("dob");
   // photos disimpan di server (bukan draft sessionStorage). Init dari server.
@@ -131,6 +131,7 @@ export function OnboardingWizard({
             d.step2Screen === "intro" ||
             d.step2Screen === "photos" ||
             d.step2Screen === "prompts" ||
+            d.step2Screen === "interests" ||
             d.step2Screen === "details"
           ) {
             setStep2Screen(d.step2Screen);
@@ -198,15 +199,7 @@ export function OnboardingWizard({
     prompts,
   ]);
 
-  function toggleHobby(h: string) {
-    setHobbies((prev) =>
-      prev.includes(h)
-        ? prev.filter((x) => x !== h)
-        : [...prev, h].slice(0, 15)
-    );
-  }
-
-  async function handleFinish() {
+async function handleFinish() {
     setSaving(true);
     try {
       await completeOnboarding({
@@ -248,6 +241,7 @@ export function OnboardingWizard({
     "intro",
     "photos",
     "prompts",
+    "interests",
   ] as const;
   const isChoiceScreen =
     step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
@@ -276,11 +270,17 @@ export function OnboardingWizard({
       {step === 2 && step2Screen === "prompts" && (
         <button
           type="button"
-          onClick={() => setStep2Screen("details")}
+          onClick={() => setStep2Screen("interests")}
           className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
         >
           Skip
         </button>
+      )}
+      {/* Counter "N left" kanan-atas — layar interests (ala CMB). */}
+      {step === 2 && step2Screen === "interests" && (
+        <span className="fixed right-4 top-4 z-20 rounded-full border border-primary/50 px-3 py-1 text-xs font-semibold text-primary">
+          {MAX_INTERESTS - hobbies.length} left
+        </span>
       )}
       {/* Progress + step label — disembunyikan di layar 1-pertanyaan ala CMB. */}
       {!isChoiceScreen && (
@@ -317,7 +317,9 @@ export function OnboardingWizard({
                     ? "Add up to 3 photos"
                     : step2Screen === "prompts"
                       ? "Pick a prompt or two"
-                      : `Hi, ${initialName} 👋`}
+                      : step2Screen === "interests"
+                        ? "What do you like?"
+                        : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -334,7 +336,9 @@ export function OnboardingWizard({
                     ? "Show your face so people can recognize you at SOHO. At least 1 required."
                     : step2Screen === "prompts"
                       ? "Give people something to break the ice with. Answer up to 5 — even one helps."
-                      : "Fill in your personal details."}
+                      : step2Screen === "interests"
+                        ? `Pick up to ${MAX_INTERESTS} interests for your profile.`
+                        : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -512,9 +516,28 @@ export function OnboardingWizard({
                 variant="gold"
                 size="lg"
                 className="w-full rounded-full h-14"
-                onClick={() => setStep2Screen("details")}
+                onClick={() => setStep2Screen("interests")}
               >
                 {prompts.length > 0 ? "Next" : "Skip for now"}{" "}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "interests" ? (
+        /* Step 2 · layar INTERESTS — "What do you like?" (CMB-style) */
+        <div className="pb-28">
+          <InterestPicker selected={hobbies} onChange={setHobbies} />
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={() => setStep2Screen("details")}
+              >
+                {hobbies.length > 0 ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -524,7 +547,7 @@ export function OnboardingWizard({
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("prompts")}
+            onClick={() => setStep2Screen("interests")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -570,35 +593,6 @@ export function OnboardingWizard({
                 ...LOOKING_FOR.map((o) => ({ value: o.value, label: o.label })),
               ]}
             />
-          </Field>
-
-          <Field label="Hobbies & interests (pick a few)">
-            <div className="space-y-3">
-              {hobbyGroups.map((cat) => (
-                <div key={cat.category}>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1.5">
-                    {cat.category}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {cat.items.map((item) => item.name).map((h) => (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => toggleHobby(h)}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-xs font-medium border transition",
-                          hobbies.includes(h)
-                            ? "bg-primary/15 border-primary/40 text-primary"
-                            : "border-border text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {h}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
           </Field>
 
           <Field label="Favorite music">

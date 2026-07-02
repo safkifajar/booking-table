@@ -1886,7 +1886,8 @@ export async function completeOnboarding(
   const hobbies = (data.hobbies ?? [])
     .map((h) => h.trim())
     .filter((h) => h.length > 0)
-    .filter((h, i, arr) => arr.indexOf(h) === i);
+    .filter((h, i, arr) => arr.indexOf(h) === i)
+    .slice(0, 8); // maks 8 interest (CMB-style "What do you like?")
 
   await db
     .update(profiles)

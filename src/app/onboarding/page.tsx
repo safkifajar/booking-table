@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getHobbyGroups } from "@/lib/hobby-actions";
 import { OnboardingWizard } from "./OnboardingWizard";
 
 interface PageProps {
@@ -16,15 +15,12 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
   // Sudah onboarded → tak perlu wizard lagi.
   if (profile.onboarded) redirect(next || "/");
 
-  const hobbyGroups = await getHobbyGroups();
-
   return (
     <main className="flex-1 flex items-start justify-center px-4 py-10">
       <OnboardingWizard
         next={next || "/"}
         initialName={profile.displayName.split(/\s+/)[0] ?? ""}
         initialPhotos={profile.photos ?? []}
-        hobbyGroups={hobbyGroups}
       />
     </main>
   );
