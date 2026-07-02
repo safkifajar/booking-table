@@ -14,6 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { ShiftSummary, ShiftTransaction } from "@/lib/cashier-actions";
 
 interface Props {
@@ -85,23 +86,13 @@ export function ShiftReportView({
             <label className="block text-[10px] text-muted-foreground mb-1">
               From
             </label>
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full h-10 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-            />
+            <DatePicker value={from} onChange={setFrom} />
           </div>
           <div>
             <label className="block text-[10px] text-muted-foreground mb-1">
               To
             </label>
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full h-10 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-            />
+            <DatePicker value={to} onChange={setTo} />
           </div>
         </div>
         <div className="flex gap-1.5 flex-wrap">

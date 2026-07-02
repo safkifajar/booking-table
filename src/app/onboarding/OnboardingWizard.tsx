@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
 
@@ -270,12 +271,10 @@ export function OnboardingWizard({
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
       {step === 2 && step2Screen === "dob" ? (
         <div className="pb-28">
-          <input
-            type="date"
+          <DatePicker
             value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
+            onChange={setBirthDate}
             max={new Date().toISOString().slice(0, 10)}
-            className={inputCls}
           />
 
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Calendar } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 type Preset =
@@ -145,22 +146,18 @@ export function DateRangeFilter({
             <span className="text-sm font-medium truncate">{currentLabel}</span>
           </div>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
+            <DatePicker
               value={fromValue}
-              onChange={(e) => onFromChange(e.target.value)}
+              onChange={onFromChange}
               placeholder="From"
-              aria-label="Start date"
-              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+              ariaLabel="Start date"
             />
             <span className="text-muted-foreground text-xs">→</span>
-            <input
-              type="date"
+            <DatePicker
               value={toValue}
-              onChange={(e) => onToChange(e.target.value)}
+              onChange={onToChange}
               placeholder="To"
-              aria-label="End date"
-              className="h-8 px-2 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+              ariaLabel="End date"
             />
           </div>
         </div>

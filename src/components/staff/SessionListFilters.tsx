@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Search, SlidersHorizontal, X } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
 /**
@@ -203,12 +204,10 @@ export function SessionListFilters({
             <label className="block text-xs font-medium mb-1.5">
               From Date
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={filter.from}
               max={filter.to || undefined}
-              onChange={(e) => onFilter({ ...filter, from: e.target.value })}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+              onChange={(v) => onFilter({ ...filter, from: v })}
             />
           </div>
 
@@ -217,12 +216,10 @@ export function SessionListFilters({
               <label className="block text-xs font-medium mb-1.5">
                 To Date
               </label>
-              <input
-                type="date"
+              <DatePicker
                 value={filter.to}
                 min={filter.from || undefined}
-                onChange={(e) => onFilter({ ...filter, to: e.target.value })}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 transition"
+                onChange={(v) => onFilter({ ...filter, to: v })}
               />
             </div>
           </div>

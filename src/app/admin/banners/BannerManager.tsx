@@ -24,6 +24,7 @@ import {
   type AdminBanner,
 } from "@/lib/banner-actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Props {
   barId: string;
@@ -542,23 +543,13 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
                 Start (optional)
               </label>
-              <input
-                type="date"
-                value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-              />
+              <DatePicker value={startsAt} onChange={setStartsAt} />
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
                 End (optional)
               </label>
-              <input
-                type="date"
-                value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-              />
+              <DatePicker value={endsAt} onChange={setEndsAt} />
             </div>
           </div>
 

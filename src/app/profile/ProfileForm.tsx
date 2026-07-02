@@ -21,6 +21,7 @@ import {
   Utensils,
   Wine,
 } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
@@ -217,12 +218,10 @@ export function ProfileForm({
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
               <Cake className="h-3 w-3" /> Date of birth
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
+              onChange={setBirthDate}
               max={new Date().toISOString().slice(0, 10)}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
           </div>
 

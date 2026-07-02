@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Loader2, Pencil, Mail, Phone, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CustomerReviews, CustomerHistory } from "./CustomerDetailSections";
 import { updateCustomer, setCustomerPassword } from "@/lib/customer-actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
@@ -317,12 +318,10 @@ function EditForm({
         />
       </Field>
       <Field label="Date of birth (optional)">
-        <input
-          type="date"
+        <DatePicker
           value={birthDate}
-          onChange={(e) => setBirthDate(e.target.value)}
+          onChange={setBirthDate}
           max={new Date().toISOString().slice(0, 10)}
-          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>
       <Field label="Social media (optional)">
