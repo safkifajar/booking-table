@@ -29,6 +29,7 @@ import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
 import { EDUCATION_OPTIONS } from "@/lib/education";
+import { RELIGION_OPTIONS } from "@/lib/religion";
 
 
 type Gender = "" | "male" | "female";
@@ -53,6 +54,7 @@ interface Props {
   initialLookingFor: string;
   initialEducation: string;
   initialHeightCm: number | null;
+  initialReligion: string;
   initialMusicPref: string;
   initialFavFood: string;
   initialFavDrink: string;
@@ -77,6 +79,7 @@ export function ProfileForm({
   initialLookingFor,
   initialEducation,
   initialHeightCm,
+  initialReligion,
   initialMusicPref,
   initialFavFood,
   initialFavDrink,
@@ -102,6 +105,7 @@ export function ProfileForm({
   const [heightCm, setHeightCm] = React.useState(
     initialHeightCm != null ? String(initialHeightCm) : ""
   );
+  const [religion, setReligion] = React.useState(initialReligion);
   const [musicPref, setMusicPref] = React.useState(initialMusicPref);
   const [favFood, setFavFood] = React.useState(initialFavFood);
   const [favDrink, setFavDrink] = React.useState(initialFavDrink);
@@ -153,6 +157,16 @@ export function ProfileForm({
         heightCm: heightCm.trim()
           ? Math.min(230, Math.max(120, parseInt(heightCm, 10) || 120))
           : null,
+        religion:
+          (religion as
+            | "islam"
+            | "christian"
+            | "catholic"
+            | "hindu"
+            | "buddhist"
+            | "confucian"
+            | "spiritual"
+            | "") || undefined,
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
@@ -362,6 +376,24 @@ export function ProfileForm({
               onChange={(e) => setHeightCm(e.target.value)}
               placeholder="e.g. 170"
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+            />
+          </div>
+
+          {/* Religion */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" /> Religion
+            </label>
+            <Select
+              value={religion}
+              onChange={setReligion}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...RELIGION_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                })),
+              ]}
             />
           </div>
 

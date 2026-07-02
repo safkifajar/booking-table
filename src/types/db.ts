@@ -275,6 +275,8 @@ export interface PublicProfile {
   education: string | null;
   /** Tinggi badan dalam cm. Opsional. */
   height_cm: number | null;
+  /** Agama (mis. 'islam'). Opsional. */
+  religion: string | null;
   /** Privacy: true = riwayat kunjungan disembunyikan dari viewer (bukan pemilik). */
   hide_history: boolean;
   hobbies: string[];

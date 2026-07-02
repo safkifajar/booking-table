@@ -15,6 +15,7 @@ import { PromptPicker } from "./PromptPicker";
 import { InterestPicker } from "./InterestPicker";
 import { MAX_INTERESTS } from "./interests";
 import { EDUCATION_OPTIONS } from "@/lib/education";
+import { RELIGION_OPTIONS } from "@/lib/religion";
 import { HeightWheel } from "./HeightWheel";
 
 const LOOKING_FOR = [
@@ -73,7 +74,7 @@ export function OnboardingWizard({
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
   // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
-  // photos → prompts → interests → education → height → details.
+  // photos → prompts → interests → education → height → religion → details.
   const [step2Screen, setStep2Screen] = React.useState<
     | "dob"
     | "gender"
@@ -84,6 +85,7 @@ export function OnboardingWizard({
     | "interests"
     | "education"
     | "height"
+    | "religion"
     | "details"
   >("dob");
   // photos disimpan di server (bukan draft sessionStorage). Init dari server.
@@ -106,6 +108,7 @@ export function OnboardingWizard({
   const [lookingFor, setLookingFor] = React.useState("");
   const [education, setEducation] = React.useState("");
   const [heightCm, setHeightCm] = React.useState<number | null>(null);
+  const [religion, setReligion] = React.useState("");
   const [musicPref, setMusicPref] = React.useState("");
   const [favFood, setFavFood] = React.useState("");
   const [favDrink, setFavDrink] = React.useState("");
@@ -140,6 +143,7 @@ export function OnboardingWizard({
             d.step2Screen === "interests" ||
             d.step2Screen === "education" ||
             d.step2Screen === "height" ||
+            d.step2Screen === "religion" ||
             d.step2Screen === "details"
           ) {
             setStep2Screen(d.step2Screen);
@@ -155,6 +159,7 @@ export function OnboardingWizard({
           setLookingFor(d.lookingFor ?? "");
           setEducation(d.education ?? "");
           setHeightCm(typeof d.heightCm === "number" ? d.heightCm : null);
+          setReligion(d.religion ?? "");
           setMusicPref(d.musicPref ?? "");
           setFavFood(d.favFood ?? "");
           setFavDrink(d.favDrink ?? "");
@@ -182,6 +187,7 @@ export function OnboardingWizard({
       lookingFor,
       education,
       heightCm,
+      religion,
       musicPref,
       favFood,
       favDrink,
@@ -205,6 +211,7 @@ export function OnboardingWizard({
     lookingFor,
     education,
     heightCm,
+    religion,
     musicPref,
     favFood,
     favDrink,
@@ -236,6 +243,16 @@ async function handleFinish() {
             | "other"
             | "") || undefined,
         heightCm: heightCm ?? undefined,
+        religion:
+          (religion as
+            | "islam"
+            | "christian"
+            | "catholic"
+            | "hindu"
+            | "buddhist"
+            | "confucian"
+            | "spiritual"
+            | "") || undefined,
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
@@ -268,6 +285,7 @@ async function handleFinish() {
     "interests",
     "education",
     "height",
+    "religion",
   ] as const;
   const isChoiceScreen =
     step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
@@ -312,6 +330,15 @@ async function handleFinish() {
         </button>
       )}
       {step === 2 && step2Screen === "height" && (
+        <button
+          type="button"
+          onClick={() => setStep2Screen("religion")}
+          className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
+        >
+          Skip
+        </button>
+      )}
+      {step === 2 && step2Screen === "religion" && (
         <button
           type="button"
           onClick={() => setStep2Screen("details")}
@@ -367,7 +394,9 @@ async function handleFinish() {
                           ? "What's your highest education?"
                           : step2Screen === "height"
                             ? "How tall are you?"
-                            : `Hi, ${initialName} 👋`}
+                            : step2Screen === "religion"
+                              ? "What's your religion?"
+                              : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -390,7 +419,9 @@ async function handleFinish() {
                           ? "Optional — it just helps people get to know you."
                           : step2Screen === "height"
                             ? "Optional — just another little detail about you."
-                            : "Fill in your personal details."}
+                            : step2Screen === "religion"
+                              ? "Optional — share it if you'd like, or skip."
+                              : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -660,9 +691,61 @@ async function handleFinish() {
                 variant="gold"
                 size="lg"
                 className="w-full rounded-full h-14"
-                onClick={() => setStep2Screen("details")}
+                onClick={() => setStep2Screen("religion")}
               >
                 {heightCm ? "Next" : "Skip for now"}{" "}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "religion" ? (
+        /* Step 2 · layar RELIGION — agama (opsional, radio) */
+        <div className="space-y-1 pb-28">
+          <div>
+            {RELIGION_OPTIONS.map((o) => {
+              const active = religion === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() =>
+                    setReligion((cur) => (cur === o.value ? "" : o.value))
+                  }
+                  className="w-full flex items-center justify-between py-4 text-left transition border-b border-border"
+                >
+                  <span
+                    className={cn(
+                      "text-base font-medium",
+                      active ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {o.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
+                      active
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground/40"
+                    )}
+                  >
+                    {active && <Check className="h-4 w-4" />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={() => setStep2Screen("details")}
+              >
+                {religion ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -672,7 +755,7 @@ async function handleFinish() {
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("height")}
+            onClick={() => setStep2Screen("religion")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back

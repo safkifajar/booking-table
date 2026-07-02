@@ -1805,6 +1805,18 @@ const updateProfileSchema = z.object({
     .optional()
     .or(z.literal("")),
   heightCm: z.number().int().min(120).max(230).nullable().optional(),
+  religion: z
+    .enum([
+      "islam",
+      "christian",
+      "catholic",
+      "hindu",
+      "buddhist",
+      "confucian",
+      "spiritual",
+    ])
+    .optional()
+    .or(z.literal("")),
   musicPref: z.string().max(120).optional().or(z.literal("")),
   favFood: z.string().max(120).optional().or(z.literal("")),
   favDrink: z.string().max(120).optional().or(z.literal("")),
@@ -1839,6 +1851,7 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       lookingFor: data.lookingFor || null,
       education: data.education || null,
       ...(data.heightCm !== undefined ? { heightCm: data.heightCm } : {}),
+      religion: data.religion || null,
       musicPref: data.musicPref?.trim() || null,
       favFood: data.favFood?.trim() || null,
       favDrink: data.favDrink?.trim() || null,
@@ -1886,6 +1899,18 @@ const onboardingSchema = z.object({
     .optional()
     .or(z.literal("")),
   heightCm: z.number().int().min(120).max(230).nullable().optional(),
+  religion: z
+    .enum([
+      "islam",
+      "christian",
+      "catholic",
+      "hindu",
+      "buddhist",
+      "confucian",
+      "spiritual",
+    ])
+    .optional()
+    .or(z.literal("")),
   musicPref: z.string().max(120).optional().or(z.literal("")),
   favFood: z.string().max(120).optional().or(z.literal("")),
   favDrink: z.string().max(120).optional().or(z.literal("")),
@@ -1926,6 +1951,7 @@ export async function completeOnboarding(
       lookingFor: data.lookingFor || null,
       education: data.education || null,
       heightCm: data.heightCm ?? null,
+      religion: data.religion || null,
       musicPref: data.musicPref?.trim() || null,
       favFood: data.favFood?.trim() || null,
       favDrink: data.favDrink?.trim() || null,

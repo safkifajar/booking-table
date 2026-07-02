@@ -49,6 +49,8 @@ export const profiles = pgTable(
     education: text("education"),
     /** Tinggi badan dalam cm (mis. 170). Opsional. */
     heightCm: integer("height_cm"),
+    /** Agama (mis. 'islam'). Opsional. */
+    religion: text("religion"),
     /** Preferensi musik (teks bebas). */
     musicPref: text("music_pref"),
     /** Makanan favorit (teks bebas). */

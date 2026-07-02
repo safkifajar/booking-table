@@ -9,8 +9,10 @@ import {
   Link as LinkIcon,
   GraduationCap,
   Ruler,
+  Sparkles,
 } from "lucide-react";
 import { educationLabel } from "@/lib/education";
+import { religionLabel } from "@/lib/religion";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { ProfileAvatar } from "@/components/network/ProfileAvatar";
@@ -119,10 +121,11 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               : "Never hung out yet"}
           </p>
 
-          {/* Umur + tinggi + pendidikan + media sosial (kalau diisi) */}
+          {/* Umur + tinggi + pendidikan + agama + media sosial (kalau diisi) */}
           {(profile.birth_date ||
             profile.height_cm ||
             profile.education ||
+            profile.religion ||
             profile.social_link) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm">
               {profile.birth_date && (
@@ -141,6 +144,12 @@ export default async function NetworkProfilePage({ params }: PageProps) {
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <GraduationCap className="h-3.5 w-3.5" />
                   {educationLabel(profile.education)}
+                </span>
+              )}
+              {religionLabel(profile.religion) && (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {religionLabel(profile.religion)}
                 </span>
               )}
               {profile.social_link && (

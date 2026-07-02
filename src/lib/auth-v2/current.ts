@@ -54,6 +54,7 @@ export interface Profile {
   lookingFor: string | null;
   education: string | null;
   heightCm: number | null;
+  religion: string | null;
   musicPref: string | null;
   favFood: string | null;
   favDrink: string | null;
@@ -123,6 +124,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     lookingFor: row.lookingFor,
     education: row.education,
     heightCm: row.heightCm,
+    religion: row.religion,
     musicPref: row.musicPref,
     favFood: row.favFood,
     favDrink: row.favDrink,
