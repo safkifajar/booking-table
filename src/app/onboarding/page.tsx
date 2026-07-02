@@ -23,6 +23,7 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
       <OnboardingWizard
         next={next || "/"}
         initialName={profile.displayName.split(/\s+/)[0] ?? ""}
+        initialPhotos={profile.photos ?? []}
         hobbyGroups={hobbyGroups}
       />
     </main>

@@ -2088,6 +2088,127 @@ export async function uploadAvatar(formData: FormData): Promise<{ avatarUrl: str
   return { avatarUrl: versionedUrl };
 }
 
+// Foto profil (galeri): maks 3, tiap ≤4MB (pre-process). Server tetap kompres
+// (resize 1080px + webp q80) sbg jaring kedua walau client sudah kompres.
+const MAX_PROFILE_PHOTOS = 3;
+const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+
+/** Tambah 1 foto ke galeri profil. Foto pertama otomatis jadi avatar utama. */
+export async function uploadProfilePhoto(
+  formData: FormData
+): Promise<{ photos: string[]; avatarUrl: string | null }> {
+  const profile = await requireProfile();
+  const file = formData.get("file");
+
+  if (!(file instanceof File)) throw new Error("Invalid file");
+  if (file.size === 0) throw new Error("File is empty");
+  if (file.size > MAX_PHOTO_BYTES) {
+    throw new Error(
+      `File is too large (max ${Math.floor(MAX_PHOTO_BYTES / 1024 / 1024)}MB)`
+    );
+  }
+  const heic = isHeicFile(file);
+  const validMime = ACCEPTED_AVATAR_TYPES.includes(
+    file.type as (typeof ACCEPTED_AVATAR_TYPES)[number]
+  );
+  if (!validMime && !heic) {
+    throw new Error("File must be JPG, PNG, WebP, or HEIC");
+  }
+
+  const [row] = await db
+    .select({ photos: profiles.photos, avatarUrl: profiles.avatarUrl })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+  const current = row?.photos ?? [];
+  if (current.length >= MAX_PROFILE_PHOTOS) {
+    throw new Error(`You can add up to ${MAX_PROFILE_PHOTOS} photos`);
+  }
+
+  const { default: sharp } = await import("sharp");
+  const { storage } = await import("@/lib/storage");
+
+  let inputBuffer = Buffer.from(await file.arrayBuffer());
+  if (heic) {
+    const { default: heicConvert } = await import("heic-convert");
+    inputBuffer = Buffer.from(
+      await heicConvert({
+        buffer: new Uint8Array(inputBuffer),
+        format: "JPEG",
+        quality: 0.9,
+      })
+    );
+  }
+
+  // Resize maks 1080px (sisi terpanjang, tak upscale) → webp q80.
+  const outputBuffer = await sharp(inputBuffer)
+    .rotate()
+    .resize(1080, 1080, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer();
+
+  const { publicUrl } = await storage.upload({
+    buffer: outputBuffer,
+    folder: "photos",
+    // key unik per foto (profileId + index + waktu) supaya tak overwrite.
+    key: `${profile.id}-${current.length}-${Date.now()}`,
+    contentType: "image/webp",
+  });
+
+  const photos = [...current, publicUrl];
+  // Foto pertama = avatar utama (kalau belum ada avatar).
+  const nextAvatar =
+    photos.length === 1 ? `${publicUrl}?v=${Date.now()}` : row?.avatarUrl ?? null;
+
+  await db
+    .update(profiles)
+    .set({ photos, avatarUrl: nextAvatar })
+    .where(eq(profiles.id, profile.id));
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout");
+  return { photos, avatarUrl: nextAvatar };
+}
+
+/** Hapus 1 foto galeri (by index). Kalau foto[0] dihapus, avatar ikut geser. */
+export async function removeProfilePhoto(
+  index: number
+): Promise<{ photos: string[]; avatarUrl: string | null }> {
+  const profile = await requireProfile();
+  const [row] = await db
+    .select({ photos: profiles.photos, avatarUrl: profiles.avatarUrl })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+  const current = row?.photos ?? [];
+  if (index < 0 || index >= current.length) {
+    throw new Error("Photo not found");
+  }
+
+  const { storage } = await import("@/lib/storage");
+  const removedUrl = current[index];
+  const photos = current.filter((_, i) => i !== index);
+
+  // Avatar mengikuti foto[0]. Kalau foto pertama berubah/hilang → update avatar.
+  const nextAvatar =
+    photos.length > 0 ? `${photos[0]}?v=${Date.now()}` : null;
+
+  await db
+    .update(profiles)
+    .set({ photos, avatarUrl: nextAvatar })
+    .where(eq(profiles.id, profile.id));
+
+  // Hapus file dari storage (best-effort) — tapi jangan hapus kalau URL masih
+  // dipakai foto lain (tak mungkin, key unik) — aman.
+  try {
+    await storage.delete(removedUrl);
+  } catch {
+    /* ignore */
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/", "layout");
+  return { photos, avatarUrl: nextAvatar };
+}
+
 /**
  * Hapus avatar (kembali ke initials fallback).
  */

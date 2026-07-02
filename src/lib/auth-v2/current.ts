@@ -43,6 +43,7 @@ export interface Profile {
   id: string;
   displayName: string;
   avatarUrl: string | null;
+  photos: string[];
   phone: string | null;
   birthDate: string | null; // ISO date "YYYY-MM-DD"
   bio: string | null;
@@ -108,6 +109,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     id: row.id,
     displayName: row.displayName,
     avatarUrl: row.avatarUrl,
+    photos: row.photos ?? [],
     phone: row.phone,
     birthDate: row.birthDate,
     bio: row.bio,

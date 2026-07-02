@@ -19,7 +19,7 @@ export interface UploadInput {
    * Folder logical: "avatars", "stories", "banners", dst.
    * Adapter map ke filesystem path (local) atau S3 key prefix (R2).
    */
-  folder: "avatars" | "stories" | "banners" | "menu";
+  folder: "avatars" | "stories" | "banners" | "menu" | "photos";
 
   /**
    * Unique key untuk file. Untuk avatar: userId. Untuk story: random uuid.

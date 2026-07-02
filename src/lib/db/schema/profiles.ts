@@ -28,6 +28,8 @@ export const profiles = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     avatarUrl: text("avatar_url"),
+    /** Galeri foto profil (URL storage). Maks 3; foto[0] = avatar utama. */
+    photos: text("photos").array().notNull().default([]),
     phone: text("phone"),
     birthDate: date("birth_date"),
     bio: text("bio"),
