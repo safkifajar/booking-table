@@ -66,8 +66,7 @@ export function OnboardingWizard({
   initialPhotos: string[];
 }) {
   const router = useRouter();
-  const [step, setStep] = React.useState<2 | 3>(2);
-  // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
+  // Onboarding dibagi beberapa layar CMB-style: dob → gender → interested → intro →
   // photos → prompts → interests → education → height → religion → address →
   // social (finish).
   const [step2Screen, setStep2Screen] = React.useState<
@@ -122,7 +121,6 @@ export function OnboardingWizard({
         const raw = sessionStorage.getItem(STORAGE_KEY);
         if (raw) {
           const d = JSON.parse(raw);
-          if (d.step === 3) setStep(3);
           setBirthDate(d.birthDate ?? "");
           setGender(d.gender ?? "");
           setInterestedIn(d.interestedIn ?? "");
@@ -177,7 +175,6 @@ export function OnboardingWizard({
   React.useEffect(() => {
     if (!restored.current) return; // jangan timpa sebelum restore selesai
     const draft = {
-      step,
       step2Screen,
       birthDate,
       gender,
@@ -201,7 +198,6 @@ export function OnboardingWizard({
       /* storage penuh — abaikan */
     }
   }, [
-    step,
     step2Screen,
     birthDate,
     gender,
@@ -289,8 +285,9 @@ async function handleFinish() {
     "address",
     "social",
   ] as const;
-  const isChoiceScreen =
-    step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
+  const isChoiceScreen = (CHOICE_ORDER as readonly string[]).includes(
+    step2Screen
+  );
   const showChoiceBack = isChoiceScreen;
 
   function choiceBack() {
@@ -312,8 +309,8 @@ async function handleFinish() {
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      {/* Skip kanan-atas — layar opsional (prompts, education). */}
-      {step === 2 && step2Screen === "prompts" && (
+      {/* Skip kanan-atas — layar opsional (prompts, education, dst). */}
+      {step2Screen === "prompts" && (
         <button
           type="button"
           onClick={() => setStep2Screen("interests")}
@@ -322,7 +319,7 @@ async function handleFinish() {
           Skip
         </button>
       )}
-      {step === 2 && step2Screen === "education" && (
+      {step2Screen === "education" && (
         <button
           type="button"
           onClick={() => setStep2Screen("height")}
@@ -331,7 +328,7 @@ async function handleFinish() {
           Skip
         </button>
       )}
-      {step === 2 && step2Screen === "height" && (
+      {step2Screen === "height" && (
         <button
           type="button"
           onClick={() => setStep2Screen("religion")}
@@ -340,7 +337,7 @@ async function handleFinish() {
           Skip
         </button>
       )}
-      {step === 2 && step2Screen === "religion" && (
+      {step2Screen === "religion" && (
         <button
           type="button"
           onClick={() => setStep2Screen("address")}
@@ -349,7 +346,7 @@ async function handleFinish() {
           Skip
         </button>
       )}
-      {step === 2 && step2Screen === "social" && (
+      {step2Screen === "social" && (
         <button
           type="button"
           onClick={handleFinish}
@@ -360,36 +357,14 @@ async function handleFinish() {
         </button>
       )}
       {/* Counter "N left" kanan-atas — layar interests (ala CMB). */}
-      {step === 2 && step2Screen === "interests" && (
+      {step2Screen === "interests" && (
         <span className="fixed right-4 top-4 z-20 rounded-full border border-primary/50 px-3 py-1 text-xs font-semibold text-primary">
           {MAX_INTERESTS - hobbies.length} left
         </span>
       )}
-      {/* Progress + step label — disembunyikan di layar 1-pertanyaan ala CMB. */}
-      {!isChoiceScreen && (
-        <>
-          <div className="flex items-center gap-2 mb-6">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={cn(
-                  "h-1.5 flex-1 rounded-full transition-colors",
-                  s <= step ? "bg-primary" : "bg-muted"
-                )}
-              />
-            ))}
-          </div>
-
-          <p className="text-xs text-muted-foreground mb-1">
-            Step {step} of 3
-          </p>
-        </>
-      )}
       <h1 className="text-xl font-bold mb-1">
-        {step === 3
-          ? "Interests & preferences"
-          : step2Screen === "dob"
-            ? "When's your birthday?"
+        {step2Screen === "dob"
+          ? "When's your birthday?"
             : step2Screen === "gender"
               ? "What's your gender?"
               : step2Screen === "interested"
@@ -415,10 +390,8 @@ async function handleFinish() {
                                   : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
-        {step === 3
-          ? "So it's easy to find the right vibe at SOHO."
-          : step2Screen === "dob"
-            ? "We use it to confirm you're of legal age."
+        {step2Screen === "dob"
+          ? "We use it to confirm you're of legal age."
             : step2Screen === "gender"
               ? "Your gender stays hidden and can't be changed later."
               : step2Screen === "interested"
@@ -445,7 +418,7 @@ async function handleFinish() {
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
-      {step === 2 && step2Screen === "dob" ? (
+      {step2Screen === "dob" ? (
         <div className="pb-28">
           <DatePicker
             value={birthDate}
@@ -468,7 +441,7 @@ async function handleFinish() {
           </div>
         </div>
       ) : /* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */
-      step === 2 && step2Screen === "gender" ? (
+      step2Screen === "gender" ? (
         <div className="space-y-1 pb-28">
           <div>
             {GENDER_OPTIONS.map((o) => {
@@ -516,7 +489,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "interested" ? (
+      ) : step2Screen === "interested" ? (
         /* Step 2 · layar INTERESTED IN — satu pertanyaan (CMB-style) */
         <div className="space-y-1 pb-28">
           <div>
@@ -565,7 +538,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "intro" ? (
+      ) : step2Screen === "intro" ? (
         /* Step 2 · layar INTRO — transisi ke data profil (vibe SOHO) */
         <div className="flex flex-col items-center text-center min-h-[70vh] pb-28">
           <div className="flex-1 flex items-center justify-center">
@@ -584,7 +557,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "photos" ? (
+      ) : step2Screen === "photos" ? (
         /* Step 2 · layar PHOTOS — upload foto profil (min 1) */
         <div className="pb-28">
           <PhotoUploader photos={photos} onChange={setPhotos} />
@@ -603,7 +576,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "prompts" ? (
+      ) : step2Screen === "prompts" ? (
         /* Step 2 · layar PROMPTS — ice-breaker (opsional, bisa Skip) */
         <div className="pb-28">
           <PromptPicker
@@ -627,7 +600,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "interests" ? (
+      ) : step2Screen === "interests" ? (
         /* Step 2 · layar INTERESTS — "What do you like?" (CMB-style) */
         <div className="pb-28">
           <InterestPicker selected={hobbies} onChange={setHobbies} />
@@ -646,7 +619,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "education" ? (
+      ) : step2Screen === "education" ? (
         /* Step 2 · layar EDUCATION — pendidikan terakhir (opsional, radio) */
         <div className="space-y-1 pb-28">
           <div>
@@ -698,7 +671,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "height" ? (
+      ) : step2Screen === "height" ? (
         /* Step 2 · layar HEIGHT — tinggi badan cm (opsional, wheel picker) */
         <div className="pb-28">
           <div className="pt-6">
@@ -719,7 +692,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "religion" ? (
+      ) : step2Screen === "religion" ? (
         /* Step 2 · layar RELIGION — agama (opsional, radio) */
         <div className="space-y-1 pb-28">
           <div>
@@ -771,7 +744,7 @@ async function handleFinish() {
             </div>
           </div>
         </div>
-      ) : step === 2 && step2Screen === "address" ? (
+      ) : step2Screen === "address" ? (
         /* Step 2 · layar ADDRESS — area/alamat (CMB-style, satu field) */
         <div className="pb-28">
           <input
