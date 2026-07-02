@@ -10,7 +10,7 @@ import {
   magicLinkAction,
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
@@ -21,22 +21,26 @@ export function AuthForm() {
   const checkEmail = sp.get("check_email");
   const [mode, setMode] = React.useState<Mode>(checkEmail ? "magic" : "choose");
 
+  // Landing (mode choose): logo besar + tagline di tengah, dua tombol di bawah,
+  // consent Terms/Privacy — konsep app kencan (CMB-style). Mode form: layout
+  // ringkas (logo kecil + form).
+  if (mode === "choose") {
+    return <AuthLanding setMode={setMode} />;
+  }
+
   return (
     <div className="auth-shell w-full max-w-sm mx-auto flex flex-col items-center text-center">
-      {/* Logo brand SOHO (sudah termasuk "SOCIAL HOUSE"). Aset statis → <img>
-          biasa, tak perlu optimasi next/image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/logo-soho.jpeg"
         alt="SOHO Social House"
-        className="w-48 sm:w-56 h-auto select-none pointer-events-none mb-6"
+        className="w-40 sm:w-48 h-auto select-none pointer-events-none mb-6"
       />
 
       <h1 className="text-xl font-semibold text-[#f0e6d2]">{titleFor(mode)}</h1>
       <p className="text-sm text-[#f0e6d2]/70 mt-1 mb-6">{descFor(mode)}</p>
 
       <div className="w-full space-y-3 text-left">
-        {mode === "choose" && <ChooseMode setMode={setMode} />}
         {mode === "signin" && (
           <PasswordForm
             mode="signin"
@@ -72,6 +76,57 @@ export function AuthForm() {
   );
 }
 
+// ============================================================
+// LANDING (mode choose) — CMB-style
+// ============================================================
+function AuthLanding({ setMode }: { setMode: (m: Mode) => void }) {
+  return (
+    <div className="flex flex-col items-center text-center min-h-[80vh] w-full">
+      {/* Logo + tagline — terpusat di area atas */}
+      <div className="flex-1 flex flex-col items-center justify-center pt-8">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-soho.jpeg"
+          alt="SOHO Social House"
+          className="w-56 sm:w-64 h-auto select-none pointer-events-none"
+        />
+        <span className="mt-6 inline-block rounded-full bg-[#f0e6d2]/15 px-4 py-1.5 text-sm font-medium text-[#f0e6d2] -rotate-2">
+          book a table, meet the room
+        </span>
+      </div>
+
+      {/* Aksi + consent — di bawah */}
+      <div className="w-full space-y-3 pb-2">
+        <Button
+          size="lg"
+          className="w-full bg-[#f0e6d2] text-[#8d1312] hover:bg-white text-base font-semibold h-14 rounded-full"
+          onClick={() => setMode("signup")}
+        >
+          I&apos;m new here
+        </Button>
+        <Button
+          size="lg"
+          className="w-full bg-[#4a0a09] text-[#f0e6d2] hover:bg-[#3a0807] text-base font-semibold h-14 rounded-full"
+          onClick={() => setMode("signin")}
+        >
+          I&apos;ve been here before
+        </Button>
+
+        <p className="pt-3 text-xs text-[#f0e6d2]/70 leading-relaxed">
+          By continuing you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-[#f0e6d2]">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline hover:text-[#f0e6d2]">
+            Privacy Policy
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function titleFor(mode: Mode): string {
   if (mode === "signin") return "Sign in";
   if (mode === "signup") return "Create a new account";
@@ -84,50 +139,6 @@ function descFor(mode: Mode): string {
   if (mode === "signup") return "Sign up once, sign in anytime.";
   if (mode === "magic") return "We'll send you a magic link — just click it.";
   return "Choose how to sign in to reserve a table or join tonight.";
-}
-
-// ============================================================
-// MODE: CHOOSE
-// ============================================================
-function ChooseMode({ setMode }: { setMode: (m: Mode) => void }) {
-  return (
-    <>
-      <Button
-        variant="gold"
-        size="lg"
-        className="w-full"
-        onClick={() => setMode("signin")}
-      >
-        <Lock className="h-4 w-4" /> Sign In (Email + Password)
-      </Button>
-      <Button
-        variant="outline"
-        size="lg"
-        className="w-full"
-        onClick={() => setMode("signup")}
-      >
-        Create New Account
-      </Button>
-      {/* Magic Link di-hide sementara. Aktifkan lagi kalau dibutuhkan:
-      <div className="relative py-2">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-border"></span>
-        </div>
-        <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-          <span className="bg-card px-2 text-muted-foreground">atau</span>
-        </div>
-      </div>
-      <Button
-        variant="ghost"
-        size="lg"
-        className="w-full"
-        onClick={() => setMode("magic")}
-      >
-        <Mail className="h-4 w-4" /> Magic Link
-      </Button>
-      */}
-    </>
-  );
 }
 
 // ============================================================
