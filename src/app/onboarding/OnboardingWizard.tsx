@@ -80,14 +80,18 @@ export function OnboardingWizard({
           if (d.step === 3) setStep(3);
           setBirthDate(d.birthDate ?? "");
           setGender(d.gender ?? "");
-          // Draft punya gender (termasuk "" prefer-not-to-say) → sudah dipilih,
-          // langsung ke layar details supaya tak paksa ulang.
-          if (typeof d.gender === "string") {
-            setGenderPicked(true);
-            setStep2Screen("details");
-          }
           setInterestedIn(d.interestedIn ?? "");
+          // Tandai pilihan yg sudah diisi (biar tombol Next tak terkunci saat balik).
+          if (typeof d.gender === "string") setGenderPicked(true);
           if (typeof d.interestedIn === "string") setInterestedPicked(true);
+          // Lanjut dari layar terakhir yg tersimpan; fallback infer dari isian.
+          if (d.step2Screen === "interested" || d.step2Screen === "details") {
+            setStep2Screen(d.step2Screen);
+          } else if (typeof d.interestedIn === "string") {
+            setStep2Screen("details");
+          } else if (typeof d.gender === "string") {
+            setStep2Screen("interested");
+          }
           setArea(d.area ?? "");
           setSocialLink(d.socialLink ?? "");
           setLookingFor(d.lookingFor ?? "");
@@ -108,6 +112,7 @@ export function OnboardingWizard({
     if (!restored.current) return; // jangan timpa sebelum restore selesai
     const draft = {
       step,
+      step2Screen,
       birthDate,
       gender,
       interestedIn,
@@ -127,6 +132,7 @@ export function OnboardingWizard({
     }
   }, [
     step,
+    step2Screen,
     birthDate,
     gender,
     interestedIn,

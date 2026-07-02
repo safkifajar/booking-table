@@ -189,12 +189,15 @@ function PasswordForm({
 
     setLoading(true);
     try {
-      // Login/daftar → onboarding fresh dari layar gender. Buang draft lama (sisa
-      // sesi/akun lain di device ini) supaya tak skip ke details.
-      try {
-        sessionStorage.removeItem("soho_onboarding_draft");
-      } catch {
-        /* ignore */
+      // Akun BARU (signup) → onboarding fresh dari gender: buang draft sisa akun
+      // lain di device ini. LOGIN tak menghapus draft — biar user yg belum
+      // selesai onboarding bisa lanjut dari isian terakhir (persist di browser).
+      if (mode === "signup") {
+        try {
+          sessionStorage.removeItem("soho_onboarding_draft");
+        } catch {
+          /* ignore */
+        }
       }
       const result =
         mode === "signup"
