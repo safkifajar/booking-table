@@ -189,6 +189,15 @@ function PasswordForm({
 
     setLoading(true);
     try {
+      // Akun baru → onboarding fresh dari layar gender. Buang draft lama (mis.
+      // sisa sesi/akun lain di device ini) supaya tak skip ke details.
+      if (mode === "signup") {
+        try {
+          sessionStorage.removeItem("soho_onboarding_draft");
+        } catch {
+          /* ignore */
+        }
+      }
       const result =
         mode === "signup"
           ? await signUpAction({
