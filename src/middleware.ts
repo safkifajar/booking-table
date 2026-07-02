@@ -129,6 +129,24 @@ export default authMiddleware(async (req) => {
     return new NextResponse(null, { status: 404 });
   }
 
+  // Belum login (customer) → arahkan ke /auth, kecuali path PUBLIK. Auth & legal
+  // & join-via-QR tetap boleh dibuka anonim. API/SSE tak di-redirect (biar fetch
+  // dapat 401/JSON, bukan HTML redirect).
+  if (!isAdmin && !req.auth?.user?.id) {
+    const isPublic =
+      path === "/auth" ||
+      path === "/terms" ||
+      path === "/privacy" ||
+      path.startsWith("/join/") ||
+      path.startsWith("/api/");
+    if (!isPublic) {
+      const url = req.nextUrl.clone();
+      url.pathname = "/auth";
+      if (path !== "/") url.searchParams.set("next", path);
+      return NextResponse.redirect(url);
+    }
+  }
+
   return NextResponse.next();
 });
 
