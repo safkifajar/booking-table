@@ -90,9 +90,6 @@ function AuthLanding({ setMode }: { setMode: (m: Mode) => void }) {
           alt="SOHO Social House"
           className="w-56 sm:w-64 h-auto select-none pointer-events-none"
         />
-        <span className="mt-6 inline-block rounded-full bg-[#f0e6d2]/15 px-4 py-1.5 text-sm font-medium text-[#f0e6d2] -rotate-2">
-          book a table, meet the room
-        </span>
       </div>
 
       {/* Aksi + consent — di bawah */}
