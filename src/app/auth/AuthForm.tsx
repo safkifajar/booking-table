@@ -10,10 +10,31 @@ import {
   magicLinkAction,
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
+
+// Nomor WhatsApp SOHO untuk tombol "Contact us" (format 62..., tanpa +/spasi).
+// TODO: ganti dengan nomor asli SOHO.
+const CONTACT_WA = "6281234567890";
+const CONTACT_WA_URL = `https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(
+  "Hi SOHO Social House, I'd like to ask about "
+)}`;
+
+/** Tombol Contact us — pill di kanan-atas, mengarah ke WhatsApp. */
+function ContactUsButton() {
+  return (
+    <a
+      href={CONTACT_WA_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed right-4 top-4 z-20 inline-flex items-center gap-1.5 h-10 rounded-full px-4 text-xs font-medium text-[#f0e6d2]/90 hover:text-[#8d1312] bg-[#f0e6d2]/10 hover:bg-[#f0e6d2] transition"
+    >
+      <MessageCircle className="h-4 w-4" /> Contact us
+    </a>
+  );
+}
 
 export function AuthForm() {
   const sp = useSearchParams();
@@ -38,6 +59,7 @@ export function AuthForm() {
       >
         <ArrowLeft className="h-5 w-5" />
       </button>
+      <ContactUsButton />
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -82,6 +104,7 @@ export function AuthForm() {
 function AuthLanding({ setMode }: { setMode: (m: Mode) => void }) {
   return (
     <div className="flex flex-col items-center text-center min-h-[80vh] w-full">
+      <ContactUsButton />
       {/* Logo + tagline — terpusat di area atas */}
       <div className="flex-1 flex flex-col items-center justify-center pt-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
