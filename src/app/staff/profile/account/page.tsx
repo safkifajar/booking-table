@@ -44,6 +44,7 @@ export default async function StaffProfileAccountPage() {
           initialSocialLink={profile.socialLink ?? ""}
           initialArea={profile.area ?? ""}
           initialLookingFor={profile.lookingFor ?? ""}
+          initialEducation={profile.education ?? ""}
           initialMusicPref={profile.musicPref ?? ""}
           initialFavFood={profile.favFood ?? ""}
           initialFavDrink={profile.favDrink ?? ""}

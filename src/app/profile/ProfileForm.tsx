@@ -20,12 +20,14 @@ import {
   Music,
   Utensils,
   Wine,
+  GraduationCap,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
+import { EDUCATION_OPTIONS } from "@/lib/education";
 
 
 type Gender = "" | "male" | "female";
@@ -48,6 +50,7 @@ interface Props {
   initialSocialLink: string;
   initialArea: string;
   initialLookingFor: string;
+  initialEducation: string;
   initialMusicPref: string;
   initialFavFood: string;
   initialFavDrink: string;
@@ -70,6 +73,7 @@ export function ProfileForm({
   initialSocialLink,
   initialArea,
   initialLookingFor,
+  initialEducation,
   initialMusicPref,
   initialFavFood,
   initialFavDrink,
@@ -91,6 +95,7 @@ export function ProfileForm({
   const [socialLink, setSocialLink] = React.useState(initialSocialLink);
   const [area, setArea] = React.useState(initialArea);
   const [lookingFor, setLookingFor] = React.useState(initialLookingFor);
+  const [education, setEducation] = React.useState(initialEducation);
   const [musicPref, setMusicPref] = React.useState(initialMusicPref);
   const [favFood, setFavFood] = React.useState(initialFavFood);
   const [favDrink, setFavDrink] = React.useState(initialFavDrink);
@@ -130,6 +135,15 @@ export function ProfileForm({
         socialLink: socialLink.trim() || undefined,
         area: area || undefined,
         lookingFor: (lookingFor as "relationship" | "casual" | "friendship" | "") || undefined,
+        education:
+          (education as
+            | "high_school"
+            | "diploma"
+            | "bachelor"
+            | "master"
+            | "doctorate"
+            | "other"
+            | "") || undefined,
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
@@ -303,6 +317,24 @@ export function ProfileForm({
               options={[
                 { value: "", label: "Prefer not to say" },
                 ...LOOKING_FOR_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+              ]}
+            />
+          </div>
+
+          {/* Education */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <GraduationCap className="h-3 w-3" /> Education
+            </label>
+            <Select
+              value={education}
+              onChange={setEducation}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...EDUCATION_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                })),
               ]}
             />
           </div>

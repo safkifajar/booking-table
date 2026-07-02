@@ -14,6 +14,7 @@ import { PhotoUploader } from "./PhotoUploader";
 import { PromptPicker } from "./PromptPicker";
 import { InterestPicker } from "./InterestPicker";
 import { MAX_INTERESTS } from "./interests";
+import { EDUCATION_OPTIONS } from "@/lib/education";
 
 const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
@@ -71,7 +72,7 @@ export function OnboardingWizard({
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
   // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
-  // photos → prompts → interests → details.
+  // photos → prompts → interests → education → details.
   const [step2Screen, setStep2Screen] = React.useState<
     | "dob"
     | "gender"
@@ -80,6 +81,7 @@ export function OnboardingWizard({
     | "photos"
     | "prompts"
     | "interests"
+    | "education"
     | "details"
   >("dob");
   // photos disimpan di server (bukan draft sessionStorage). Init dari server.
@@ -100,6 +102,7 @@ export function OnboardingWizard({
   const [socialLink, setSocialLink] = React.useState("");
   // Step 3 — interest & preferensi
   const [lookingFor, setLookingFor] = React.useState("");
+  const [education, setEducation] = React.useState("");
   const [musicPref, setMusicPref] = React.useState("");
   const [favFood, setFavFood] = React.useState("");
   const [favDrink, setFavDrink] = React.useState("");
@@ -132,6 +135,7 @@ export function OnboardingWizard({
             d.step2Screen === "photos" ||
             d.step2Screen === "prompts" ||
             d.step2Screen === "interests" ||
+            d.step2Screen === "education" ||
             d.step2Screen === "details"
           ) {
             setStep2Screen(d.step2Screen);
@@ -145,6 +149,7 @@ export function OnboardingWizard({
           setArea(d.area ?? "");
           setSocialLink(d.socialLink ?? "");
           setLookingFor(d.lookingFor ?? "");
+          setEducation(d.education ?? "");
           setMusicPref(d.musicPref ?? "");
           setFavFood(d.favFood ?? "");
           setFavDrink(d.favDrink ?? "");
@@ -170,6 +175,7 @@ export function OnboardingWizard({
       area,
       socialLink,
       lookingFor,
+      education,
       musicPref,
       favFood,
       favDrink,
@@ -191,6 +197,7 @@ export function OnboardingWizard({
     area,
     socialLink,
     lookingFor,
+    education,
     musicPref,
     favFood,
     favDrink,
@@ -212,6 +219,15 @@ async function handleFinish() {
         lookingFor:
           (lookingFor as "relationship" | "casual" | "friendship" | "") ||
           undefined,
+        education:
+          (education as
+            | "high_school"
+            | "diploma"
+            | "bachelor"
+            | "master"
+            | "doctorate"
+            | "other"
+            | "") || undefined,
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
@@ -242,6 +258,7 @@ async function handleFinish() {
     "photos",
     "prompts",
     "interests",
+    "education",
   ] as const;
   const isChoiceScreen =
     step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
@@ -266,11 +283,20 @@ async function handleFinish() {
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      {/* Skip kanan-atas — hanya di layar prompts (opsional). */}
+      {/* Skip kanan-atas — layar opsional (prompts, education). */}
       {step === 2 && step2Screen === "prompts" && (
         <button
           type="button"
           onClick={() => setStep2Screen("interests")}
+          className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
+        >
+          Skip
+        </button>
+      )}
+      {step === 2 && step2Screen === "education" && (
+        <button
+          type="button"
+          onClick={() => setStep2Screen("details")}
           className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
         >
           Skip
@@ -319,7 +345,9 @@ async function handleFinish() {
                       ? "Pick a prompt or two"
                       : step2Screen === "interests"
                         ? "What do you like?"
-                        : `Hi, ${initialName} 👋`}
+                        : step2Screen === "education"
+                          ? "What's your highest education?"
+                          : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -338,7 +366,9 @@ async function handleFinish() {
                       ? "Give people something to break the ice with. Answer up to 5 — even one helps."
                       : step2Screen === "interests"
                         ? `Pick up to ${MAX_INTERESTS} interests for your profile.`
-                        : "Fill in your personal details."}
+                        : step2Screen === "education"
+                          ? "Optional — it just helps people get to know you."
+                          : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -535,9 +565,57 @@ async function handleFinish() {
                 variant="gold"
                 size="lg"
                 className="w-full rounded-full h-14"
-                onClick={() => setStep2Screen("details")}
+                onClick={() => setStep2Screen("education")}
               >
                 {hobbies.length > 0 ? "Next" : "Skip for now"}{" "}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "education" ? (
+        /* Step 2 · layar EDUCATION — pendidikan terakhir (opsional, radio) */
+        <div className="space-y-1 pb-28">
+          <div>
+            {EDUCATION_OPTIONS.map((o) => {
+              const active = education === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() =>
+                    setEducation((cur) => (cur === o.value ? "" : o.value))
+                  }
+                  className={cn(
+                    "w-full flex items-center justify-between py-4 text-left transition border-b border-border",
+                    active ? "text-primary" : "hover:text-foreground"
+                  )}
+                >
+                  <span className="text-base font-medium">{o.label}</span>
+                  <span
+                    className={cn(
+                      "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
+                      active
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground/40"
+                    )}
+                  >
+                    {active && <Check className="h-4 w-4" />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={() => setStep2Screen("details")}
+              >
+                {education ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -547,7 +625,7 @@ async function handleFinish() {
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("interests")}
+            onClick={() => setStep2Screen("education")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back

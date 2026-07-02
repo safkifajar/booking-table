@@ -44,6 +44,8 @@ export const profiles = pgTable(
     area: text("area"),
     /** Tujuan/mencari: 'relationship' | 'casual' | 'friendship' | null. */
     lookingFor: text("looking_for"),
+    /** Pendidikan terakhir (mis. 'bachelor'). Opsional. */
+    education: text("education"),
     /** Preferensi musik (teks bebas). */
     musicPref: text("music_pref"),
     /** Makanan favorit (teks bebas). */

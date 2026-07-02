@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { ArrowLeft, MapPin, ChevronRight, Cake, Link as LinkIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  ChevronRight,
+  Cake,
+  Link as LinkIcon,
+  GraduationCap,
+} from "lucide-react";
+import { educationLabel } from "@/lib/education";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { ProfileAvatar } from "@/components/network/ProfileAvatar";
@@ -110,13 +118,21 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               : "Never hung out yet"}
           </p>
 
-          {/* Umur + media sosial (kalau diisi) */}
-          {(profile.birth_date || profile.social_link) && (
+          {/* Umur + pendidikan + media sosial (kalau diisi) */}
+          {(profile.birth_date ||
+            profile.education ||
+            profile.social_link) && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-sm">
               {profile.birth_date && (
                 <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <Cake className="h-3.5 w-3.5" />
                   {ageFrom(profile.birth_date)} yrs
+                </span>
+              )}
+              {educationLabel(profile.education) && (
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <GraduationCap className="h-3.5 w-3.5" />
+                  {educationLabel(profile.education)}
                 </span>
               )}
               {profile.social_link && (

@@ -271,6 +271,8 @@ export interface PublicProfile {
   gender: string | null;
   interested_in: string | null;
   social_link: string | null;
+  /** Pendidikan terakhir (mis. 'bachelor'). Opsional. */
+  education: string | null;
   /** Privacy: true = riwayat kunjungan disembunyikan dari viewer (bukan pemilik). */
   hide_history: boolean;
   hobbies: string[];
