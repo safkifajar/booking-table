@@ -3,7 +3,14 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import {
+  Loader2,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Image as ImageIcon,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -46,9 +53,10 @@ export function OnboardingWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
-  // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → details.
+  // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
+  // details.
   const [step2Screen, setStep2Screen] = React.useState<
-    "dob" | "gender" | "interested" | "details"
+    "dob" | "gender" | "interested" | "intro" | "details"
   >("dob");
   const [genderPicked, setGenderPicked] = React.useState(false);
   const [interestedPicked, setInterestedPicked] = React.useState(false);
@@ -90,6 +98,7 @@ export function OnboardingWizard({
           if (
             d.step2Screen === "gender" ||
             d.step2Screen === "interested" ||
+            d.step2Screen === "intro" ||
             d.step2Screen === "details"
           ) {
             setStep2Screen(d.step2Screen);
@@ -199,7 +208,8 @@ export function OnboardingWizard({
     step === 2 &&
     (step2Screen === "dob" ||
       step2Screen === "gender" ||
-      step2Screen === "interested");
+      step2Screen === "interested" ||
+      step2Screen === "intro");
 
   return (
     <div className={cn("w-full max-w-md mx-auto", showChoiceBack && "pt-12")}>
@@ -209,11 +219,13 @@ export function OnboardingWizard({
           type="button"
           aria-label="Back"
           onClick={() =>
-            step2Screen === "interested"
-              ? setStep2Screen("gender")
-              : step2Screen === "gender"
-                ? setStep2Screen("dob")
-                : router.back()
+            step2Screen === "intro"
+              ? setStep2Screen("interested")
+              : step2Screen === "interested"
+                ? setStep2Screen("gender")
+                : step2Screen === "gender"
+                  ? setStep2Screen("dob")
+                  : router.back()
           }
           className="fixed left-4 top-4 z-20 inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
         >
@@ -226,7 +238,8 @@ export function OnboardingWizard({
         step === 2 &&
         (step2Screen === "dob" ||
           step2Screen === "gender" ||
-          step2Screen === "interested")
+          step2Screen === "interested" ||
+          step2Screen === "intro")
       ) && (
         <>
           <div className="flex items-center gap-2 mb-6">
@@ -255,7 +268,9 @@ export function OnboardingWizard({
               ? "What's your gender?"
               : step2Screen === "interested"
                 ? "Who are you interested in?"
-                : `Hi, ${initialName} 👋`}
+                : step2Screen === "intro"
+                  ? "Add a face & a few details so people can say hi"
+                  : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -266,7 +281,9 @@ export function OnboardingWizard({
               ? "Your gender stays hidden and can't be changed later."
               : step2Screen === "interested"
                 ? "So we can connect you with the right people."
-                : "Fill in your personal details."}
+                : step2Screen === "intro"
+                  ? "A photo and a couple of notes help the room get to know you at SOHO."
+                  : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -383,6 +400,32 @@ export function OnboardingWizard({
                 size="lg"
                 className="w-full rounded-full h-14"
                 disabled={!interestedPicked}
+                onClick={() => setStep2Screen("intro")}
+              >
+                Next <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "intro" ? (
+        /* Step 2 · layar INTRO — transisi ke data profil (vibe SOHO) */
+        <div className="flex flex-col items-center text-center min-h-[70vh] pb-28">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="relative">
+              <div className="h-40 w-40 rounded-full bg-primary/10 flex items-center justify-center">
+                <div className="h-24 w-24 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center">
+                  <ImageIcon className="h-10 w-10 text-primary" />
+                </div>
+              </div>
+              <Sparkles className="absolute -top-1 -right-1 h-6 w-6 text-primary" />
+            </div>
+          </div>
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
                 onClick={() => setStep2Screen("details")}
               >
                 Next <ArrowRight className="h-4 w-4" />
@@ -394,7 +437,7 @@ export function OnboardingWizard({
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("interested")}
+            onClick={() => setStep2Screen("intro")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
