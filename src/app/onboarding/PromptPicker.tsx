@@ -76,15 +76,15 @@ export function PromptPicker({
                 setEditing({ prompt: o, answer: answer ?? "", index })
               }
               className={cn(
-                "flex-1 min-w-0 text-left py-4 transition",
+                "flex-1 min-w-0 text-left py-5 transition",
                 disabled
                   ? "opacity-40 cursor-not-allowed"
                   : "hover:text-foreground"
               )}
             >
-              <p className="text-base">{o}</p>
+              <p className="text-base text-muted-foreground">{o}</p>
               {answered && (
-                <p className="text-sm text-primary mt-1 break-words">
+                <p className="text-sm text-primary mt-1.5 break-words">
                   {answer}
                 </p>
               )}
