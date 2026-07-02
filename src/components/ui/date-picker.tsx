@@ -131,6 +131,19 @@ export function DatePicker({
     return toISO(n.getFullYear(), n.getMonth(), n.getDate());
   })();
 
+  // Rentang tahun untuk dropdown (navigasi cepat). Batas dari min/max kalau ada,
+  // else 1900..tahun-max/sekarang. Urut terbaru → lama (praktis utk tgl lahir).
+  const yearOptions = React.useMemo(() => {
+    const nowY = new Date().getFullYear();
+    const minY = min ? parseISO(min)?.y ?? 1900 : 1900;
+    const maxY = max ? parseISO(max)?.y ?? nowY : nowY;
+    const lo = Math.min(minY, maxY);
+    const hi = Math.max(minY, maxY, view.y);
+    const out: number[] = [];
+    for (let y = hi; y >= lo; y--) out.push(y);
+    return out;
+  }, [min, max, view.y]);
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -151,29 +164,48 @@ export function DatePicker({
 
       {open && (
         <div className="absolute z-50 mt-2 w-[300px] rounded-lg border border-border bg-card p-3 shadow-2xl">
-          {/* Header: bulan/tahun + navigasi */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold">
-              {MONTHS[view.m]} {view.y}
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Previous month"
-                onClick={() => shiftMonth(-1)}
-                className="h-7 w-7 rounded-md hover:bg-muted/60 flex items-center justify-center text-muted-foreground"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Next month"
-                onClick={() => shiftMonth(1)}
-                className="h-7 w-7 rounded-md hover:bg-muted/60 flex items-center justify-center text-muted-foreground"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
-            </div>
+          {/* Header: dropdown bulan + tahun (navigasi cepat) + panah bulan */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <select
+              value={view.m}
+              onChange={(e) => setView((v) => ({ ...v, m: +e.target.value }))}
+              aria-label="Month"
+              className="flex-1 h-8 px-2 rounded-md bg-input border border-border text-sm font-medium focus:outline-none focus:border-primary/60"
+            >
+              {MONTHS.map((mn, i) => (
+                <option key={mn} value={i}>
+                  {mn}
+                </option>
+              ))}
+            </select>
+            <select
+              value={view.y}
+              onChange={(e) => setView((v) => ({ ...v, y: +e.target.value }))}
+              aria-label="Year"
+              className="w-[84px] h-8 px-2 rounded-md bg-input border border-border text-sm font-medium focus:outline-none focus:border-primary/60"
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              aria-label="Previous month"
+              onClick={() => shiftMonth(-1)}
+              className="h-8 w-7 rounded-md hover:bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Next month"
+              onClick={() => shiftMonth(1)}
+              className="h-8 w-7 rounded-md hover:bg-muted/60 flex items-center justify-center text-muted-foreground shrink-0"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Weekday header */}
