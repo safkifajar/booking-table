@@ -189,14 +189,12 @@ function PasswordForm({
 
     setLoading(true);
     try {
-      // Akun baru → onboarding fresh dari layar gender. Buang draft lama (mis.
-      // sisa sesi/akun lain di device ini) supaya tak skip ke details.
-      if (mode === "signup") {
-        try {
-          sessionStorage.removeItem("soho_onboarding_draft");
-        } catch {
-          /* ignore */
-        }
+      // Login/daftar → onboarding fresh dari layar gender. Buang draft lama (sisa
+      // sesi/akun lain di device ini) supaya tak skip ke details.
+      try {
+        sessionStorage.removeItem("soho_onboarding_draft");
+      } catch {
+        /* ignore */
       }
       const result =
         mode === "signup"
@@ -216,8 +214,10 @@ function PasswordForm({
       }
       // Kalau sukses, sudah redirect — tidak perlu setLoading(false)
     } catch (err) {
-      // NEXT_REDIRECT akan di-handle Next.js, tidak sampai sini
+      // NEXT_REDIRECT = sukses redirect (bukan error). Re-throw biar Next handle,
+      // JANGAN toast (dulu muncul popup "NEXT_REDIRECT").
       const message = err instanceof Error ? err.message : "Sign in failed";
+      if (message.includes("NEXT_REDIRECT")) throw err;
       toast.error(message);
       setLoading(false);
     }
