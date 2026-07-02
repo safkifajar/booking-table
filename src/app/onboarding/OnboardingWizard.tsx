@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import type { HobbyGroup } from "@/lib/hobbies";
 import { PhotoUploader } from "./PhotoUploader";
+import { PromptPicker } from "./PromptPicker";
 
 const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
@@ -36,6 +37,26 @@ const INTERESTED_OPTIONS = [
   { value: "", label: "Prefer not to say" },
 ];
 
+// Prompt ice-breaker bertema social house (bukan dating) — pemantik obrolan di
+// venue. User pilih & jawab, maks 5.
+const PROMPT_OPTIONS = [
+  "Tonight I'm in the mood for…",
+  "My go-to order here is…",
+  "You'll usually find me…",
+  "The perfect night out is…",
+  "Ask me about…",
+  "I'll always say yes to…",
+  "A little-known fact about me…",
+  "My hidden talent is…",
+  "On repeat right now…",
+  "My karaoke go-to is…",
+  "Let's talk about…",
+  "The best way to break the ice with me…",
+  "I'm here to…",
+  "My kind of crowd is…",
+];
+const MAX_PROMPTS = 5;
+
 
 export function OnboardingWizard({
   next,
@@ -53,10 +74,20 @@ export function OnboardingWizard({
   // Step 2 dibagi beberapa layar CMB-style: dob → gender → interested → intro →
   // photos → details.
   const [step2Screen, setStep2Screen] = React.useState<
-    "dob" | "gender" | "interested" | "intro" | "photos" | "details"
+    | "dob"
+    | "gender"
+    | "interested"
+    | "intro"
+    | "photos"
+    | "prompts"
+    | "details"
   >("dob");
   // photos disimpan di server (bukan draft sessionStorage). Init dari server.
   const [photos, setPhotos] = React.useState<string[]>(initialPhotos);
+  // Prompt ice-breaker terpilih (persist di draft).
+  const [prompts, setPrompts] = React.useState<
+    { prompt: string; answer: string }[]
+  >([]);
   const [genderPicked, setGenderPicked] = React.useState(false);
   const [interestedPicked, setInterestedPicked] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -99,6 +130,7 @@ export function OnboardingWizard({
             d.step2Screen === "interested" ||
             d.step2Screen === "intro" ||
             d.step2Screen === "photos" ||
+            d.step2Screen === "prompts" ||
             d.step2Screen === "details"
           ) {
             setStep2Screen(d.step2Screen);
@@ -117,6 +149,7 @@ export function OnboardingWizard({
           setFavDrink(d.favDrink ?? "");
           setBio(d.bio ?? "");
           setHobbies(Array.isArray(d.hobbies) ? d.hobbies : []);
+          setPrompts(Array.isArray(d.prompts) ? d.prompts : []);
         }
       } catch {
         /* abaikan draft rusak */
@@ -141,6 +174,7 @@ export function OnboardingWizard({
       favDrink,
       bio,
       hobbies,
+      prompts,
     };
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -161,6 +195,7 @@ export function OnboardingWizard({
     favDrink,
     bio,
     hobbies,
+    prompts,
   ]);
 
   function toggleHobby(h: string) {
@@ -189,6 +224,7 @@ export function OnboardingWizard({
         favDrink: favDrink.trim() || undefined,
         bio: bio.trim() || undefined,
         hobbies,
+        prompts: prompts.length ? prompts : undefined,
       });
       try {
         sessionStorage.removeItem(STORAGE_KEY);
@@ -204,47 +240,50 @@ export function OnboardingWizard({
     }
   }
 
-  const showChoiceBack =
-    step === 2 &&
-    (step2Screen === "dob" ||
-      step2Screen === "gender" ||
-      step2Screen === "interested" ||
-      step2Screen === "intro" ||
-      step2Screen === "photos");
+  // Urutan layar 1-pertanyaan step 2 (CMB-style) — untuk back & hide-stepper.
+  const CHOICE_ORDER = [
+    "dob",
+    "gender",
+    "interested",
+    "intro",
+    "photos",
+    "prompts",
+  ] as const;
+  const isChoiceScreen =
+    step === 2 && (CHOICE_ORDER as readonly string[]).includes(step2Screen);
+  const showChoiceBack = isChoiceScreen;
+
+  function choiceBack() {
+    const idx = (CHOICE_ORDER as readonly string[]).indexOf(step2Screen);
+    if (idx > 0) setStep2Screen(CHOICE_ORDER[idx - 1]);
+    else router.back();
+  }
 
   return (
     <div className={cn("w-full max-w-md mx-auto", showChoiceBack && "pt-12")}>
-      {/* Back panah — pojok kiri-atas (di layar dob/gender/interested). */}
+      {/* Back panah — pojok kiri-atas (di layar 1-pertanyaan). */}
       {showChoiceBack && (
         <button
           type="button"
           aria-label="Back"
-          onClick={() =>
-            step2Screen === "photos"
-              ? setStep2Screen("intro")
-              : step2Screen === "intro"
-                ? setStep2Screen("interested")
-                : step2Screen === "interested"
-                  ? setStep2Screen("gender")
-                  : step2Screen === "gender"
-                    ? setStep2Screen("dob")
-                    : router.back()
-          }
+          onClick={choiceBack}
           className="fixed left-4 top-4 z-20 inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
       )}
-      {/* Progress + step label — disembunyikan di layar 1-pertanyaan
-          (dob/gender/interested) ala CMB. */}
-      {!(
-        step === 2 &&
-        (step2Screen === "dob" ||
-          step2Screen === "gender" ||
-          step2Screen === "interested" ||
-          step2Screen === "intro" ||
-          step2Screen === "photos")
-      ) && (
+      {/* Skip kanan-atas — hanya di layar prompts (opsional). */}
+      {step === 2 && step2Screen === "prompts" && (
+        <button
+          type="button"
+          onClick={() => setStep2Screen("details")}
+          className="fixed right-4 top-4 z-20 text-sm font-medium text-primary hover:underline"
+        >
+          Skip
+        </button>
+      )}
+      {/* Progress + step label — disembunyikan di layar 1-pertanyaan ala CMB. */}
+      {!isChoiceScreen && (
         <>
           <div className="flex items-center gap-2 mb-6">
             {[1, 2, 3].map((s) => (
@@ -276,7 +315,9 @@ export function OnboardingWizard({
                   ? "Add a face & a few details so people can say hi"
                   : step2Screen === "photos"
                     ? "Add up to 3 photos"
-                    : `Hi, ${initialName} 👋`}
+                    : step2Screen === "prompts"
+                      ? "Pick a prompt or two"
+                      : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
@@ -291,7 +332,9 @@ export function OnboardingWizard({
                   ? "A photo and a couple of notes help the room get to know you at SOHO."
                   : step2Screen === "photos"
                     ? "Show your face so people can recognize you at SOHO. At least 1 required."
-                    : "Fill in your personal details."}
+                    : step2Screen === "prompts"
+                      ? "Give people something to break the ice with. Answer up to 5 — even one helps."
+                      : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar DATE OF BIRTH — pertanyaan pertama (CMB-style) */}
@@ -446,9 +489,33 @@ export function OnboardingWizard({
                 size="lg"
                 className="w-full rounded-full h-14"
                 disabled={photos.length < 1}
-                onClick={() => setStep2Screen("details")}
+                onClick={() => setStep2Screen("prompts")}
               >
                 Next <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "prompts" ? (
+        /* Step 2 · layar PROMPTS — ice-breaker (opsional, bisa Skip) */
+        <div className="pb-28">
+          <PromptPicker
+            prompts={prompts}
+            onChange={setPrompts}
+            options={PROMPT_OPTIONS}
+            max={MAX_PROMPTS}
+          />
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                onClick={() => setStep2Screen("details")}
+              >
+                {prompts.length > 0 ? "Next" : "Skip for now"}{" "}
+                <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -457,7 +524,7 @@ export function OnboardingWizard({
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("photos")}
+            onClick={() => setStep2Screen("prompts")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back

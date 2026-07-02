@@ -1865,6 +1865,15 @@ const onboardingSchema = z.object({
   favDrink: z.string().max(120).optional().or(z.literal("")),
   bio: z.string().max(280).optional().or(z.literal("")),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
+  prompts: z
+    .array(
+      z.object({
+        prompt: z.string().min(1).max(120),
+        answer: z.string().min(1).max(280),
+      })
+    )
+    .max(5)
+    .optional(),
 });
 
 /** Selesaikan onboarding: simpan profil step 2-3 + tandai onboarded=true. */
@@ -1893,6 +1902,10 @@ export async function completeOnboarding(
       favDrink: data.favDrink?.trim() || null,
       bio: data.bio?.trim() || null,
       hobbies,
+      prompts: (data.prompts ?? [])
+        .map((p) => ({ prompt: p.prompt.trim(), answer: p.answer.trim() }))
+        .filter((p) => p.prompt && p.answer)
+        .slice(0, 5),
       onboarded: true,
     })
     .where(eq(profiles.id, profile.id));

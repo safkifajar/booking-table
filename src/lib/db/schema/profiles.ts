@@ -5,6 +5,7 @@ import {
   date,
   boolean,
   timestamp,
+  jsonb,
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -55,6 +56,11 @@ export const profiles = pgTable(
     hideAge: boolean("hide_age").notNull().default(false),
     hideSocial: boolean("hide_social").notNull().default(false),
     hobbies: text("hobbies").array().notNull().default([]),
+    /** Prompt profil (ice-breaker): [{ prompt, answer }]. Maks 5. */
+    prompts: jsonb("prompts")
+      .$type<{ prompt: string; answer: string }[]>()
+      .notNull()
+      .default([]),
     isGuest: boolean("is_guest").notNull().default(false),
     /** Akun aktif. False = di-nonaktifkan admin → tidak bisa login. */
     isActive: boolean("is_active").notNull().default(true),

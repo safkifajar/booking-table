@@ -61,6 +61,7 @@ export interface Profile {
   hideSocial: boolean;
   onboarded: boolean;
   hobbies: string[];
+  prompts: { prompt: string; answer: string }[];
   createdAt: Date;
 }
 
@@ -127,6 +128,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     hideSocial: row.hideSocial,
     onboarded: row.onboarded,
     hobbies: row.hobbies,
+    prompts: row.prompts ?? [],
     createdAt: row.createdAt,
   };
 }
