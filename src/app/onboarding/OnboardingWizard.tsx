@@ -23,6 +23,15 @@ const GENDER_OPTIONS = [
   { value: "", label: "Prefer not to say" },
 ];
 
+// "Interested in" — value cocok enum DB (male/female/both). Framing netral,
+// bukan "date with".
+const INTERESTED_OPTIONS = [
+  { value: "female", label: "Women" },
+  { value: "male", label: "Men" },
+  { value: "both", label: "Everyone" },
+  { value: "", label: "Prefer not to say" },
+];
+
 
 export function OnboardingWizard({
   next,
@@ -35,11 +44,12 @@ export function OnboardingWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
-  // Step 2 dibagi 2 layar: "gender" (satu pertanyaan, list) → "details" (sisa).
-  const [step2Screen, setStep2Screen] = React.useState<"gender" | "details">(
-    "gender"
-  );
+  // Step 2 dibagi jadi beberapa layar CMB-style: gender → interested → details.
+  const [step2Screen, setStep2Screen] = React.useState<
+    "gender" | "interested" | "details"
+  >("gender");
   const [genderPicked, setGenderPicked] = React.useState(false);
+  const [interestedPicked, setInterestedPicked] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
   // Step 2 — data diri
@@ -77,6 +87,7 @@ export function OnboardingWizard({
             setStep2Screen("details");
           }
           setInterestedIn(d.interestedIn ?? "");
+          if (typeof d.interestedIn === "string") setInterestedPicked(true);
           setArea(d.area ?? "");
           setSocialLink(d.socialLink ?? "");
           setLookingFor(d.lookingFor ?? "");
@@ -170,10 +181,33 @@ export function OnboardingWizard({
     }
   }
 
+  const showChoiceBack =
+    step === 2 &&
+    (step2Screen === "gender" || step2Screen === "interested");
+
   return (
-    <div className="w-full max-w-md mx-auto">
-      {/* Progress + step label — disembunyikan di layar gender (CMB-style). */}
-      {!(step === 2 && step2Screen === "gender") && (
+    <div className={cn("w-full max-w-md mx-auto", showChoiceBack && "pt-12")}>
+      {/* Back panah — pojok kiri-atas layar (di layar gender/interested). */}
+      {showChoiceBack && (
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() =>
+            step2Screen === "interested"
+              ? setStep2Screen("gender")
+              : router.back()
+          }
+          className="fixed left-4 top-4 z-20 inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+      )}
+      {/* Progress + step label — disembunyikan di layar 1-pertanyaan (gender/
+          interested) ala CMB. */}
+      {!(
+        step === 2 &&
+        (step2Screen === "gender" || step2Screen === "interested")
+      ) && (
         <>
           <div className="flex items-center gap-2 mb-6">
             {[1, 2, 3].map((s) => (
@@ -197,14 +231,18 @@ export function OnboardingWizard({
           ? "Interests & preferences"
           : step2Screen === "gender"
             ? "What's your gender?"
-            : `Hi, ${initialName} 👋`}
+            : step2Screen === "interested"
+              ? "Who are you interested in?"
+              : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
         {step === 3
           ? "So it's easy to find the right vibe at SOHO."
           : step2Screen === "gender"
             ? "Your gender stays hidden and can't be changed later."
-            : "Fill in your personal details."}
+            : step2Screen === "interested"
+              ? "So we can connect you with the right people."
+              : "Fill in your personal details."}
       </p>
 
       {/* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */}
@@ -249,6 +287,55 @@ export function OnboardingWizard({
                 size="lg"
                 className="w-full rounded-full h-14"
                 disabled={!genderPicked}
+                onClick={() => setStep2Screen("interested")}
+              >
+                Next <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 && step2Screen === "interested" ? (
+        /* Step 2 · layar INTERESTED IN — satu pertanyaan (CMB-style) */
+        <div className="space-y-1 pb-28">
+          <div>
+            {INTERESTED_OPTIONS.map((o) => {
+              const active = interestedPicked && interestedIn === o.value;
+              return (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => {
+                    setInterestedIn(o.value);
+                    setInterestedPicked(true);
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-between py-4 text-left transition border-b border-border",
+                    active ? "text-primary" : "hover:text-foreground"
+                  )}
+                >
+                  <span className="text-base font-medium">{o.label}</span>
+                  <span
+                    className={cn(
+                      "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
+                      active
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground/40"
+                    )}
+                  >
+                    {active && <Check className="h-4 w-4" />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                disabled={!interestedPicked}
                 onClick={() => setStep2Screen("details")}
               >
                 Next <ArrowRight className="h-4 w-4" />
@@ -260,7 +347,7 @@ export function OnboardingWizard({
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => setStep2Screen("gender")}
+            onClick={() => setStep2Screen("interested")}
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -273,18 +360,6 @@ export function OnboardingWizard({
               max={new Date().toISOString().slice(0, 10)}
               className={inputCls}
             />
-          </Field>
-          <Field label="Interested in">
-            <select
-              value={interestedIn}
-              onChange={(e) => setInterestedIn(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Prefer not to say</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="both">Both</option>
-            </select>
           </Field>
           <Field label="Address">
             <input
