@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Calendar, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 /**
  * DatePicker general — pengganti <input type="date"> native supaya tampilan
@@ -166,30 +167,23 @@ export function DatePicker({
         <div className="absolute z-50 mt-2 w-[300px] rounded-lg border border-border bg-card p-3 shadow-2xl">
           {/* Header: dropdown bulan + tahun (navigasi cepat) + panah bulan */}
           <div className="flex items-center gap-1.5 mb-2">
-            <select
-              value={view.m}
-              onChange={(e) => setView((v) => ({ ...v, m: +e.target.value }))}
-              aria-label="Month"
-              className="flex-1 h-8 px-2 rounded-md bg-input border border-border text-sm font-medium focus:outline-none focus:border-primary/60"
-            >
-              {MONTHS.map((mn, i) => (
-                <option key={mn} value={i}>
-                  {mn}
-                </option>
-              ))}
-            </select>
-            <select
-              value={view.y}
-              onChange={(e) => setView((v) => ({ ...v, y: +e.target.value }))}
-              aria-label="Year"
-              className="w-[84px] h-8 px-2 rounded-md bg-input border border-border text-sm font-medium focus:outline-none focus:border-primary/60"
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={String(view.m)}
+              onChange={(v) => setView((s) => ({ ...s, m: +v }))}
+              ariaLabel="Month"
+              className="flex-1"
+              options={MONTHS.map((mn, i) => ({ value: String(i), label: mn }))}
+            />
+            <Select
+              value={String(view.y)}
+              onChange={(v) => setView((s) => ({ ...s, y: +v }))}
+              ariaLabel="Year"
+              className="w-[92px]"
+              options={yearOptions.map((y) => ({
+                value: String(y),
+                label: String(y),
+              }))}
+            />
             <button
               type="button"
               aria-label="Previous month"
