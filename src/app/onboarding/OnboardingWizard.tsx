@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, ArrowRight } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { completeOnboarding } from "@/lib/actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
@@ -13,6 +13,14 @@ const LOOKING_FOR = [
   { value: "relationship", label: "Relationship" },
   { value: "casual", label: "Casual Date" },
   { value: "friendship", label: "Friendship" },
+];
+
+// Opsi gender — value disimpan (cocok enum DB male/female), label ditampilkan.
+// "" = prefer not to say. (CMB-style: satu pertanyaan, list pilihan.)
+const GENDER_OPTIONS = [
+  { value: "female", label: "Woman" },
+  { value: "male", label: "Man" },
+  { value: "", label: "Prefer not to say" },
 ];
 
 
@@ -27,6 +35,11 @@ export function OnboardingWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<2 | 3>(2);
+  // Step 2 dibagi 2 layar: "gender" (satu pertanyaan, list) → "details" (sisa).
+  const [step2Screen, setStep2Screen] = React.useState<"gender" | "details">(
+    "gender"
+  );
+  const [genderPicked, setGenderPicked] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
   // Step 2 — data diri
@@ -57,6 +70,12 @@ export function OnboardingWizard({
           if (d.step === 3) setStep(3);
           setBirthDate(d.birthDate ?? "");
           setGender(d.gender ?? "");
+          // Draft punya gender (termasuk "" prefer-not-to-say) → sudah dipilih,
+          // langsung ke layar details supaya tak paksa ulang.
+          if (typeof d.gender === "string") {
+            setGenderPicked(true);
+            setStep2Screen("details");
+          }
           setInterestedIn(d.interestedIn ?? "");
           setArea(d.area ?? "");
           setSocialLink(d.socialLink ?? "");
@@ -153,33 +172,99 @@ export function OnboardingWizard({
 
   return (
     <div className="w-full max-w-md mx-auto">
-      {/* Progress */}
-      <div className="flex items-center gap-2 mb-6">
-        {[1, 2, 3].map((s) => (
-          <div
-            key={s}
-            className={cn(
-              "h-1.5 flex-1 rounded-full transition-colors",
-              s <= step ? "bg-primary" : "bg-muted"
-            )}
-          />
-        ))}
-      </div>
+      {/* Progress + step label — disembunyikan di layar gender (CMB-style). */}
+      {!(step === 2 && step2Screen === "gender") && (
+        <>
+          <div className="flex items-center gap-2 mb-6">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={cn(
+                  "h-1.5 flex-1 rounded-full transition-colors",
+                  s <= step ? "bg-primary" : "bg-muted"
+                )}
+              />
+            ))}
+          </div>
 
-      <p className="text-xs text-muted-foreground mb-1">
-        Step {step} of 3
-      </p>
+          <p className="text-xs text-muted-foreground mb-1">
+            Step {step} of 3
+          </p>
+        </>
+      )}
       <h1 className="text-xl font-bold mb-1">
-        {step === 2 ? `Hi, ${initialName} 👋` : "Interests & preferences"}
+        {step === 3
+          ? "Interests & preferences"
+          : step2Screen === "gender"
+            ? "What's your gender?"
+            : `Hi, ${initialName} 👋`}
       </h1>
       <p className="text-sm text-muted-foreground mb-5">
-        {step === 2
-          ? "Fill in your personal details."
-          : "So it's easy to find the right vibe at SOHO."}
+        {step === 3
+          ? "So it's easy to find the right vibe at SOHO."
+          : step2Screen === "gender"
+            ? "Your gender stays hidden and can't be changed later."
+            : "Fill in your personal details."}
       </p>
 
-      {step === 2 ? (
+      {/* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */}
+      {step === 2 && step2Screen === "gender" ? (
+        <div className="space-y-1 pb-28">
+          <div>
+            {GENDER_OPTIONS.map((o) => {
+              const active = genderPicked && gender === o.value;
+              return (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => {
+                    setGender(o.value);
+                    setGenderPicked(true);
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-between py-4 text-left transition border-b border-border",
+                    active ? "text-primary" : "hover:text-foreground"
+                  )}
+                >
+                  <span className="text-base font-medium">{o.label}</span>
+                  <span
+                    className={cn(
+                      "h-6 w-6 rounded-full border flex items-center justify-center shrink-0",
+                      active
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground/40"
+                    )}
+                  >
+                    {active && <Check className="h-4 w-4" />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-md mx-auto px-4 py-3">
+              <Button
+                variant="gold"
+                size="lg"
+                className="w-full rounded-full h-14"
+                disabled={!genderPicked}
+                onClick={() => setStep2Screen("details")}
+              >
+                Next <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : step === 2 ? (
         <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setStep2Screen("gender")}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-1"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
+          </button>
           <Field label="Date of birth">
             <input
               type="date"
@@ -188,17 +273,6 @@ export function OnboardingWizard({
               max={new Date().toISOString().slice(0, 10)}
               className={inputCls}
             />
-          </Field>
-          <Field label="Gender">
-            <select
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Prefer not to say</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
           </Field>
           <Field label="Interested in">
             <select
