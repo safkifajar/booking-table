@@ -65,13 +65,6 @@ export function AuthForm() {
           />
         )}
       </div>
-
-      <Link
-        href="/"
-        className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#f0e6d2]/60 hover:text-[#f0e6d2] transition"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to home
-      </Link>
     </div>
   );
 }
@@ -273,13 +266,14 @@ function PasswordForm({
         </p>
       )}
 
-      <div className="flex justify-between text-xs">
+      <div className="flex items-center justify-between text-xs">
         <button
           type="button"
           onClick={onBack}
-          className="text-muted-foreground hover:text-foreground"
+          aria-label="Back"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center"
         >
-          ← Other options
+          <ArrowLeft className="h-4 w-4" />
         </button>
         <button
           type="button"
@@ -364,9 +358,10 @@ function MagicLinkForm({
       <button
         type="button"
         onClick={onBack}
-        className="block w-full text-xs text-muted-foreground hover:text-foreground"
+        aria-label="Back"
+        className="mx-auto flex items-center justify-center text-xs text-muted-foreground hover:text-foreground"
       >
-        ← Other options
+        <ArrowLeft className="h-4 w-4" />
       </button>
     </form>
   );
