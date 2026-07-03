@@ -37,7 +37,7 @@ export function ProfilePhotoCarousel({
 
   if (count === 0) {
     return (
-      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-border bg-muted/30 flex items-center justify-center">
+      <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-muted/30 flex items-center justify-center">
         <span className="text-5xl font-bold text-muted-foreground/40">
           {displayName.charAt(0).toUpperCase()}
         </span>
@@ -46,7 +46,7 @@ export function ProfilePhotoCarousel({
   }
 
   return (
-    <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-border bg-muted/20">
+    <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-muted/20">
       {/* Track swipe */}
       <div
         ref={scrollRef}

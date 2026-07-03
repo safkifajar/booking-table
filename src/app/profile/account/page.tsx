@@ -12,7 +12,7 @@ import {
   Link as LinkIcon,
   Pencil,
 } from "lucide-react";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoCarousel } from "../ProfilePhotoCarousel";
 import { educationLabel } from "@/lib/education";
@@ -34,8 +34,6 @@ export default async function ProfileAccountPage() {
     redirect("/auth?next=/profile/account");
   }
   if (!profile.onboarded) redirect("/onboarding");
-
-  const user = await getCurrentUser();
 
   const age = ageFromISO(profile.birthDate);
   const education = educationLabel(profile.education);
@@ -59,8 +57,19 @@ export default async function ProfileAccountPage() {
     });
 
   return (
-    <main className="flex-1 pb-12">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
+    <main className="relative flex-1 pb-12">
+      {/* Glow merah maroon SOHO — spotlight moody nightclub di belakang konten.
+          Fixed di viewport, memancar dari tengah layar (center), memudar ke
+          background. pointer-events-none supaya tak ganggu klik. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{
+          background:
+            "radial-gradient(55% 45% at 50% 50%, rgba(225,29,42,0.22), rgba(122,31,31,0.10) 45%, transparent 72%), radial-gradient(75% 55% at 50% 50%, rgba(122,31,31,0.26), transparent 65%)",
+        }}
+      />
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
             <Link href="/profile" aria-label="Back to Profile">
@@ -91,7 +100,7 @@ export default async function ProfileAccountPage() {
         />
 
         {/* Kartu identitas */}
-        <section className="rounded-2xl border border-border bg-card p-5">
+        <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h2 className="text-2xl font-bold tracking-tight">
               {profile.displayName}
@@ -141,7 +150,7 @@ export default async function ProfileAccountPage() {
             {profile.prompts.map((p, i) => (
               <section
                 key={i}
-                className="rounded-2xl border border-border bg-card p-5"
+                className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5"
               >
                 <h3 className="text-base font-semibold">{p.prompt}</h3>
                 <div className="mt-3 flex gap-2.5 rounded-xl bg-primary/10 p-4">
@@ -157,7 +166,7 @@ export default async function ProfileAccountPage() {
 
         {/* Looking for */}
         {looking && (
-          <section className="rounded-2xl border border-border bg-card p-5">
+          <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
             <h3 className="text-base font-semibold mb-2">
               What I&apos;m looking for
             </h3>
@@ -170,7 +179,7 @@ export default async function ProfileAccountPage() {
 
         {/* More about me */}
         {moreAboutMe.length > 0 && (
-          <section className="rounded-2xl border border-border bg-card p-5">
+          <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
             <h3 className="text-base font-semibold mb-3">More about me</h3>
             <div className="space-y-2.5 text-sm">
               {moreAboutMe.map((row, i) => (
@@ -188,7 +197,7 @@ export default async function ProfileAccountPage() {
 
         {/* Interests (chip + emoji) */}
         {profile.hobbies && profile.hobbies.length > 0 && (
-          <section className="rounded-2xl border border-border bg-card p-5">
+          <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
             <h3 className="text-base font-semibold mb-3">Interests</h3>
             <div className="flex flex-wrap gap-2">
               {profile.hobbies.map((h) => {
@@ -211,12 +220,6 @@ export default async function ProfileAccountPage() {
           </section>
         )}
 
-        {/* Email (kecil) */}
-        {user?.email && (
-          <p className="px-1 text-xs text-muted-foreground">
-            Signed in as {user.email}
-          </p>
-        )}
       </div>
     </main>
   );
