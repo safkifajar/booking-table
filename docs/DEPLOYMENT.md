@@ -701,8 +701,8 @@ sudo certbot --nginx \
 ### 11.8 GitHub Actions — auto-deploy
 
 Workflow sudah ada di repo:
-- `.github/workflows/deploy-staging.yml` — push ke `staging` → SSH → `scripts/deploy.sh staging` (auto `db:push --force`).
-- `.github/workflows/deploy-production.yml` — push/merge ke `main` → SSH → `scripts/deploy.sh production` (**tanpa** `db:push`).
+- `.github/workflows/deploy-staging.yml` — push ke `staging` → SSH → `scripts/deploy.sh staging` (auto `db:push --force`, tanpa backup).
+- `.github/workflows/deploy-production.yml` — push/merge ke `main` → SSH → `scripts/deploy.sh production` (backup `pg_dump` dulu → auto `db:push --force`).
 
 Build dijalankan **di VPS**, bukan di runner GitHub → kuota Actions nyaris nol.
 
@@ -730,16 +730,30 @@ cat ~/.ssh/gha_deploy                                  # PRIVATE key → copy ke
 Setelah secret terisi: push ke `staging` → tab **Actions** harus hijau → cek
 `pm2 status` di VPS.
 
-### 11.9 Migrasi production (manual)
+### 11.9 Migrasi production (otomatis + backup)
 
-Production **tidak** auto-`db:push` (lindungi data asli). Kalau rilis ke `main`
-mengubah skema DB, setelah workflow prod selesai, jalankan manual:
+Production migrasi DB **otomatis** (`db:push --force`) saat deploy, tapi
+`scripts/deploy.sh` selalu **backup DB dulu** (`pg_dump` → `~/backups/`,
+timestamp, di-gzip, disimpan 14 hari) sebelum push. Jadi kamu **tidak perlu
+SSH manual** — cukup merge ke `main`.
+
+Syarat: `pg_dump` tersedia di VPS (sudah otomatis ada kalau install
+`postgresql-16`). Backup dijalankan sebagai user `booking` — pastikan user itu
+bisa `pg_dump` ke DB `soho_prod` (kalau `DATABASE_URL` sudah benar, otomatis
+bisa lewat connection string).
+
+**Restore kalau ada masalah** (mis. push tak sengaja hapus kolom):
 ```bash
 ssh booking@<VPS_IP>
-cd /home/booking/soho-prod
-npm run db:push        # REVIEW prompt drizzle-kit — bisa destruktif (drop/rename)!
+ls -lt ~/backups/                    # cari backup sebelum deploy bermasalah
+# ambil DATABASE_URL dari .env.local, lalu:
+gunzip < ~/backups/soho-prod-YYYYMMDD-HHMMSS.sql.gz | psql "<DATABASE_URL soho_prod>"
 pm2 reload soho-prod
 ```
+
+> Meski otomatis, tetap **hati-hati perubahan skema destruktif** (drop/rename
+> kolom). Kalau rilis mengandung itu, lebih aman test di **staging** dulu
+> (merge ke `staging`, cek datanya) sebelum merge ke `main`.
 
 ### 11.10 Cron per-environment
 
@@ -818,5 +832,6 @@ Sebelum go-live:
 - [ ] GitHub Secrets terisi: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
 - [ ] `scripts/deploy.sh` executable di kedua folder VPS
 - [ ] Test: push ke `staging` → Actions hijau → staging ter-update
-- [ ] Test: merge ke `main` → Actions hijau → prod ter-update (migrasi prod
-      manual kalau ada perubahan skema)
+- [ ] Test: merge ke `main` → Actions hijau → prod ter-update (migrasi +
+      backup DB otomatis; cek `~/backups/` ada file baru)
+- [ ] `pg_dump` tersedia di VPS + user `booking` bisa dump DB `soho_prod`

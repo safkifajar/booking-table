@@ -12,9 +12,9 @@
 # Catatan:
 # - `.env.local` (secret) & folder uploads ada DI LUAR working tree, jadi
 #   `git reset --hard` tidak menyentuhnya.
-# - PRODUCTION sengaja TIDAK menjalankan db:push (skema bisa destruktif).
-#   Migrasi prod dijalankan manual: `npm run db:push` (review prompt) lalu
-#   `pm2 reload soho-prod`. Lihat docs/DEPLOYMENT.md.
+# - PRODUCTION: db:push OTOMATIS, tapi DIDAHULUI backup pg_dump (jaring pengaman
+#   kalau perubahan skema tak sengaja destruktif). Backup ke ~/backups/.
+# - STAGING: db:push --force tanpa backup (DB test, tak masalah).
 # - Kalau `npm run build` gagal, script berhenti (set -e) SEBELUM pm2 reload,
 #   jadi versi lama tetap online (tidak ada downtime karena build rusak).
 
@@ -27,13 +27,13 @@ case "$ENVIRONMENT" in
     APP_DIR="/home/booking/soho-staging"
     PM2_NAME="soho-staging"
     BRANCH="staging"
-    RUN_MIGRATE="true"
+    BACKUP_BEFORE_MIGRATE="false"
     ;;
   production)
     APP_DIR="/home/booking/soho-prod"
     PM2_NAME="soho-prod"
     BRANCH="main"
-    RUN_MIGRATE="false"
+    BACKUP_BEFORE_MIGRATE="true"
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -55,19 +55,37 @@ git reset --hard "origin/$BRANCH"
 echo "==> npm ci"
 npm ci
 
-# 3. Migrasi DB — staging saja (otomatis). Production: manual (lihat docs).
-if [ "$RUN_MIGRATE" = "true" ]; then
-  echo "==> db:push --force (staging)"
-  npm run db:push -- --force
-else
-  echo "==> skip db:push (production — jalankan manual saat perlu)"
+# 3. Backup DB (production saja) — jaring pengaman sebelum migrasi.
+#    Baca DATABASE_URL dari .env.local, pg_dump ke ~/backups/ (timestamp),
+#    lalu buang backup >14 hari. Butuh `date` — CI SSH punya. Timestamp
+#    di-generate di VPS (bukan hardcode).
+if [ "$BACKUP_BEFORE_MIGRATE" = "true" ]; then
+  echo "==> backup DB sebelum migrasi"
+  DB_URL="$(grep -E '^DATABASE_URL=' .env.local | head -n1 | cut -d= -f2-)"
+  if [ -z "$DB_URL" ]; then
+    echo "ERROR: DATABASE_URL tidak ditemukan di $APP_DIR/.env.local" >&2
+    exit 1
+  fi
+  BACKUP_DIR="$HOME/backups"
+  mkdir -p "$BACKUP_DIR"
+  STAMP="$(date +%Y%m%d-%H%M%S)"
+  BACKUP_FILE="$BACKUP_DIR/soho-prod-$STAMP.sql.gz"
+  # pg_dump pakai connection string langsung; gzip supaya hemat disk.
+  pg_dump "$DB_URL" | gzip > "$BACKUP_FILE"
+  echo "    backup: $BACKUP_FILE"
+  # Simpan 14 hari terakhir saja.
+  find "$BACKUP_DIR" -name 'soho-prod-*.sql.gz' -mtime +14 -delete 2>/dev/null || true
 fi
 
-# 4. Build production.
+# 4. Migrasi DB — db:push --force (staging & production).
+echo "==> db:push --force"
+npm run db:push -- --force
+
+# 5. Build production.
 echo "==> npm run build"
 npm run build
 
-# 5. Reload PM2 (zero-downtime-ish). Kalau app belum pernah start, start dulu.
+# 6. Reload PM2 (zero-downtime-ish). Kalau app belum pernah start, start dulu.
 echo "==> pm2 reload $PM2_NAME"
 if pm2 describe "$PM2_NAME" > /dev/null 2>&1; then
   pm2 reload "$PM2_NAME" --update-env

@@ -1,10 +1,9 @@
 name: Deploy Production
 
 # Auto-deploy setiap push/merge ke branch `main`.
-# CATATAN: production TIDAK menjalankan db:push otomatis (lihat scripts/deploy.sh).
-# Kalau rilis ini mengubah skema DB, jalankan migrasi manual SETELAH deploy:
-#   ssh <vps> 'cd /home/booking/soho-prod && npm run db:push && pm2 reload soho-prod'
-# (review prompt drizzle-kit dulu — bisa destruktif). Lihat docs/DEPLOYMENT.md.
+# Migrasi DB OTOMATIS (db:push --force) tapi DIDAHULUI backup pg_dump —
+# lihat scripts/deploy.sh. Backup tersimpan di ~/backups/ di VPS (14 hari).
+# Kalau ada masalah, restore: gunzip < backup.sql.gz | psql "$DATABASE_URL"
 on:
   push:
     branches: [main]
