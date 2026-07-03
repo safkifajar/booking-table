@@ -6,18 +6,19 @@ import {
   GraduationCap,
   Ruler,
   Sparkles,
-  Globe,
   Quote,
   Heart,
-  Link as LinkIcon,
   Pencil,
+  Phone,
+  User,
+  Mail,
 } from "lucide-react";
-import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { InstagramIcon } from "@/components/ui/brand-icons";
+import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoCarousel } from "../ProfilePhotoCarousel";
 import { educationLabel } from "@/lib/education";
 import { religionLabel } from "@/lib/religion";
-import { lookingForLabel } from "@/lib/looking-for";
 import { interestEmoji } from "@/app/onboarding/interests";
 
 /**
@@ -35,25 +36,37 @@ export default async function ProfileAccountPage() {
   }
   if (!profile.onboarded) redirect("/onboarding");
 
+  const user = await getCurrentUser();
+
   const age = ageFromISO(profile.birthDate);
   const education = educationLabel(profile.education);
   const religion = religionLabel(profile.religion);
-  const looking = lookingForLabel(profile.lookingFor);
+  const gender = genderLabel(profile.gender);
+  const interested = interestedLabel(profile.interestedIn);
   const igHandle = profile.socialLink?.replace(/^@/, "").trim();
+  const memberSince = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      })
+    : null;
 
-  // "More about me" — kumpulkan detail yg terisi.
+  // "More about me" — detail yg terisi. Field yg disembunyikan dari form edit
+  // (looking-for, music, food, drink) TIDAK ditampilkan.
   const moreAboutMe: { icon: React.ReactNode; text: string }[] = [];
+  if (gender)
+    moreAboutMe.push({ icon: <User className="h-4 w-4" />, text: gender });
+  if (interested)
+    moreAboutMe.push({
+      icon: <Heart className="h-4 w-4" />,
+      text: `Interested in ${interested}`,
+    });
   if (religion)
     moreAboutMe.push({ icon: <Sparkles className="h-4 w-4" />, text: religion });
   if (profile.heightCm)
     moreAboutMe.push({
       icon: <Ruler className="h-4 w-4" />,
       text: `${profile.heightCm} cm`,
-    });
-  if (profile.musicPref)
-    moreAboutMe.push({
-      icon: <Globe className="h-4 w-4" />,
-      text: profile.musicPref,
     });
 
   return (
@@ -107,7 +120,7 @@ export default async function ProfileAccountPage() {
             </h2>
             {age !== null && (
               <span className="text-2xl font-light text-muted-foreground">
-                {age}
+                {age} yrs
               </span>
             )}
           </div>
@@ -122,6 +135,12 @@ export default async function ProfileAccountPage() {
                 text={education}
               />
             )}
+            {user?.email && (
+              <InfoRow icon={<Mail className="h-4 w-4" />} text={user.email} />
+            )}
+            {profile.phone && (
+              <InfoRow icon={<Phone className="h-4 w-4" />} text={profile.phone} />
+            )}
             {igHandle && (
               <a
                 href={`https://instagram.com/${igHandle}`}
@@ -130,7 +149,7 @@ export default async function ProfileAccountPage() {
                 className="flex items-center gap-2.5 text-primary hover:underline min-w-0"
               >
                 <span className="text-muted-foreground/80 shrink-0">
-                  <LinkIcon className="h-4 w-4" />
+                  <InstagramIcon className="h-4 w-4" />
                 </span>
                 <span className="truncate">@{igHandle}</span>
               </a>
@@ -162,19 +181,6 @@ export default async function ProfileAccountPage() {
               </section>
             ))}
           </div>
-        )}
-
-        {/* Looking for */}
-        {looking && (
-          <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
-            <h3 className="text-base font-semibold mb-2">
-              What I&apos;m looking for
-            </h3>
-            <div className="flex items-center gap-2 text-sm">
-              <Heart className="h-4 w-4 text-primary/70" />
-              {looking}
-            </div>
-          </section>
         )}
 
         {/* More about me */}
@@ -220,6 +226,11 @@ export default async function ProfileAccountPage() {
           </section>
         )}
 
+        {memberSince && (
+          <p className="px-1 text-xs text-muted-foreground">
+            Member since {memberSince}
+          </p>
+        )}
       </div>
     </main>
   );
@@ -232,6 +243,21 @@ function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
       <span className="min-w-0 truncate">{text}</span>
     </div>
   );
+}
+
+/** Label gender (value DB → tampilan). */
+function genderLabel(v: string | null): string | null {
+  if (v === "male") return "Man";
+  if (v === "female") return "Woman";
+  return null;
+}
+
+/** Label "interested in" (value DB → tampilan). */
+function interestedLabel(v: string | null): string | null {
+  if (v === "male") return "Men";
+  if (v === "female") return "Women";
+  if (v === "both") return "Everyone";
+  return null;
 }
 
 /** Umur dari ISO date "YYYY-MM-DD" (null kalau kosong/invalid). */
