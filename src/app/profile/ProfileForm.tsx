@@ -177,8 +177,8 @@ export function ProfileForm({
         hobbies,
       });
       toast.success("Profile saved");
-      // Langsung balik ke halaman profil (data terbaru).
-      router.push("/profile");
+      // Balik ke tampilan profil (CMB-style) dengan data terbaru.
+      router.push("/profile/account");
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save"));

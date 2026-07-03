@@ -138,3 +138,16 @@ export const INTEREST_CATALOG: InterestGroup[] = [
     ],
   },
 ];
+
+/** Map nama minat → emoji (flatten katalog), untuk tampilan chip di profil. */
+const INTEREST_EMOJI: Record<string, string> = Object.fromEntries(
+  INTEREST_CATALOG.flatMap((g) => g.items.map((i) => [i.name, i.emoji]))
+);
+
+/**
+ * Emoji untuk satu nama minat. Return "" kalau tak dikenal (mis. hobi lama dari
+ * master DB yg bukan bagian katalog) — caller tampilkan tanpa emoji.
+ */
+export function interestEmoji(name: string): string {
+  return INTEREST_EMOJI[name] ?? "";
+}

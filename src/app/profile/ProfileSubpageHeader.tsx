@@ -6,19 +6,25 @@ interface Props {
   title: string;
   /** Eyebrow text di atas title (opsional, kapital tipis) */
   eyebrow?: string;
+  /** Tujuan tombol back (default /profile). */
+  backHref?: string;
 }
 
 /**
  * Shared header untuk semua sub-pages di /profile/*.
- * - Tombol back → /profile (list menu)
+ * - Tombol back → backHref (default /profile)
  * - Title + eyebrow konsisten
  */
-export function ProfileSubpageHeader({ title, eyebrow }: Props) {
+export function ProfileSubpageHeader({
+  title,
+  eyebrow,
+  backHref = "/profile",
+}: Props) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
         <Button asChild variant="ghost" size="icon">
-          <Link href="/profile" aria-label="Back to Profile">
+          <Link href={backHref} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
