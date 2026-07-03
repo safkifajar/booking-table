@@ -1,18 +1,17 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { AvatarUploader } from "./AvatarUploader";
+import { ArrowLeft } from "lucide-react";
 import { ProfileMenuList } from "./ProfileMenuList";
 
 /**
  * Halaman utama profile — list-style menu.
  *
- * Header: avatar besar (uploadable inline) + display name + email
- * Body: list menu (Account, Password, History, Logout)
- * Sub-pages: /profile/account, /profile/password, /profile/sessions
+ * Header: back + display name
+ * Body: list menu (Account, Password, History, Notifications, Logout).
+ * Data profil lengkap (foto, bio, interests, dll) tampil di /profile/account.
+ * Sub-pages: /profile/account, /profile/password, /profile/sessions, /profile/stories
  */
 export default async function ProfilePage() {
   const profile = await getCurrentProfile();
@@ -21,8 +20,6 @@ export default async function ProfilePage() {
   }
   // Belum selesai onboarding → paksa ke wizard (mulai layar gender).
   if (!profile.onboarded) redirect("/onboarding");
-
-  const user = await getCurrentUser();
 
   return (
     <main className="flex-1 pb-12">
@@ -45,44 +42,6 @@ export default async function ProfilePage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Identity card — avatar + name + email + bio + hobi */}
-        <section className="rounded-xl border border-border bg-card p-5">
-          <AvatarUploader
-            initialAvatarUrl={profile.avatarUrl}
-            displayName={profile.displayName}
-          />
-          <div className="mt-4 pt-4 border-t border-border space-y-3">
-            <div className="space-y-0.5">
-              <div className="text-base font-semibold">{profile.displayName}</div>
-              <div className="text-xs text-muted-foreground truncate">
-                {user?.email}
-              </div>
-            </div>
-
-            {profile.bio && (
-              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
-                {profile.bio}
-              </p>
-            )}
-
-            {profile.hobbies && profile.hobbies.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                  <Sparkles className="h-3 w-3 text-primary/70" />
-                  Hobbies & interests
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {profile.hobbies.map((h) => (
-                    <Badge key={h} variant="secondary" className="text-[11px]">
-                      {h}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Menu list */}
         <ProfileMenuList />
       </div>

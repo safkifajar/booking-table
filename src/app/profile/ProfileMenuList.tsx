@@ -9,7 +9,6 @@ import {
   KeyRound,
   History,
   LogOut,
-  Camera,
   BellRing,
   BellOff,
   Loader2,
@@ -147,12 +146,6 @@ export function ProfileMenuList() {
           icon={<History className="h-4 w-4" />}
           label="Session History"
           description="Tables you've joined"
-        />
-        <MenuItem
-          href="/profile/stories"
-          icon={<Camera className="h-4 w-4" />}
-          label="My Story"
-          description="Active stories you've uploaded"
         />
       </MenuGroup>
 
