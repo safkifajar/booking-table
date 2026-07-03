@@ -37,6 +37,7 @@ export async function getHobbyGroups(): Promise<HobbyGroup[]> {
       id: r.id,
       name: r.name,
       category: r.category,
+      emoji: r.emoji,
       sort_order: r.sortOrder,
     };
     if (!byCat.has(r.category)) byCat.set(r.category, []);
@@ -62,6 +63,7 @@ export async function getHobbiesList(): Promise<HobbyItem[]> {
     id: r.id,
     name: r.name,
     category: r.category,
+    emoji: r.emoji,
     sort_order: r.sortOrder,
   }));
 }
@@ -73,16 +75,21 @@ export async function getHobbiesList(): Promise<HobbyItem[]> {
 const addHobbySchema = z.object({
   name: z.string().min(1, "Name is required").max(40),
   category: z.string().min(1, "Category is required").max(60),
+  emoji: z.string().max(8).optional().or(z.literal("")),
 });
 
 export async function addHobby(input: z.infer<typeof addHobbySchema>) {
   await requireAdmin();
   const data = addHobbySchema.parse(input);
-  const name = data.name.trim().toLowerCase();
+  // Nama disimpan apa adanya (katalog SOHO Capitalized + emoji).
+  const name = data.name.trim();
   try {
-    await db
-      .insert(hobbies)
-      .values({ name, category: data.category.trim(), sortOrder: 999 });
+    await db.insert(hobbies).values({
+      name,
+      category: data.category.trim(),
+      emoji: data.emoji?.trim() || null,
+      sortOrder: 999,
+    });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
       throw new Error("This hobby already exists");
@@ -96,6 +103,7 @@ const updateHobbySchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(40),
   category: z.string().min(1).max(60),
+  emoji: z.string().max(8).optional().or(z.literal("")),
 });
 
 export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
@@ -105,8 +113,9 @@ export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
     await db
       .update(hobbies)
       .set({
-        name: data.name.trim().toLowerCase(),
+        name: data.name.trim(),
         category: data.category.trim(),
+        emoji: data.emoji?.trim() || null,
       })
       .where(eq(hobbies.id, data.id));
   } catch (err) {

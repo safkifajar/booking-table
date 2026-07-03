@@ -16,11 +16,11 @@ import {
 import { InstagramIcon } from "@/components/ui/brand-icons";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getHobbyGroups } from "@/lib/hobby-actions";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoCarousel } from "../ProfilePhotoCarousel";
 import { educationLabel } from "@/lib/education";
 import { religionLabel } from "@/lib/religion";
-import { interestEmoji } from "@/app/onboarding/interests";
 
 /**
  * Tampilan profil "Account" ala CMB (tema gelap SOHO) — menampilkan SEMUA data
@@ -37,7 +37,14 @@ export default async function ProfileAccountPage() {
   }
   if (!profile.onboarded) redirect("/onboarding");
 
-  const user = await getCurrentUser();
+  const [user, hobbyGroups] = await Promise.all([
+    getCurrentUser(),
+    getHobbyGroups(),
+  ]);
+  // Map nama minat → emoji (dari master DB) untuk chip Interests.
+  const emojiByName = new Map<string, string>();
+  for (const g of hobbyGroups)
+    for (const it of g.items) if (it.emoji) emojiByName.set(it.name, it.emoji);
 
   const age = ageFromISO(profile.birthDate);
   const education = educationLabel(profile.education);
@@ -198,7 +205,7 @@ export default async function ProfileAccountPage() {
             <h3 className="text-base font-semibold mb-3">Interests</h3>
             <div className="flex flex-wrap gap-2">
               {profile.hobbies.map((h) => {
-                const emoji = interestEmoji(h);
+                const emoji = emojiByName.get(h);
                 return (
                   <span
                     key={h}

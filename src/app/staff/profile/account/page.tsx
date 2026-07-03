@@ -4,11 +4,17 @@ import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ProfileForm } from "@/app/profile/ProfileForm";
+import { getHobbyGroups } from "@/lib/hobby-actions";
+import { getPromptTexts } from "@/lib/prompt-actions";
 
 export default async function StaffProfileAccountPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  const user = await getCurrentUser();
+  const [user, interestCatalog, promptOptions] = await Promise.all([
+    getCurrentUser(),
+    getHobbyGroups(),
+    getPromptTexts(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -55,6 +61,8 @@ export default async function StaffProfileAccountPage() {
           initialHobbies={profile.hobbies ?? []}
           initialPhotos={profile.photos ?? []}
           initialPrompts={profile.prompts ?? []}
+          interestCatalog={interestCatalog}
+          promptOptions={promptOptions}
         />
       </div>
     </main>

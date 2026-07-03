@@ -22,5 +22,6 @@ export * from "./notifications";
 export * from "./push-subscriptions";
 export * from "./legal";
 export * from "./hobbies";
+export * from "./prompts";
 export * from "./move-requests";
 

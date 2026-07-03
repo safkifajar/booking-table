@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getHobbyGroups } from "@/lib/hobby-actions";
+import { getPromptTexts } from "@/lib/prompt-actions";
 import { ProfileSubpageHeader } from "../../ProfileSubpageHeader";
 import { ProfileForm } from "../../ProfileForm";
 
@@ -12,7 +14,11 @@ export default async function ProfileAccountEditPage() {
     redirect("/auth?next=/profile/account/edit");
   }
 
-  const user = await getCurrentUser();
+  const [user, interestCatalog, promptOptions] = await Promise.all([
+    getCurrentUser(),
+    getHobbyGroups(),
+    getPromptTexts(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -49,6 +55,8 @@ export default async function ProfileAccountEditPage() {
           initialHobbies={profile.hobbies ?? []}
           initialPhotos={profile.photos ?? []}
           initialPrompts={profile.prompts ?? []}
+          interestCatalog={interestCatalog}
+          promptOptions={promptOptions}
         />
       </div>
     </main>

@@ -8,6 +8,8 @@ export interface HobbyItem {
   id: string;
   name: string;
   category: string;
+  /** Emoji di depan nama (opsional). */
+  emoji: string | null;
   sort_order: number;
 }
 

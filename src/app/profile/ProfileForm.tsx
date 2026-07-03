@@ -32,7 +32,8 @@ import { RELIGION_OPTIONS } from "@/lib/religion";
 import { PhotoUploader } from "@/app/onboarding/PhotoUploader";
 import { PromptPicker } from "@/app/onboarding/PromptPicker";
 import { InterestPicker } from "@/app/onboarding/InterestPicker";
-import { PROMPT_OPTIONS, MAX_PROMPTS } from "@/app/onboarding/prompts";
+import { MAX_PROMPTS } from "@/app/onboarding/prompts";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 
 type Gender = "" | "male" | "female";
@@ -62,6 +63,10 @@ interface Props {
   initialHobbies: string[];
   initialPhotos: string[];
   initialPrompts: { prompt: string; answer: string }[];
+  /** Master interests dari DB (getHobbyGroups). */
+  interestCatalog: HobbyGroup[];
+  /** Master pertanyaan prompt dari DB (getPromptTexts). */
+  promptOptions: string[];
 }
 
 export function ProfileForm({
@@ -88,6 +93,8 @@ export function ProfileForm({
   initialHobbies,
   initialPhotos,
   initialPrompts,
+  interestCatalog,
+  promptOptions,
 }: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
@@ -219,7 +226,7 @@ export function ProfileForm({
           <PromptPicker
             prompts={prompts}
             onChange={setPrompts}
-            options={PROMPT_OPTIONS}
+            options={promptOptions}
             max={MAX_PROMPTS}
           />
         </CardContent>
@@ -449,7 +456,12 @@ export function ProfileForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <InterestPicker selected={hobbies} onChange={setHobbies} max={15} />
+          <InterestPicker
+            selected={hobbies}
+            onChange={setHobbies}
+            max={15}
+            catalog={interestCatalog}
+          />
         </CardContent>
       </Card>
 

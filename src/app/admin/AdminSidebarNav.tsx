@@ -18,6 +18,7 @@ import {
   QrCode,
   FileText,
   Sparkles,
+  MessageSquareQuote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,6 +104,12 @@ const NAV: NavItem[] = [
         href: "/admin/hobbies",
         label: "Hobbies & Interests",
         icon: <Sparkles className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/prompts",
+        label: "Prompts",
+        icon: <MessageSquareQuote className="h-4 w-4" />,
       },
       {
         type: "leaf",

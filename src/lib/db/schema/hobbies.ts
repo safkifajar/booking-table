@@ -24,10 +24,12 @@ export const hobbies = pgTable(
   "hobbies",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Nama hobi (lowercase, dipakai sbg value di profiles.hobbies[]). */
+    /** Nama hobi (dipakai sbg value di profiles.hobbies[]). */
     name: text("name").notNull(),
-    /** Kategori tampilan (mis. "Musik & Hiburan"). */
+    /** Kategori tampilan (mis. "Food & Drink"). */
     category: text("category").notNull(),
+    /** Emoji di depan nama (mis. "🍸"). Opsional. */
+    emoji: text("emoji"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()

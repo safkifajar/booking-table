@@ -185,6 +185,7 @@ function HobbiesTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
+              <th className="text-left px-4 py-2.5 w-12">Emoji</th>
               <th className="text-left px-4 py-2.5">Name</th>
               <th className="text-left px-4 py-2.5">Category</th>
               <th className="text-right px-4 py-2.5 w-24">Actions</th>
@@ -193,6 +194,7 @@ function HobbiesTab({
           <tbody>
             {pageItems.map((h) => (
               <tr key={h.id} className="border-b border-border/40 last:border-0">
+                <td className="px-4 py-2.5 text-base">{h.emoji ?? ""}</td>
                 <td className="px-4 py-2.5 font-medium">{h.name}</td>
                 <td className="px-4 py-2.5 text-muted-foreground">{h.category}</td>
                 <td className="p-3 text-right">
@@ -225,7 +227,7 @@ function HobbiesTab({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                   {q ? "No matching hobbies." : "No hobbies yet."}
                 </td>
               </tr>
@@ -416,6 +418,7 @@ function HobbyFormModal({
   onSaved: () => void;
 }) {
   const [name, setName] = React.useState(initial?.name ?? "");
+  const [emoji, setEmoji] = React.useState(initial?.emoji ?? "");
   const [category, setCategory] = React.useState(
     initial?.category ?? categories[0]?.name ?? ""
   );
@@ -431,9 +434,14 @@ function HobbyFormModal({
     setSubmitting(true);
     try {
       if (mode === "create") {
-        await addHobby({ name: name.trim(), category });
+        await addHobby({ name: name.trim(), category, emoji: emoji.trim() });
       } else {
-        await updateHobby({ id: initial!.id, name: name.trim(), category });
+        await updateHobby({
+          id: initial!.id,
+          name: name.trim(),
+          category,
+          emoji: emoji.trim(),
+        });
       }
       toast.success(mode === "create" ? "Hobby added" : "Hobby saved");
       onSaved();
@@ -454,10 +462,23 @@ function HobbyFormModal({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. rock climbing"
+            placeholder="e.g. Rock climbing"
             maxLength={40}
             autoFocus
             required
+            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            Emoji (optional)
+          </label>
+          <input
+            type="text"
+            value={emoji}
+            onChange={(e) => setEmoji(e.target.value)}
+            placeholder="e.g. 🧗"
+            maxLength={8}
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
           />
         </div>

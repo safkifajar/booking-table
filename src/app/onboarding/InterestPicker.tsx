@@ -2,28 +2,25 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import {
-  INTEREST_CATALOG,
-  MAX_INTERESTS,
-  type InterestGroup,
-} from "./interests";
+import { MAX_INTERESTS } from "./interests";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 /**
  * Pemilih minat CMB-style ("What do you like?"). Chip pill per kategori,
  * maks {@link MAX_INTERESTS} pilihan, tiap kategori bisa "See more/less"
  * (collapsed ke ~2 baris). Nilai = daftar `name` terpilih (disimpan ke
- * profiles.hobbies).
+ * profiles.hobbies). `catalog` = data master dari DB (getHobbyGroups).
  */
 export function InterestPicker({
   selected,
   onChange,
   max = MAX_INTERESTS,
-  catalog = INTEREST_CATALOG,
+  catalog,
 }: {
   selected: string[];
   onChange: (next: string[]) => void;
   max?: number;
-  catalog?: InterestGroup[];
+  catalog: HobbyGroup[];
 }) {
   const atMax = selected.length >= max;
   const selectedSet = new Set(selected);
@@ -60,7 +57,7 @@ function InterestCategory({
   atMax,
   onToggle,
 }: {
-  group: InterestGroup;
+  group: HobbyGroup;
   selectedSet: Set<string>;
   atMax: boolean;
   onToggle: (name: string) => void;
@@ -93,9 +90,11 @@ function InterestCategory({
                     : "border-border text-foreground/90 hover:border-foreground/40"
               )}
             >
-              <span aria-hidden className="text-base leading-none">
-                {item.emoji}
-              </span>
+              {item.emoji && (
+                <span aria-hidden className="text-base leading-none">
+                  {item.emoji}
+                </span>
+              )}
               {item.name}
             </button>
           );

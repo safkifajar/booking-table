@@ -13,11 +13,12 @@ import { PhotoUploader } from "./PhotoUploader";
 import { PromptPicker } from "./PromptPicker";
 import { InterestPicker } from "./InterestPicker";
 import { MAX_INTERESTS } from "./interests";
-import { PROMPT_OPTIONS, MAX_PROMPTS } from "./prompts";
+import { MAX_PROMPTS } from "./prompts";
 import { EDUCATION_OPTIONS } from "@/lib/education";
 import { RELIGION_OPTIONS } from "@/lib/religion";
 import { HeightWheel } from "./HeightWheel";
 import { StickyActionBar } from "@/components/ui/sticky-action-bar";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 
 // Opsi gender — value disimpan (cocok enum DB male/female), label ditampilkan.
@@ -43,10 +44,16 @@ export function OnboardingWizard({
   next,
   initialName,
   initialPhotos,
+  interestCatalog,
+  promptOptions,
 }: {
   next: string;
   initialName: string;
   initialPhotos: string[];
+  /** Master interests dari DB (getHobbyGroups). */
+  interestCatalog: HobbyGroup[];
+  /** Master pertanyaan prompt dari DB (getPrompts → text[]). */
+  promptOptions: string[];
 }) {
   const router = useRouter();
   // Onboarding dibagi beberapa layar CMB-style: dob → gender → interested → intro →
@@ -563,7 +570,7 @@ async function handleFinish() {
           <PromptPicker
             prompts={prompts}
             onChange={setPrompts}
-            options={PROMPT_OPTIONS}
+            options={promptOptions}
             max={MAX_PROMPTS}
           />
 
@@ -582,7 +589,11 @@ async function handleFinish() {
       ) : step2Screen === "interests" ? (
         /* Step 2 · layar INTERESTS — "What do you like?" (CMB-style) */
         <div className="pb-28">
-          <InterestPicker selected={hobbies} onChange={setHobbies} />
+          <InterestPicker
+            selected={hobbies}
+            onChange={setHobbies}
+            catalog={interestCatalog}
+          />
 
           <StickyActionBar maxWidth="max-w-md">
               <Button
