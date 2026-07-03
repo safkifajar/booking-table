@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import { EmojiPicker } from "@/components/ui/emoji-picker";
 import { Pagination } from "@/components/admin/Pagination";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
@@ -473,14 +474,17 @@ function HobbyFormModal({
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
             Emoji (optional)
           </label>
-          <input
-            type="text"
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            placeholder="e.g. 🧗"
-            maxLength={8}
-            className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={emoji}
+              onChange={(e) => setEmoji(e.target.value)}
+              placeholder="e.g. 🧗"
+              maxLength={8}
+              className="flex-1 h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
+            />
+            <EmojiPicker onPick={setEmoji} />
+          </div>
         </div>
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
