@@ -32,7 +32,6 @@ import { Pagination } from "@/components/admin/Pagination";
 import { initials, getActionErrorMessage, cn } from "@/lib/utils";
 import {
   createCustomer,
-  updateCustomer,
   deleteCustomer,
   type AdminCustomerRow,
 } from "@/lib/customer-actions";
@@ -45,10 +44,9 @@ interface Props {
   query: string;
 }
 
-type EditTarget =
-  | { mode: "create" }
-  | { mode: "edit"; row: AdminCustomerRow }
-  | null;
+/** Dialog hanya untuk TAMBAH customer. Edit dilakukan di halaman detail
+ * (/admin/users/[id]). */
+type EditTarget = { mode: "create" } | null;
 
 export function CustomerManager({
   initialRows,
@@ -253,7 +251,6 @@ export function CustomerManager({
 
       {editTarget && (
         <CustomerFormDialog
-          target={editTarget}
           onClose={() => setEditTarget(null)}
           onSaved={() => {
             setEditTarget(null);
@@ -266,55 +263,33 @@ export function CustomerManager({
 }
 
 function CustomerFormDialog({
-  target,
   onClose,
   onSaved,
 }: {
-  target: Exclude<EditTarget, null>;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const isEdit = target.mode === "edit";
-  const row = isEdit ? target.row : null;
-
-  const [name, setName] = React.useState(row?.name ?? "");
-  const [email, setEmail] = React.useState(row?.email ?? "");
-  const [phone, setPhone] = React.useState(row?.phone ?? "");
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
+  const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [confirmPassword, setConfirmPassword] = React.useState("");
-  const [isActive, setIsActive] = React.useState(row?.is_active ?? true);
-  const [gender, setGender] = React.useState<"" | "male" | "female">(
-    (row?.gender as "" | "male" | "female") ?? ""
-  );
+  const [gender, setGender] = React.useState<"" | "male" | "female">("");
   const [interestedIn, setInterestedIn] = React.useState<
     "" | "male" | "female" | "both"
-  >((row?.interested_in as "" | "male" | "female" | "both") ?? "");
-  const [birthDate, setBirthDate] = React.useState(row?.birth_date ?? "");
-  const [socialLink, setSocialLink] = React.useState(row?.social_link ?? "");
-  const [area, setArea] = React.useState(row?.area ?? "");
-  const [education, setEducation] = React.useState(row?.education ?? "");
-  const [heightCm, setHeightCm] = React.useState(
-    row?.height_cm != null ? String(row.height_cm) : ""
-  );
-  const [religion, setReligion] = React.useState(row?.religion ?? "");
-  const [bio, setBio] = React.useState(row?.bio ?? "");
+  >("");
+  const [birthDate, setBirthDate] = React.useState("");
+  const [socialLink, setSocialLink] = React.useState("");
+  const [area, setArea] = React.useState("");
+  const [education, setEducation] = React.useState("");
+  const [heightCm, setHeightCm] = React.useState("");
+  const [religion, setReligion] = React.useState("");
+  const [bio, setBio] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Validasi password (edit: opsional; kalau diisi harus cocok & min 6).
-    if (isEdit && (password || confirmPassword)) {
-      if (password.length < 6) {
-        toast.error("New password must be at least 6 characters");
-        return;
-      }
-      if (password !== confirmPassword) {
-        toast.error("Password confirmation does not match");
-        return;
-      }
-    }
     setSaving(true);
-    // Field profil bersama (create & update) — samakan dgn form edit profil.
+    // Field profil — samakan dgn form edit profil (create customer lengkap).
     const profilePayload = {
       phone: phone.trim() || undefined,
       gender: gender || undefined,
@@ -347,27 +322,13 @@ function CustomerFormDialog({
       bio: bio.trim() || undefined,
     };
     try {
-      if (isEdit) {
-        await updateCustomer({
-          id: row!.id,
-          name: name.trim(),
-          email: email.trim(),
-          password: password || undefined,
-          isActive,
-          ...profilePayload,
-        });
-        toast.success(
-          password ? "Customer & password updated" : "Customer updated"
-        );
-      } else {
-        await createCustomer({
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          ...profilePayload,
-        });
-        toast.success("Customer created");
-      }
+      await createCustomer({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        ...profilePayload,
+      });
+      toast.success("Customer created");
       onSaved();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save customer"));
@@ -377,11 +338,17 @@ function CustomerFormDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Customer" : "Add Customer"}</DialogTitle>
+      <DialogContent className="max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
+          <DialogTitle>Add Customer</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col min-h-0 flex-1"
+        >
+          {/* Body scrollable — header & footer tetap. -mx/px biar scrollbar
+              tak menempel field. */}
+          <div className="space-y-3 overflow-y-auto min-h-0 flex-1 -mx-1 px-1">
           <Field label="Name">
             <input
               type="text"
@@ -414,48 +381,18 @@ function CustomerFormDialog({
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
-          {!isEdit ? (
-            <Field label="Password">
-              <input
-                type="text"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                maxLength={100}
-                placeholder="At least 6 characters"
-                className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-              />
-            </Field>
-          ) : (
-            <div className="rounded-md border border-border p-3 space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Reset password (optional) — fill in if the customer forgot their
-                password. Leave blank if unchanged.
-              </p>
-              <Field label="New password">
-                <input
-                  type="text"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  minLength={6}
-                  maxLength={100}
-                  placeholder="At least 6 characters"
-                  className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-                />
-              </Field>
-              <Field label="Confirm new password">
-                <input
-                  type="text"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  maxLength={100}
-                  placeholder="Repeat new password"
-                  className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-                />
-              </Field>
-            </div>
-          )}
+          <Field label="Password">
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              maxLength={100}
+              placeholder="At least 6 characters"
+              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            />
+          </Field>
 
           {/* Jenis kelamin (opsional) */}
           <Field label="Gender (optional)">
@@ -598,29 +535,9 @@ function CustomerFormDialog({
               className="w-full px-3 py-2 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 resize-none"
             />
           </Field>
+          </div>
 
-          {/* Status aktif (edit) — paling bawah; nonaktif = tak bisa login */}
-          {isEdit && (
-            <Field label="Account status">
-              <button
-                type="button"
-                onClick={() => setIsActive((v) => !v)}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-md border px-3 h-10 text-sm transition",
-                  isActive
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    : "border-red-500/30 bg-red-500/10 text-red-400"
-                )}
-              >
-                <span>{isActive ? "Active" : "Inactive"}</span>
-                <span className="text-xs opacity-70">
-                  {isActive ? "Tap to deactivate" : "Tap to activate"}
-                </span>
-              </button>
-            </Field>
-          )}
-
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t border-border pt-3 mt-3">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
@@ -629,8 +546,6 @@ function CustomerFormDialog({
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" /> Saving…
                 </>
-              ) : isEdit ? (
-                "Save"
               ) : (
                 "Create Account"
               )}

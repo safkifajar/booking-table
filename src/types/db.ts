@@ -271,6 +271,8 @@ export interface PublicProfile {
   gender: string | null;
   interested_in: string | null;
   social_link: string | null;
+  /** Alamat/area (opsional). null jika hide_location (bukan pemilik). */
+  area: string | null;
   /** Pendidikan terakhir (mis. 'bachelor'). Opsional. */
   education: string | null;
   /** Tinggi badan dalam cm. Opsional. */

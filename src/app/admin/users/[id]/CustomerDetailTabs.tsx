@@ -6,6 +6,9 @@ import { Loader2, Pencil, Mail, Phone, Link as LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
+import { EDUCATION_OPTIONS, educationLabel } from "@/lib/education";
+import { RELIGION_OPTIONS, religionLabel } from "@/lib/religion";
 import { CustomerReviews, CustomerHistory } from "./CustomerDetailSections";
 import { updateCustomer, setCustomerPassword } from "@/lib/customer-actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
@@ -24,6 +27,10 @@ interface CustomerData {
   gender: Gender;
   interestedIn: InterestedIn;
   socialLink: string | null;
+  area: string | null;
+  education: string | null;
+  heightCm: number | null;
+  religion: string | null;
   isActive: boolean;
   bio: string | null;
   hobbies: string[];
@@ -170,6 +177,16 @@ function DetailTab({ customer }: { customer: CustomerData }) {
         />
         <Row label="Gender" value={genderLabel(customer.gender)} />
         <Row label="Interested in" value={interestLabel(customer.interestedIn)} />
+        <Row label="Address" value={customer.area || "—"} />
+        <Row
+          label="Education"
+          value={educationLabel(customer.education) || "—"}
+        />
+        <Row
+          label="Height"
+          value={customer.heightCm ? `${customer.heightCm} cm` : "—"}
+        />
+        <Row label="Religion" value={religionLabel(customer.religion) || "—"} />
         <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-2">
           <dt className="text-muted-foreground">Social media</dt>
           <dd className="font-medium text-right min-w-0">
@@ -250,6 +267,12 @@ function EditForm({
   const [interestedIn, setInterestedIn] = React.useState<InterestedIn>(
     customer.interestedIn
   );
+  const [area, setArea] = React.useState(customer.area ?? "");
+  const [education, setEducation] = React.useState(customer.education ?? "");
+  const [heightCm, setHeightCm] = React.useState(
+    customer.heightCm != null ? String(customer.heightCm) : ""
+  );
+  const [religion, setReligion] = React.useState(customer.religion ?? "");
   const [isActive, setIsActive] = React.useState(customer.isActive);
   const [saving, setSaving] = React.useState(false);
 
@@ -271,6 +294,29 @@ function EditForm({
         isActive,
         gender: gender || undefined,
         interestedIn: interestedIn || undefined,
+        area: area.trim() || undefined,
+        education:
+          (education as
+            | "high_school"
+            | "diploma"
+            | "bachelor"
+            | "master"
+            | "doctorate"
+            | "other"
+            | "") || undefined,
+        heightCm: heightCm.trim()
+          ? Math.min(230, Math.max(120, parseInt(heightCm, 10) || 120))
+          : null,
+        religion:
+          (religion as
+            | "islam"
+            | "christian"
+            | "catholic"
+            | "hindu"
+            | "buddhist"
+            | "confucian"
+            | "spiritual"
+            | "") || undefined,
       });
       toast.success("Customer updated");
       router.refresh();
@@ -354,6 +400,58 @@ function EditForm({
           ]}
           value={interestedIn}
           onChange={(v) => setInterestedIn(v as InterestedIn)}
+        />
+      </Field>
+
+      <Field label="Address (optional)">
+        <input
+          type="text"
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+          maxLength={120}
+          placeholder="e.g. North Purwokerto"
+          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </Field>
+
+      <Field label="Education (optional)">
+        <Select
+          value={education}
+          onChange={setEducation}
+          options={[
+            { value: "", label: "Prefer not to say" },
+            ...EDUCATION_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          ]}
+        />
+      </Field>
+
+      <Field label="Height cm (optional)">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={120}
+          max={230}
+          value={heightCm}
+          onChange={(e) => setHeightCm(e.target.value)}
+          placeholder="e.g. 170"
+          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </Field>
+
+      <Field label="Religion (optional)">
+        <Select
+          value={religion}
+          onChange={setReligion}
+          options={[
+            { value: "", label: "Prefer not to say" },
+            ...RELIGION_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          ]}
         />
       </Field>
 
