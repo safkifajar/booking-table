@@ -1,0 +1,32 @@
+name: Deploy Production
+
+# Auto-deploy setiap push/merge ke branch `main`.
+# CATATAN: production TIDAK menjalankan db:push otomatis (lihat scripts/deploy.sh).
+# Kalau rilis ini mengubah skema DB, jalankan migrasi manual SETELAH deploy:
+#   ssh <vps> 'cd /home/booking/soho-prod && npm run db:push && pm2 reload soho-prod'
+# (review prompt drizzle-kit dulu — bisa destruktif). Lihat docs/DEPLOYMENT.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # bisa trigger manual dari tab Actions
+
+# Batalkan run lama kalau ada push baru ke main.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy ke VPS (production)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # port: 22   # uncomment kalau SSH pakai port non-standar (tambah secret VPS_SSH_PORT)
+          script_stop: true
+          script: |
+            cd /home/booking/soho-prod
+            ./scripts/deploy.sh production

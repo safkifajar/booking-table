@@ -434,6 +434,331 @@ Untuk zero-downtime deploy lebih advanced, pakai PM2 cluster mode + reload
 
 ---
 
+## 11. Staging + Production (1 VPS, GitHub Actions CI/CD)
+
+Section 1–10 di atas = setup **single environment**. Bagian ini memperluas jadi
+**2 environment di 1 VPS** — staging (test) & production — dengan deploy
+otomatis via GitHub Actions.
+
+**Ringkasan arsitektur:**
+
+```
+VPS (Ubuntu)
+├─ Postgres 16 (1 instance, 2 database)
+│   ├─ soho_prod       (user soho_prod)
+│   └─ soho_staging    (user soho_staging)
+├─ /home/booking/soho-prod/     branch main     → PM2 "soho-prod"    PORT 3000
+├─ /home/booking/soho-staging/  branch staging  → PM2 "soho-staging" PORT 3001
+├─ /var/lib/soho-prod/uploads   +  /var/lib/soho-staging/uploads
+└─ Nginx:
+     bookingsoho.com / admin.bookingsoho.com                 → :3000
+     staging.bookingsoho.com / admin.staging.bookingsoho.com → :3001
+```
+
+> Ganti `bookingsoho.com` dengan domain final saat DNS siap. Sebelum domain
+> ada, staging bisa diakses sementara lewat `http://<VPS_IP>:3001` (buka port
+> 3001 di ufw sementara, tutup lagi setelah domain + Nginx jalan).
+
+Git flow: feature branch → merge ke `staging` (auto-deploy, test) → merge ke
+`main` (auto-deploy production).
+
+### 11.1 Buat branch staging (sekali)
+
+Di lokal:
+```bash
+git checkout main && git pull
+git checkout -b staging
+git push -u origin staging
+```
+
+### 11.2 Dua database + user Postgres
+
+```bash
+sudo -u postgres psql <<'EOF'
+CREATE DATABASE soho_prod;
+CREATE USER soho_prod WITH PASSWORD 'GANTI_PASSWORD_PROD_32_CHAR_RANDOM';
+GRANT ALL PRIVILEGES ON DATABASE soho_prod TO soho_prod;
+\c soho_prod
+GRANT ALL ON SCHEMA public TO soho_prod;
+
+CREATE DATABASE soho_staging;
+CREATE USER soho_staging WITH PASSWORD 'GANTI_PASSWORD_STAGING_32_CHAR_RANDOM';
+GRANT ALL PRIVILEGES ON DATABASE soho_staging TO soho_staging;
+\c soho_staging
+GRANT ALL ON SCHEMA public TO soho_staging;
+EOF
+```
+
+Tetap bind Postgres ke localhost saja (section 3).
+
+### 11.3 Clone 2 folder + `.env.local` per environment
+
+```bash
+cd /home/booking
+
+# Production (branch main)
+git clone https://github.com/safkifajar/booking-table.git soho-prod
+cd soho-prod && git checkout main && cd ..
+
+# Staging (branch staging)
+git clone https://github.com/safkifajar/booking-table.git soho-staging
+cd soho-staging && git checkout staging && cd ..
+```
+
+**`.env.local` production** (`/home/booking/soho-prod/.env.local`):
+```
+DATABASE_URL=postgres://soho_prod:PASSWORD_PROD@localhost:5432/soho_prod
+AUTH_SECRET=<openssl rand -base64 32 — khusus prod>
+AUTH_URL=https://bookingsoho.com
+RESEND_API_KEY=re_xxx
+RESEND_FROM=noreply@bookingsoho.com
+NEXT_PUBLIC_BAR_SLUG=soho-purwokerto
+NEXT_PUBLIC_DEMO_MODE=false
+CRON_SECRET=<openssl rand -base64 32 — khusus prod>
+STORAGE_DRIVER=local
+UPLOADS_DIR=/var/lib/soho-prod/uploads
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<vapid public>
+VAPID_PRIVATE_KEY=<vapid private>
+VAPID_SUBJECT=mailto:you@bookingsoho.com
+```
+
+**`.env.local` staging** (`/home/booking/soho-staging/.env.local`) — nilai BEDA:
+```
+DATABASE_URL=postgres://soho_staging:PASSWORD_STAGING@localhost:5432/soho_staging
+AUTH_SECRET=<secret berbeda dari prod>
+AUTH_URL=https://staging.bookingsoho.com
+RESEND_API_KEY=re_xxx
+RESEND_FROM=onboarding@resend.dev        # staging boleh pakai test domain
+NEXT_PUBLIC_BAR_SLUG=soho-purwokerto
+NEXT_PUBLIC_DEMO_MODE=true                # staging boleh demo mode
+CRON_SECRET=<secret berbeda dari prod>
+STORAGE_DRIVER=local
+UPLOADS_DIR=/var/lib/soho-staging/uploads
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<vapid public — boleh keypair beda>
+VAPID_PRIVATE_KEY=<vapid private>
+VAPID_SUBJECT=mailto:you@bookingsoho.com
+```
+
+> Yang WAJIB beda antar env: `DATABASE_URL`, `AUTH_URL`, `UPLOADS_DIR`,
+> `AUTH_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_DEMO_MODE`. Kalau `AUTH_URL` salah,
+> redirect login / cookie / magic-link / URL admin (`admin.`) tidak resolve.
+
+### 11.4 Folder uploads persistent per-env
+
+```bash
+sudo mkdir -p /var/lib/soho-prod/uploads/{avatars,stories,photos}
+sudo mkdir -p /var/lib/soho-staging/uploads/{avatars,stories,photos}
+sudo chown -R booking:booking /var/lib/soho-prod /var/lib/soho-staging
+```
+
+### 11.5 First run kedua environment
+
+```bash
+# Production
+cd /home/booking/soho-prod
+npm ci
+npm run db:push        # bangun skema DB prod (review prompt!)
+npm run db:seed        # seed data awal (idempotent)
+npm run build
+
+# Staging
+cd /home/booking/soho-staging
+npm ci
+npm run db:push -- --force
+npm run db:seed
+npm run build
+
+# Start keduanya via PM2 (ecosystem.config.js sudah punya 2 app)
+cd /home/booking/soho-prod            # cwd bebas, config absolut
+pm2 start /home/booking/soho-prod/ecosystem.config.js --only soho-prod
+pm2 start /home/booking/soho-prod/ecosystem.config.js --only soho-staging
+pm2 save
+pm2 status                            # soho-prod (3000) & soho-staging (3001) online
+```
+
+### 11.6 Nginx — 4 server block
+
+Tambah ke `/etc/nginx/sites-available/booking-table` (atau file terpisah).
+Pola SSE + `/uploads/` + subdomain sama seperti section 6; yang beda cuma
+`server_name` dan `proxy_pass` port + `alias` uploads per-env.
+
+```nginx
+# ---------- PRODUCTION (:3000) ----------
+server {
+    listen 80;
+    server_name bookingsoho.com;
+    client_max_body_size 10M;
+
+    location /api/realtime/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off; proxy_cache off; chunked_transfer_encoding on;
+        proxy_read_timeout 24h; proxy_send_timeout 24h;
+    }
+    location /uploads/ {
+        alias /var/lib/soho-prod/uploads/;
+        expires 1d; add_header Cache-Control "public, immutable"; access_log off;
+    }
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+server {                              # admin prod → port sama, middleware routing
+    listen 80;
+    server_name admin.bookingsoho.com;
+    client_max_body_size 10M;
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# ---------- STAGING (:3001) ----------
+server {
+    listen 80;
+    server_name staging.bookingsoho.com;
+    client_max_body_size 10M;
+
+    location /api/realtime/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off; proxy_cache off; chunked_transfer_encoding on;
+        proxy_read_timeout 24h; proxy_send_timeout 24h;
+    }
+    location /uploads/ {
+        alias /var/lib/soho-staging/uploads/;
+        expires 1d; add_header Cache-Control "public, immutable"; access_log off;
+    }
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+server {                              # admin staging → port 3001
+    listen 80;
+    server_name admin.staging.bookingsoho.com;
+    client_max_body_size 10M;
+    location / {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 11.7 DNS + SSL (4 domain)
+
+DNS A record (semua ke IP VPS yang sama):
+```
+bookingsoho.com                 A  <VPS_IP>
+admin.bookingsoho.com           A  <VPS_IP>
+staging.bookingsoho.com         A  <VPS_IP>
+admin.staging.bookingsoho.com   A  <VPS_IP>
+```
+(atau wildcard `*.bookingsoho.com` + `*.staging.bookingsoho.com`.)
+
+SSL sekaligus 4 domain:
+```bash
+sudo certbot --nginx \
+  -d bookingsoho.com -d admin.bookingsoho.com \
+  -d staging.bookingsoho.com -d admin.staging.bookingsoho.com
+```
+
+### 11.8 GitHub Actions — auto-deploy
+
+Workflow sudah ada di repo:
+- `.github/workflows/deploy-staging.yml` — push ke `staging` → SSH → `scripts/deploy.sh staging` (auto `db:push --force`).
+- `.github/workflows/deploy-production.yml` — push/merge ke `main` → SSH → `scripts/deploy.sh production` (**tanpa** `db:push`).
+
+Build dijalankan **di VPS**, bukan di runner GitHub → kuota Actions nyaris nol.
+
+**Setup deploy SSH key (di VPS, sebagai user `booking`):**
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/gha_deploy -N "" -C "github-actions-deploy"
+cat ~/.ssh/gha_deploy.pub >> ~/.ssh/authorized_keys   # izinkan key ini login
+chmod 600 ~/.ssh/authorized_keys
+cat ~/.ssh/gha_deploy                                  # PRIVATE key → copy ke GitHub Secret
+```
+
+**Isi GitHub repo Secrets** (`Settings → Secrets and variables → Actions → New repository secret`):
+
+| Secret | Nilai |
+|---|---|
+| `VPS_HOST` | IP / hostname VPS (mis. `123.45.67.89`) |
+| `VPS_USER` | `booking` |
+| `VPS_SSH_KEY` | isi lengkap `~/.ssh/gha_deploy` (private key, termasuk baris BEGIN/END) |
+
+> `scripts/deploy.sh` sudah di-mark executable di git (mode 100755), jadi hasil
+> clone di VPS otomatis executable. Kalau ternyata tidak (mis. filesystem tak
+> dukung), jalankan sekali:
+> `chmod +x /home/booking/soho-*/scripts/deploy.sh`
+
+Setelah secret terisi: push ke `staging` → tab **Actions** harus hijau → cek
+`pm2 status` di VPS.
+
+### 11.9 Migrasi production (manual)
+
+Production **tidak** auto-`db:push` (lindungi data asli). Kalau rilis ke `main`
+mengubah skema DB, setelah workflow prod selesai, jalankan manual:
+```bash
+ssh booking@<VPS_IP>
+cd /home/booking/soho-prod
+npm run db:push        # REVIEW prompt drizzle-kit — bisa destruktif (drop/rename)!
+pm2 reload soho-prod
+```
+
+### 11.10 Cron per-environment
+
+Section 8b bikin 1 timer. Untuk 2 env, buat 2 pasang service+timer (beda
+`EnvironmentFile` + URL). Contoh production:
+`/etc/systemd/system/soho-prod-stories.service`:
+```ini
+[Service]
+Type=oneshot
+EnvironmentFile=/home/booking/soho-prod/.env.local
+ExecStart=/usr/bin/curl -fsS -X POST -H "Authorization: Bearer ${CRON_SECRET}" \
+  https://bookingsoho.com/api/cron/expire-stories
+```
+Staging: `EnvironmentFile=/home/booking/soho-staging/.env.local` + URL
+`https://staging.bookingsoho.com/...`. Masing-masing punya timer sendiri
+(`soho-prod-stories.timer`, `soho-staging-stories.timer`).
+
+---
+
 ## Troubleshooting
 
 ### App tidak start
@@ -480,3 +805,18 @@ Sebelum go-live:
 - [ ] Test full flow: signup credentials, signin, magic link, open table,
       add item, payment, close session, rate member
 - [ ] Test 2-tab realtime: SSE update across tabs <1s
+
+### Tambahan kalau pakai staging + production (section 11)
+
+- [ ] 2 database terpisah (`soho_prod`, `soho_staging`) + user + password beda
+- [ ] `.env.local` beda per folder — `AUTH_URL`, `DATABASE_URL`, `UPLOADS_DIR`,
+      `AUTH_SECRET`, `CRON_SECRET`, `NEXT_PUBLIC_DEMO_MODE` tidak tertukar
+- [ ] `UPLOADS_DIR` prod ≠ staging (upload staging tidak nyampur ke prod)
+- [ ] PM2: `soho-prod` (3000) & `soho-staging` (3001) keduanya `online`
+- [ ] Nginx 4 server block + SSL 4 domain aktif
+- [ ] Branch `staging` sudah ada di remote
+- [ ] GitHub Secrets terisi: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
+- [ ] `scripts/deploy.sh` executable di kedua folder VPS
+- [ ] Test: push ke `staging` → Actions hijau → staging ter-update
+- [ ] Test: merge ke `main` → Actions hijau → prod ter-update (migrasi prod
+      manual kalau ada perubahan skema)
