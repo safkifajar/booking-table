@@ -17,6 +17,7 @@ import { PROMPT_OPTIONS, MAX_PROMPTS } from "./prompts";
 import { EDUCATION_OPTIONS } from "@/lib/education";
 import { RELIGION_OPTIONS } from "@/lib/religion";
 import { HeightWheel } from "./HeightWheel";
+import { StickyActionBar } from "@/components/ui/sticky-action-bar";
 
 
 // Opsi gender — value disimpan (cocok enum DB male/female), label ditampilkan.
@@ -408,8 +409,7 @@ async function handleFinish() {
             max={new Date().toISOString().slice(0, 10)}
           />
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -419,8 +419,7 @@ async function handleFinish() {
               >
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : /* Step 2 · layar GENDER — satu pertanyaan, list pilihan (CMB-style) */
       step2Screen === "gender" ? (
@@ -461,8 +460,7 @@ async function handleFinish() {
             })}
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -472,8 +470,7 @@ async function handleFinish() {
               >
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "interested" ? (
         /* Step 2 · layar INTERESTED IN — satu pertanyaan (CMB-style) */
@@ -514,8 +511,7 @@ async function handleFinish() {
             })}
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -525,8 +521,7 @@ async function handleFinish() {
               >
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "intro" ? (
         /* Step 2 · layar INTRO — transisi ke data profil (vibe SOHO) */
@@ -534,8 +529,7 @@ async function handleFinish() {
           <div className="flex-1 flex items-center justify-center">
             <FramedCupIllustration className="w-64 h-64 max-w-full" />
           </div>
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -544,16 +538,14 @@ async function handleFinish() {
               >
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "photos" ? (
         /* Step 2 · layar PHOTOS — upload foto profil (min 1) */
         <div className="pb-28">
           <PhotoUploader photos={photos} onChange={setPhotos} />
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -563,8 +555,7 @@ async function handleFinish() {
               >
                 Next <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "prompts" ? (
         /* Step 2 · layar PROMPTS — ice-breaker (opsional, bisa Skip) */
@@ -576,8 +567,7 @@ async function handleFinish() {
             max={MAX_PROMPTS}
           />
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -587,16 +577,14 @@ async function handleFinish() {
                 {prompts.length > 0 ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "interests" ? (
         /* Step 2 · layar INTERESTS — "What do you like?" (CMB-style) */
         <div className="pb-28">
           <InterestPicker selected={hobbies} onChange={setHobbies} />
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -606,8 +594,7 @@ async function handleFinish() {
                 {hobbies.length > 0 ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "education" ? (
         /* Step 2 · layar EDUCATION — pendidikan terakhir (opsional, radio) */
@@ -647,8 +634,7 @@ async function handleFinish() {
             })}
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -658,8 +644,7 @@ async function handleFinish() {
                 {education ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "height" ? (
         /* Step 2 · layar HEIGHT — tinggi badan cm (opsional, wheel picker) */
@@ -668,8 +653,7 @@ async function handleFinish() {
             <HeightWheel value={heightCm} onChange={setHeightCm} />
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -679,8 +663,7 @@ async function handleFinish() {
                 {heightCm ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "religion" ? (
         /* Step 2 · layar RELIGION — agama (opsional, radio) */
@@ -720,8 +703,7 @@ async function handleFinish() {
             })}
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -731,8 +713,7 @@ async function handleFinish() {
                 {religion ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : step2Screen === "address" ? (
         /* Step 2 · layar ADDRESS — area/alamat (CMB-style, satu field) */
@@ -747,8 +728,7 @@ async function handleFinish() {
             className="w-full border-b border-border bg-transparent pb-3 text-lg focus:outline-none focus:border-primary/60 transition placeholder:text-muted-foreground/50"
           />
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -758,8 +738,7 @@ async function handleFinish() {
                 {area.trim() ? "Next" : "Skip for now"}{" "}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       ) : (
         /* Step 2 · layar SOCIAL — Instagram (CMB-style, terakhir → Finish) */
@@ -783,8 +762,7 @@ async function handleFinish() {
             />
           </div>
 
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-md">
-            <div className="max-w-md mx-auto px-4 py-3">
+          <StickyActionBar maxWidth="max-w-md">
               <Button
                 variant="gold"
                 size="lg"
@@ -802,8 +780,7 @@ async function handleFinish() {
                   </>
                 )}
               </Button>
-            </div>
-          </div>
+            </StickyActionBar>
         </div>
       )}
     </div>

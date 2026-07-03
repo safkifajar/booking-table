@@ -16,16 +16,15 @@ import {
   Link as LinkIcon,
   Lock,
   MapPin,
-  Music,
-  Utensils,
-  Wine,
   GraduationCap,
   Ruler,
   Camera,
   MessageSquareQuote,
+  Loader2,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
+import { StickyActionBar } from "@/components/ui/sticky-action-bar";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
 import { EDUCATION_OPTIONS } from "@/lib/education";
@@ -38,12 +37,6 @@ import { PROMPT_OPTIONS, MAX_PROMPTS } from "@/app/onboarding/prompts";
 
 type Gender = "" | "male" | "female";
 type InterestedIn = "" | "male" | "female" | "both";
-
-const LOOKING_FOR_OPTIONS = [
-  { value: "relationship", label: "Relationship" },
-  { value: "casual", label: "Casual Date" },
-  { value: "friendship", label: "Friendship" },
-];
 
 interface Props {
   email: string;
@@ -106,15 +99,17 @@ export function ProfileForm({
     React.useState<InterestedIn>(initialInterestedIn);
   const [socialLink, setSocialLink] = React.useState(initialSocialLink);
   const [area, setArea] = React.useState(initialArea);
-  const [lookingFor, setLookingFor] = React.useState(initialLookingFor);
   const [education, setEducation] = React.useState(initialEducation);
   const [heightCm, setHeightCm] = React.useState(
     initialHeightCm != null ? String(initialHeightCm) : ""
   );
   const [religion, setReligion] = React.useState(initialReligion);
-  const [musicPref, setMusicPref] = React.useState(initialMusicPref);
-  const [favFood, setFavFood] = React.useState(initialFavFood);
-  const [favDrink, setFavDrink] = React.useState(initialFavDrink);
+  // Disembunyikan dari form (looking-for, music, food, drink) tapi nilai lama
+  // tetap dikirim saat Save supaya tidak terhapus.
+  const lookingFor = initialLookingFor;
+  const musicPref = initialMusicPref;
+  const favFood = initialFavFood;
+  const favDrink = initialFavDrink;
   const [hideHistory, setHideHistory] = React.useState(initialHideHistory);
   const [hideLocation, setHideLocation] = React.useState(initialHideLocation);
   const [hideAge, setHideAge] = React.useState(initialHideAge);
@@ -190,7 +185,7 @@ export function ProfileForm({
   const bioLength = bio.length;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 pb-24">
       {/* FOTO — PhotoUploader menyimpan langsung ke server (tak nunggu Save). */}
       <Card>
         <CardHeader>
@@ -362,21 +357,6 @@ export function ProfileForm({
             />
           </div>
 
-          {/* Looking for */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Heart className="h-3 w-3" /> Looking for
-            </label>
-            <Select
-              value={lookingFor}
-              onChange={setLookingFor}
-              options={[
-                { value: "", label: "Prefer not to say" },
-                ...LOOKING_FOR_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-              ]}
-            />
-          </div>
-
           {/* Education */}
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
@@ -428,51 +408,6 @@ export function ProfileForm({
                 })),
               ]}
             />
-          </div>
-
-          {/* Music preference */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Music className="h-3 w-3" /> Favorite music
-            </label>
-            <input
-              type="text"
-              value={musicPref}
-              onChange={(e) => setMusicPref(e.target.value)}
-              placeholder="e.g. pop, jazz, hip-hop"
-              maxLength={120}
-              className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-            />
-          </div>
-
-          {/* Makanan & minuman favorit */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                <Utensils className="h-3 w-3" /> Favorite food
-              </label>
-              <input
-                type="text"
-                value={favFood}
-                onChange={(e) => setFavFood(e.target.value)}
-                placeholder="e.g. fried rice"
-                maxLength={120}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                <Wine className="h-3 w-3" /> Favorite drink
-              </label>
-              <input
-                type="text"
-                value={favDrink}
-                onChange={(e) => setFavDrink(e.target.value)}
-                placeholder="e.g. coffee, mojito"
-                maxLength={120}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-              />
-            </div>
           </div>
 
           {/* Bio */}
@@ -557,12 +492,24 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
-      {/* Submit */}
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="submit" variant="gold" size="lg" disabled={loading}>
-          {loading ? "Saving..." : "Save Profile"}
+      {/* Submit — sticky bawah (ala onboarding), gold pill full-width. */}
+      <StickyActionBar>
+        <Button
+          type="submit"
+          variant="gold"
+          size="lg"
+          className="w-full rounded-full h-14"
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+            </>
+          ) : (
+            "Save profile"
+          )}
         </Button>
-      </div>
+      </StickyActionBar>
     </form>
   );
 }
