@@ -14,6 +14,7 @@ import {
   Mail,
 } from "lucide-react";
 import { InstagramIcon } from "@/components/ui/brand-icons";
+import { SohoGlow } from "@/components/ui/soho-glow";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoCarousel } from "../ProfilePhotoCarousel";
@@ -71,17 +72,7 @@ export default async function ProfileAccountPage() {
 
   return (
     <main className="relative flex-1 pb-12">
-      {/* Glow merah maroon SOHO — spotlight moody nightclub di belakang konten.
-          Fixed di viewport, memancar dari tengah layar (center), memudar ke
-          background. pointer-events-none supaya tak ganggu klik. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(55% 45% at 50% 50%, rgba(225,29,42,0.22), rgba(122,31,31,0.10) 45%, transparent 72%), radial-gradient(75% 55% at 50% 50%, rgba(122,31,31,0.26), transparent 65%)",
-        }}
-      />
+      <SohoGlow />
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">

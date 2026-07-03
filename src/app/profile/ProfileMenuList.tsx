@@ -246,7 +246,7 @@ export function ProfileMenuList() {
 
 function MenuGroup({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+    <div className="rounded-xl border border-border bg-card/70 backdrop-blur-sm overflow-hidden divide-y divide-border">
       {children}
     </div>
   );
