@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { EDUCATION_OPTIONS } from "@/lib/education";
+import { RELIGION_OPTIONS } from "@/lib/religion";
 import {
   Search,
   UserPlus,
@@ -286,6 +289,15 @@ function CustomerFormDialog({
   const [interestedIn, setInterestedIn] = React.useState<
     "" | "male" | "female" | "both"
   >((row?.interested_in as "" | "male" | "female" | "both") ?? "");
+  const [birthDate, setBirthDate] = React.useState(row?.birth_date ?? "");
+  const [socialLink, setSocialLink] = React.useState(row?.social_link ?? "");
+  const [area, setArea] = React.useState(row?.area ?? "");
+  const [education, setEducation] = React.useState(row?.education ?? "");
+  const [heightCm, setHeightCm] = React.useState(
+    row?.height_cm != null ? String(row.height_cm) : ""
+  );
+  const [religion, setReligion] = React.useState(row?.religion ?? "");
+  const [bio, setBio] = React.useState(row?.bio ?? "");
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -302,17 +314,47 @@ function CustomerFormDialog({
       }
     }
     setSaving(true);
+    // Field profil bersama (create & update) — samakan dgn form edit profil.
+    const profilePayload = {
+      phone: phone.trim() || undefined,
+      gender: gender || undefined,
+      interestedIn: interestedIn || undefined,
+      birthDate: birthDate || undefined,
+      socialLink: socialLink.trim() || undefined,
+      area: area.trim() || undefined,
+      education:
+        (education as
+          | "high_school"
+          | "diploma"
+          | "bachelor"
+          | "master"
+          | "doctorate"
+          | "other"
+          | "") || undefined,
+      heightCm: heightCm.trim()
+        ? Math.min(230, Math.max(120, parseInt(heightCm, 10) || 120))
+        : null,
+      religion:
+        (religion as
+          | "islam"
+          | "christian"
+          | "catholic"
+          | "hindu"
+          | "buddhist"
+          | "confucian"
+          | "spiritual"
+          | "") || undefined,
+      bio: bio.trim() || undefined,
+    };
     try {
       if (isEdit) {
         await updateCustomer({
           id: row!.id,
           name: name.trim(),
           email: email.trim(),
-          phone: phone.trim() || undefined,
           password: password || undefined,
           isActive,
-          gender: gender || undefined,
-          interestedIn: interestedIn || undefined,
+          ...profilePayload,
         });
         toast.success(
           password ? "Customer & password updated" : "Customer updated"
@@ -322,7 +364,7 @@ function CustomerFormDialog({
           name: name.trim(),
           email: email.trim(),
           password,
-          phone: phone.trim() || undefined,
+          ...profilePayload,
         });
         toast.success("Customer created");
       }
@@ -466,6 +508,95 @@ function CustomerFormDialog({
                 </button>
               ))}
             </div>
+          </Field>
+
+          {/* Date of birth (opsional) */}
+          <Field label="Date of birth (optional)">
+            <DatePicker
+              value={birthDate}
+              onChange={setBirthDate}
+              max={new Date().toISOString().slice(0, 10)}
+            />
+          </Field>
+
+          {/* Address (opsional) */}
+          <Field label="Address (optional)">
+            <input
+              type="text"
+              value={area}
+              onChange={(e) => setArea(e.target.value)}
+              maxLength={120}
+              placeholder="e.g. North Purwokerto"
+              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            />
+          </Field>
+
+          {/* Social media (opsional) */}
+          <Field label="Social media (optional)">
+            <input
+              type="text"
+              value={socialLink}
+              onChange={(e) => setSocialLink(e.target.value)}
+              maxLength={200}
+              placeholder="@username"
+              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            />
+          </Field>
+
+          {/* Education (opsional) */}
+          <Field label="Education (optional)">
+            <Select
+              value={education}
+              onChange={setEducation}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...EDUCATION_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                })),
+              ]}
+            />
+          </Field>
+
+          {/* Height (opsional) */}
+          <Field label="Height cm (optional)">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={120}
+              max={230}
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              placeholder="e.g. 170"
+              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            />
+          </Field>
+
+          {/* Religion (opsional) */}
+          <Field label="Religion (optional)">
+            <Select
+              value={religion}
+              onChange={setReligion}
+              options={[
+                { value: "", label: "Prefer not to say" },
+                ...RELIGION_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: o.label,
+                })),
+              ]}
+            />
+          </Field>
+
+          {/* Bio (opsional) */}
+          <Field label="Short bio (optional)">
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={280}
+              rows={3}
+              placeholder="A short story about the customer"
+              className="w-full px-3 py-2 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 resize-none"
+            />
           </Field>
 
           {/* Status aktif (edit) — paling bawah; nonaktif = tak bisa login */}

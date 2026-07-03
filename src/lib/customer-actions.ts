@@ -39,6 +39,13 @@ export interface AdminCustomerRow {
   phone: string | null;
   gender: string | null;
   interested_in: string | null;
+  birth_date: string | null;
+  social_link: string | null;
+  area: string | null;
+  education: string | null;
+  height_cm: number | null;
+  religion: string | null;
+  bio: string | null;
   is_guest: boolean;
   is_active: boolean;
   created_at: string;
@@ -116,6 +123,13 @@ export async function listCustomers(
         phone: profiles.phone,
         gender: profiles.gender,
         interested_in: profiles.interestedIn,
+        birth_date: profiles.birthDate,
+        social_link: profiles.socialLink,
+        area: profiles.area,
+        education: profiles.education,
+        height_cm: profiles.heightCm,
+        religion: profiles.religion,
+        bio: profiles.bio,
         is_guest: profiles.isGuest,
         is_active: profiles.isActive,
         created_at: profiles.createdAt,
@@ -146,6 +160,13 @@ export async function listCustomers(
       phone: r.phone,
       gender: r.gender,
       interested_in: r.interested_in,
+      birth_date: r.birth_date,
+      social_link: r.social_link,
+      area: r.area,
+      education: r.education,
+      height_cm: r.height_cm,
+      religion: r.religion,
+      bio: r.bio,
       is_guest: r.is_guest,
       is_active: r.is_active,
       created_at: r.created_at.toISOString(),
@@ -161,11 +182,82 @@ export async function listCustomers(
 // CREATE
 // ============================================================
 
+/**
+ * Field profil opsional yang bisa diisi admin saat create/update customer.
+ * Disamakan dengan yang ada di form edit profil (ProfileForm) supaya data
+ * konsisten. Foto/prompts/interests sengaja tak di sini — lebih pas diisi
+ * user sendiri (butuh upload/picker).
+ */
+const profileFields = {
+  phone: z.string().max(20).optional(),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
+    .optional()
+    .or(z.literal("")),
+  gender: z.enum(["male", "female"]).optional().or(z.literal("")),
+  interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
+  socialLink: z.string().max(200).optional().or(z.literal("")),
+  area: z.string().max(120).optional().or(z.literal("")),
+  education: z
+    .enum([
+      "high_school",
+      "diploma",
+      "bachelor",
+      "master",
+      "doctorate",
+      "other",
+    ])
+    .optional()
+    .or(z.literal("")),
+  heightCm: z.number().int().min(120).max(230).nullable().optional(),
+  religion: z
+    .enum([
+      "islam",
+      "christian",
+      "catholic",
+      "hindu",
+      "buddhist",
+      "confucian",
+      "spiritual",
+    ])
+    .optional()
+    .or(z.literal("")),
+  bio: z.string().max(280).optional().or(z.literal("")),
+};
+
+/** Field profil → nilai untuk .set()/.values() (normalisasi trim/null). */
+function profileValues(data: {
+  phone?: string;
+  birthDate?: string;
+  gender?: string;
+  interestedIn?: string;
+  socialLink?: string;
+  area?: string;
+  education?: string;
+  heightCm?: number | null;
+  religion?: string;
+  bio?: string;
+}) {
+  return {
+    phone: data.phone?.trim() || null,
+    birthDate: data.birthDate || null,
+    gender: data.gender || null,
+    interestedIn: data.interestedIn || null,
+    socialLink: data.socialLink?.trim() || null,
+    area: data.area || null,
+    education: data.education || null,
+    heightCm: data.heightCm ?? null,
+    religion: data.religion || null,
+    bio: data.bio?.trim() || null,
+  };
+}
+
 const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(80),
   email: z.string().email("Invalid email").max(120),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
-  phone: z.string().max(20).optional(),
+  ...profileFields,
 });
 
 export async function createCustomer(input: z.infer<typeof createSchema>) {
@@ -194,7 +286,7 @@ export async function createCustomer(input: z.infer<typeof createSchema>) {
     await tx.insert(profiles).values({
       id: u.id,
       displayName: data.name,
-      phone: data.phone?.trim() || null,
+      ...profileValues(data),
     });
   });
 
@@ -209,19 +301,11 @@ const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(80),
   email: z.string().email().max(120),
-  phone: z.string().max(20).optional(),
-  birthDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
-    .optional()
-    .or(z.literal("")),
   /** Password baru (opsional) — kalau diisi, reset password customer. */
   password: z.string().min(6, "Password must be at least 6 characters").max(100).optional(),
   /** Status aktif. false = tak bisa login. */
   isActive: z.boolean(),
-  gender: z.enum(["male", "female"]).optional().or(z.literal("")),
-  interestedIn: z.enum(["male", "female", "both"]).optional().or(z.literal("")),
-  socialLink: z.string().max(200).optional().or(z.literal("")),
+  ...profileFields,
 });
 
 export async function updateCustomer(input: z.infer<typeof updateSchema>) {
@@ -261,12 +345,8 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
       .update(profiles)
       .set({
         displayName: data.name,
-        phone: data.phone?.trim() || null,
-        birthDate: data.birthDate || null,
         isActive: data.isActive,
-        gender: data.gender || null,
-        interestedIn: data.interestedIn || null,
-        socialLink: data.socialLink?.trim() || null,
+        ...profileValues(data),
       })
       .where(eq(profiles.id, data.id));
   });
