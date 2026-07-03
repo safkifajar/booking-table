@@ -13,6 +13,8 @@ import {
   getBarBySlug,
   getActiveSessionsByBar,
   getUnpaidSessionsForProfile,
+  expireFinishedSessions,
+  promoteDueReservations,
 } from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
@@ -44,6 +46,13 @@ export default async function HomePage() {
       </main>
     );
   }
+
+  // Lazy cleanup sebelum baca sesi aktif (sama pola dgn /bar/[slug] & dashboard
+  // staff): tutup sesi yg selesai (reservasi lewat / walk-in basi >12 jam) lalu
+  // promote reservasi yg waktunya tiba. Tanpa ini, sesi lama yg lupa ditutup
+  // tetap muncul di "LIVE NOW" walau sudah berhari-hari.
+  await expireFinishedSessions(bar.id);
+  await promoteDueReservations(bar.id);
 
   // Fetch data feed (parallel)
   const [allSessions, banners, unpaidSessions] = await Promise.all([
