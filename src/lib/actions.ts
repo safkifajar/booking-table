@@ -1825,6 +1825,15 @@ const updateProfileSchema = z.object({
   hideAge: z.boolean().optional(),
   hideSocial: z.boolean().optional(),
   hobbies: z.array(z.string().min(1).max(30)).max(15).optional(),
+  prompts: z
+    .array(
+      z.object({
+        prompt: z.string().min(1).max(120),
+        answer: z.string().min(1).max(280),
+      })
+    )
+    .max(5)
+    .optional(),
 });
 
 export async function updateProfile(input: z.infer<typeof updateProfileSchema>) {
@@ -1836,6 +1845,12 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
     .map((h) => h.trim())
     .filter((h) => h.length > 0)
     .filter((h, i, arr) => arr.indexOf(h) === i);
+
+  // Clean prompts: trim + buang kosong, maks 5.
+  const prompts = (data.prompts ?? [])
+    .map((p) => ({ prompt: p.prompt.trim(), answer: p.answer.trim() }))
+    .filter((p) => p.prompt && p.answer)
+    .slice(0, 5);
 
   await db
     .update(profiles)
@@ -1860,6 +1875,9 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
       ...(data.hideAge !== undefined ? { hideAge: data.hideAge } : {}),
       ...(data.hideSocial !== undefined ? { hideSocial: data.hideSocial } : {}),
       hobbies,
+      // Hanya tulis prompts kalau caller mengirim (jaga data lama kalau field
+      // tak dikirim). Form edit selalu mengirim.
+      ...(data.prompts !== undefined ? { prompts } : {}),
     })
     .where(eq(profiles.id, profile.id));
 

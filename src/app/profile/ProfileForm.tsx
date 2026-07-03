@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  X,
   Sparkles,
   Mail,
   Phone,
@@ -22,14 +21,19 @@ import {
   Wine,
   GraduationCap,
   Ruler,
+  Camera,
+  MessageSquareQuote,
 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { updateProfile } from "@/lib/actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
-import type { HobbyGroup } from "@/lib/hobbies";
 import { EDUCATION_OPTIONS } from "@/lib/education";
 import { RELIGION_OPTIONS } from "@/lib/religion";
+import { PhotoUploader } from "@/app/onboarding/PhotoUploader";
+import { PromptPicker } from "@/app/onboarding/PromptPicker";
+import { InterestPicker } from "@/app/onboarding/InterestPicker";
+import { PROMPT_OPTIONS, MAX_PROMPTS } from "@/app/onboarding/prompts";
 
 
 type Gender = "" | "male" | "female";
@@ -63,7 +67,8 @@ interface Props {
   initialHideAge: boolean;
   initialHideSocial: boolean;
   initialHobbies: string[];
-  hobbyGroups: HobbyGroup[];
+  initialPhotos: string[];
+  initialPrompts: { prompt: string; answer: string }[];
 }
 
 export function ProfileForm({
@@ -88,7 +93,8 @@ export function ProfileForm({
   initialHideAge,
   initialHideSocial,
   initialHobbies,
-  hobbyGroups,
+  initialPhotos,
+  initialPrompts,
 }: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
@@ -114,17 +120,11 @@ export function ProfileForm({
   const [hideAge, setHideAge] = React.useState(initialHideAge);
   const [hideSocial, setHideSocial] = React.useState(initialHideSocial);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
+  const [photos, setPhotos] = React.useState<string[]>(initialPhotos);
+  const [prompts, setPrompts] = React.useState<
+    { prompt: string; answer: string }[]
+  >(initialPrompts);
   const [loading, setLoading] = React.useState(false);
-
-  function toggleHobby(h: string) {
-    const normalized = h.trim().toLowerCase();
-    if (!normalized) return;
-    setHobbies((prev) =>
-      prev.includes(normalized)
-        ? prev.filter((x) => x !== normalized)
-        : [...prev, normalized].slice(0, 15)
-    );
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -175,6 +175,7 @@ export function ProfileForm({
         hideAge,
         hideSocial,
         hobbies,
+        prompts,
       });
       toast.success("Profile saved");
       // Balik ke tampilan profil (CMB-style) dengan data terbaru.
@@ -186,17 +187,49 @@ export function ProfileForm({
     }
   }
 
-  // Saran per kategori (dari master list admin), sembunyikan yg sudah dipilih.
-  const suggestionGroups = hobbyGroups
-    .map((cat) => ({
-      label: cat.category,
-      items: cat.items.map((i) => i.name).filter((h) => !hobbies.includes(h)),
-    }))
-    .filter((cat) => cat.items.length > 0);
   const bioLength = bio.length;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* FOTO — PhotoUploader menyimpan langsung ke server (tak nunggu Save). */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Camera className="h-4 w-4 text-primary" />
+            Photos
+          </CardTitle>
+          <CardDescription>
+            Up to 3 photos — the first is your main photo. Saved instantly when
+            you upload or remove.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PhotoUploader photos={photos} onChange={setPhotos} />
+        </CardContent>
+      </Card>
+
+      {/* PROMPTS — ice-breaker (disimpan saat Save). */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquareQuote className="h-4 w-4 text-primary" />
+            Prompts
+          </CardTitle>
+          <CardDescription>
+            Pick a few and answer them — up to {MAX_PROMPTS}. Great ice-breakers
+            for people at SOHO.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PromptPicker
+            prompts={prompts}
+            onChange={setPrompts}
+            options={PROMPT_OPTIONS}
+            max={MAX_PROMPTS}
+          />
+        </CardContent>
+      </Card>
+
       {/* IDENTITAS */}
       <Card>
         <CardHeader>
@@ -469,72 +502,19 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
-      {/* HOBI */}
+      {/* INTERESTS — katalog onboarding (English + emoji). */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
-            Hobbies & Interests
+            Interests
           </CardTitle>
           <CardDescription>
-            Help your host & tablemates get to know you — easier vibe matching.
-            Pick from the available options. Max 15 hobbies.
+            Pick what you like so people find their crowd at SOHO. Up to 15.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Your hobbies ({hobbies.length})
-            </p>
-            {hobbies.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                None yet. Pick from the list below.
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {hobbies.map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => toggleHobby(h)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/15 border border-primary/40 text-primary hover:bg-primary/20 transition"
-                  >
-                    {h}
-                    <X className="h-3 w-3 opacity-70" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {suggestionGroups.length > 0 && (
-            <div className="space-y-3">
-              {suggestionGroups.map((cat) => (
-                <div key={cat.label}>
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                    {cat.label}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {cat.items.map((h) => (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => toggleHobby(h)}
-                        disabled={hobbies.length >= 15}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-xs font-medium border transition",
-                          "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30",
-                          "disabled:opacity-40 disabled:cursor-not-allowed"
-                        )}
-                      >
-                        + {h}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <CardContent>
+          <InterestPicker selected={hobbies} onChange={setHobbies} max={15} />
         </CardContent>
       </Card>
 

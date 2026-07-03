@@ -2,14 +2,12 @@ import { redirect } from "next/navigation";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { ProfileSubpageHeader } from "../../ProfileSubpageHeader";
 import { ProfileForm } from "../../ProfileForm";
-import { getHobbyGroups } from "@/lib/hobby-actions";
 
 /**
  * Form EDIT profil. Tampilan VIEW (CMB-style) ada di /profile/account.
  */
 export default async function ProfileAccountEditPage() {
   const profile = await getCurrentProfile();
-  const hobbyGroups = await getHobbyGroups();
   if (!profile) {
     redirect("/auth?next=/profile/account/edit");
   }
@@ -49,7 +47,8 @@ export default async function ProfileAccountEditPage() {
           initialHideAge={profile.hideAge}
           initialHideSocial={profile.hideSocial}
           initialHobbies={profile.hobbies ?? []}
-          hobbyGroups={hobbyGroups}
+          initialPhotos={profile.photos ?? []}
+          initialPrompts={profile.prompts ?? []}
         />
       </div>
     </main>
