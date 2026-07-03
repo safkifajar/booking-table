@@ -18,7 +18,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Secret tidak bisa dipakai di `if` job-level, jadi diangkat ke output dulu.
+      # Kalau VPS_HOST belum diisi (VPS belum ada) → step deploy di-skip,
+      # job tetap HIJAU (bukan gagal merah).
+      - name: Cek secret VPS
+        id: check
+        run: |
+          if [ -n "${{ secrets.VPS_HOST }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secret VPS belum diisi — deploy di-skip. Isi VPS_HOST/VPS_USER/VPS_SSH_KEY di Settings > Secrets untuk mengaktifkan."
+          fi
+
       - name: Deploy ke VPS (production)
+        if: steps.check.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
