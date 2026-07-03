@@ -3,6 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { PhotoGalleryViewer } from "@/components/ui/photo-gallery-viewer";
 
 /**
  * Galeri foto profil ala CMB — swipe horizontal (scroll-snap) + indikator dot +
@@ -21,6 +22,10 @@ export function ProfilePhotoCarousel({
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(0);
   const count = photos.length;
+  // Index foto yg sedang dibuka fullscreen (null = tertutup).
+  const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
+  // Posisi pointer saat mulai tekan — untuk bedakan tap vs swipe.
+  const downPos = React.useRef<{ x: number; y: number } | null>(null);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -46,6 +51,7 @@ export function ProfilePhotoCarousel({
   }
 
   return (
+    <>
     <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-muted/20">
       {/* Track swipe */}
       <div
@@ -55,9 +61,25 @@ export function ProfilePhotoCarousel({
         style={{ scrollbarWidth: "none" }}
       >
         {photos.map((src, i) => (
-          <div
+          <button
             key={src}
-            className="relative h-full w-full shrink-0 snap-center"
+            type="button"
+            aria-label={`View photo ${i + 1} full screen`}
+            onPointerDown={(e) => {
+              downPos.current = { x: e.clientX, y: e.clientY };
+            }}
+            onClick={(e) => {
+              // Buka viewer hanya kalau tap (bukan geser/swipe).
+              const d = downPos.current;
+              if (
+                d &&
+                Math.abs(e.clientX - d.x) < 8 &&
+                Math.abs(e.clientY - d.y) < 8
+              ) {
+                setViewerIndex(i);
+              }
+            }}
+            className="relative h-full w-full shrink-0 snap-center cursor-zoom-in"
           >
             <Image
               src={src}
@@ -67,7 +89,7 @@ export function ProfilePhotoCarousel({
               className="object-cover"
               priority={i === 0}
             />
-          </div>
+          </button>
         ))}
       </div>
 
@@ -101,5 +123,15 @@ export function ProfilePhotoCarousel({
         </div>
       )}
     </div>
+
+      {viewerIndex !== null && (
+        <PhotoGalleryViewer
+          photos={photos}
+          initialIndex={viewerIndex}
+          alt={displayName}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
+    </>
   );
 }
