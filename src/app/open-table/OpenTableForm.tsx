@@ -222,7 +222,7 @@ export function OpenTableForm({
         .filter(([, qty]) => qty > 0)
         .map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
 
-      await openTable({
+      const result = await openTable({
         tableId: table.id,
         visibility,
         vibeTags: vibes,
@@ -235,6 +235,18 @@ export function OpenTableForm({
             ? invited.map((u) => u.id)
             : undefined,
       });
+      // Sukses → openTable redirect (tak return apa-apa). Kalau ada return
+      // { ok:false }, itu validasi reservasi (jam operasi/slot lewat/bentrok)
+      // yang alasannya harus ditampilkan ke user.
+      if (result && result.ok === false) {
+        toast.error(result.error);
+        if (result.error.toLowerCase().includes("booked")) {
+          router.push(`/bar/${barSlug}`);
+          return;
+        }
+        setLoading(false);
+        return;
+      }
       // openTable redirects on success
     } catch (err) {
       const message = getActionErrorMessage(err, "Failed to open table");

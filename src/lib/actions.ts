@@ -276,7 +276,15 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       existing
     );
     if (!validation.ok) {
-      throw new Error(validation.reason ?? "Invalid reservation time");
+      // Validasi yang DIHARAPKAN (jam operasi, slot lewat, bentrok, dll) —
+      // bukan bug. RETURN, bukan throw: di production Next.js menyensor pesan
+      // thrown error Server Action jadi digest generik ("digest: 1370...")
+      // sehingga user tak tahu alasannya. Nilai return TIDAK disensor, jadi
+      // pesan aslinya sampai ke client & bisa ditampilkan di toast.
+      return {
+        ok: false as const,
+        error: validation.reason ?? "Waktu reservasi tidak valid",
+      };
     }
   }
 
