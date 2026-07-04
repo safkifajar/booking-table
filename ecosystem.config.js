@@ -45,6 +45,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 3000,
+        // Semua logika waktu (reservasi, jam operasi, "past") pakai Asia/Jakarta.
+        // Tanpa ini, VPS default UTC → booking meleset 7 jam / tak bisa booking.
+        TZ: "Asia/Jakarta",
       },
     },
     {
@@ -54,6 +57,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 3001,
+        TZ: "Asia/Jakarta",
       },
     },
   ],

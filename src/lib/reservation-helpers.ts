@@ -136,7 +136,7 @@ export function isWithinOperatingHours(
   const dayKey = getDayKey(date);
   const dayHours = hours[dayKey];
 
-  if (!dayHours) {
+  if (!dayHours || !dayHours.open || !dayHours.close) {
     return { ok: false, reason: "Operating hours tidak terdefinisi" };
   }
   if (dayHours.closed) {
