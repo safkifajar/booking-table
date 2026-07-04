@@ -140,7 +140,9 @@ function buildHourRows(
   const date = groupKeyToDate(gk);
   const dayKey = DAY_KEYS_FLOOR[date.getDay()];
   const dh = hours[dayKey];
-  if (!dh || dh.closed) return [];
+  // Tutup kalau: hari tak ada, ditandai closed, atau jam open/close tak lengkap
+  // (data lama/rusak) — hindari crash `.split` pada undefined.
+  if (!dh || dh.closed || !dh.open || !dh.close) return [];
 
   const toMin = (t: string) => {
     const [h, m] = t.split(":").map(Number);
