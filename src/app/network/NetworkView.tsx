@@ -9,6 +9,8 @@ import {
   X,
   MapPin,
   GraduationCap,
+  Users,
+  Cake,
 } from "lucide-react";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { RatingStars } from "@/components/network/RatingStars";
@@ -18,6 +20,7 @@ import { listAllMembers } from "@/lib/customer-actions";
 import { educationLabel } from "@/lib/education";
 import { cn } from "@/lib/utils";
 import type { NetworkSearchUser } from "@/types/db";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 /**
  * Feed "Discover" ala CMB — kartu foto besar semua member. Prioritas urutan
@@ -26,11 +29,11 @@ import type { NetworkSearchUser } from "@/types/db";
  */
 export function NetworkView({
   myProfileId,
-  popularHobbies,
+  interestCatalog,
   interestedIn,
 }: {
   myProfileId: string | null;
-  popularHobbies: string[];
+  interestCatalog: HobbyGroup[];
   interestedIn: "male" | "female" | "both" | "";
 }) {
   const [query, setQuery] = React.useState("");
@@ -116,75 +119,88 @@ export function NetworkView({
 
   return (
     <div>
-      {/* Search + Filter */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search members by name…"
-            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-          />
-        </div>
-        {popularHobbies.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setFilterOpen(true)}
-            className={cn(
-              "shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm transition",
-              selectedHobbies.length > 0
-                ? "border-primary bg-primary/15 text-primary font-medium"
-                : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
-            )}
-            aria-label="Filter by hobby"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            <span>Filter</span>
-            {selectedHobbies.length > 0 && (
-              <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 leading-none">
-                {selectedHobbies.length}
-              </span>
-            )}
-          </button>
-        )}
-      </div>
+      {/* Sticky: judul + search + filter — tetap terlihat saat scroll feed.
+          top-[57px] = tinggi header brand di page.tsx. */}
+      <div className="sticky top-[56px] z-20 border-b border-border bg-background/95 backdrop-blur-md">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-5 w-5 text-primary" />
+            <h1 className="text-xl font-bold tracking-tight">Discover</h1>
+          </div>
 
-      {/* Chip hobi terpilih */}
-      {selectedHobbies.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 mb-4">
-          {selectedHobbies.map((h) => (
-            <span
-              key={h}
-              className="inline-flex items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary"
-            >
-              {h}
+          {/* Search + Filter */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search members by name…"
+                className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+            {interestCatalog.length > 0 && (
               <button
                 type="button"
-                onClick={() => removeHobby(h)}
-                aria-label={`Remove filter ${h}`}
-                className="hover:text-primary/70"
+                onClick={() => setFilterOpen(true)}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm transition",
+                  selectedHobbies.length > 0
+                    ? "border-primary bg-primary/15 text-primary font-medium"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                )}
+                aria-label="Filter by hobby"
               >
-                <X className="h-3 w-3" />
+                <SlidersHorizontal className="h-4 w-4" />
+                <span>Filter</span>
+                {selectedHobbies.length > 0 && (
+                  <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 leading-none">
+                    {selectedHobbies.length}
+                  </span>
+                )}
               </button>
-            </span>
-          ))}
-          <button
-            type="button"
-            onClick={() => setSelectedHobbies([])}
-            className="text-xs text-muted-foreground hover:text-foreground ml-1"
-          >
-            Clear all
-          </button>
-        </div>
-      )}
+            )}
+          </div>
 
+          {/* Chip hobi terpilih (di dalam sticky biar ikut kelihatan) */}
+          {selectedHobbies.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-3">
+              {selectedHobbies.map((h) => (
+                <span
+                  key={h}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary"
+                >
+                  {h}
+                  <button
+                    type="button"
+                    onClick={() => removeHobby(h)}
+                    aria-label={`Remove filter ${h}`}
+                    className="hover:text-primary/70"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSelectedHobbies([])}
+                className="text-xs text-muted-foreground hover:text-foreground ml-1"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Konten feed */}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-4">
       <HobbyFilterSheet
         key={filterOpen ? "open" : "closed"}
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
-        hobbies={popularHobbies}
+        catalog={interestCatalog}
         selected={selectedHobbies}
         onApply={setSelectedHobbies}
       />
@@ -215,6 +231,7 @@ export function NetworkView({
           All members shown.
         </p>
       )}
+      </div>
     </div>
   );
 }
@@ -228,12 +245,6 @@ function MemberCard({
   isMe: boolean;
 }) {
   const eduLabel = educationLabel(user.education);
-  const metaLine = [
-    user.age !== null ? String(user.age) : null,
-    user.area,
-  ]
-    .filter(Boolean)
-    .join(", ");
 
   return (
     <Link
@@ -267,10 +278,16 @@ function MemberCard({
           )}
         </div>
 
-        {metaLine && (
+        {user.area && (
           <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 truncate">{metaLine}</span>
+            <span className="min-w-0 truncate">{user.area}</span>
+          </div>
+        )}
+        {user.age !== null && (
+          <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Cake className="h-3.5 w-3.5 shrink-0" />
+            <span>{user.age} yrs</span>
           </div>
         )}
         {eduLabel && (

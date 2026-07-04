@@ -3,22 +3,23 @@
 import * as React from "react";
 import { X, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { HobbyGroup } from "@/lib/hobbies";
 
 /**
- * Bottom sheet untuk pilih filter hobi & minat (multi-select). Mengikuti pola
- * bottom sheet repo: overlay bg-black/40, muncul dari bawah (rounded-t-2xl),
- * di desktop jadi modal tengah. Pilihan diterapkan saat klik "Terapkan".
+ * Bottom sheet untuk pilih filter interest (multi-select). Dikelompokkan per
+ * kategori + emoji — konsisten dgn katalog interests onboarding/admin. Pilihan
+ * diterapkan saat klik "Apply". Nilai = `name` (cocok profiles.hobbies).
  */
 export function HobbyFilterSheet({
   open,
   onClose,
-  hobbies,
+  catalog,
   selected,
   onApply,
 }: {
   open: boolean;
   onClose: () => void;
-  hobbies: string[];
+  catalog: HobbyGroup[];
   selected: string[];
   onApply: (next: string[]) => void;
 }) {
@@ -67,33 +68,45 @@ export function HobbyFilterSheet({
           </button>
         </div>
 
-        {/* Daftar hobi */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {hobbies.length === 0 ? (
+        {/* Daftar interest per kategori (dgn emoji) */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {catalog.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              No hobbies yet.
+              No interests yet.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {hobbies.map((h) => {
-                const on = draft.includes(h);
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => toggle(h)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-sm border transition",
-                      on
-                        ? "border-primary bg-primary/15 text-primary font-medium"
-                        : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70"
-                    )}
-                  >
-                    {h}
-                  </button>
-                );
-              })}
-            </div>
+            catalog.map((group) => (
+              <div key={group.category}>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80 mb-2">
+                  {group.category}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((item) => {
+                    const on = draft.includes(item.name);
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        onClick={() => toggle(item.name)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border transition",
+                          on
+                            ? "border-primary bg-primary/15 text-primary font-medium"
+                            : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70"
+                        )}
+                      >
+                        {item.emoji && (
+                          <span aria-hidden className="leading-none">
+                            {item.emoji}
+                          </span>
+                        )}
+                        {item.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
           )}
         </div>
 

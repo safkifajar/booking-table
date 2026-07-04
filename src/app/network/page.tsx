@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Users } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getBarBySlug, getPopularHobbies } from "@/lib/queries";
+import { getBarBySlug } from "@/lib/queries";
+import { getHobbyGroups } from "@/lib/hobby-actions";
 import { NetworkView } from "./NetworkView";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function NetworkPage() {
     );
   }
 
-  const popularHobbies = await getPopularHobbies(12);
+  const interestCatalog = await getHobbyGroups();
   const isAnon = !profile;
 
   return (
@@ -57,23 +57,13 @@ export default async function NetworkPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Users className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold tracking-tight">Discover</h1>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Explore other members at SOHO — people you&apos;re into show up first.
-        </p>
-
-        <NetworkView
-          myProfileId={profile?.id ?? null}
-          popularHobbies={popularHobbies}
-          interestedIn={
-            (profile?.interestedIn as "male" | "female" | "both" | "") ?? ""
-          }
-        />
-      </div>
+      <NetworkView
+        myProfileId={profile?.id ?? null}
+        interestCatalog={interestCatalog}
+        interestedIn={
+          (profile?.interestedIn as "male" | "female" | "both" | "") ?? ""
+        }
+      />
 
       <HomeBottomNav
         barId={bar.id}

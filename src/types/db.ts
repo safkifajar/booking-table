@@ -293,6 +293,10 @@ export interface PublicProfile {
   /** Privacy: true = riwayat kunjungan disembunyikan dari viewer (bukan pemilik). */
   hide_history: boolean;
   hobbies: string[];
+  /** Galeri foto profil (carousel). */
+  photos: string[];
+  /** Prompt profil (ice-breaker) — [{prompt, answer}]. */
+  prompts: { prompt: string; answer: string }[];
   rating: UserRatingSummary;
   visit_count: number;
   /** Sesi aktif tempat user sedang nongkrong sekarang (kalau ada). */

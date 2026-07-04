@@ -832,6 +832,7 @@ export async function getPublicProfile(
       id: profiles.id,
       display_name: profiles.displayName,
       avatar_url: profiles.avatarUrl,
+      photos: profiles.photos,
       bio: profiles.bio,
       phone: profiles.phone,
       birth_date: profiles.birthDate,
@@ -848,6 +849,7 @@ export async function getPublicProfile(
       hide_age: profiles.hideAge,
       hide_social: profiles.hideSocial,
       hobbies: profiles.hobbies,
+      prompts: profiles.prompts,
       is_guest: profiles.isGuest,
     })
     .from(profiles)
@@ -902,6 +904,8 @@ export async function getPublicProfile(
     religion: p.religion,
     hide_history: hideHistory,
     hobbies: p.hobbies,
+    photos: p.photos ?? [],
+    prompts: p.prompts ?? [],
     rating,
     visit_count,
     active_session:

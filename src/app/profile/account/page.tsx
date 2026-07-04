@@ -108,6 +108,7 @@ export default async function ProfileAccountPage() {
         <ProfilePhotoCarousel
           photos={profile.photos ?? []}
           displayName={profile.displayName}
+          fullWidth
         />
 
         {/* Kartu identitas */}

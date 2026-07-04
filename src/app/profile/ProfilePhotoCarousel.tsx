@@ -27,7 +27,7 @@ export function ProfilePhotoCarousel({
   const count = photos.length;
   // Kelas ukuran kontainer sesuai mode.
   const frameCls = fullWidth
-    ? "aspect-[4/5] w-full"
+    ? "aspect-[4/3] w-full"
     : "mx-auto aspect-square w-full max-w-xs";
   // Index foto yg sedang dibuka fullscreen (null = tertutup).
   const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
