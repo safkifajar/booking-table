@@ -213,11 +213,12 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       ? "/staff/waiter?tab=sessions"
       : defaultDashboardFor(staffRole)
     : `/bar/${sessionRow.bar_slug}`;
-  // ?from= override (mis. datang dari profil network) — hanya path internal aman.
-  // Staff tetap ke dashboard masing-masing (abaikan from).
-  const backHref = staffRole
-    ? defaultBack
-    : safeInternalPath(from) ?? defaultBack;
+  // ?from= override (mis. datang dari booking/floor atau profil network) —
+  // hanya path internal aman. Berlaku utk SEMUA peran: staff/admin yg lagi
+  // jadi customer (booking sendiri) tetap balik ke asalnya, bukan dashboard.
+  // Kalau tak ada from, fallback ke default (dashboard utk staff, /bar utk
+  // customer).
+  const backHref = safeInternalPath(from) ?? defaultBack;
 
   // Rating batch untuk semua members
   const memberProfileIds = membersRaw.map((m) => m.profile_id);
