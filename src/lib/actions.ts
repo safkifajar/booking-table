@@ -276,6 +276,18 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       existing
     );
     if (!validation.ok) {
+      // DIAGNOSTIK sementara — hapus setelah bug midnight ketemu.
+      console.log("[openTable] validasi gagal:", {
+        reason: validation.reason,
+        reservationAt: reservationAt.toISOString(),
+        reservationEndAt: reservationEndAt?.toISOString(),
+        now: now.toISOString(),
+        nowLocal: now.toString(),
+        tz: process.env.TZ ?? "(unset)",
+        nowHours: now.getHours(),
+        slotInterval: resConfig.slotIntervalMinutes,
+        minLead: resConfig.minLeadTimeMinutes,
+      });
       // Validasi yang DIHARAPKAN (jam operasi, slot lewat, bentrok, dll) —
       // bukan bug. RETURN, bukan throw: di production Next.js menyensor pesan
       // thrown error Server Action jadi digest generik ("digest: 1370...")
