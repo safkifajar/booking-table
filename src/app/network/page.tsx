@@ -5,6 +5,7 @@ import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getBarBySlug } from "@/lib/queries";
 import { getHobbyGroups } from "@/lib/hobby-actions";
+import { SohoGlow } from "@/components/ui/soho-glow";
 import { NetworkView } from "./NetworkView";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +38,10 @@ export default async function NetworkPage() {
   const isAnon = !profile;
 
   return (
-    <main className="flex-1 pb-24">
+    <main className="relative flex-1 pb-24">
+      <SohoGlow />
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span

@@ -8,6 +8,7 @@ import { StoryBarSection } from "@/components/story/StoryBarSection";
 import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
+import { SohoGlow } from "@/components/ui/soho-glow";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
   getBarBySlug,
@@ -75,9 +76,10 @@ export default async function HomePage() {
   const greet = greeting(new Date().getHours());
 
   return (
-    <main className="flex-1 pb-24">
+    <main className="relative flex-1 pb-24">
+      <SohoGlow />
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span

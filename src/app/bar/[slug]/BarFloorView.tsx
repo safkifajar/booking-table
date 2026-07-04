@@ -7,6 +7,7 @@ import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SohoGlow } from "@/components/ui/soho-glow";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Loader2, Map as MapIcon, UtensilsCrossed } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
@@ -266,9 +267,10 @@ export function BarFloorView({
   }, [bar.id, router]);
 
   return (
-    <main className="flex-1 pb-32">
+    <main className="relative flex-1 pb-32">
+      <SohoGlow />
       {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <span
             className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 text-[11px] font-extrabold tracking-tight shadow-md shrink-0"
