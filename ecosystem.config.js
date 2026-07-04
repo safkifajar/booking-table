@@ -24,6 +24,9 @@
 const common = {
   script: "npm",
   args: "start",
+  // FORK mode wajib: `next start` bukan aplikasi cluster-aware. Cluster mode
+  // bikin PM2 gagal boot ("errored" + restart loop). instances tetap 1.
+  exec_mode: "fork",
   instances: 1,
   autorestart: true,
   max_memory_restart: "1G",
