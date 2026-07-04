@@ -15,13 +15,20 @@ import { PhotoGalleryViewer } from "@/components/ui/photo-gallery-viewer";
 export function ProfilePhotoCarousel({
   photos,
   displayName,
+  fullWidth = false,
 }: {
   photos: string[];
   displayName: string;
+  /** true = lebar penuh + potret 4:5 (kartu Discover). default = persegi max-w-xs. */
+  fullWidth?: boolean;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(0);
   const count = photos.length;
+  // Kelas ukuran kontainer sesuai mode.
+  const frameCls = fullWidth
+    ? "aspect-[4/5] w-full"
+    : "mx-auto aspect-square w-full max-w-xs";
   // Index foto yg sedang dibuka fullscreen (null = tertutup).
   const [viewerIndex, setViewerIndex] = React.useState<number | null>(null);
   // Posisi pointer saat mulai tekan — untuk bedakan tap vs swipe.
@@ -42,7 +49,12 @@ export function ProfilePhotoCarousel({
 
   if (count === 0) {
     return (
-      <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-muted/30 flex items-center justify-center">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-2xl border border-border bg-muted/30 flex items-center justify-center",
+          frameCls
+        )}
+      >
         <span className="text-5xl font-bold text-muted-foreground/40">
           {displayName.charAt(0).toUpperCase()}
         </span>
@@ -52,7 +64,12 @@ export function ProfilePhotoCarousel({
 
   return (
     <>
-    <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-2xl border border-border bg-muted/20">
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-border bg-muted/20",
+        frameCls
+      )}
+    >
       {/* Track swipe */}
       <div
         ref={scrollRef}

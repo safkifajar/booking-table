@@ -25,8 +25,24 @@ import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import { getUserRatingsBatch } from "@/lib/queries";
+import {
+  getUserRatingsBatch,
+  getBarBySlug,
+  getActiveProfileIdsAtBar,
+} from "@/lib/queries";
 import type { NetworkMembersPage } from "@/types/db";
+
+/** Umur dari ISO date "YYYY-MM-DD" (null kalau kosong/invalid). */
+function ageFromISO(iso: string | null): number | null {
+  if (!iso) return null;
+  const dob = new Date(iso);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  return age >= 0 && age < 130 ? age : null;
+}
 
 // ============================================================
 // LIST
@@ -507,6 +523,8 @@ export async function listAllMembers(opts?: {
   query?: string;
   cursor?: string | null;
   hobbies?: string[];
+  /** Ketertarikan viewer — prioritaskan gender ini di urutan (male/female). */
+  interestedIn?: "male" | "female" | "both" | "";
 }): Promise<NetworkMembersPage> {
   const me = await getCurrentProfile();
   if (!me) return { users: [], next_cursor: null };
@@ -514,6 +532,16 @@ export async function listAllMembers(opts?: {
   const q = (opts?.query ?? "").trim();
   const hobbies = (opts?.hobbies ?? []).filter((h) => h.trim().length > 0);
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  // Prioritas gender: 0 = gender cocok interestedIn (tampil dulu), 1 = sisanya.
+  // both/"" → semua priority 0 (urut biasa).
+  const wantGender =
+    opts?.interestedIn === "male" || opts?.interestedIn === "female"
+      ? opts.interestedIn
+      : null;
+  const priorityExpr = wantGender
+    ? sql<number>`CASE WHEN ${profiles.gender} = ${wantGender} THEN 0 ELSE 1 END`
+    : sql<number>`0`;
 
   const conditions = [
     sql`${users.id} <> ${me.id}`,
@@ -525,8 +553,6 @@ export async function listAllMembers(opts?: {
       or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
     );
   }
-  // Filter hobi: user punya MINIMAL SATU dari hobi terpilih (array overlap &&).
-  // Bangun ARRAY['a','b',...]::text[] dgn tiap nilai sbg parameter terpisah.
   if (hobbies.length > 0) {
     const elems = sql.join(
       hobbies.map((h) => sql`${h}`),
@@ -534,16 +560,16 @@ export async function listAllMembers(opts?: {
     );
     conditions.push(sql`${profiles.hobbies} && ARRAY[${elems}]::text[]`);
   }
-  // Keyset: ambil baris SETELAH cursor (displayName, id) terakhir. Pemisah
-  // cursor = "\n" — display_name bisa berisi spasi, jadi spasi tak bisa jadi
-  // pemisah; id (uuid) tak mengandung newline.
+  // Keyset dgn priority: baris SETELAH (priority, displayName, id) terakhir.
+  // Cursor = "<priority>\n<displayName>\n<id>". Tuple compare jaga urutan
+  // konsisten lintas grup priority saat infinite scroll.
   if (opts?.cursor) {
-    const sep = opts.cursor.indexOf("\n");
-    if (sep >= 0) {
-      const cName = opts.cursor.slice(0, sep);
-      const cId = opts.cursor.slice(sep + 1);
+    const parts = opts.cursor.split("\n");
+    if (parts.length === 3) {
+      const [cPrioStr, cName, cId] = parts;
+      const cPrio = Number(cPrioStr);
       conditions.push(
-        sql`(${profiles.displayName}, ${users.id}) > (${cName}, ${cId})`
+        sql`(${priorityExpr}, ${profiles.displayName}, ${users.id}) > (${cPrio}, ${cName}, ${cId})`
       );
     }
   }
@@ -553,17 +579,32 @@ export async function listAllMembers(opts?: {
       id: users.id,
       display_name: profiles.displayName,
       avatar_url: profiles.avatarUrl,
+      photos: profiles.photos,
+      gender: profiles.gender,
+      birth_date: profiles.birthDate,
+      area: profiles.area,
+      education: profiles.education,
+      hide_age: profiles.hideAge,
+      hide_location: profiles.hideLocation,
       hobbies: profiles.hobbies,
+      priority: priorityExpr,
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
     .where(and(...conditions))
-    .orderBy(profiles.displayName, users.id)
+    .orderBy(priorityExpr, profiles.displayName, users.id)
     .limit(MEMBERS_PAGE_SIZE + 1);
 
-  // Ambil 1 lebih untuk tahu apakah masih ada halaman berikutnya.
   const hasMore = rows.length > MEMBERS_PAGE_SIZE;
   const pageRows = hasMore ? rows.slice(0, MEMBERS_PAGE_SIZE) : rows;
+
+  // Badge "At SOHO now": set profile_id yg sedang nongkrong di bar default.
+  const bar = await getBarBySlug(
+    process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto"
+  );
+  const activeIds = bar
+    ? await getActiveProfileIdsAtBar(bar.id)
+    : new Set<string>();
 
   const ratings = await getUserRatingsBatch(pageRows.map((r) => r.id));
   const last = pageRows[pageRows.length - 1];
@@ -572,10 +613,19 @@ export async function listAllMembers(opts?: {
       id: r.id,
       display_name: r.display_name,
       avatar_url: r.avatar_url,
+      photos: r.photos ?? [],
+      // Privasi: hormati hide_age / hide_location.
+      age: r.hide_age ? null : ageFromISO(r.birth_date),
+      area: r.hide_location ? null : r.area,
+      education: r.education,
+      gender: r.gender,
+      at_soho: activeIds.has(r.id),
       hobbies: r.hobbies,
       rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
     })),
     next_cursor:
-      hasMore && last ? `${last.display_name}\n${last.id}` : null,
+      hasMore && last
+        ? `${last.priority}\n${last.display_name}\n${last.id}`
+        : null,
   };
 }

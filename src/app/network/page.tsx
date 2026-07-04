@@ -4,12 +4,7 @@ import { Users } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
-import {
-  getBarBySlug,
-  getActiveUsersAtBar,
-  getPopularHobbies,
-  getMyActiveSessionIds,
-} from "@/lib/queries";
+import { getBarBySlug, getPopularHobbies } from "@/lib/queries";
 import { NetworkView } from "./NetworkView";
 
 export const dynamic = "force-dynamic";
@@ -38,11 +33,7 @@ export default async function NetworkPage() {
     );
   }
 
-  const [activeUsers, popularHobbies, myActiveSessionIds] = await Promise.all([
-    getActiveUsersAtBar(bar.id),
-    getPopularHobbies(12),
-    profile ? getMyActiveSessionIds(profile.id) : Promise.resolve([]),
-  ]);
+  const popularHobbies = await getPopularHobbies(12);
   const isAnon = !profile;
 
   return (
@@ -69,17 +60,18 @@ export default async function NetworkPage() {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-4">
         <div className="flex items-center gap-2 mb-1">
           <Users className="h-5 w-5 text-primary" />
-          <h1 className="text-xl font-bold tracking-tight">Network</h1>
+          <h1 className="text-xl font-bold tracking-tight">Discover</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          See who&apos;s at SOHO right now & explore other members to hang out with.
+          Explore other members at SOHO — people you&apos;re into show up first.
         </p>
 
         <NetworkView
-          activeUsers={activeUsers}
           myProfileId={profile?.id ?? null}
-          myActiveSessionIds={myActiveSessionIds}
           popularHobbies={popularHobbies}
+          interestedIn={
+            (profile?.interestedIn as "male" | "female" | "both" | "") ?? ""
+          }
         />
       </div>
 

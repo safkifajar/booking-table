@@ -755,6 +755,33 @@ export async function getActiveUsersAtBar(
 }
 
 /**
+ * Set profile_id yang sedang nongkrong di bar (sesi open/locked, joined).
+ * Ringkas — untuk badge "At SOHO now" di feed Discover. Menghormati privasi
+ * lokasi (hideLocation) sama seperti getActiveUsersAtBar.
+ */
+export async function getActiveProfileIdsAtBar(
+  barId: string
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ profile_id: sessionMembers.profileId })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        inArray(tableSessions.status, ["open", "locked"]),
+        eq(sessionMembers.status, "joined"),
+        eq(profiles.isGuest, false),
+        eq(profiles.hideLocation, false)
+      )
+    );
+  return new Set(rows.map((r) => r.profile_id));
+}
+
+/**
  * Set session_id (open/locked) yang viewer ini sedang ikuti (status joined).
  * Untuk Network: sembunyikan tombol "Gabung" pada meja yg viewer sudah di situ.
  */

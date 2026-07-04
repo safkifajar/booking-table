@@ -227,6 +227,17 @@ export interface NetworkSearchUser {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  /** Galeri foto (carousel). Kosong = pakai avatar_url / placeholder. */
+  photos: string[];
+  /** Umur dari tgl lahir (null kalau tak diisi / hide_age). */
+  age: number | null;
+  /** Area/lokasi (null kalau tak diisi / hide_location). */
+  area: string | null;
+  /** Pendidikan terakhir value (mis. 'bachelor'). */
+  education: string | null;
+  gender: string | null;
+  /** True kalau member ini sedang nongkrong di SOHO (sesi aktif). */
+  at_soho: boolean;
   hobbies: string[];
   rating: UserRatingSummary;
 }
