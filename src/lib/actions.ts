@@ -1003,8 +1003,13 @@ export async function inviteUsersToSession(
   if (row.host_id !== profile.id) {
     throw new Error("Only the host can invite");
   }
-  if (row.status !== "open") {
-    throw new Error("Table is not active");
+  // Invite boleh saat meja OPEN (lagi dipakai) atau RESERVED (booking untuk
+  // nanti — host boleh undang teman lebih dulu). Status lain (closed/cancelled/
+  // overdue) tak bisa diundang.
+  if (row.status !== "open" && row.status !== "reserved") {
+    throw new Error(
+      "This table isn't open for invites yet — it needs to be reserved or active."
+    );
   }
 
   // 2. Resolusi user: dedup, buang host, non-staff, non-guest. + email.
