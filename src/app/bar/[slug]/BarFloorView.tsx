@@ -245,39 +245,10 @@ export function BarFloorView({
   // ikut tanggal ini. "today" = hari ini. groupKey ("YYYY-MM-DD") = tanggal lain.
   const [activeDate, setActiveDate] = React.useState<string>("today");
 
-  // Denah per-tanggal: sesuaikan status tiap meja dgn `activeDate`.
-  // - Status LIVE (open/locked/overdue) = fisik SEKARANG → hanya tampil saat
-  //   activeDate = hari ini. Di tanggal lain, meja itu tak "sedang dipakai".
-  // - RESERVED → tampil "R" hanya kalau meja punya reservasi di tanggal itu.
-  // Sumber reservasi: reservationsByTable (semua reservasi 'reserved' per meja).
-  const dateAwareAreas = React.useMemo(() => {
-    const isToday = activeDate === "today";
-    return areasWithTables.map(({ area, tables }) => ({
-      area,
-      tables: tables.map((t): FloorMapTable => {
-        // Reservasi meja ini yg jatuh di tanggal terpilih.
-        const resToday = (reservationsByTable[t.id] ?? []).find(
-          (r) =>
-            r.reservation_at &&
-            dateGroupKey(new Date(r.reservation_at)) === activeDate
-        );
-        const live = t.active_session;
-        // Live (open/locked/overdue) hanya relevan hari ini.
-        const liveNow =
-          isToday &&
-          live &&
-          (live.status === "open" ||
-            live.status === "locked" ||
-            live.status === "overdue")
-            ? live
-            : null;
-        // Prioritas: sesi live hari ini > reservasi tanggal itu > kosong.
-        return { ...t, active_session: liveNow ?? resToday ?? null };
-      }),
-    }));
-  }, [areasWithTables, reservationsByTable, activeDate]);
-
-  const activeArea = dateAwareAreas.find((a) => a.area.slug === activeAreaSlug);
+  // Denah cerminkan KONDISI SEKARANG. active_session dari server sudah cuma
+  // open/locked (meja fisik sedang dipakai). Reservasi TIDAK mewarnai meja —
+  // infonya di Booking Schedule. Jadi tak ada override reservasi di sini.
+  const activeArea = areasWithTables.find((a) => a.area.slug === activeAreaSlug);
 
   // Re-derive selectedTable dari props setiap render — jadi auto-update saat
   // floor data berubah (member nambah, payment, session closed, dll)
