@@ -43,6 +43,27 @@ export default authMiddleware(async (req) => {
   const path = req.nextUrl.pathname;
 
   // ==================================================
+  // MAINTENANCE GATE ("live tapi tertutup")
+  // ==================================================
+  // MAINTENANCE_MODE=true → subdomain CUSTOMER tampilkan halaman "Segera Hadir".
+  // Subdomain ADMIN tidak terkena — operator tetap bisa login & setup bar/menu/
+  // meja sebelum buka ke publik. Aset statis, API, & halaman maintenance sendiri
+  // dilewati supaya halaman tetap ter-render. Set MAINTENANCE_MODE=false (atau
+  // hapus) saat siap buka ke user.
+  if (
+    process.env.MAINTENANCE_MODE === "true" &&
+    !isAdmin &&
+    path !== "/maintenance" &&
+    !path.startsWith("/api/") &&
+    !path.startsWith("/_next/")
+  ) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/maintenance";
+    url.search = "";
+    return NextResponse.rewrite(url);
+  }
+
+  // ==================================================
   // ADMIN SUBDOMAIN
   // ==================================================
   if (isAdmin) {
