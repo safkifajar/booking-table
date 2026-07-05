@@ -540,7 +540,7 @@ function VibeTab(
             </h2>
             {/* Nomor meja — biar cepat kelihatan tanpa lihat header atas. */}
             <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-              {props.table.label}
+              Table {props.table.label}
             </Badge>
           </div>
           <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground shrink-0" />
