@@ -126,7 +126,11 @@ export function StoryViewer({
     }
   }, [currentIndex, hasPrevUser, orderedUserIds, userIndex]);
 
-  // Auto-advance progress
+  // Auto-advance progress. `goNext` MASUK deps: kalau di-exclude, timer memakai
+  // goNext versi lama (stale) → saat pindah antar-user, hasNextUser/userIndex
+  // stale → salah anggap "user terakhir" → viewer nutup padahal masih ada user
+  // berikutnya. Dengan goNext di deps (ia useCallback), timer selalu pakai
+  // versi terbaru.
   React.useEffect(() => {
     if (phase !== "viewing" || paused || showViewers) return;
     const startTime = Date.now() - progress * SLIDE_DURATION_MS;
@@ -141,7 +145,7 @@ export function StoryViewer({
     }, 50);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, currentIndex, paused, showViewers]);
+  }, [phase, currentIndex, paused, showViewers, goNext]);
 
   // ESC to close
   React.useEffect(() => {
@@ -154,8 +158,7 @@ export function StoryViewer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showViewers]);
+  }, [showViewers, goNext, goPrev, onClose]);
 
   // Bedakan tap cepat (navigasi) vs tahan (pause). Tekan ≥ LONG_PRESS_MS =
   // long-press → pause selama ditahan, lepas → lanjut TANPA navigasi.
@@ -181,6 +184,18 @@ export function StoryViewer({
       if (dir === "prev") goPrev();
       else goNext();
     }
+  }
+
+  // Jari keluar dari zona (mis. geser saat tap) → HANYA batalkan pause/timer,
+  // JANGAN navigasi. Kalau pointerLeave ikut memanggil onPressEnd, tap bisa
+  // memicu goNext DUA kali (pointerUp + pointerLeave) → skip 2 story → lewat
+  // batas → viewer nutup. Ini yang bikin "next malah close".
+  function onPressCancel() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    setPaused(false);
   }
 
   async function handleDelete() {
@@ -267,7 +282,7 @@ export function StoryViewer({
           type="button"
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("prev")}
-          onPointerLeave={() => onPressEnd("prev")}
+          onPointerLeave={onPressCancel}
           className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2 touch-none select-none"
           aria-label="Previous story"
         >
@@ -279,7 +294,7 @@ export function StoryViewer({
           type="button"
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("next")}
-          onPointerLeave={() => onPressEnd("next")}
+          onPointerLeave={onPressCancel}
           className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2 touch-none select-none"
           aria-label="Next story"
         >
