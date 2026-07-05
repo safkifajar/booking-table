@@ -469,9 +469,12 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
               ? "#fb923c"
               : isReserved
                 ? "#60a5fa"
-                : isAvailable
-                  ? "#a3a3a3"
-                  : "#f87171"
+                : isLocked
+                  ? "#f87171"
+                  : // default (available / status tak dikenal / sesi basi) → abu2.
+                    // Dulu fallback "#f87171" (merah) → meja dgn active_session
+                    // status aneh (closed/basi) fontnya merah walau tampak kosong.
+                    "#a3a3a3"
         }
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
