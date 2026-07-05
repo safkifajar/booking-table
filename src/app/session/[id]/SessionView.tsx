@@ -531,37 +531,52 @@ function VibeTab(
         />
       )}
 
-      {/* Members */}
+      {/* Section 1: Table information */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-1 gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              At table ({joined.length}/{props.table.capacity})
-            </h2>
-            {/* Nomor meja — biar cepat kelihatan tanpa lihat header atas. */}
-            <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-              Table {props.table.label}
-            </Badge>
-          </div>
-          <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground shrink-0" />
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Table information
+          </h2>
+          <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+            Table {props.table.label}
+          </Badge>
         </div>
-        {/* Visibility meja — public / friends / invite only. */}
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-          <VisibilityIcon visibility={props.session.visibility} />
-          <span>{visibilityLabel(props.session.visibility)}</span>
-        </div>
-        {/* Jam booking (kalau reservasi, bukan walk-in) */}
-        {props.session.reservation_at && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-            <Clock className="h-3.5 w-3.5 shrink-0" />
+        <div className="space-y-2 text-sm">
+          {/* Kapasitas */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Users className="h-3.5 w-3.5 shrink-0" />
             <span>
-              Booked {formatTime(props.session.reservation_at)}
-              {props.session.reservation_end_at &&
-                `–${formatTime(props.session.reservation_end_at)}`}
+              {props.table.capacity} seats
+              {props.areaName ? ` · ${props.areaName}` : ""}
             </span>
           </div>
-        )}
-        {!props.session.reservation_at && <div className="mb-2" />}
+          {/* Visibility meja — public / friends / invite only. */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <VisibilityIcon visibility={props.session.visibility} />
+            <span>{visibilityLabel(props.session.visibility)}</span>
+          </div>
+          {/* Jam booking (kalau reservasi, bukan walk-in) */}
+          {props.session.reservation_at && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Booked {formatTime(props.session.reservation_at)}
+                {props.session.reservation_end_at &&
+                  `–${formatTime(props.session.reservation_end_at)}`}
+              </span>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Section 2: People at table */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            People at table ({joined.length}/{props.table.capacity})
+          </h2>
+          <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground shrink-0" />
+        </div>
         <div className="space-y-3">
           {joined.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
