@@ -10,17 +10,13 @@ import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
-import { staffRoles } from "@/lib/db/schema/extras";
-import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import {
   getMenuByBar,
   getUserRatingsBatch,
   promoteSessionIfDue,
 } from "@/lib/queries";
-import {
-  defaultDashboardFor,
-  type StaffRoleName,
-} from "@/lib/auth-v2/permissions";
+import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
 import { SessionView } from "./SessionView";
 
@@ -43,7 +39,12 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
   }
-  if (!profile.onboarded)
+  // Staff (kasir/waiter/admin) BUKAN customer sosial — jangan paksa isi
+  // onboarding customer (foto/minat/dll). Mereka buka session utk bantu tamu
+  // (buka meja, bantu pesan), bukan pakai fitur sosial. Onboarding hanya utk
+  // customer asli. Reuse staffRole di bawah utk back button (satu query).
+  const staffRole = (await getStaffRole())?.role ?? null;
+  if (!staffRole && !profile.onboarded)
     redirect(
       `/onboarding?next=${encodeURIComponent(`/session/${id}`)}`
     );
@@ -198,15 +199,8 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   const myMember = membersRaw.find((m) => m.profile_id === profile.id);
   const isMember = !!myMember && myMember.status === "joined";
 
-  // Cek apakah current user adalah staff — kalau iya, back button arah ke
-  // dashboard role-nya (bukan ke /bar/[slug] customer landing)
-  const [staffRow] = await db
-    .select({ role: staffRoles.role })
-    .from(staffRoles)
-    .where(
-      and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
-    );
-  const staffRole = staffRow ? (staffRow.role as StaffRoleName) : null;
+  // staffRole sudah diambil di atas (via getStaffRole) — kalau staff, back
+  // button arah ke dashboard role-nya (bukan ke /bar/[slug] customer landing).
   // Untuk waiter, default ke tab "Meja Aktif" (lebih relevan setelah dari session)
   const defaultBack = staffRole
     ? staffRole === "waiter"
