@@ -230,10 +230,10 @@ export function OpenTableForm({
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
         dpMethod: dpRequired ? "mock" : undefined,
+        // Public & friends → teman langsung join; invite_only → diundang.
+        // Semua visibility boleh bawa teman spesifik.
         invitedUserIds:
-          visibility !== "public" && invited.length > 0
-            ? invited.map((u) => u.id)
-            : undefined,
+          invited.length > 0 ? invited.map((u) => u.id) : undefined,
       });
       // Sukses → openTable redirect (tak return apa-apa). Kalau ada return
       // { ok:false }, itu validasi reservasi (jam operasi/slot lewat/bentrok)
@@ -320,10 +320,7 @@ export function OpenTableForm({
                 label="Public"
                 desc="Anyone"
                 active={visibility === "public"}
-                onClick={() => {
-                  setVisibility("public");
-                  setInvited([]);
-                }}
+                onClick={() => setVisibility("public")}
               />
               <VisibilityOption
                 icon={<UserPlus className="h-4 w-4" />}
@@ -342,14 +339,13 @@ export function OpenTableForm({
             </div>
           </div>
 
-          {/* Pilih user untuk diajak/diundang (friends / invite_only) */}
-          {visibility !== "public" && (
-            <UserInvitePicker
-              mode={visibility === "friends" ? "join" : "invite"}
-              selected={invited}
-              onChange={setInvited}
-            />
-          )}
+          {/* Pilih teman untuk diajak. public/friends → langsung join;
+              invite_only → diundang (harus terima). Tampil di semua tipe. */}
+          <UserInvitePicker
+            mode={visibility === "invite_only" ? "invite" : "join"}
+            selected={invited}
+            onChange={setInvited}
+          />
 
           {/* Vibes */}
           <div>

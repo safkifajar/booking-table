@@ -102,9 +102,8 @@ const openTableSchema = z.object({
     .optional(),
   /**
    * User yg diajak/diundang (profile id). Untuk visibility:
-   * - "friends": langsung di-join (status joined)
+   * - "public" / "friends": teman langsung di-join (status joined)
    * - "invite_only": diundang (status pending + invited_by = host)
-   * Diabaikan kalau visibility "public".
    */
   invitedUserIds: z.array(z.string().uuid()).max(20).optional(),
 });
@@ -360,16 +359,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     }
   }
 
-  // 7b. Resolusi user yg diajak/diundang (cuma untuk friends/invite_only).
+  // 7b. Resolusi user yg diajak/diundang.
+  // - public / friends → teman yg dipilih LANGSUNG join (status joined).
+  // - invite_only     → diundang (pending + invited_by = host).
+  // Public tetap "anyone can join", tapi host boleh sekalian bawa teman spesifik
+  // yg langsung masuk (tak perlu nunggu mereka cari mejanya).
   // Validasi: bukan host, non-staff, non-guest, dedup. Cek kapasitas.
   type Invitee = { id: string; name: string; email: string };
   let invitees: Invitee[] = [];
   const inviteMode: "joined" | "invited" | null =
-    data.visibility === "friends"
-      ? "joined"
-      : data.visibility === "invite_only"
-        ? "invited"
-        : null;
+    data.visibility === "invite_only" ? "invited" : "joined";
   if (inviteMode && data.invitedUserIds && data.invitedUserIds.length > 0) {
     const uniqueIds = Array.from(new Set(data.invitedUserIds)).filter(
       (id) => id !== profile.id
