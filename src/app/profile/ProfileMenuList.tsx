@@ -118,6 +118,14 @@ export function ProfileMenuList() {
     if (!ok) return;
     setSigningOut(true);
     try {
+      // Hapus push subscription device INI sebelum logout — cegah notif akun
+      // yg di-logout tetap terkirim ke HP ini (subscription yatim). Best-effort.
+      try {
+        const sub = await getExistingSubscription();
+        if (sub?.endpoint) await removeSubscription(sub.endpoint);
+      } catch {
+        // abaikan — logout tetap lanjut.
+      }
       await signOutAction();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to sign out"));

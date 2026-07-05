@@ -7,6 +7,8 @@ import { LogOut, UserCircle, ChevronDown } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { adminSignOutAction } from "@/lib/auth-v2/admin-actions";
+import { getExistingSubscription } from "@/lib/push-client";
+import { removeSubscription } from "@/lib/push";
 import { getActionErrorMessage, initials } from "@/lib/utils";
 
 interface Props {
@@ -44,6 +46,13 @@ export function AdminHeaderProfile({
 
     setLoading(true);
     try {
+      // Hapus push subscription device ini sebelum logout (cegah notif yatim).
+      try {
+        const sub = await getExistingSubscription();
+        if (sub?.endpoint) await removeSubscription(sub.endpoint);
+      } catch {
+        // abaikan — logout tetap lanjut.
+      }
       await adminSignOutAction();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Gagal logout"));

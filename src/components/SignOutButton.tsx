@@ -5,6 +5,8 @@ import { LogOut } from "lucide-react";
 import { signOutAction } from "@/lib/auth-v2/actions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { getActionErrorMessage } from "@/lib/utils";
+import { getExistingSubscription } from "@/lib/push-client";
+import { removeSubscription } from "@/lib/push";
 import { toast } from "sonner";
 
 export function SignOutButton({ displayName }: { displayName: string }) {
@@ -22,6 +24,17 @@ export function SignOutButton({ displayName }: { displayName: string }) {
     if (!ok) return;
     setLoading(true);
     try {
+      // Hapus push subscription device INI dari DB sebelum logout. Tanpa ini,
+      // notif akun yg baru di-logout tetap terkirim ke HP ini (subscription
+      // yatim) → "notif muncul di HP yg harusnya tak dapat". Best-effort:
+      // jangan gagalkan logout kalau ini error. Subscription browser dibiarkan
+      // (login lagi → re-subscribe cepat).
+      try {
+        const sub = await getExistingSubscription();
+        if (sub?.endpoint) await removeSubscription(sub.endpoint);
+      } catch {
+        // abaikan — logout tetap lanjut.
+      }
       await signOutAction();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to sign out"));
