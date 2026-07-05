@@ -81,6 +81,13 @@ fi
 echo "==> db:push --force"
 npm run db:push -- --force
 
+# 4b. Apply SQL "berfungsi" yg db:push LEWATI (FUNCTION/TRIGGER/EXCLUDE/
+#     EXTENSION) — RPC admin, anti double-booking, dll. IDEMPOTENT: aman tiap
+#     deploy. Tanpa ini admin panel 500 & race double-booking lolos. Nambah
+#     SQL baru (0053+) cukup taruh di drizzle/ → otomatis ke-apply di sini.
+echo "==> apply-sql (RPC/trigger/constraint)"
+bash "$(dirname "$0")/apply-sql.sh"
+
 # 5. Build production.
 echo "==> npm run build"
 npm run build
