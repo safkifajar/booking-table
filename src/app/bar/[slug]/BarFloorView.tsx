@@ -650,8 +650,26 @@ function BookingSchedule({
                       </span>
                     )}
                   </div>
+                  {/* Vibe meja — di bawah baris public/room. */}
+                  {r.vibe_tags.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {r.vibe_tags.slice(0, 4).map((v) => (
+                        <span
+                          key={v}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                        >
+                          {v}
+                        </span>
+                      ))}
+                      {r.vibe_tags.length > 4 && (
+                        <span className="text-[10px] text-muted-foreground/60">
+                          +{r.vibe_tags.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {/* Kanan: nomor meja (atas) + status (bawah) */}
+                {/* Kanan: nomor meja (atas) + status + sisa kursi (bawah) */}
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <Badge variant="default" className="text-[10px] px-1.5">
                     {r.table_label}
@@ -659,6 +677,15 @@ function BookingSchedule({
                   <span className={cn("text-[11px]", statusColor)}>
                     {statusLabel}
                   </span>
+                  {/* Sisa kursi / Full — kalau kapasitas diketahui. */}
+                  {r.table_capacity > 0 &&
+                    (r.table_capacity - r.member_count > 0 ? (
+                      <span className="text-[10px] text-muted-foreground/80">
+                        {r.table_capacity - r.member_count} seats left
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-primary/80">Full</span>
+                    ))}
                 </div>
               </>
             );
