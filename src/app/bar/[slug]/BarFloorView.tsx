@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Clock, Loader2, Map as MapIcon, UtensilsCrossed } from "lucide-react";
-import { formatIDR, cn } from "@/lib/utils";
+import { formatIDR, cn, initials } from "@/lib/utils";
 import { MenuList } from "@/components/menu/MenuList";
 import type {
   Bar,
@@ -608,6 +609,15 @@ function BookingSchedule({
                 <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
                   {r.table_label}
                 </Badge>
+                {/* Avatar host — di kanan nomor meja */}
+                <Avatar className="h-9 w-9 shrink-0">
+                  {r.host_avatar && (
+                    <AvatarImage src={r.host_avatar} alt={r.host_name} />
+                  )}
+                  <AvatarFallback className="text-[10px]">
+                    {initials(r.host_name)}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{r.host_name}</p>
                   {/* Deskripsi booking (title) — kalau ada. */}
