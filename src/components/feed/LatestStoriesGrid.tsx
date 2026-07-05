@@ -71,6 +71,12 @@ export function LatestStoriesGrid({ stories, barId, viewerId }: Props) {
           startUserId={openUserId}
           viewerId={viewerId}
           orderedUserIds={orderedUserIds}
+          userMeta={Object.fromEntries(
+            stories.map((s) => [
+              s.userId,
+              { displayName: s.displayName, avatarUrl: s.avatarUrl },
+            ])
+          )}
           onClose={() => setOpenUserId(null)}
         />
       )}

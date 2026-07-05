@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { X, ChevronLeft, ChevronRight, MapPin, Eye, Trash2 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -16,6 +17,12 @@ import {
 } from "@/lib/story-actions";
 import { getActionErrorMessage, initials } from "@/lib/utils";
 
+/** Info profil ringkas pembuat story (untuk header). */
+export interface StoryUserMeta {
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 interface Props {
   barId: string;
   /** UserId yang stories-nya pertama mau dilihat */
@@ -24,6 +31,8 @@ interface Props {
   viewerId: string;
   /** Urutan user yang punya story aktif — untuk navigasi antar user */
   orderedUserIds: string[];
+  /** Map userId → {displayName, avatarUrl} untuk header pembuat story. */
+  userMeta: Record<string, StoryUserMeta>;
   onClose: () => void;
 }
 
@@ -48,9 +57,21 @@ export function StoryViewer({
   startUserId,
   viewerId,
   orderedUserIds,
+  userMeta,
   onClose,
 }: Props) {
   const confirm = useConfirm();
+  const router = useRouter();
+
+  // Buka halaman profil user (pembuat story / viewer). Tutup viewer dulu supaya
+  // tak menutupi halaman tujuan.
+  const goToProfile = React.useCallback(
+    (userId: string) => {
+      onClose();
+      router.push(`/network/${userId}`);
+    },
+    [onClose, router]
+  );
 
   const [currentUserId, setCurrentUserId] = React.useState(startUserId);
   const [currentIndex, setCurrentIndex] = React.useState(0);
@@ -263,6 +284,7 @@ export function StoryViewer({
   }
 
   const timeAgo = formatStoryAge(currentStory.createdAt);
+  const creator = userMeta[currentUserId];
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -335,15 +357,34 @@ export function StoryViewer({
           ))}
         </div>
 
-        {/* Top bar (close + time) */}
-        <div className="absolute top-4 inset-x-0 px-4 flex items-center justify-between pointer-events-none">
-          <span className="text-xs text-white/80 font-medium pointer-events-auto">
-            {timeAgo}
-          </span>
+        {/* Top bar (profil pembuat + waktu + close) */}
+        <div className="absolute top-4 inset-x-0 px-4 flex items-center justify-between gap-2 pointer-events-none">
+          {/* Profil pembuat — klik ke halaman profil user */}
+          <button
+            type="button"
+            onClick={() => goToProfile(currentUserId)}
+            className="flex items-center gap-2 min-w-0 pointer-events-auto rounded-full pr-2 hover:bg-white/10 transition"
+            aria-label={`Lihat profil ${creator?.displayName ?? "user"}`}
+          >
+            <Avatar className="h-8 w-8 ring-2 ring-white/20 shrink-0">
+              {creator?.avatarUrl && (
+                <AvatarImage src={creator.avatarUrl} alt={creator.displayName} />
+              )}
+              <AvatarFallback className="text-[10px]">
+                {initials(creator?.displayName ?? "?")}
+              </AvatarFallback>
+            </Avatar>
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-semibold text-white truncate">
+                {creator?.displayName ?? "User"}
+              </span>
+              <span className="text-xs text-white/60 shrink-0">{timeAgo}</span>
+            </span>
+          </button>
           <button
             type="button"
             onClick={onClose}
-            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/10 transition pointer-events-auto"
+            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-white/10 transition pointer-events-auto shrink-0"
             aria-label="Close story"
           >
             <X className="h-5 w-5 text-white" />
@@ -393,6 +434,7 @@ export function StoryViewer({
         {showViewers && (
           <ViewersPanel
             viewers={viewers}
+            onViewerClick={goToProfile}
             onClose={() => {
               setShowViewers(false);
               setPaused(false);
@@ -406,9 +448,11 @@ export function StoryViewer({
 
 function ViewersPanel({
   viewers,
+  onViewerClick,
   onClose,
 }: {
   viewers: ViewerEntry[] | null;
+  onViewerClick: (userId: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -436,7 +480,12 @@ function ViewersPanel({
         ) : (
           <div className="divide-y divide-white/5">
             {viewers.map((v) => (
-              <div key={v.profileId} className="flex items-center gap-3 py-2.5">
+              <button
+                key={v.profileId}
+                type="button"
+                onClick={() => onViewerClick(v.profileId)}
+                className="flex items-center gap-3 py-2.5 w-full text-left hover:bg-white/5 -mx-4 px-4 transition"
+              >
                 <Avatar className="h-8 w-8">
                   {v.avatarUrl && (
                     <AvatarImage src={v.avatarUrl} alt={v.displayName} />
@@ -450,10 +499,10 @@ function ViewersPanel({
                     {v.displayName}
                   </div>
                   <div className="text-[10px] text-white/40">
-                    {timeAgoShort(v.viewedAt)}
+                    {formatViewedAt(v.viewedAt)}
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -470,11 +519,29 @@ function formatStoryAge(createdAt: Date): string {
   return `${Math.floor(m / 60)}h`;
 }
 
-function timeAgoShort(date: Date): string {
+/**
+ * Waktu lihat story di panel viewers. < 1 jam → relatif ("baru saja" / "N menit
+ * lalu"). ≥ 1 jam → tampilkan JAM (mis. "19:30"), atau tanggal + jam kalau beda
+ * hari — biar owner tahu kapan persisnya dilihat, bukan cuma "5 jam lalu".
+ */
+function formatViewedAt(date: Date): string {
   const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  return `${Math.floor(hours / 24)} days ago`;
+  if (minutes < 1) return "baru saja";
+  if (minutes < 60) return `${minutes} menit lalu`;
+  // ≥ 1 jam → jam:menit. Kalau bukan hari ini, tambahkan tanggal singkat.
+  const now = new Date();
+  const sameDay =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+  const time = date.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  if (sameDay) return time;
+  const day = date.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+  });
+  return `${day}, ${time}`;
 }

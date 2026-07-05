@@ -127,6 +127,7 @@ export function ProfileAvatar({
           startUserId={userId}
           viewerId={viewerId}
           orderedUserIds={[userId]}
+          userMeta={{ [userId]: { displayName, avatarUrl } }}
           onClose={() => setStoryOpen(false)}
         />
       )}

@@ -107,6 +107,12 @@ export function StoryBar({
             ...(ownItem ? [viewerId] : []),
             ...otherItems.map((it) => it.userId),
           ]}
+          userMeta={Object.fromEntries(
+            initialItems.map((it) => [
+              it.userId,
+              { displayName: it.displayName, avatarUrl: it.avatarUrl },
+            ])
+          )}
           onClose={() => setViewerOpen(null)}
         />
       )}
