@@ -76,6 +76,15 @@ function formatTime(iso: string): string {
   ).padStart(2, "0")}`;
 }
 
+/** Tanggal singkat, mis. "Sat, 5 Jul". */
+function formatDateShort(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 interface SessionViewProps {
   session: {
     id: string;
@@ -542,12 +551,13 @@ function VibeTab(
             <VisibilityIcon visibility={props.session.visibility} />
             <span>{visibilityLabel(props.session.visibility)}</span>
           </div>
-          {/* Jam booking (kalau reservasi, bukan walk-in) */}
+          {/* Tanggal + jam booking (kalau reservasi, bukan walk-in) */}
           {props.session.reservation_at && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="h-3.5 w-3.5 shrink-0" />
               <span>
-                Booked {formatTime(props.session.reservation_at)}
+                Booked {formatDateShort(props.session.reservation_at)},{" "}
+                {formatTime(props.session.reservation_at)}
                 {props.session.reservation_end_at &&
                   `–${formatTime(props.session.reservation_end_at)}`}
               </span>
