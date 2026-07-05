@@ -245,10 +245,37 @@ export function BarFloorView({
   // ikut tanggal ini. "today" = hari ini. groupKey ("YYYY-MM-DD") = tanggal lain.
   const [activeDate, setActiveDate] = React.useState<string>("today");
 
-  // Denah cerminkan KONDISI SEKARANG. active_session dari server sudah cuma
-  // open/locked (meja fisik sedang dipakai). Reservasi TIDAK mewarnai meja —
-  // infonya di Booking Schedule. Jadi tak ada override reservasi di sini.
-  const activeArea = areasWithTables.find((a) => a.area.slug === activeAreaSlug);
+  // Denah IKUT tanggal terpilih di Booking Schedule.
+  // - HARI INI: meja MERAH kalau sedang dipakai (open/locked, dari server) ATAU
+  //   punya reservasi hari ini yg belum lewat.
+  // - TANGGAL LAIN: meja MERAH kalau punya reservasi di tanggal itu; kalau tak
+  //   ada → ABU (available). Live session (open/locked) hanya relevan hari ini.
+  // Sumber reservasi: reservationsByTable (semua reservasi 'reserved' per meja).
+  // Stabil per mount (lazy init) — hindari Date.now() di memo/render body.
+  const [nowMsFloor] = React.useState(() => Date.now());
+  const dateAwareAreas = React.useMemo(() => {
+    const isToday = activeDate === "today";
+    return areasWithTables.map(({ area, tables }) => ({
+      area,
+      tables: tables.map((t): FloorMapTable => {
+        // Live session (open/locked) dari server — cuma relevan HARI INI.
+        const liveNow = isToday ? t.active_session : null;
+        if (liveNow) return { ...t, active_session: liveNow };
+        // Cari reservasi meja ini yg jatuh di tanggal terpilih & BELUM lewat.
+        const resOnDate = (reservationsByTable[t.id] ?? []).find(
+          (r) =>
+            r.reservation_at &&
+            r.status === "reserved" &&
+            dateGroupKey(new Date(r.reservation_at)) === activeDate &&
+            (!r.reservation_end_at ||
+              new Date(r.reservation_end_at).getTime() > nowMsFloor)
+        );
+        return { ...t, active_session: resOnDate ?? null };
+      }),
+    }));
+  }, [areasWithTables, reservationsByTable, activeDate, nowMsFloor]);
+
+  const activeArea = dateAwareAreas.find((a) => a.area.slug === activeAreaSlug);
 
   // Re-derive selectedTable dari props setiap render — jadi auto-update saat
   // floor data berubah (member nambah, payment, session closed, dll)
