@@ -10,7 +10,13 @@ import { Card } from "@/components/ui/card";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Clock, Loader2, Map as MapIcon, UtensilsCrossed } from "lucide-react";
+import {
+  Clock,
+  Loader2,
+  Map as MapIcon,
+  MapPin,
+  UtensilsCrossed,
+} from "lucide-react";
 import { formatIDR, cn, initials } from "@/lib/utils";
 import { MenuList } from "@/components/menu/MenuList";
 import type {
@@ -606,10 +612,7 @@ function BookingSchedule({
             // history saja). Yg masih aktif/akan datang tetap bisa diklik.
             const inner = (
               <>
-                <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-                  {r.table_label}
-                </Badge>
-                {/* Avatar host — di kanan nomor meja */}
+                {/* Avatar host */}
                 <Avatar className="h-9 w-9 shrink-0">
                   {r.host_avatar && (
                     <AvatarImage src={r.host_avatar} alt={r.host_name} />
@@ -631,16 +634,36 @@ function BookingSchedule({
                     {r.reservation_end_at
                       ? `–${formatTime(r.reservation_end_at)}`
                       : ""}
-                    {r.area_name ? ` · ${r.area_name}` : ""}
                   </p>
+                  {/* Visibility (public/friends/invite) + room */}
+                  <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0"
+                    >
+                      {visibilityLabel(r.visibility)}
+                    </Badge>
+                    {r.area_name && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/80">
+                        <MapPin className="h-3 w-3" />
+                        {r.area_name}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className={cn("text-[11px] shrink-0", statusColor)}>
-                  {statusLabel}
-                </span>
+                {/* Kanan: nomor meja (atas) + status (bawah) */}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge variant="default" className="text-[10px] px-1.5">
+                    {r.table_label}
+                  </Badge>
+                  <span className={cn("text-[11px]", statusColor)}>
+                    {statusLabel}
+                  </span>
+                </div>
               </>
             );
             const rowCls =
-              "w-full flex items-center gap-3 px-3 py-2.5 text-left";
+              "w-full flex items-start gap-3 px-3 py-2.5 text-left";
             return ended ? (
               <div key={r.id} className={cn(rowCls, "opacity-70")}>
                 {inner}
