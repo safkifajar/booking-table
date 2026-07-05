@@ -56,37 +56,42 @@ export function MenuPicker({ menu, onAdd }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search menu, signature, mocktail..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
-        />
-      </div>
-
-      {/* Category strip */}
-      {!query && (
-        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-          {menu.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setActiveCat(c.slug)}
-              className={cn(
-                "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
-                activeCat === c.slug
-                  ? "bg-primary/15 border-primary/40 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {c.name}
-            </button>
-          ))}
+      {/* Search + kategori STICKY — nempel DI BAWAH tab bar session saat scroll.
+          Header session sticky top-0 (~57px) + tab bar sticky top-[57px] (~44px)
+          → search nempel di ~101px. bg + backdrop biar item tak nembus. */}
+      <div className="sticky top-[101px] z-20 -mx-4 px-4 pt-2 pb-2 bg-background/95 backdrop-blur-sm space-y-3">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search menu, signature, mocktail..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full h-11 pl-10 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+          />
         </div>
-      )}
+
+        {/* Category strip */}
+        {!query && (
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+            {menu.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setActiveCat(c.slug)}
+                className={cn(
+                  "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
+                  activeCat === c.slug
+                    ? "bg-primary/15 border-primary/40 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Items */}
       {(query ? filtered : activeCategory ? [activeCategory] : []).map((cat) => (
