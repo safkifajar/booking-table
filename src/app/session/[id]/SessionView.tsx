@@ -23,6 +23,7 @@ import {
   Loader2,
   Clock,
   MapPin,
+  Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -513,6 +514,13 @@ function VibeTab(
           </Badge>
         </div>
         <div className="space-y-2 text-sm">
+          {/* Deskripsi (dari field opsional saat open table) — kalau ada. */}
+          {props.session.title && (
+            <div className="flex items-start gap-1.5 text-foreground">
+              <Quote className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
+              <span className="italic">{props.session.title}</span>
+            </div>
+          )}
           {/* Room / area + venue */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0" />
