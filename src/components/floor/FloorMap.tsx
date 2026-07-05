@@ -131,14 +131,29 @@ export function FloorMap({
     setView({ x: 0, y: 0, w: canvasWidth, h: canvasHeight });
   }
 
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault();
-    const rect = containerRef.current?.getBoundingClientRect();
-    const px = rect ? e.clientX - rect.left : 0;
-    const py = rect ? e.clientY - rect.top : 0;
-    const factor = e.deltaY < 0 ? 1 + ZOOM_STEP / 2 : 1 - ZOOM_STEP / 2;
-    zoomTo(scale * factor, px, py);
-  }
+  // Wheel-zoom: React onWheel = passive listener → preventDefault() diabaikan &
+  // nge-spam warning "Unable to preventDefault inside passive event listener".
+  // Pasang listener NATIVE non-passive lewat ref. Logika terbaru disimpan di ref
+  // (di-update via effect, bukan saat render) supaya listener cukup dipasang
+  // sekali tanpa stale closure.
+  const wheelLogic = React.useRef<(e: WheelEvent) => void>(() => {});
+  React.useEffect(() => {
+    wheelLogic.current = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = containerRef.current?.getBoundingClientRect();
+      const px = rect ? e.clientX - rect.left : 0;
+      const py = rect ? e.clientY - rect.top : 0;
+      const factor = e.deltaY < 0 ? 1 + ZOOM_STEP / 2 : 1 - ZOOM_STEP / 2;
+      zoomTo(scale * factor, px, py);
+    };
+  });
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => wheelLogic.current(e);
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
 
   function relPoint(e: React.PointerEvent) {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -249,7 +264,6 @@ export function FloorMap({
         "relative w-full overflow-hidden rounded-xl border border-border bg-card touch-none select-none",
         className
       )}
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
