@@ -524,21 +524,9 @@ function VibeTab(
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Table information
           </h2>
-          <div className="flex items-center gap-2 shrink-0">
-            {canEditInfo && (
-              <button
-                type="button"
-                onClick={() => setEditInfoModal(true)}
-                className="inline-flex items-center gap-1 text-xs text-primary hover:opacity-80 transition"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Edit
-              </button>
-            )}
-            <Badge variant="default" className="text-[10px] px-1.5">
-              Table {props.table.label}
-            </Badge>
-          </div>
+          <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+            Table {props.table.label}
+          </Badge>
         </div>
         <div className="space-y-2 text-sm">
           {/* Deskripsi (dari field opsional saat open table) — kalau ada. */}
@@ -596,26 +584,45 @@ function VibeTab(
           )}
         </div>
 
-        {/* Aksi pindah meja — di dalam section ini (bukan mengambang di atas).
-            Host → request approval; staff (non-host) → langsung. */}
-        {props.isHost && canMoveTable && (
-          <div className="mt-4 pt-4 border-t border-border">
-            <MoveTableButton
-              sessionId={props.session.id}
-              status={props.session.status}
-              menu={props.menu}
-              pendingMove={props.pendingMove}
-              existingOrderTotal={props.orderItems.reduce(
-                (acc, i) =>
-                  i.status === "void" ? acc : acc + i.quantity * i.unit_price,
-                0
-              )}
-            />
-          </div>
-        )}
-        {!props.isHost && props.staffRole && canMoveTable && (
-          <div className="mt-4 pt-4 border-t border-border">
-            <StaffMoveTableButton sessionId={props.session.id} />
+        {/* Aksi meja — Move Table + Edit berdampingan (2 tombol). */}
+        {(canEditInfo || canMoveTable) && (
+          <div className="mt-4 pt-4 border-t border-border flex items-stretch gap-2">
+            {/* Move table — host (request) / staff (langsung). */}
+            {props.isHost && canMoveTable && (
+              <div className="flex-1">
+                <MoveTableButton
+                  sessionId={props.session.id}
+                  status={props.session.status}
+                  menu={props.menu}
+                  pendingMove={props.pendingMove}
+                  existingOrderTotal={props.orderItems.reduce(
+                    (acc, i) =>
+                      i.status === "void"
+                        ? acc
+                        : acc + i.quantity * i.unit_price,
+                    0
+                  )}
+                />
+              </div>
+            )}
+            {!props.isHost && props.staffRole && canMoveTable && (
+              <div className="flex-1">
+                <StaffMoveTableButton sessionId={props.session.id} />
+              </div>
+            )}
+            {/* Edit info meja — pakai Button size="sm" biar tinggi = Move Table. */}
+            {canEditInfo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setEditInfoModal(true)}
+              >
+                <Pencil className="h-4 w-4" />
+                Edit info
+              </Button>
+            )}
           </div>
         )}
       </Card>
