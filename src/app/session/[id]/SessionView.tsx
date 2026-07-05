@@ -21,6 +21,7 @@ import {
   Sparkles,
   Loader2,
   Clock,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -542,13 +543,21 @@ function VibeTab(
           </Badge>
         </div>
         <div className="space-y-2 text-sm">
+          {/* Room / area + venue */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              {props.areaName}
+              <span className="text-muted-foreground/60">
+                {" · "}
+                {props.bar.name}
+              </span>
+            </span>
+          </div>
           {/* Kapasitas */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Users className="h-3.5 w-3.5 shrink-0" />
-            <span>
-              {props.table.capacity} seats
-              {props.areaName ? ` · ${props.areaName}` : ""}
-            </span>
+            <span>{props.table.capacity} seats</span>
           </div>
           {/* Visibility meja — public / friends / invite only. */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
