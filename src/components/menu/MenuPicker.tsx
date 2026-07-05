@@ -57,9 +57,10 @@ export function MenuPicker({ menu, onAdd }: Props) {
   return (
     <div className="space-y-3">
       {/* Search + kategori STICKY — nempel DI BAWAH tab bar session saat scroll.
-          Header session sticky top-0 (~57px) + tab bar sticky top-[57px] (~44px)
-          → search nempel di ~101px. bg + backdrop biar item tak nembus. */}
-      <div className="sticky top-[101px] z-20 -mx-4 px-4 pt-2 pb-2 bg-background/95 backdrop-blur-sm space-y-3">
+          Header session sticky top-0 (~57px) + tab bar sticky top-[57px].
+          top disetel supaya overlap tepat di bawah tab bar (tanpa celah tempat
+          item nembus). bg SOLID + padding atas lebih besar utk nutup penuh. */}
+      <div className="sticky top-[98px] z-20 -mx-4 px-4 pt-4 pb-3 bg-background space-y-3">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
