@@ -604,6 +604,77 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   redirect(`/session/${sessionId}`);
 }
 
+// ============================================================
+// EDIT INFO MEJA — host / staff ubah deskripsi, visibility, vibe, jam booking
+// ============================================================
+
+const updateSessionInfoSchema = z.object({
+  sessionId: z.string().uuid(),
+  title: z.string().max(80).nullable().optional(),
+  visibility: z.enum(["public", "friends", "invite_only"]).optional(),
+  vibeTags: z.array(z.string()).max(5).optional(),
+});
+
+/**
+ * Edit informasi meja (session). Boleh: HOST meja atau STAFF (kasir/waiter).
+ * Field: title (deskripsi), visibility, vibeTags. Jam booking TIDAK diubah di
+ * sini (fixed setelah dibuat).
+ */
+export async function updateSessionInfo(
+  input: z.infer<typeof updateSessionInfoSchema>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const profile = await requireProfile();
+  const data = updateSessionInfoSchema.parse(input);
+
+  // 1. Ambil session (host + status utk otorisasi).
+  const [row] = await db
+    .select({
+      id: tableSessions.id,
+      host_id: tableSessions.hostId,
+    })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, data.sessionId));
+  if (!row) throw new Error("Session not found");
+
+  // 2. Otorisasi: host ATAU staff aktif.
+  const isHost = row.host_id === profile.id;
+  let isStaff = false;
+  if (!isHost) {
+    const [staff] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(
+        and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true))
+      );
+    isStaff = !!staff;
+  }
+  if (!isHost && !isStaff) {
+    throw new Error("Only the host or staff can edit this table");
+  }
+
+  // 3. Susun perubahan.
+  const updates: Partial<{
+    title: string | null;
+    visibility: "public" | "friends" | "invite_only";
+    vibeTags: string[];
+  }> = {};
+  if (data.title !== undefined) updates.title = data.title?.trim() || null;
+  if (data.visibility !== undefined) updates.visibility = data.visibility;
+  if (data.vibeTags !== undefined) updates.vibeTags = data.vibeTags;
+
+  if (Object.keys(updates).length === 0) return { ok: true };
+
+  await db
+    .update(tableSessions)
+    .set(updates)
+    .where(eq(tableSessions.id, data.sessionId));
+
+  await notifySessionAndStaff(data.sessionId);
+  revalidatePath(`/session/${data.sessionId}`);
+  revalidatePath("/bar/[slug]", "page");
+  return { ok: true };
+}
+
 export async function joinSession(input: z.infer<typeof joinSchema>) {
   const profile = await requireProfile();
   const { sessionId } = joinSchema.parse(input);

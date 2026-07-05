@@ -24,6 +24,7 @@ import {
   Clock,
   MapPin,
   Quote,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +53,7 @@ import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
+import { EditTableInfoModal } from "./EditTableInfoModal";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
   MemberRole,
@@ -451,6 +453,7 @@ function TabButton({
 function VibeTab(
   props: SessionViewProps & { isStaff: boolean; isEnded: boolean }
 ) {
+  const router = useRouter();
   const joined = props.members.filter((m) => m.status === "joined");
   // "Request masuk" = orang yang minta join sendiri (host yg approve) →
   // invited_by NULL. Yang DIUNDANG host (invited_by terisi) bukan request,
@@ -468,6 +471,10 @@ function VibeTab(
   const inviteSlotsAvailable = slotsAvailable - invitedPending.length;
   const [addGuestModal, setAddGuestModal] = React.useState(false);
   const [inviteModal, setInviteModal] = React.useState(false);
+  const [editInfoModal, setEditInfoModal] = React.useState(false);
+  // Host / staff boleh edit info meja (deskripsi, visibility, vibe) selama
+  // sesi belum berakhir.
+  const canEditInfo = (props.isHost || props.isStaff) && !props.isEnded;
   // Tombol "Tambah Tamu" cuma muncul untuk staff di session walk-in
   // (yang dibuka oleh staff lewat opened_by_staff_id). Untuk session customer
   // reguler, tamu tambah lewat invite link.
@@ -517,9 +524,21 @@ function VibeTab(
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Table information
           </h2>
-          <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-            Table {props.table.label}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            {canEditInfo && (
+              <button
+                type="button"
+                onClick={() => setEditInfoModal(true)}
+                className="inline-flex items-center gap-1 text-xs text-primary hover:opacity-80 transition"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+            <Badge variant="default" className="text-[10px] px-1.5">
+              Table {props.table.label}
+            </Badge>
+          </div>
         </div>
         <div className="space-y-2 text-sm">
           {/* Deskripsi (dari field opsional saat open table) — kalau ada. */}
@@ -773,6 +792,17 @@ function VibeTab(
           sessionId={props.session.id}
           remainingSlots={slotsAvailable}
           onClose={() => setAddGuestModal(false)}
+        />
+      )}
+
+      {editInfoModal && (
+        <EditTableInfoModal
+          sessionId={props.session.id}
+          initialTitle={props.session.title}
+          initialVisibility={props.session.visibility}
+          initialVibes={props.session.vibe_tags}
+          onClose={() => setEditInfoModal(false)}
+          onSaved={() => router.refresh()}
         />
       )}
     </div>
