@@ -166,6 +166,7 @@ export default authMiddleware(async (req) => {
       path === "/auth" ||
       path === "/terms" ||
       path === "/privacy" ||
+      path === "/maintenance" ||
       path.startsWith("/join/") ||
       path.startsWith("/api/");
     if (!isPublic) {
