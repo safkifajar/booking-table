@@ -37,6 +37,17 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["192.168.1.3"],
   images: {
     /**
+     * Matikan Image Optimization. Semua gambar app = lokal: static /public
+     * atau file upload /uploads/** yang di-serve nginx (di luar app dir, path
+     * persistent UPLOADS_DIR). Optimizer Next me-rewrite src ke /_next/image
+     * lalu fetch file dari origin-nya sendiri — di VPS file /uploads/ TIDAK
+     * ada di proses Next (nginx yang serve) → "received null" → gambar rusak.
+     * Upload sudah dikompres ke webp saat unggah (sharp), jadi optimasi ulang
+     * tak perlu. Tak ada gambar remote (remotePatterns kosong). unoptimized =
+     * <Image> serve URL apa adanya → nginx/public yang layani → semua tampil.
+     */
+    unoptimized: true,
+    /**
      * File upload lokal (/uploads/**) dipakai <Image> dengan query string
      * cache-bust (?v=timestamp). Next 16 butuh localPatterns; `search` di-omit
      * supaya query string apa pun (?v=...) lolos. Tanpa ini → error
