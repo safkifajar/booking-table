@@ -233,8 +233,43 @@ export function BarFloorView({
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
     null
   );
+  // Tanggal terpilih di Booking Schedule — DIANGKAT ke sini supaya denah (floor)
+  // ikut tanggal ini. "today" = hari ini. groupKey ("YYYY-MM-DD") = tanggal lain.
+  const [activeDate, setActiveDate] = React.useState<string>("today");
 
-  const activeArea = areasWithTables.find((a) => a.area.slug === activeAreaSlug);
+  // Denah per-tanggal: sesuaikan status tiap meja dgn `activeDate`.
+  // - Status LIVE (open/locked/overdue) = fisik SEKARANG → hanya tampil saat
+  //   activeDate = hari ini. Di tanggal lain, meja itu tak "sedang dipakai".
+  // - RESERVED → tampil "R" hanya kalau meja punya reservasi di tanggal itu.
+  // Sumber reservasi: reservationsByTable (semua reservasi 'reserved' per meja).
+  const dateAwareAreas = React.useMemo(() => {
+    const isToday = activeDate === "today";
+    return areasWithTables.map(({ area, tables }) => ({
+      area,
+      tables: tables.map((t): FloorMapTable => {
+        // Reservasi meja ini yg jatuh di tanggal terpilih.
+        const resToday = (reservationsByTable[t.id] ?? []).find(
+          (r) =>
+            r.reservation_at &&
+            dateGroupKey(new Date(r.reservation_at)) === activeDate
+        );
+        const live = t.active_session;
+        // Live (open/locked/overdue) hanya relevan hari ini.
+        const liveNow =
+          isToday &&
+          live &&
+          (live.status === "open" ||
+            live.status === "locked" ||
+            live.status === "overdue")
+            ? live
+            : null;
+        // Prioritas: sesi live hari ini > reservasi tanggal itu > kosong.
+        return { ...t, active_session: liveNow ?? resToday ?? null };
+      }),
+    }));
+  }, [areasWithTables, reservationsByTable, activeDate]);
+
+  const activeArea = dateAwareAreas.find((a) => a.area.slug === activeAreaSlug);
 
   // Re-derive selectedTable dari props setiap render — jadi auto-update saat
   // floor data berubah (member nambah, payment, session closed, dll)
@@ -365,10 +400,13 @@ export function BarFloorView({
           </div>
         )}
 
-        {/* Jadwal booking — list per tanggal (semua meja) */}
+        {/* Jadwal booking — list per tanggal (semua meja). activeDate DIANGKAT
+            ke parent supaya denah ikut tanggal terpilih. */}
         <BookingSchedule
           reservationsByTable={reservationsByTable}
           bookingWindowDays={bookingWindowDays}
+          activeDate={activeDate}
+          onDateChange={setActiveDate}
         />
           </>
         )}
@@ -453,9 +491,14 @@ function LegendDot({
 function BookingSchedule({
   reservationsByTable,
   bookingWindowDays = 7,
+  activeDate,
+  onDateChange,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
   bookingWindowDays?: number;
+  /** Tanggal terpilih (dikontrol parent supaya denah ikut). */
+  activeDate: string;
+  onDateChange: (gk: string) => void;
 }) {
   const [nowMs] = React.useState(() => Date.now());
 
@@ -490,7 +533,7 @@ function BookingSchedule({
     return Array.from(keys).sort(compareGroupKey);
   }, [byDate, bookingWindowDays, nowMs]);
 
-  const [activeDate, setActiveDate] = React.useState<string>("today");
+  // activeDate dikontrol parent (biar denah ikut). Klik chip → onDateChange.
   const dayBookings = byDate.get(activeDate) ?? [];
 
   return (
@@ -508,7 +551,7 @@ function BookingSchedule({
             <button
               key={gk}
               type="button"
-              onClick={() => setActiveDate(gk)}
+              onClick={() => onDateChange(gk)}
               className={cn(
                 "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition",
                 active
