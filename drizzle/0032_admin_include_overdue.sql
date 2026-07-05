@@ -148,6 +148,11 @@ AS $function$
   from paid group by method order by total_amount desc;
 $function$;
 
+-- DROP dulu: fungsi ini mengubah RETURN TYPE dari versi sebelumnya (0031).
+-- CREATE OR REPLACE tak bisa ganti return type → "cannot change return type of
+-- existing function". Tanpa DROP, deploy ULANG gagal (saat setup fresh lolos
+-- karena fungsi belum ada, tapi re-deploy error). DROP IF EXISTS = idempotent.
+DROP FUNCTION IF EXISTS public.admin_transactions(uuid, timestamptz, timestamptz, integer, integer);
 CREATE OR REPLACE FUNCTION public.admin_transactions(p_bar_id uuid, p_from timestamptz, p_to timestamptz, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0)
  RETURNS TABLE(session_id uuid, closed_at timestamptz, started_at timestamptz, duration_minutes integer, table_label text, area_name text, host_name text, member_count integer, item_count integer, subtotal bigint, paid_total bigint, session_title text)
  LANGUAGE sql STABLE SET search_path TO 'public'
