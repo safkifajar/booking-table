@@ -159,8 +159,16 @@ function buildHourRows(
 
   // Rentang booked (ms epoch) untuk tanggal ini. inUse = session sudah aktif
   // (open/locked) hasil promote reservasi, bukan cuma reserved.
+  // Reservasi yg SUDAH SELESAI (end <= now) DIKECUALIKAN — slot-nya bebas lagi,
+  // jadi tampil "Tersedia" (bisa dibooking lagi), bukan "booked by X" yg nyangkut
+  // & nge-link ke session mati (403). Booking basi Yusa 00-03 hilang dari sini.
   const ranges = dayReservations
-    .filter((r) => r.reservation_at && r.reservation_end_at)
+    .filter(
+      (r) =>
+        r.reservation_at &&
+        r.reservation_end_at &&
+        new Date(r.reservation_end_at).getTime() > nowMs
+    )
     .map((r) => ({
       start: new Date(r.reservation_at!).getTime(),
       end: new Date(r.reservation_end_at!).getTime(),
@@ -588,12 +596,11 @@ function BookingSchedule({
               : inUse
                 ? "text-emerald-400"
                 : "text-blue-400";
-            return (
-              <Link
-                key={r.id}
-                href={`/session/${r.id}`}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition hover:bg-muted/40"
-              >
+            // Booking yg SUDAH SELESAI ("Done") = session mati → jangan link ke
+            // /session (user bukan member → 403). Tampil sbg baris biasa (info
+            // history saja). Yg masih aktif/akan datang tetap bisa diklik.
+            const inner = (
+              <>
                 <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
                   {r.table_label}
                 </Badge>
@@ -610,6 +617,21 @@ function BookingSchedule({
                 <span className={cn("text-[11px] shrink-0", statusColor)}>
                   {statusLabel}
                 </span>
+              </>
+            );
+            const rowCls =
+              "w-full flex items-center gap-3 px-3 py-2.5 text-left";
+            return ended ? (
+              <div key={r.id} className={cn(rowCls, "opacity-70")}>
+                {inner}
+              </div>
+            ) : (
+              <Link
+                key={r.id}
+                href={`/session/${r.id}`}
+                className={cn(rowCls, "transition hover:bg-muted/40")}
+              >
+                {inner}
               </Link>
             );
           })}
