@@ -354,10 +354,11 @@ export function BarFloorView({
           <MenuList menu={menu} />
         ) : (
           <>
-        {/* Legend — denah 2 warna: Available (abu) & Booked/Open (merah). */}
+        {/* Legend — denah cerminkan kondisi SEKARANG: Available (abu) & sedang
+            dipakai (merah). Reservasi tak mewarnai meja (info di jadwal). */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
           <LegendDot color="rgba(28,28,28,0.9)" border="rgba(255,255,255,0.15)" label="Available" />
-          <LegendDot color="rgba(225, 29, 42,0.4)" border="#e11d2a" label="Booked / in use" pulse />
+          <LegendDot color="rgba(225, 29, 42,0.4)" border="#e11d2a" label="In use" pulse />
         </div>
 
         {activeArea && (
