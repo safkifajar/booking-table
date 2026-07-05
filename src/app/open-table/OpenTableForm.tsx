@@ -133,6 +133,8 @@ export function OpenTableForm({
   const [visibility, setVisibility] =
     React.useState<SessionVisibility>("public");
   const [vibes, setVibes] = React.useState<string[]>([]);
+  // Deskripsi opsional sesi (disimpan sbg session.title, max 80).
+  const [description, setDescription] = React.useState("");
   // User yg diajak/diundang (friends/invite_only).
   const [invited, setInvited] = React.useState<InviteCandidate[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -264,6 +266,7 @@ export function OpenTableForm({
         tableId: table.id,
         visibility,
         vibeTags: vibes,
+        title: description.trim() || undefined,
         reservationAt: selectedSlot || null,
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
@@ -413,6 +416,27 @@ export function OpenTableForm({
                 );
               })}
             </div>
+          </div>
+
+          {/* Deskripsi opsional */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Description{" "}
+              <span className="text-muted-foreground font-normal">
+                (optional)
+              </span>
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 80))}
+              placeholder="Add a short note about this table (e.g. birthday, casual meetup)…"
+              rows={2}
+              maxLength={80}
+              className="w-full rounded-md bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-primary/60 transition resize-none"
+            />
+            <p className="mt-1 text-right text-[11px] text-muted-foreground">
+              {description.length}/80
+            </p>
           </div>
 
           {/* Order awal */}
