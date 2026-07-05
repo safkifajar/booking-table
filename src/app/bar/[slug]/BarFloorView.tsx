@@ -429,6 +429,10 @@ export function BarFloorView({
             aria-hidden="true"
           />
           <TableSheet
+            // key = table.id → REMOUNT tiap ganti meja. Tanpa ini, React reuse
+            // instance → state internal (selStart/selEnd/activeDate) nyangkut:
+            // slot yg dipilih di meja sebelumnya tampil "Selected ✓" di meja baru.
+            key={selectedTable.id}
             table={selectedTable}
             reservations={reservationsByTable[selectedTable.id] ?? []}
             operatingHours={operatingHours}
