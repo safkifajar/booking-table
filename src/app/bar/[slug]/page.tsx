@@ -156,23 +156,15 @@ export default async function BarPage({ params }: PageProps) {
         // 'overdue' (belum lunas) SENGAJA tidak ditampilkan di denah — meja
         // tampil available; tagihan ditangani via banner home. Backend overdue
         // (tetap tertagih, tak auto-close) tidak terpengaruh.
-        // JUGA kecualikan reservasi yg WAKTUNYA SUDAH LEWAT (reservation_end_at
-        // <= now): booking basi tak lagi menempati meja. Tanpa ini, meja tampil
-        // "reserved" (badge 0) & klik langsung ke session (403, bukan member) —
-        // padahal harusnya available & klik = tampil list waktu.
-        const activeReservations = forTable.filter(
-          (s) =>
-            s.reservation_at &&
-            s.status !== "overdue" &&
-            (!s.reservation_end_at ||
-              new Date(s.reservation_end_at).getTime() > now.getTime())
-        );
+        // active_session DENAH = KONDISI SEKARANG saja (open/locked = meja fisik
+        // sedang dipakai → MERAH). Reservasi (future booking) TIDAK mewarnai meja
+        // — meja tetap ABU (available) sampai jam booking tiba & di-promote jadi
+        // open. Info reservasi cukup di Booking Schedule (via reservationsByTable).
+        // 'overdue' juga tak ditampilkan (tagihan ditangani di home).
         const active =
           forTable.find(
             (s) => s.status === "open" || s.status === "locked"
-          ) ??
-          activeReservations[0] ??
-          null;
+          ) ?? null;
         return { ...t, active_session: active };
       });
       return { area, tables: tablesWithSession };
