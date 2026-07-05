@@ -680,6 +680,16 @@ function TableSheet({
   const isOpen = session?.status === "open";
   const isReserved = session?.status === "reserved";
 
+  // GUARD click-through: sheet muncul TEPAT di bawah kursor saat klik meja
+  // (onPointerUp di FloorMap). "Ghost click" bawaan browser lalu nembus ke slot
+  // jam di posisi kursor yg sama → 1 klik meja = slot ikut ke-klik. Abaikan
+  // interaksi slot ~350ms pertama setelah sheet mount.
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => {
+    const t = setTimeout(() => setReady(true), 350);
+    return () => clearTimeout(t);
+  }, []);
+
   // Kelompokkan reservasi per tanggal (groupKey).
   const byDate = React.useMemo(() => {
     const map = new Map<string, ActiveSessionView[]>();
@@ -753,6 +763,7 @@ function TableSheet({
   // setelah → perpanjang; klik sebelum → mulai baru. Tidak boleh menembus
   // slot non-selectable (booked/lewat) di antara.
   function clickSlot(h: HourRow) {
+    if (!ready) return; // abaikan ghost-click saat sheet baru muncul
     const iso = h.startIso;
     const ms = new Date(iso).getTime();
     if (!selStart) {
