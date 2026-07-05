@@ -436,6 +436,8 @@ export function BarFloorView({
             operatingHours={operatingHours}
             slotIntervalMinutes={slotIntervalMinutes}
             bookingWindowDays={bookingWindowDays}
+            // Buka sheet di tanggal yg sedang dipilih di denah (biar nyambung).
+            initialDate={activeDate}
             onClose={() => setSelectedTable(null)}
           />
         </>
@@ -660,6 +662,7 @@ function TableSheet({
   operatingHours,
   slotIntervalMinutes,
   bookingWindowDays = 7,
+  initialDate,
   onClose,
 }: {
   table: FloorMapTable;
@@ -667,6 +670,8 @@ function TableSheet({
   operatingHours?: OperatingHours;
   slotIntervalMinutes?: number;
   bookingWindowDays?: number;
+  /** Tanggal awal sheet — ikut tanggal yg dipilih di denah. */
+  initialDate?: string;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -705,8 +710,11 @@ function TableSheet({
     return Array.from(keys).sort(compareGroupKey);
   }, [byDate, bookingWindowDays]);
 
-  const [activeDate, setActiveDate] = React.useState<string>(
-    () => dateChips[0] ?? "today"
+  // Buka di tanggal yg dipilih di denah (initialDate) kalau valid; else hari ini.
+  const [activeDate, setActiveDate] = React.useState<string>(() =>
+    initialDate && dateChips.includes(initialDate)
+      ? initialDate
+      : dateChips[0] ?? "today"
   );
   // Stabil per mount (lazy init) — hindari Date.now() di render body.
   const [nowMs] = React.useState(() => Date.now());
