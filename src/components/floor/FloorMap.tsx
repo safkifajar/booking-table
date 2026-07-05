@@ -374,27 +374,26 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isOverdue = !!table.active_session && table.active_session.status === "overdue";
   const isAvailable = !table.active_session;
 
-  const fill = isOpen
-    ? "rgba(225, 29, 42, 0.25)"
-    : isOverdue
-      ? "rgba(249, 115, 22, 0.18)"
-      : isLocked
-        ? "rgba(220, 38, 38, 0.15)"
-        : isReserved
-          ? "rgba(59, 130, 246, 0.15)"
+  // Denah 2 warna: MERAH (terisi: open/reserved/locked/overdue) & ABU
+  // (available). Reserved TAK lagi biru — samakan dgn merah spy denah simpel.
+  const fill =
+    isOpen || isReserved
+      ? "rgba(225, 29, 42, 0.25)"
+      : isOverdue
+        ? "rgba(249, 115, 22, 0.18)"
+        : isLocked
+          ? "rgba(220, 38, 38, 0.15)"
           : "rgba(28, 28, 28, 0.9)";
 
   const stroke = selected
     ? "#ff4d57"
-    : isOpen
+    : isOpen || isReserved
       ? "#e11d2a"
       : isOverdue
         ? "#f97316"
         : isLocked
           ? "#dc2626"
-          : isReserved
-            ? "#3b82f6"
-            : "rgba(255,255,255,0.15)";
+          : "rgba(255,255,255,0.15)";
 
   const strokeWidth = selected || highlighted ? 3 : 2;
 
@@ -463,18 +462,16 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         fontSize="13"
         fontWeight="600"
         fill={
-          isOpen
+          isOpen || isReserved
             ? "#ff4d57"
             : isOverdue
               ? "#fb923c"
-              : isReserved
-                ? "#60a5fa"
-                : isLocked
-                  ? "#f87171"
-                  : // default (available / status tak dikenal / sesi basi) → abu2.
-                    // Dulu fallback "#f87171" (merah) → meja dgn active_session
-                    // status aneh (closed/basi) fontnya merah walau tampak kosong.
-                    "#a3a3a3"
+              : isLocked
+                ? "#f87171"
+                : // default (available / status tak dikenal / sesi basi) → abu2.
+                  // Dulu fallback "#f87171" (merah) → meja dgn active_session
+                  // status aneh (closed/basi) fontnya merah walau tampak kosong.
+                  "#a3a3a3"
         }
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
@@ -538,14 +535,14 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         </g>
       )}
 
-      {/* Reserved badge — clock icon, no member count yet */}
+      {/* Reserved badge — "R" (merah, samakan warna denah 2-warna). */}
       {isReserved && (
         <g style={{ pointerEvents: "none" }}>
           <circle
             cx={table.pos_x + table.width - 6}
             cy={table.pos_y + 6}
             r="10"
-            fill="#3b82f6"
+            fill="#e11d2a"
           />
           <text
             x={table.pos_x + table.width - 6}
