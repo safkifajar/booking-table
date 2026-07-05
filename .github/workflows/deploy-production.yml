@@ -32,7 +32,9 @@ jobs:
           fi
 
       - name: Deploy ke VPS (production)
+        id: deploy
         if: steps.check.outputs.ready == 'true'
+        continue-on-error: true
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -40,6 +42,27 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           # port: 22   # uncomment kalau SSH pakai port non-standar (tambah secret VPS_SSH_PORT)
           script_stop: true
+          # VPS Hostinger kadang lambat merespons handshake SSH → "i/o timeout".
+          # timeout = batas CONNECT (perlonggar dr 30s default → 120s beri napas
+          # saat VPS lambat). command_timeout = batas eksekusi script (build lama).
+          timeout: 120s
+          command_timeout: 20m
+          script: |
+            cd /home/booking/soho-prod
+            ./scripts/deploy.sh production
+
+      # Coba ULANG kalau attempt pertama gagal (biasanya i/o timeout sesaat) —
+      # jadi tak perlu Re-run manual. deploy.sh idempotent + backup DB tiap jalan.
+      - name: Deploy ulang (retry) — production
+        if: steps.check.outputs.ready == 'true' && steps.deploy.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          timeout: 120s
+          command_timeout: 20m
           script: |
             cd /home/booking/soho-prod
             ./scripts/deploy.sh production
