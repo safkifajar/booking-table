@@ -477,35 +477,15 @@ function VibeTab(
     props.session.status === "open" &&
     props.session.visibility === "public";
 
+  // Aksi pindah meja — host (request approval) / staff (langsung). Ditaruh di
+  // dalam section Table Information (di bawah), bukan mengambang di atas.
+  const canMoveTable =
+    props.session.status === "reserved" ||
+    props.session.status === "open" ||
+    props.session.status === "locked";
+
   return (
     <div className="space-y-4">
-      {/* Pindah meja — host. reserved=langsung; aktif(open/locked)=request approval */}
-      {props.isHost &&
-        (props.session.status === "reserved" ||
-          props.session.status === "open" ||
-          props.session.status === "locked") && (
-          <MoveTableButton
-            sessionId={props.session.id}
-            status={props.session.status}
-            menu={props.menu}
-            pendingMove={props.pendingMove}
-            existingOrderTotal={props.orderItems.reduce(
-              (acc, i) =>
-                i.status === "void" ? acc : acc + i.quantity * i.unit_price,
-              0
-            )}
-          />
-        )}
-
-      {/* Pindah meja — STAFF (kasir/waiter) langsung tanpa approval. Tampil saat
-          viewer staff & bukan host (host pakai tombol di atas). */}
-      {!props.isHost &&
-        props.staffRole &&
-        (props.session.status === "reserved" ||
-          props.session.status === "open" ||
-          props.session.status === "locked") && (
-          <StaffMoveTableButton sessionId={props.session.id} />
-        )}
 
       {/* Vibe tags */}
       {props.session.vibe_tags.length > 0 && (
@@ -576,6 +556,29 @@ function VibeTab(
             </div>
           )}
         </div>
+
+        {/* Aksi pindah meja — di dalam section ini (bukan mengambang di atas).
+            Host → request approval; staff (non-host) → langsung. */}
+        {props.isHost && canMoveTable && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <MoveTableButton
+              sessionId={props.session.id}
+              status={props.session.status}
+              menu={props.menu}
+              pendingMove={props.pendingMove}
+              existingOrderTotal={props.orderItems.reduce(
+                (acc, i) =>
+                  i.status === "void" ? acc : acc + i.quantity * i.unit_price,
+                0
+              )}
+            />
+          </div>
+        )}
+        {!props.isHost && props.staffRole && canMoveTable && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <StaffMoveTableButton sessionId={props.session.id} />
+          </div>
+        )}
       </Card>
 
       {/* Section 2: People at table */}
