@@ -381,6 +381,13 @@ function VisibilityIcon({ visibility }: { visibility: SessionVisibility }) {
   return <Lock className="h-3 w-3 text-muted-foreground" />;
 }
 
+/** Label visibility meja utk ditampilkan ke user. */
+function visibilityLabel(visibility: SessionVisibility): string {
+  if (visibility === "public") return "Public · anyone can join";
+  if (visibility === "friends") return "Friends only";
+  return "Invite only";
+}
+
 // ============================================================
 // TABS
 // ============================================================
@@ -526,11 +533,22 @@ function VibeTab(
 
       {/* Members */}
       <Card className="p-5">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            At table ({joined.length}/{props.table.capacity})
-          </h2>
-          <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground" />
+        <div className="flex items-center justify-between mb-1 gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              At table ({joined.length}/{props.table.capacity})
+            </h2>
+            {/* Nomor meja — biar cepat kelihatan tanpa lihat header atas. */}
+            <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+              {props.table.label}
+            </Badge>
+          </div>
+          <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground shrink-0" />
+        </div>
+        {/* Visibility meja — public / friends / invite only. */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+          <VisibilityIcon visibility={props.session.visibility} />
+          <span>{visibilityLabel(props.session.visibility)}</span>
         </div>
         {/* Jam booking (kalau reservasi, bukan walk-in) */}
         {props.session.reservation_at && (
