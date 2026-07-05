@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import {
   Search,
   Minus,
@@ -9,6 +10,7 @@ import {
   ShoppingCart,
   ChevronUp,
   ChevronDown,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
@@ -130,6 +132,20 @@ export function StaffMenuGrid({
                     !item.is_available && "opacity-50"
                   )}
                 >
+                  {/* Foto menu (thumbnail) */}
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted/40 flex items-center justify-center">
+                    {item.image_url ? (
+                      <Image
+                        src={item.image_url}
+                        alt={item.name}
+                        width={48}
+                        height={48}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <UtensilsCrossed className="h-4 w-4 text-muted-foreground/40" />
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.name}</p>
                     <p className="text-xs text-primary tabular-nums">

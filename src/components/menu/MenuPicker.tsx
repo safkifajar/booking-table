@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Minus, Search } from "lucide-react";
+import { Plus, Minus, Search, UtensilsCrossed } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 
 export interface MenuPickerItem {
@@ -104,6 +105,20 @@ export function MenuPicker({ menu, onAdd }: Props) {
               )}
               onClick={() => item.is_available && setSelectedItem(item)}
             >
+              {/* Foto menu (thumbnail). Placeholder ikon kalau tak ada foto. */}
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted/40 flex items-center justify-center">
+                {item.image_url ? (
+                  <Image
+                    src={item.image_url}
+                    alt={item.name}
+                    width={64}
+                    height={64}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <UtensilsCrossed className="h-5 w-5 text-muted-foreground/40" />
+                )}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start gap-2 mb-1">
                   <p className="font-medium text-sm leading-tight flex-1">{item.name}</p>

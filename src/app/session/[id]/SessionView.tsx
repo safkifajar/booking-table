@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -1129,7 +1130,21 @@ function BillTab({
           <div className="space-y-2">
             {g.items.map((i) => (
               <div key={i.id} className="flex items-start gap-2 text-sm slide-in-top">
-                <span className="text-muted-foreground w-6 shrink-0">{i.quantity}×</span>
+                {/* Foto menu (thumbnail) */}
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted/40 flex items-center justify-center">
+                  {i.menu_item.image_url ? (
+                    <Image
+                      src={i.menu_item.image_url}
+                      alt={i.menu_item.name}
+                      width={40}
+                      height={40}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Utensils className="h-4 w-4 text-muted-foreground/40" />
+                  )}
+                </div>
+                <span className="text-muted-foreground w-6 shrink-0 pt-1">{i.quantity}×</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate">{i.menu_item.name}</p>
