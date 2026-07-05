@@ -611,10 +611,17 @@ function VibeTab(
         <div className="space-y-3">
           {joined.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
-              <Avatar>
-                {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
-                <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
-              </Avatar>
+              {/* Avatar → halaman profil user. */}
+              <Link
+                href={`/network/${m.profile.id}`}
+                className="shrink-0 rounded-full transition hover:ring-2 hover:ring-primary/40"
+                aria-label={`View ${m.profile.display_name}'s profile`}
+              >
+                <Avatar>
+                  {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
+                  <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
+                </Avatar>
+              </Link>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <p className="font-medium text-sm truncate">{m.profile.display_name}</p>
