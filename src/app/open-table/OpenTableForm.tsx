@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -26,6 +25,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { openTable } from "@/lib/actions";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { type InviteCandidate } from "@/lib/customer-actions";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
@@ -92,6 +92,44 @@ export function OpenTableForm({
   menu,
 }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  // True saat kita SUDAH konfirmasi & benar-benar mau keluar (biar handler
+  // popstate tak minta konfirmasi 2x).
+  const leavingRef = React.useRef(false);
+
+  // Konfirmasi batal open table, lalu balik ke denah kalau user setuju.
+  const confirmLeave = React.useCallback(async () => {
+    const ok = await confirm({
+      title: "Cancel opening this table?",
+      description:
+        "Your table setup won't be saved and the table stays available. You can start again anytime.",
+      confirmText: "Discard",
+      cancelText: "Keep editing",
+      variant: "danger",
+    });
+    if (ok) {
+      leavingRef.current = true;
+      router.push(`/bar/${barSlug}`);
+    }
+    return ok;
+  }, [confirm, router, barSlug]);
+
+  // Intercept tombol BACK HP/browser: dorong 1 entry history saat mount, lalu
+  // saat popstate (back ditekan) → tahan & minta konfirmasi. Kalau user pilih
+  // keluar, confirmLeave sudah router.push; kalau batal, dorong lagi entry biar
+  // back berikutnya tetap ke-intercept.
+  React.useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+    const onPop = () => {
+      if (leavingRef.current) return; // sudah dikonfirmasi keluar
+      // Balikin entry yg baru saja di-pop supaya tetap di halaman ini.
+      window.history.pushState(null, "", window.location.href);
+      void confirmLeave();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [confirmLeave]);
+
   const [visibility, setVisibility] =
     React.useState<SessionVisibility>("public");
   const [vibes, setVibes] = React.useState<string[]>([]);
@@ -265,12 +303,14 @@ export function OpenTableForm({
     <Card className="w-full max-w-lg">
       <CardHeader className="space-y-3">
         <div className="flex items-center gap-2">
-          <Link
-            href={`/bar/${barSlug}`}
+          <button
+            type="button"
+            onClick={() => void confirmLeave()}
             className="text-muted-foreground hover:text-foreground transition"
+            aria-label="Back"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
+          </button>
           <span className="text-xs tracking-[0.3em] uppercase text-primary/70 font-medium">
             Open Table
           </span>
