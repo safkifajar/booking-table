@@ -610,6 +610,12 @@ function BookingSchedule({
                 </Badge>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate">{r.host_name}</p>
+                  {/* Deskripsi booking (title) — kalau ada. */}
+                  {r.title && (
+                    <p className="text-xs italic text-muted-foreground/90 truncate">
+                      {r.title}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground tabular-nums">
                     {r.reservation_at ? formatTime(r.reservation_at) : "?"}
                     {r.reservation_end_at
