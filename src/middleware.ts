@@ -93,12 +93,20 @@ export default authMiddleware(async (req) => {
     // - /staff/* — dashboard role (cashier, waiter)
     // - /session/* — customer session UI (staff pakai untuk "Bantu Pesan" + "Buka Meja")
     // - /bar/* — venue page (staff balik dari session bisa landing di sini)
+    // - /open-table — form buka/booking meja (kasir buka meja utk customer)
+    // - /onboarding — guest yg dibuatkan kasir belum onboarded → redirect ke sini
+    // - /auth — kalau session guest perlu login/daftar
     // - /api/* — API routes
+    // Tanpa ini, route customer di atas di-rewrite ke /admin/* (tak ada) → 404
+    // saat staff mengaksesnya dari subdomain admin (mis. buka meja → onboarding).
     const skipRewrite =
       path.startsWith("/admin") ||
       path.startsWith("/staff") ||
       path.startsWith("/session") ||
       path.startsWith("/bar") ||
+      path.startsWith("/open-table") ||
+      path.startsWith("/onboarding") ||
+      path.startsWith("/auth") ||
       path.startsWith("/api/") ||
       // Service worker & PWA manifest harus di-serve apa adanya (jangan
       // di-rewrite ke /admin/* → 404 → SW gagal register, push toggle hang).
