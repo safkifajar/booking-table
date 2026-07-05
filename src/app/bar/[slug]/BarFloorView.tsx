@@ -966,20 +966,18 @@ function TableSheet({
                           : h.booked
                             ? "bg-muted/30"
                             : "",
-                      (selectable || h.sessionId) && !picked && "hover:bg-muted/50",
-                      (selectable || h.sessionId) && "cursor-pointer"
+                      selectable && !picked && "hover:bg-muted/50",
+                      selectable && "cursor-pointer"
                     );
 
-                    // Ada booking → Link lihat session. Tersedia → pilih rentang.
+                    // Slot ter-booking = info saja (siapa & kapan). JANGAN link
+                    // ke /session — customer bukan member booking itu → 403.
+                    // Slot tersedia → tombol pilih rentang.
                     if (h.sessionId) {
                       return (
-                        <Link
-                          key={h.startIso}
-                          href={`/session/${h.sessionId}`}
-                          className={rowClass}
-                        >
+                        <div key={h.startIso} className={rowClass}>
                           {inner}
-                        </Link>
+                        </div>
                       );
                     }
                     if (selectable) {
