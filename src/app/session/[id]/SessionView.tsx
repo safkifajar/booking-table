@@ -488,17 +488,6 @@ function VibeTab(
   return (
     <div className="space-y-4">
 
-      {/* Vibe tags */}
-      {props.session.vibe_tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {props.session.vibe_tags.map((v) => (
-            <Badge key={v} variant="secondary" className="text-xs">
-              {v}
-            </Badge>
-          ))}
-        </div>
-      )}
-
       {/* Pending requests — host only */}
       {props.isHost && pending.length > 0 && (
         <PendingRequests sessionId={props.session.id} pending={pending} />
@@ -554,6 +543,19 @@ function VibeTab(
                 {props.session.reservation_end_at &&
                   `–${formatTime(props.session.reservation_end_at)}`}
               </span>
+            </div>
+          )}
+          {/* Vibe tags — dipindah ke dalam info (dulu mengambang di atas). */}
+          {props.session.vibe_tags.length > 0 && (
+            <div className="flex items-start gap-1.5 text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div className="flex flex-wrap gap-1.5">
+                {props.session.vibe_tags.map((v) => (
+                  <Badge key={v} variant="secondary" className="text-xs">
+                    {v}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
         </div>
