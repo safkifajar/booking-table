@@ -14,8 +14,12 @@ self.addEventListener("push", (event) => {
   const title = data.title || "SOHO Social House";
   const options = {
     body: data.body || "",
+    // icon = gambar besar di dalam notif (boleh berwarna).
     icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    // badge = ikon KECIL di status bar (samping jam). Android WAJIB monokrom +
+    // transparan (siluet putih); kalau pakai gambar opaque → tampil kotak putih.
+    // badge-96.png = siluet "SO.HO" putih transparan.
+    badge: "/badge-96.png",
     data: { url: data.url || "/" },
   };
   event.waitUntil(self.registration.showNotification(title, options));
