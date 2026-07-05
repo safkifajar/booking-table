@@ -30,7 +30,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
-import { RelativeTime } from "@/components/ui/relative-time";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentConfetti } from "@/components/PaymentConfetti";
 import {
@@ -608,7 +607,6 @@ function VibeTab(
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             People at table ({joined.length}/{props.table.capacity})
           </h2>
-          <RelativeTime date={props.session.started_at} className="text-xs text-muted-foreground shrink-0" />
         </div>
         <div className="space-y-3">
           {joined.map((m) => (
@@ -640,7 +638,8 @@ function VibeTab(
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>
-                    Joined <RelativeTime date={m.joined_at} />
+                    Joined {formatDateShort(m.joined_at)},{" "}
+                    {formatTime(m.joined_at)}
                   </span>
                   {m.rating?.top_tags && m.rating.top_tags.length > 0 && (
                     <>
