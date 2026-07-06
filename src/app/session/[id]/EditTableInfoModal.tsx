@@ -41,6 +41,15 @@ export function EditTableInfoModal({
   const [vibes, setVibes] = React.useState<string[]>(initialVibes);
   const [saving, setSaving] = React.useState(false);
 
+  // Kunci scroll body selama modal terbuka.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   function toggleVibe(v: string) {
     setVibes((prev) =>
       prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v].slice(0, 5)

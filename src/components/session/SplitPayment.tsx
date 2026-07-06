@@ -424,6 +424,15 @@ function PickerSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  // Kunci scroll body selama sheet terbuka — konten di belakang tak ikut scroll.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div

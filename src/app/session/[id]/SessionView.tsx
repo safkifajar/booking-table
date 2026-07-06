@@ -650,18 +650,21 @@ function VibeTab(
                 <StaffMoveTableButton sessionId={props.session.id} />
               </div>
             )}
-            {/* Edit info meja — pakai Button size="sm" biar tinggi = Move Table. */}
+            {/* Edit info meja — struktur sama (flex-1 wrapper + w-full Button)
+                spy lebar & tinggi persis = Move Table. */}
             {canEditInfo && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => setEditInfoModal(true)}
-              >
-                <Pencil className="h-4 w-4" />
-                Edit info
-              </Button>
+              <div className="flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setEditInfoModal(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit info
+                </Button>
+              </div>
             )}
           </div>
         )}
