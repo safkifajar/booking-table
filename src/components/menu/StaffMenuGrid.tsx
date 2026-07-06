@@ -13,6 +13,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
 
@@ -293,27 +294,12 @@ export function StaffMenuGrid({
         </div>
       ))}
 
-      {/* Bar keranjang sticky — Lihat pesanan (expand) + Simpan Pesanan */}
+      {/* Bar keranjang sticky — ala Traveloka (info kiri + tombol aksi kanan),
+          warna SOHO. Panel ringkasan expand di atas saat "View order" diklik. */}
       {totalQty > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-primary/30 bg-background/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.35)]">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 space-y-2">
-            {/* Tombol toggle lihat ordernan */}
-            <button
-              type="button"
-              onClick={() => setCartOpen((v) => !v)}
-              className="w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition"
-            >
-              <span className="font-medium">
-                {cartOpen ? "Hide" : "View"} order ({totalQty} items)
-              </span>
-              {cartOpen ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
-            </button>
-
-            {/* Panel ringkasan keranjang (expand) */}
+            {/* Panel ringkasan keranjang (expand) — di ATAS baris aksi */}
             {cartOpen && (
               <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-card/60 divide-y divide-border">
                 {cartLines.map((l) => {
@@ -360,19 +346,45 @@ export function StaffMenuGrid({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <ShoppingCart className="h-4 w-4" />
-              )}
-              Save Order · {totalQty} items · {formatIDR(totalPrice)}
-            </button>
+            {/* Baris aksi: info harga (kiri, clickable → toggle panel) + tombol
+                Save menonjol (kanan) — ala Traveloka, warna SOHO. */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setCartOpen((v) => !v)}
+                className="flex-1 min-w-0 text-left"
+              >
+                <div className="flex items-center gap-1 text-[11px] font-medium text-primary">
+                  {cartOpen ? "Hide order" : "View order"}
+                  {cartOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  )}
+                </div>
+                <div className="text-lg font-bold text-foreground tabular-nums leading-tight">
+                  {formatIDR(totalPrice)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  {totalQty} item{totalQty > 1 ? "s" : ""}
+                </div>
+              </button>
+              <Button
+                type="button"
+                variant="gold"
+                size="lg"
+                onClick={handleSave}
+                disabled={saving}
+                className="shrink-0 px-6"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShoppingCart className="h-4 w-4" />
+                )}
+                Save order
+              </Button>
+            </div>
           </div>
         </div>
       )}
