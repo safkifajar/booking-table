@@ -172,58 +172,101 @@ export function SessionView(props: SessionViewProps) {
   const router = useRouter();
   useSessionRealtime(props.session.id);
 
-  // Arah animasi geser tab: 1 = konten baru masuk dari kanan (pindah ke tab
-  // berikutnya), -1 = dari kiri (tab sebelumnya).
-  const [slideDir, setSlideDir] = React.useState<1 | -1>(1);
-  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill", "pay"];
-  // Ganti tab + set arah animasi berdasar posisi tab.
-  function changeTab(next: Tab) {
-    if (next === tab) return;
-    setSlideDir(TAB_ORDER.indexOf(next) > TAB_ORDER.indexOf(tab) ? 1 : -1);
-    setTab(next);
-  }
-
-  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Tab menu/pay
-  // hanya dpt diakses kalau bisa interact (member/staff) — lewati saat swipe.
-  const canInteractRef = React.useRef(false);
-  const touchStart = React.useRef<{ x: number; y: number } | null>(null);
-  function goTab(dir: 1 | -1) {
-    let idx = TAB_ORDER.indexOf(tab);
-    // Cari tab berikutnya yg boleh diakses (skip menu/pay kalau tak interact).
-    while (true) {
-      idx += dir;
-      const next = TAB_ORDER[idx];
-      if (!next) return;
-      if ((next === "menu" || next === "pay") && !canInteractRef.current)
-        continue;
-      changeTab(next);
-      return;
-    }
-  }
-  function onTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0];
-    touchStart.current = { x: t.clientX, y: t.clientY };
-  }
-  function onTouchEnd(e: React.TouchEvent) {
-    const s = touchStart.current;
-    touchStart.current = null;
-    if (!s) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s.x;
-    const dy = t.clientY - s.y;
-    // Swipe horizontal jelas (jarak cukup + lebih horizontal dari vertikal).
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    goTab(dx < 0 ? 1 : -1); // geser kiri → tab berikutnya; kanan → sebelumnya
-  }
-
   // Staff (waiter/cashier/manager/admin) yang bukan member meja tetap bisa
   // interact dengan UI cart/payment. Order item akan attributed ke member
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
-  React.useEffect(() => {
-    canInteractRef.current = canInteract;
+
+  // ── Swipe interaktif antar tab (ala FB/IG): track horizontal di-drag ikut
+  //    jari, halaman samping kelihatan, indikator garis tab ikut geser. ──
+  // Tab yg tampil (menu/pay hanya kalau bisa interact).
+  const visibleTabs: Tab[] = React.useMemo(() => {
+    const t: Tab[] = ["vibe"];
+    if (canInteract) t.push("menu");
+    t.push("bill");
+    if (canInteract) t.push("pay");
+    return t;
   }, [canInteract]);
+  const activeIndex = Math.max(0, visibleTabs.indexOf(tab));
+  // dragX = offset px saat jari geser (0 = tak drag). trackRef utk ukur lebar.
+  const trackRef = React.useRef<HTMLDivElement>(null);
+  const [dragX, setDragX] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  // Lebar track diukur via effect (jangan baca ref saat render).
+  const [trackW, setTrackW] = React.useState(1);
+  React.useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const update = () => setTrackW(el.clientWidth || 1);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const swipe = React.useRef<{
+    x: number;
+    y: number;
+    w: number;
+    decided: boolean;
+    horizontal: boolean;
+  } | null>(null);
+
+  function changeTab(next: Tab) {
+    if (next === tab) return;
+    setTab(next);
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    swipe.current = {
+      x: t.clientX,
+      y: t.clientY,
+      w: trackRef.current?.clientWidth ?? window.innerWidth,
+      decided: false,
+      horizontal: false,
+    };
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    const s = swipe.current;
+    if (!s) return;
+    const t = e.touches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // Tentukan arah gestur sekali (horizontal vs vertikal).
+    if (!s.decided && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      s.decided = true;
+      s.horizontal = Math.abs(dx) > Math.abs(dy);
+      if (s.horizontal) setDragging(true);
+    }
+    if (!s.horizontal) return;
+    // Redam di ujung (tak ada tab lagi) — efek karet.
+    let d = dx;
+    const atStart = activeIndex === 0 && dx > 0;
+    const atEnd = activeIndex === visibleTabs.length - 1 && dx < 0;
+    if (atStart || atEnd) d = dx * 0.3;
+    setDragX(d);
+  }
+  function onTouchEnd() {
+    const s = swipe.current;
+    swipe.current = null;
+    setDragging(false);
+    if (!s || !s.horizontal) {
+      setDragX(0);
+      return;
+    }
+    // Pindah tab kalau geser > 25% lebar.
+    const threshold = s.w * 0.25;
+    if (dragX <= -threshold && activeIndex < visibleTabs.length - 1) {
+      setTab(visibleTabs[activeIndex + 1]);
+    } else if (dragX >= threshold && activeIndex > 0) {
+      setTab(visibleTabs[activeIndex - 1]);
+    }
+    setDragX(0);
+  }
+
+  // Progress geser 0..(n-1) utk posisi indikator garis tab (ikut drag realtime).
+  const indicatorPos = activeIndex - dragX / trackW;
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
@@ -281,7 +324,17 @@ export function SessionView(props: SessionViewProps) {
 
       {/* Tab strip */}
       <div className="sticky top-[57px] z-10 bg-background/85 backdrop-blur-md border-b border-border">
-        <div className="max-w-3xl mx-auto px-2">
+        <div className="max-w-3xl mx-auto px-2 relative">
+          {/* Garis indikator merah — ikut geser realtime saat swipe. */}
+          <div
+            className="absolute bottom-0 h-0.5 bg-primary"
+            style={{
+              width: `${100 / visibleTabs.length}%`,
+              left: 0,
+              transform: `translateX(${indicatorPos * 100}%)`,
+              transition: dragging ? "none" : "transform 0.25s ease-out",
+            }}
+          />
           <div className="flex">
             <TabButton
               icon={<Users className="h-4 w-4" />}
@@ -346,57 +399,67 @@ export function SessionView(props: SessionViewProps) {
         </div>
       )}
 
-      {/* Tab content — swipe kiri/kanan pindah tab. Wrapper luar overflow-hidden
-          supaya animasi geser tak bikin scroll horizontal. Inner key={tab} →
-          remount + animasi slide sesuai arah (slideDir). */}
+      {/* Tab content — SWIPE INTERAKTIF (ala FB). Semua tab dlm 1 track
+          horizontal; track ikut jari saat digeser (halaman samping kelihatan),
+          snap ke tab terdekat saat lepas. overscroll-x contain + touch-action
+          pan-y → cegah swipe-back native (panah kembali). */}
       <div
-        className="[overflow-x:clip]"
+        ref={trackRef}
+        className="overflow-hidden [overscroll-behavior-x:contain] [touch-action:pan-y]"
         onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-      <div
-        key={tab}
-        className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
-        style={{
-          animation: `${slideDir === 1 ? "tab-slide-right" : "tab-slide-left"} 0.22s ease-out`,
-        }}
-      >
-        {tab === "vibe" && (
-          <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
-        )}
-        {tab === "menu" && canInteract && (
-          <MenuTab
-            menu={props.menu}
-            sessionId={props.session.id}
-            canInteract={canInteract}
-            isStaff={isStaff}
-            hostMemberId={hostMember?.id ?? null}
-            cart={menuCart}
-            onCartChange={setMenuCart}
-          />
-        )}
-        {tab === "bill" && (
-          <BillTab
-            items={props.orderItems}
-            myProfileId={props.myProfileId}
-            isStaff={isStaff}
-            sessionId={props.session.id}
-            subtotal={subtotal}
-          />
-        )}
-        {tab === "pay" && canInteract && (
-          <SplitTab
-            sessionId={props.session.id}
-            items={props.orderItems}
-            payments={props.payments}
-            members={props.members.filter((m) => m.status === "joined")}
-            myMemberId={props.myMemberId}
-            subtotal={subtotal}
-            remaining={remaining}
-            payFullOnly={isStaff}
-          />
-        )}
-      </div>
+        <div
+          className="flex"
+          style={{
+            transform: `translateX(calc(${-activeIndex * 100}% + ${dragX}px))`,
+            transition: dragging ? "none" : "transform 0.25s ease-out",
+          }}
+        >
+          {visibleTabs.map((t) => (
+            <div
+              key={t}
+              className="w-full shrink-0 max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+            >
+              {t === "vibe" && (
+                <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
+              )}
+              {t === "menu" && (
+                <MenuTab
+                  menu={props.menu}
+                  sessionId={props.session.id}
+                  canInteract={canInteract}
+                  isStaff={isStaff}
+                  hostMemberId={hostMember?.id ?? null}
+                  cart={menuCart}
+                  onCartChange={setMenuCart}
+                />
+              )}
+              {t === "bill" && (
+                <BillTab
+                  items={props.orderItems}
+                  myProfileId={props.myProfileId}
+                  isStaff={isStaff}
+                  sessionId={props.session.id}
+                  subtotal={subtotal}
+                />
+              )}
+              {t === "pay" && (
+                <SplitTab
+                  sessionId={props.session.id}
+                  items={props.orderItems}
+                  payments={props.payments}
+                  members={props.members.filter((m) => m.status === "joined")}
+                  myMemberId={props.myMemberId}
+                  subtotal={subtotal}
+                  remaining={remaining}
+                  payFullOnly={isStaff}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Sticky bottom bar */}
@@ -489,10 +552,10 @@ function TabButton({
     <button
       onClick={onClick}
       className={cn(
-        "relative flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium border-b-2 transition",
+        "relative flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition",
         active
-          ? "text-primary border-primary"
-          : "text-muted-foreground border-transparent hover:text-foreground"
+          ? "text-primary"
+          : "text-muted-foreground hover:text-foreground"
       )}
     >
       {icon}
