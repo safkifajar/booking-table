@@ -405,7 +405,7 @@ export function SessionView(props: SessionViewProps) {
           pan-y → cegah swipe-back native (panah kembali). */}
       <div
         ref={trackRef}
-        className="overflow-hidden [overscroll-behavior-x:contain] [touch-action:pan-y]"
+        className="[overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
