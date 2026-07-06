@@ -169,11 +169,48 @@ export function SessionView(props: SessionViewProps) {
   const router = useRouter();
   useSessionRealtime(props.session.id);
 
+  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Tab menu/pay
+  // hanya dpt diakses kalau bisa interact (member/staff) — lewati saat swipe.
+  const canInteractRef = React.useRef(false);
+  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill", "pay"];
+  const touchStart = React.useRef<{ x: number; y: number } | null>(null);
+  function goTab(dir: 1 | -1) {
+    let idx = TAB_ORDER.indexOf(tab);
+    // Cari tab berikutnya yg boleh diakses (skip menu/pay kalau tak interact).
+    while (true) {
+      idx += dir;
+      const next = TAB_ORDER[idx];
+      if (!next) return;
+      if ((next === "menu" || next === "pay") && !canInteractRef.current)
+        continue;
+      setTab(next);
+      return;
+    }
+  }
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const s = touchStart.current;
+    touchStart.current = null;
+    if (!s) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - s.x;
+    const dy = t.clientY - s.y;
+    // Swipe horizontal jelas (jarak cukup + lebih horizontal dari vertikal).
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    goTab(dx < 0 ? 1 : -1); // geser kiri → tab berikutnya; kanan → sebelumnya
+  }
+
   // Staff (waiter/cashier/manager/admin) yang bukan member meja tetap bisa
   // interact dengan UI cart/payment. Order item akan attributed ke member
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
+  React.useEffect(() => {
+    canInteractRef.current = canInteract;
+  }, [canInteract]);
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
@@ -296,8 +333,12 @@ export function SessionView(props: SessionViewProps) {
         </div>
       )}
 
-      {/* Tab content */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+      {/* Tab content — swipe kiri/kanan pindah tab */}
+      <div
+        className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {tab === "vibe" && (
           <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
         )}
