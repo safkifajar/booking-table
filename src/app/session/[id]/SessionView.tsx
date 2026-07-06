@@ -47,7 +47,7 @@ import {
 } from "@/lib/actions";
 import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
-import { MenuPicker, type MenuPickerCategory } from "@/components/menu/MenuPicker";
+import { type MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
@@ -1083,40 +1083,27 @@ function MenuTab({
   }
   return (
     <div className="space-y-3">
-      {isStaff ? (
-        // Waiter/staff: keranjang — +/- per item, simpan sekali ke meja.
-        <StaffMenuGrid
-          menu={menu}
-          onSave={async (cart) => {
-            if (!hostMemberId) {
-              toast.error("Table has no host yet — can't save the order");
-              return;
-            }
-            // Pesanan waiter masuk ke meja (atribusi ke host), bukan per-orang.
-            for (const line of cart) {
-              await addOrderItem({
-                sessionId,
-                menuItemId: line.menuItemId,
-                quantity: line.quantity,
-                onBehalfOfMemberId: hostMemberId,
-              });
-            }
-            toast.success("Order saved to table");
-          }}
-        />
-      ) : (
-        <MenuPicker
-          menu={menu}
-          onAdd={async (menuItemId, quantity, notes) => {
-            try {
-              await addOrderItem({ sessionId, menuItemId, quantity, notes });
-              toast.success("Order added");
-            } catch (err) {
-              toast.error(getActionErrorMessage(err, "Failed to add"));
-            }
-          }}
-        />
-      )}
+      {/* Customer & staff sama-sama pakai keranjang: pilih +/- lalu Simpan
+          sekali → semua masuk bill. Beda: staff atribusi ke host meja;
+          customer atribusi ke diri sendiri (onBehalfOfMemberId undefined). */}
+      <StaffMenuGrid
+        menu={menu}
+        onSave={async (cart) => {
+          if (isStaff && !hostMemberId) {
+            toast.error("Table has no host yet — can't save the order");
+            return;
+          }
+          for (const line of cart) {
+            await addOrderItem({
+              sessionId,
+              menuItemId: line.menuItemId,
+              quantity: line.quantity,
+              onBehalfOfMemberId: isStaff ? hostMemberId! : undefined,
+            });
+          }
+          toast.success("Order saved to table");
+        }}
+      />
     </div>
   );
 }
