@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ChevronDown,
   UtensilsCrossed,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
@@ -113,6 +114,14 @@ export function StaffMenuGrid({
       const copy = { ...c };
       if (next <= 0) delete copy[id];
       else copy[id] = next;
+      return copy;
+    });
+  }
+  // Hapus item sepenuhnya dari keranjang (tombol tong sampah).
+  function remove(id: string) {
+    setCart((c) => {
+      const copy = { ...c };
+      delete copy[id];
       return copy;
     });
   }
@@ -295,75 +304,81 @@ export function StaffMenuGrid({
 
       {totalQty > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30">
-          {/* Panel ringkasan (expand) — muncul di atas banner, nempel. */}
-          {cartOpen && (
-            <div className="border-t border-border bg-card max-h-56 overflow-y-auto divide-y divide-border">
-              <div className="max-w-3xl mx-auto">
-                {cartLines.map((l) => {
-                  const info = itemMap.get(l.menuItemId);
-                  return (
-                    <div
-                      key={l.menuItemId}
-                      className="flex items-center gap-2 px-4 sm:px-6 py-2 text-sm"
-                    >
-                      <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted/40 flex items-center justify-center">
-                        {info?.image_url ? (
-                          <Image
-                            src={info.image_url}
-                            alt={info.name}
-                            width={32}
-                            height={32}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <UtensilsCrossed className="h-3.5 w-3.5 text-muted-foreground/40" />
-                        )}
-                      </div>
-                      <span className="w-6 text-center text-xs font-semibold text-primary tabular-nums shrink-0">
-                        {l.quantity}×
-                      </span>
-                      <span className="flex-1 min-w-0 truncate">
-                        {info?.name ?? "—"}
-                      </span>
-                      <span className="text-xs tabular-nums text-muted-foreground shrink-0">
-                        {formatIDR(l.quantity * (info?.price ?? 0))}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => dec(l.menuItemId)}
-                        className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground shrink-0"
-                        aria-label="Decrease"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
+          {/* Container membesar saat dibuka: HEADER MERAH (rounded-top) + list
+              produk BG GELAP di bawahnya. Menyatu, nempel, radius atas saja. */}
+          <div className="rounded-t-2xl overflow-hidden">
+            {/* Header banner MERAH — klik toggle buka/tutup */}
+            <button
+              type="button"
+              onClick={() => setCartOpen((v) => !v)}
+              className="w-full bg-primary text-primary-foreground"
+            >
+              <div className="max-w-3xl mx-auto flex items-center gap-2 px-4 sm:px-6 py-2.5">
+                <ShoppingCart className="h-4 w-4 shrink-0" />
+                <span className="flex-1 min-w-0 text-sm font-medium truncate text-left">
+                  {totalQty} item{totalQty > 1 ? "s" : ""} in your order
+                </span>
+                <span className="flex items-center gap-1 text-xs font-semibold shrink-0">
+                  {cartOpen ? "Hide" : "View order"}
+                  {cartOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronUp className="h-4 w-4" />
+                  )}
+                </span>
               </div>
-            </div>
-          )}
+            </button>
 
-          {/* Banner merah SOHO — FULL WIDTH, radius atas saja, nempel ke bar bawah. */}
-          <button
-            type="button"
-            onClick={() => setCartOpen((v) => !v)}
-            className="w-full bg-primary text-primary-foreground rounded-t-2xl"
-          >
-            <div className="max-w-3xl mx-auto flex items-center gap-2 px-4 sm:px-6 py-2.5">
-              <ShoppingCart className="h-4 w-4 shrink-0" />
-              <span className="flex-1 min-w-0 text-sm font-medium truncate text-left">
-                {totalQty} item{totalQty > 1 ? "s" : ""} in your order
-              </span>
-              <span className="flex items-center gap-1 text-xs font-semibold shrink-0">
-                {cartOpen ? "Hide" : "View order"}
-                {cartOpen ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronUp className="h-4 w-4" />
-                )}
-              </span>
-            </div>
-          </button>
+            {/* List produk — BG GELAP (card), muncul saat dibuka. Maks tinggi
+                ~6 produk (≈44px/baris); lebih → scroll. overscroll contain →
+                scroll cart tak nembus ke list menu di belakang. */}
+            {cartOpen && (
+              <div className="max-h-[264px] overflow-y-auto [overscroll-behavior:contain] bg-card">
+                <div className="max-w-3xl mx-auto divide-y divide-border">
+                  {cartLines.map((l) => {
+                    const info = itemMap.get(l.menuItemId);
+                    return (
+                      <div
+                        key={l.menuItemId}
+                        className="flex items-center gap-2 px-4 sm:px-6 py-2 text-sm"
+                      >
+                        <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted/40 flex items-center justify-center">
+                          {info?.image_url ? (
+                            <Image
+                              src={info.image_url}
+                              alt={info.name}
+                              width={32}
+                              height={32}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <UtensilsCrossed className="h-3.5 w-3.5 text-muted-foreground/40" />
+                          )}
+                        </div>
+                        <span className="w-6 text-center text-xs font-semibold text-primary tabular-nums shrink-0">
+                          {l.quantity}×
+                        </span>
+                        <span className="flex-1 min-w-0 truncate">
+                          {info?.name ?? "—"}
+                        </span>
+                        <span className="text-xs tabular-nums text-muted-foreground shrink-0">
+                          {formatIDR(l.quantity * (info?.price ?? 0))}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => remove(l.menuItemId)}
+                          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-red-400 shrink-0"
+                          aria-label="Remove item"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Bar bawah: harga KIRI + tombol Save KANAN (pola Traveloka). */}
           <div className="border-t border-border bg-background/95 backdrop-blur-md">
