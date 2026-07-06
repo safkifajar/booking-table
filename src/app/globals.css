@@ -217,6 +217,34 @@ button:disabled,
   animation: slide-in-from-top 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Animasi geser antar tab session. right = pindah ke tab kanan (konten masuk
+   dari kanan), left = pindah ke tab kiri. */
+@keyframes tab-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes tab-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="tab-slide"] {
+    animation: none !important;
+  }
+}
+
 /* Confetti */
 @keyframes confetti-fall {
   0% {

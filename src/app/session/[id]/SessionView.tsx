@@ -172,10 +172,20 @@ export function SessionView(props: SessionViewProps) {
   const router = useRouter();
   useSessionRealtime(props.session.id);
 
+  // Arah animasi geser tab: 1 = konten baru masuk dari kanan (pindah ke tab
+  // berikutnya), -1 = dari kiri (tab sebelumnya).
+  const [slideDir, setSlideDir] = React.useState<1 | -1>(1);
+  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill", "pay"];
+  // Ganti tab + set arah animasi berdasar posisi tab.
+  function changeTab(next: Tab) {
+    if (next === tab) return;
+    setSlideDir(TAB_ORDER.indexOf(next) > TAB_ORDER.indexOf(tab) ? 1 : -1);
+    setTab(next);
+  }
+
   // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Tab menu/pay
   // hanya dpt diakses kalau bisa interact (member/staff) — lewati saat swipe.
   const canInteractRef = React.useRef(false);
-  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill", "pay"];
   const touchStart = React.useRef<{ x: number; y: number } | null>(null);
   function goTab(dir: 1 | -1) {
     let idx = TAB_ORDER.indexOf(tab);
@@ -186,7 +196,7 @@ export function SessionView(props: SessionViewProps) {
       if (!next) return;
       if ((next === "menu" || next === "pay") && !canInteractRef.current)
         continue;
-      setTab(next);
+      changeTab(next);
       return;
     }
   }
@@ -277,7 +287,7 @@ export function SessionView(props: SessionViewProps) {
               icon={<Users className="h-4 w-4" />}
               label="Table"
               active={tab === "vibe"}
-              onClick={() => setTab("vibe")}
+              onClick={() => changeTab("vibe")}
               badge={props.members.filter((m) => m.status === "joined").length}
               alert={
                 props.isHost &&
@@ -295,14 +305,14 @@ export function SessionView(props: SessionViewProps) {
                 icon={<Utensils className="h-4 w-4" />}
                 label="Menu"
                 active={tab === "menu"}
-                onClick={() => setTab("menu")}
+                onClick={() => changeTab("menu")}
               />
             )}
             <TabButton
               icon={<Receipt className="h-4 w-4" />}
               label="Bill"
               active={tab === "bill"}
-              onClick={() => setTab("bill")}
+              onClick={() => changeTab("bill")}
               badge={props.orderItems.length || undefined}
             />
             {/* Bayar hanya untuk member/staff — non-member yg cuma lihat meja
@@ -312,7 +322,7 @@ export function SessionView(props: SessionViewProps) {
                 icon={<Wallet className="h-4 w-4" />}
                 label="Pay"
                 active={tab === "pay"}
-                onClick={() => setTab("pay")}
+                onClick={() => changeTab("pay")}
               />
             )}
           </div>
@@ -336,11 +346,20 @@ export function SessionView(props: SessionViewProps) {
         </div>
       )}
 
-      {/* Tab content — swipe kiri/kanan pindah tab */}
+      {/* Tab content — swipe kiri/kanan pindah tab. Wrapper luar overflow-hidden
+          supaya animasi geser tak bikin scroll horizontal. Inner key={tab} →
+          remount + animasi slide sesuai arah (slideDir). */}
       <div
-        className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+        className="[overflow-x:clip]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+      >
+      <div
+        key={tab}
+        className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+        style={{
+          animation: `${slideDir === 1 ? "tab-slide-right" : "tab-slide-left"} 0.22s ease-out`,
+        }}
       >
         {tab === "vibe" && (
           <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
@@ -377,6 +396,7 @@ export function SessionView(props: SessionViewProps) {
             payFullOnly={isStaff}
           />
         )}
+      </div>
       </div>
 
       {/* Sticky bottom bar */}
