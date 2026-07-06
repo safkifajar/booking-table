@@ -21,6 +21,8 @@ export interface CartLine {
   quantity: number;
 }
 
+const ALL_SLUG = "__all__";
+
 /**
  * Menu WAITER berbasis KERANJANG. Tiap item cuma +/- (tanpa tombol Tambah
  * per baris): + menambah ke keranjang, - mengurangi. Ringkasan keranjang +
@@ -37,17 +39,30 @@ export function StaffMenuGrid({
   const [cart, setCart] = React.useState<Record<string, number>>({});
   const [saving, setSaving] = React.useState(false);
   const [cartOpen, setCartOpen] = React.useState(false);
+  // Filter kategori. ALL_SLUG = tampilkan semua kategori.
+  const [activeCat, setActiveCat] = React.useState<string>(ALL_SLUG);
 
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
-    if (!q) return menu;
-    return menu
+    // 1. Filter kategori (kalau bukan "All").
+    const byCat =
+      activeCat === ALL_SLUG
+        ? menu
+        : menu.filter((c) => c.slug === activeCat);
+    // 2. Filter query (nama/deskripsi/tag).
+    if (!q) return byCat;
+    return byCat
       .map((c) => ({
         ...c,
-        items: c.items.filter((i) => i.name.toLowerCase().includes(q)),
+        items: c.items.filter(
+          (i) =>
+            i.name.toLowerCase().includes(q) ||
+            i.description?.toLowerCase().includes(q) ||
+            i.tags.some((t) => t.toLowerCase().includes(q))
+        ),
       }))
       .filter((c) => c.items.length > 0);
-  }, [menu, q]);
+  }, [menu, q, activeCat]);
 
   // Lookup harga/nama/foto untuk ringkasan keranjang.
   const itemMap = React.useMemo(() => {
@@ -112,6 +127,39 @@ export function StaffMenuGrid({
         />
       </div>
 
+      {/* Filter kategori — chip "All" + per kategori. */}
+      {!q && menu.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+          <button
+            type="button"
+            onClick={() => setActiveCat(ALL_SLUG)}
+            className={cn(
+              "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
+              activeCat === ALL_SLUG
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All
+          </button>
+          {menu.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setActiveCat(c.slug)}
+              className={cn(
+                "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
+                activeCat === c.slug
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.
@@ -130,7 +178,7 @@ export function StaffMenuGrid({
                 <div
                   key={item.id}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg border p-3 transition",
+                    "flex items-start gap-3 rounded-lg border p-3 transition",
                     qty > 0
                       ? "border-primary/40 bg-primary/[0.04]"
                       : "border-border bg-card/40",
@@ -161,6 +209,25 @@ export function StaffMenuGrid({
                         </span>
                       )}
                     </p>
+                    {/* Deskripsi */}
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                        {item.description}
+                      </p>
+                    )}
+                    {/* Tag */}
+                    {item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.tags.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {item.is_available && (
