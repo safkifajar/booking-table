@@ -49,11 +49,16 @@ export function StaffMenuGrid({
       .filter((c) => c.items.length > 0);
   }, [menu, q]);
 
-  // Lookup harga/nama untuk ringkasan keranjang.
+  // Lookup harga/nama/foto untuk ringkasan keranjang.
   const itemMap = React.useMemo(() => {
-    const m = new Map<string, { name: string; price: number }>();
+    const m = new Map<
+      string,
+      { name: string; price: number; image_url: string | null }
+    >();
     menu.forEach((c) =>
-      c.items.forEach((i) => m.set(i.id, { name: i.name, price: i.price }))
+      c.items.forEach((i) =>
+        m.set(i.id, { name: i.name, price: i.price, image_url: i.image_url })
+      )
     );
     return m;
   }, [menu]);
@@ -220,6 +225,20 @@ export function StaffMenuGrid({
                       key={l.menuItemId}
                       className="flex items-center gap-2 px-3 py-2 text-sm"
                     >
+                      {/* Foto menu (thumbnail) */}
+                      <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted/40 flex items-center justify-center">
+                        {info?.image_url ? (
+                          <Image
+                            src={info.image_url}
+                            alt={info.name}
+                            width={32}
+                            height={32}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <UtensilsCrossed className="h-3.5 w-3.5 text-muted-foreground/40" />
+                        )}
+                      </div>
                       <span className="w-6 text-center text-xs font-semibold text-primary tabular-nums shrink-0">
                         {l.quantity}×
                       </span>
