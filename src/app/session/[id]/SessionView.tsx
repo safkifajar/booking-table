@@ -405,22 +405,31 @@ export function SessionView(props: SessionViewProps) {
           pan-y → cegah swipe-back native (panah kembali). */}
       <div
         ref={trackRef}
-        className="[overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
+        className="relative [overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div
-          className="flex"
-          style={{
-            transform: `translateX(calc(${-activeIndex * 100}% + ${dragX}px))`,
-            transition: dragging ? "none" : "transform 0.25s ease-out",
-          }}
-        >
-          {visibleTabs.map((t) => (
+        {visibleTabs.map((t, i) => {
+          const isActive = i === activeIndex;
+          // Panel AKTIF di alur normal (relative) → menentukan TINGGI container.
+          // Panel lain absolute (tak menambah tinggi) → tab pendek tak ikut
+          // kepanjangan mengikuti tab Menu. Semua geser ikut dragX (follow finger).
+          return (
             <div
               key={t}
-              className="w-full shrink-0 max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+              className={cn(
+                "w-full max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6",
+                isActive ? "relative" : "absolute inset-x-0 top-0"
+              )}
+              style={{
+                transform: `translateX(calc(${(i - activeIndex) * 100}% + ${dragX}px))`,
+                transition: dragging ? "none" : "transform 0.25s ease-out",
+                // Panel non-aktif disembunyikan dari a11y/tab saat jauh (tapi tetap
+                // ter-render utk efek geser). Pointer non-aktif dimatikan.
+                pointerEvents: isActive ? "auto" : "none",
+              }}
+              aria-hidden={!isActive}
             >
               {t === "vibe" && (
                 <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
@@ -458,8 +467,8 @@ export function SessionView(props: SessionViewProps) {
                 />
               )}
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
 
       {/* Sticky bottom bar */}
