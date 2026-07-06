@@ -75,6 +75,9 @@ export const tables = pgTable(
     /** Meja baru dari floor editor yg belum publish (tak tampil ke customer). */
     isDraft: boolean("is_draft").notNull().default(false),
     minSpend: integer("min_spend").default(0),
+    /** Kalau true, host boleh menambah orang MELEBIHI kapasitas meja. Diatur
+     *  admin di floor editor. Default false (dibatasi kapasitas). */
+    allowOverCapacity: boolean("allow_over_capacity").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [unique("uq_tables_area_label").on(t.areaId, t.label)]

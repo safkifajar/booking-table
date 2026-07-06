@@ -589,6 +589,9 @@ function TableDialog({
   const [capacity, setCapacity] = React.useState(String(t?.capacity ?? 4));
   const [rotation, setRotation] = React.useState(String(t?.rotation ?? 0));
   const [minSpend, setMinSpend] = React.useState(String(t?.min_spend ?? 0));
+  const [allowOverCapacity, setAllowOverCapacity] = React.useState(
+    t?.allow_over_capacity ?? false
+  );
   const [saving, setSaving] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -601,6 +604,7 @@ function TableDialog({
         capacity: Number(capacity),
         rotation: Number(rotation),
         minSpend: Number(minSpend) || 0,
+        allowOverCapacity,
       };
       if (isNew) {
         // Ukuran otomatis dari kapasitas+bentuk → taruh di tengah kanvas.
@@ -691,6 +695,25 @@ function TableDialog({
               className={inputCls}
             />
           </Field>
+
+          {/* Toggle: izinkan host menambah orang melebihi kapasitas meja. */}
+          <label className="flex items-start gap-3 rounded-md border border-border p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allowOverCapacity}
+              onChange={(e) => setAllowOverCapacity(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">
+                Allow over capacity
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Host can add more people than the table&rsquo;s seat count.
+              </span>
+            </span>
+          </label>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

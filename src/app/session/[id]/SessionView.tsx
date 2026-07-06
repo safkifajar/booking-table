@@ -98,7 +98,12 @@ interface SessionViewProps {
     reservation_end_at: string | null;
     host_id: string;
   };
-  table: { label: string; capacity: number; shape: TableShape };
+  table: {
+    label: string;
+    capacity: number;
+    shape: TableShape;
+    allowOverCapacity: boolean;
+  };
   areaName: string;
   bar: { name: string; slug: string };
   host: { id: string; display_name: string; avatar_url: string | null };
@@ -530,11 +535,18 @@ function VibeTab(
   const invitedPending = props.members.filter(
     (m) => m.status === "pending" && m.invited_by != null
   );
-  const slotsAvailable = props.table.capacity - joined.length;
+  // Kalau meja izinkan over-capacity (setting admin), anggap selalu ADA slot
+  // (host/staff boleh terus menambah orang walau lewat kapasitas). Angka
+  // ditampilkan tetap kapasitas asli, tapi tombol ajak/tambah tak terkunci.
+  const overCap = props.table.allowOverCapacity;
+  const rawSlots = props.table.capacity - joined.length;
+  const slotsAvailable = overCap ? Math.max(rawSlots, 99) : rawSlots;
   // Untuk ajak/undang: undangan yg belum dijawab (invitedPending) juga sudah
   // "memesan" slot, jadi tidak bisa over-invite. Mis. kapasitas 4, joined 3,
-  // 1 undangan pending → 0 slot untuk undangan baru.
-  const inviteSlotsAvailable = slotsAvailable - invitedPending.length;
+  // 1 undangan pending → 0 slot untuk undangan baru. (Diabaikan kalau overCap.)
+  const inviteSlotsAvailable = overCap
+    ? 99
+    : slotsAvailable - invitedPending.length;
   const [addGuestModal, setAddGuestModal] = React.useState(false);
   const [inviteModal, setInviteModal] = React.useState(false);
   const [editInfoModal, setEditInfoModal] = React.useState(false);
@@ -788,7 +800,11 @@ function VibeTab(
                     Add Guest
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {slotsAvailable} empty seats
+                    {overCap
+                      ? rawSlots > 0
+                        ? `${rawSlots} empty seats`
+                        : "Over capacity allowed"
+                      : `${rawSlots} empty seats`}
                   </p>
                 </div>
               </button>
@@ -798,7 +814,9 @@ function VibeTab(
                   <UserPlus className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm">{slotsAvailable} empty seats</p>
+                  <p className="text-sm">
+                    {rawSlots > 0 ? `${rawSlots} empty seats` : "Table full"}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Share invite link
                   </p>

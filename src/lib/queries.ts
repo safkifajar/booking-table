@@ -133,6 +133,7 @@ export async function getTablesByAreaForEditor(
     rotation: row.rotation,
     is_active: row.isActive,
     min_spend: row.minSpend,
+    allow_over_capacity: row.allowOverCapacity,
     created_at: row.createdAt.toISOString(),
   }));
 }

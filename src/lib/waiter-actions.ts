@@ -919,6 +919,7 @@ export async function staffAddGuestToTable(
       status: tableSessions.status,
       openedByStaffId: tableSessions.openedByStaffId,
       tableCapacity: tables.capacity,
+      allowOverCapacity: tables.allowOverCapacity,
       barId: floorAreas.barId,
       guestNames: tableSessions.guestNames,
     })
@@ -950,7 +951,8 @@ export async function staffAddGuestToTable(
     );
   const currentCount = Number(memberCountRow?.count ?? 0);
 
-  if (currentCount >= session.tableCapacity) {
+  // Dilewati kalau meja izinkan over-capacity (setting admin).
+  if (!session.allowOverCapacity && currentCount >= session.tableCapacity) {
     throw new Error(
       `Table is full (${currentCount}/${session.tableCapacity})`
     );

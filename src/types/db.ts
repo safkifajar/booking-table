@@ -72,6 +72,8 @@ export interface BarTable {
   rotation: number;
   is_active: boolean;
   min_spend: number | null;
+  /** Kalau true, host boleh menambah orang melebihi kapasitas (setting admin). */
+  allow_over_capacity?: boolean;
   created_at: string;
 }
 

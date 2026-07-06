@@ -151,6 +151,7 @@ const tableSchema = z.object({
   posY: z.number().int().min(0).max(3000),
   rotation: z.number().int().min(0).max(359),
   minSpend: z.number().int().min(0).max(100_000_000),
+  allowOverCapacity: z.boolean().optional(),
 });
 
 export async function createTable(input: z.infer<typeof tableSchema>) {
@@ -177,6 +178,7 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     height: size.height,
     rotation: data.rotation,
     minSpend: data.minSpend,
+    allowOverCapacity: data.allowOverCapacity ?? false,
     isDraft: true, // meja baru = draft, belum tampil ke customer sampai publish
   });
 
@@ -221,6 +223,7 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
       height: size.height,
       rotation: data.rotation,
       minSpend: data.minSpend,
+      allowOverCapacity: data.allowOverCapacity ?? false,
     })
     .where(eq(tables.id, data.id));
 

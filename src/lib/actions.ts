@@ -194,6 +194,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       id: tables.id,
       label: tables.label,
       capacity: tables.capacity,
+      allow_over_capacity: tables.allowOverCapacity,
       is_active: tables.isActive,
       min_spend: tables.minSpend,
       bar_id: floorAreas.barId,
@@ -392,7 +393,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         );
       invitees = rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
       // friends auto-join makan slot → cek kapasitas (host + invitees).
-      if (inviteMode === "joined") {
+      // Dilewati kalau meja izinkan over-capacity (setting admin).
+      if (inviteMode === "joined" && !tableRow.allow_over_capacity) {
         const cap = data.maxGuests ?? tableRow.capacity;
         if (1 + invitees.length > cap) {
           throw new Error(
@@ -685,6 +687,7 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
       id: tableSessions.id,
       status: tableSessions.status,
       capacity: tables.capacity,
+      allow_over_capacity: tables.allowOverCapacity,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -692,14 +695,14 @@ export async function joinSession(input: z.infer<typeof joinSchema>) {
   if (!row) throw new Error("Session not found");
   if (row.status !== "open") throw new Error("Session is no longer open");
 
-  // 2. Capacity check
+  // 2. Capacity check — dilewati kalau meja izinkan over-capacity (setting admin).
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(sessionMembers)
     .where(
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
-  if (Number(count) >= row.capacity) {
+  if (!row.allow_over_capacity && Number(count) >= row.capacity) {
     throw new Error("Table is full");
   }
 
@@ -738,6 +741,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
       status: tableSessions.status,
       host_id: tableSessions.hostId,
       capacity: tables.capacity,
+      allow_over_capacity: tables.allowOverCapacity,
       table_label: tables.label,
     })
     .from(tableSessions)
@@ -749,14 +753,14 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
     throw new Error("You're the host — no need to request");
   }
 
-  // 2. Capacity check (joined only)
+  // 2. Capacity check (joined only) — dilewati kalau meja izinkan over-capacity.
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(sessionMembers)
     .where(
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
-  if (Number(count) >= row.capacity) {
+  if (!row.allow_over_capacity && Number(count) >= row.capacity) {
     throw new Error("Table is full");
   }
 
@@ -816,6 +820,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     .select({
       host_id: tableSessions.hostId,
       capacity: tables.capacity,
+      allow_over_capacity: tables.allowOverCapacity,
       table_label: tables.label,
     })
     .from(tableSessions)
@@ -832,7 +837,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     .where(
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
-  if (Number(count) >= row.capacity) {
+  if (!row.allow_over_capacity && Number(count) >= row.capacity) {
     throw new Error("Table is full — request can't be approved");
   }
 
@@ -1068,6 +1073,7 @@ export async function inviteUsersToSession(
       status: tableSessions.status,
       host_id: tableSessions.hostId,
       capacity: tables.capacity,
+      allow_over_capacity: tables.allowOverCapacity,
       max_guests: tableSessions.maxGuests,
       table_label: tables.label,
       bar_name: bars.name,
@@ -1143,8 +1149,12 @@ export async function inviteUsersToSession(
     throw new Error("All users are already at the table / invited");
   }
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
+  // Dilewati kalau meja izinkan over-capacity (setting admin).
   const cap = row.max_guests ?? row.capacity;
-  if (joinedCount + pendingInviteCount + targets.length > cap) {
+  if (
+    !row.allow_over_capacity &&
+    joinedCount + pendingInviteCount + targets.length > cap
+  ) {
     throw new Error(
       `Exceeds table capacity (${cap}). Seats & invites are already filled.`
     );

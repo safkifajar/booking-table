@@ -70,6 +70,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       table_label: tables.label,
       table_capacity: tables.capacity,
       table_shape: tables.shape,
+      table_allow_over_capacity: tables.allowOverCapacity,
       // area
       area_name: floorAreas.name,
       // bar
@@ -243,6 +244,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         label: sessionRow.table_label,
         capacity: sessionRow.table_capacity,
         shape: sessionRow.table_shape,
+        allowOverCapacity: sessionRow.table_allow_over_capacity,
       }}
       areaName={sessionRow.area_name}
       bar={{ name: sessionRow.bar_name, slug: sessionRow.bar_slug }}
