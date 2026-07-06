@@ -105,8 +105,13 @@ export function StaffMenuGrid({
     return m;
   }, [menu]);
 
+  // Ref tiap baris cart (utk auto-scroll ke item yg baru ditambah) + id terakhir.
+  const cartRowRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [lastAddedId, setLastAddedId] = React.useState<string | null>(null);
+
   function inc(id: string) {
     setCart((c) => ({ ...c, [id]: Math.min(20, (c[id] ?? 0) + 1) }));
+    setLastAddedId(id);
   }
   function dec(id: string) {
     setCart((c) => {
@@ -130,6 +135,16 @@ export function StaffMenuGrid({
     ([menuItemId, quantity]) => ({ menuItemId, quantity })
   );
   const totalQty = cartLines.reduce((a, l) => a + l.quantity, 0);
+
+  // Auto-scroll list cart ke item yg baru ditambah (kalau panel terbuka) supaya
+  // yg baru langsung kelihatan walau list panjang.
+  React.useEffect(() => {
+    if (!lastAddedId || !cartOpen) return;
+    cartRowRefs.current[lastAddedId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [lastAddedId, cartOpen, cart]);
   const totalPrice = cartLines.reduce(
     (a, l) => a + l.quantity * (itemMap.get(l.menuItemId)?.price ?? 0),
     0
@@ -340,6 +355,9 @@ export function StaffMenuGrid({
                     return (
                       <div
                         key={l.menuItemId}
+                        ref={(el) => {
+                          cartRowRefs.current[l.menuItemId] = el;
+                        }}
                         className="flex items-center gap-2 px-4 sm:px-6 py-2 text-sm"
                       >
                         <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted/40 flex items-center justify-center">
