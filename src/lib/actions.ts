@@ -1548,12 +1548,10 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tableSessions.id, sessionId));
 
-  // Boleh hapus: pemesan item, host meja, ATAU staff aktif di bar (waiter dkk
-  // bantu kelola pesanan).
-  let allowed =
-    item.added_by_profile_id === profile.id ||
-    session?.host_id === profile.id;
-  if (!allowed && session) {
+  // Boleh hapus HANYA staff aktif di bar (kasir/waiter). Customer/host TIDAK
+  // boleh batalkan pesanan sendiri — harus lewat kasir/waiter.
+  let allowed = false;
+  if (session) {
     const [staff] = await db
       .select({ id: staffRoles.id })
       .from(staffRoles)
@@ -1567,7 +1565,7 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     allowed = !!staff;
   }
   if (!allowed) {
-    throw new Error("Only the person who ordered, the host, or staff can remove the item");
+    throw new Error("Only staff (cashier/waiter) can cancel an order item");
   }
 
   await db

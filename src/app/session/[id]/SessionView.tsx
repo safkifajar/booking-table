@@ -314,7 +314,6 @@ export function SessionView(props: SessionViewProps) {
           <BillTab
             items={props.orderItems}
             myProfileId={props.myProfileId}
-            isHost={props.isHost}
             isStaff={isStaff}
             sessionId={props.session.id}
             subtotal={subtotal}
@@ -1126,14 +1125,12 @@ function MenuTab({
 function BillTab({
   items,
   myProfileId,
-  isHost,
   isStaff,
   sessionId,
   subtotal,
 }: {
   items: SessionViewProps["orderItems"];
   myProfileId: string;
-  isHost: boolean;
   isStaff: boolean;
   sessionId: string;
   subtotal: number;
@@ -1228,7 +1225,9 @@ function BillTab({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs">{formatIDR(i.quantity * i.unit_price)}</span>
-                  {(profileId === myProfileId || isHost || isStaff) && i.status !== "served" && (
+                  {/* Batalkan pesanan HANYA staff (kasir/waiter). Customer/host
+                      tak boleh batal sendiri — minta ke kasir/waiter. */}
+                  {isStaff && i.status !== "served" && (
                     <button
                       disabled={removingId === i.id}
                       onClick={async () => {
