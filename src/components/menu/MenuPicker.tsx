@@ -31,8 +31,11 @@ interface Props {
   onAdd: (menuItemId: string, quantity: number, notes?: string) => Promise<void>;
 }
 
+const ALL_SLUG = "__all__";
+
 export function MenuPicker({ menu, onAdd }: Props) {
-  const [activeCat, setActiveCat] = React.useState<string>(menu[0]?.slug ?? "");
+  // Default "All" → tampilkan semua menu dalam satu list.
+  const [activeCat, setActiveCat] = React.useState<string>(ALL_SLUG);
   const [query, setQuery] = React.useState("");
   const [selectedItem, setSelectedItem] = React.useState<MenuPickerItem | null>(null);
 
@@ -52,7 +55,14 @@ export function MenuPicker({ menu, onAdd }: Props) {
       .filter((c) => c.items.length > 0);
   }, [menu, query]);
 
-  const activeCategory = filtered.find((c) => c.slug === activeCat) ?? filtered[0];
+  // Kategori yg ditampilkan: "All" → semua kategori; else → 1 kategori terpilih.
+  const shownCategories =
+    activeCat === ALL_SLUG
+      ? filtered
+      : (() => {
+          const c = filtered.find((cat) => cat.slug === activeCat);
+          return c ? [c] : filtered;
+        })();
 
   return (
     <div className="space-y-3">
@@ -73,9 +83,20 @@ export function MenuPicker({ menu, onAdd }: Props) {
           />
         </div>
 
-        {/* Category strip */}
+        {/* Category strip — chip "All" di depan menampilkan semua menu. */}
         {!query && (
           <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
+            <button
+              onClick={() => setActiveCat(ALL_SLUG)}
+              className={cn(
+                "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
+                activeCat === ALL_SLUG
+                  ? "bg-primary/15 border-primary/40 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All
+            </button>
             {menu.map((c) => (
               <button
                 key={c.id}
@@ -94,10 +115,11 @@ export function MenuPicker({ menu, onAdd }: Props) {
         )}
       </div>
 
-      {/* Items */}
-      {(query ? filtered : activeCategory ? [activeCategory] : []).map((cat) => (
+      {/* Items — saat search pakai hasil filter; else kategori terpilih/All. */}
+      {(query ? filtered : shownCategories).map((cat) => (
         <div key={cat.id} className="space-y-2">
-          {query && (
+          {/* Header kategori tampil saat search / mode "All" (multi kategori). */}
+          {(query || activeCat === ALL_SLUG) && (
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">
               {cat.name}
             </h3>
