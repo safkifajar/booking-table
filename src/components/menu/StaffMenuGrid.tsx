@@ -31,12 +31,38 @@ const ALL_SLUG = "__all__";
 export function StaffMenuGrid({
   menu,
   onSave,
+  cart: controlledCart,
+  onCartChange,
 }: {
   menu: MenuPickerCategory[];
   onSave: (cart: CartLine[]) => Promise<void>;
+  /** Cart controlled dari luar (biar persist saat pindah tab). Opsional —
+   *  kalau tak diberi, pakai state internal. */
+  cart?: Record<string, number>;
+  onCartChange?: (next: Record<string, number>) => void;
 }) {
   const [query, setQuery] = React.useState("");
-  const [cart, setCart] = React.useState<Record<string, number>>({});
+  const [internalCart, setInternalCart] = React.useState<
+    Record<string, number>
+  >({});
+  // Controlled kalau parent kasih cart+onCartChange; else internal.
+  const cart = controlledCart ?? internalCart;
+  const setCart = React.useCallback(
+    (updater: React.SetStateAction<Record<string, number>>) => {
+      if (controlledCart !== undefined && onCartChange) {
+        const next =
+          typeof updater === "function"
+            ? (updater as (p: Record<string, number>) => Record<string, number>)(
+                controlledCart
+              )
+            : updater;
+        onCartChange(next);
+      } else {
+        setInternalCart(updater);
+      }
+    },
+    [controlledCart, onCartChange]
+  );
   const [saving, setSaving] = React.useState(false);
   const [cartOpen, setCartOpen] = React.useState(false);
   // Filter kategori. ALL_SLUG = tampilkan semua kategori.

@@ -166,6 +166,9 @@ interface SessionViewProps {
 
 export function SessionView(props: SessionViewProps) {
   const [tab, setTab] = React.useState<Tab>("vibe");
+  // Cart menu diangkat ke sini supaya TAK hilang saat pindah tab (MenuTab
+  // unmount saat tab lain aktif).
+  const [menuCart, setMenuCart] = React.useState<Record<string, number>>({});
   const router = useRouter();
   useSessionRealtime(props.session.id);
 
@@ -349,6 +352,8 @@ export function SessionView(props: SessionViewProps) {
             canInteract={canInteract}
             isStaff={isStaff}
             hostMemberId={hostMember?.id ?? null}
+            cart={menuCart}
+            onCartChange={setMenuCart}
           />
         )}
         {tab === "bill" && (
@@ -1110,6 +1115,8 @@ function MenuTab({
   canInteract,
   isStaff,
   hostMemberId,
+  cart,
+  onCartChange,
 }: {
   menu: MenuPickerCategory[];
   sessionId: string;
@@ -1117,6 +1124,9 @@ function MenuTab({
   isStaff: boolean;
   /** Member tujuan atribusi order waiter (default host meja). */
   hostMemberId: string | null;
+  /** Cart diangkat ke SessionView biar tak hilang saat pindah tab. */
+  cart: Record<string, number>;
+  onCartChange: (next: Record<string, number>) => void;
 }) {
   if (!canInteract) {
     return (
@@ -1132,12 +1142,14 @@ function MenuTab({
           customer atribusi ke diri sendiri (onBehalfOfMemberId undefined). */}
       <StaffMenuGrid
         menu={menu}
-        onSave={async (cart) => {
+        cart={cart}
+        onCartChange={onCartChange}
+        onSave={async (cartLines) => {
           if (isStaff && !hostMemberId) {
             toast.error("Table has no host yet — can't save the order");
             return;
           }
-          for (const line of cart) {
+          for (const line of cartLines) {
             await addOrderItem({
               sessionId,
               menuItemId: line.menuItemId,
