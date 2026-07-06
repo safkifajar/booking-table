@@ -294,14 +294,15 @@ export function StaffMenuGrid({
         </div>
       ))}
 
-      {/* Bar keranjang sticky — ala Traveloka (info kiri + tombol aksi kanan),
-          warna SOHO. Panel ringkasan expand di atas saat "View order" diklik. */}
+      {/* Bar keranjang — CARD MENGAMBANG ala Traveloka: margin dari tepi, rounded,
+          shadow, warna SOHO. Panel ringkasan expand di dalam card (di atas aksi). */}
       {totalQty > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-primary/30 bg-background/95 backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.35)]">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 space-y-2">
+        <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-3 pointer-events-none">
+          <div className="max-w-3xl mx-auto rounded-2xl border border-primary/25 bg-card shadow-[0_8px_30px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto">
+            <div className="p-3 space-y-2">
             {/* Panel ringkasan keranjang (expand) — di ATAS baris aksi */}
             {cartOpen && (
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-card/60 divide-y divide-border">
+              <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-muted/30 divide-y divide-border">
                 {cartLines.map((l) => {
                   const info = itemMap.get(l.menuItemId);
                   return (
@@ -384,6 +385,7 @@ export function StaffMenuGrid({
                 )}
                 Save order
               </Button>
+            </div>
             </div>
           </div>
         </div>
