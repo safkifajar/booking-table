@@ -13,7 +13,6 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
 
@@ -294,15 +293,12 @@ export function StaffMenuGrid({
         </div>
       ))}
 
-      {/* Bar keranjang — CARD MENGAMBANG ala Traveloka: margin dari tepi, rounded,
-          shadow, warna SOHO. Panel ringkasan expand di dalam card (di atas aksi). */}
       {totalQty > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-3 pointer-events-none">
-          <div className="max-w-3xl mx-auto rounded-2xl border border-primary/25 bg-card shadow-[0_8px_30px_rgba(0,0,0,0.5)] overflow-hidden pointer-events-auto">
-            <div className="p-3 space-y-2">
-            {/* Panel ringkasan keranjang (expand) — di ATAS baris aksi */}
-            {cartOpen && (
-              <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-muted/30 divide-y divide-border">
+        <>
+          {/* Panel ringkasan keranjang (expand) — mengambang di atas banner. */}
+          {cartOpen && (
+            <div className="fixed inset-x-0 bottom-[132px] z-30 px-3 pointer-events-none">
+              <div className="max-w-3xl mx-auto rounded-xl border border-border bg-card shadow-[0_8px_30px_rgba(0,0,0,0.5)] max-h-56 overflow-y-auto divide-y divide-border pointer-events-auto">
                 {cartLines.map((l) => {
                   const info = itemMap.get(l.menuItemId);
                   return (
@@ -310,7 +306,6 @@ export function StaffMenuGrid({
                       key={l.menuItemId}
                       className="flex items-center gap-2 px-3 py-2 text-sm"
                     >
-                      {/* Foto menu (thumbnail) */}
                       <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-muted/40 flex items-center justify-center">
                         {info?.image_url ? (
                           <Image
@@ -345,38 +340,47 @@ export function StaffMenuGrid({
                   );
                 })}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Baris aksi: info harga (kiri, clickable → toggle panel) + tombol
-                Save menonjol (kanan) — ala Traveloka, warna SOHO. */}
-            <div className="flex items-center gap-3">
+          {/* 1) Banner MENGAMBANG merah SOHO (ala notif biru Traveloka): info di
+                kiri + toggle "View order" di kanan. Klik → buka/tutup ringkasan. */}
+          <div className="fixed inset-x-0 bottom-[72px] z-30 px-3 pointer-events-none">
+            <div className="max-w-3xl mx-auto flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-primary-foreground shadow-[0_6px_20px_rgba(225,29,42,0.45)] pointer-events-auto">
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium truncate">
+                {totalQty} item{totalQty > 1 ? "s" : ""} in your order
+              </span>
               <button
                 type="button"
                 onClick={() => setCartOpen((v) => !v)}
-                className="flex-1 min-w-0 text-left"
+                className="flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline shrink-0"
               >
-                <div className="flex items-center gap-1 text-[11px] font-medium text-primary">
-                  {cartOpen ? "Hide order" : "View order"}
-                  {cartOpen ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  )}
-                </div>
-                <div className="text-lg font-bold text-foreground tabular-nums leading-tight">
-                  {formatIDR(totalPrice)}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  {totalQty} item{totalQty > 1 ? "s" : ""}
-                </div>
+                {cartOpen ? "Hide" : "View order"}
+                {cartOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
               </button>
-              <Button
+            </div>
+          </div>
+
+          {/* 2) Bar bawah (nempel): harga di KIRI + tombol Save di KANAN — persis
+                pola Traveloka (harga kiri, tombol aksi kanan). */}
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-muted-foreground">Total order</p>
+                <p className="text-lg font-bold text-primary tabular-nums leading-tight">
+                  {formatIDR(totalPrice)}
+                </p>
+              </div>
+              <button
                 type="button"
-                variant="gold"
-                size="lg"
                 onClick={handleSave}
                 disabled={saving}
-                className="shrink-0 px-6"
+                className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -384,11 +388,10 @@ export function StaffMenuGrid({
                   <ShoppingCart className="h-4 w-4" />
                 )}
                 Save order
-              </Button>
-            </div>
+              </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
