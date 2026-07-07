@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Check, X, Loader2, Bell, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   getNotifications,
   markNotificationRead,
@@ -330,11 +329,13 @@ function NotificationItem({
           transition: drag !== null ? "none" : "transform 0.2s ease",
           touchAction: "pan-y",
         }}
-        className={cn(
-          "relative bg-card px-4 py-3",
-          !n.read && "bg-primary/[0.06]"
-        )}
+        className="relative bg-card px-4 py-3"
       >
+        {/* Tint unread — overlay di atas bg-card SOLID (jangan pakai bg semi-
+            transparan langsung di kontainer, nanti tombol merah tembus). */}
+        {!n.read && (
+          <span className="pointer-events-none absolute inset-0 bg-primary/[0.06]" />
+        )}
         <button
           type="button"
           onClick={() => {
