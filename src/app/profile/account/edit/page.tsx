@@ -48,10 +48,6 @@ export default async function ProfileAccountEditPage() {
           initialMusicPref={profile.musicPref ?? ""}
           initialFavFood={profile.favFood ?? ""}
           initialFavDrink={profile.favDrink ?? ""}
-          initialHideHistory={profile.hideHistory}
-          initialHideLocation={profile.hideLocation}
-          initialHideAge={profile.hideAge}
-          initialHideSocial={profile.hideSocial}
           initialHobbies={profile.hobbies ?? []}
           initialPhotos={profile.photos ?? []}
           initialPrompts={profile.prompts ?? []}

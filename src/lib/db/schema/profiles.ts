@@ -57,11 +57,18 @@ export const profiles = pgTable(
     favFood: text("fav_food"),
     /** Minuman favorit (teks bebas). */
     favDrink: text("fav_drink"),
-    /** Privacy: sembunyikan dari profil publik (true = disembunyikan). */
+    /** Privacy granular (LEGACY — tidak lagi dipakai UI, digantikan isPrivate). */
     hideHistory: boolean("hide_history").notNull().default(false),
     hideLocation: boolean("hide_location").notNull().default(false),
     hideAge: boolean("hide_age").notNull().default(false),
     hideSocial: boolean("hide_social").notNull().default(false),
+    /**
+     * Akun privat (ala Instagram). True = user lain HANYA lihat data yg tampil
+     * di list network (foto, nama, umur, area, education, rating, hobbies dasar,
+     * badge At SOHO). Sisanya (bio, social, prompts, dll) diblur+kunci di detail,
+     * dan hangout history disembunyikan total.
+     */
+    isPrivate: boolean("is_private").notNull().default(false),
     hobbies: text("hobbies").array().notNull().default([]),
     /** Prompt profil (ice-breaker): [{ prompt, answer }]. Maks 5. */
     prompts: jsonb("prompts")

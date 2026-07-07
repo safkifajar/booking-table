@@ -62,6 +62,8 @@ export interface Profile {
   hideLocation: boolean;
   hideAge: boolean;
   hideSocial: boolean;
+  /** Akun privat (ala IG). */
+  isPrivate: boolean;
   onboarded: boolean;
   hobbies: string[];
   prompts: { prompt: string; answer: string }[];
@@ -132,6 +134,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     hideLocation: row.hideLocation,
     hideAge: row.hideAge,
     hideSocial: row.hideSocial,
+    isPrivate: row.isPrivate,
     onboarded: row.onboarded,
     hobbies: row.hobbies,
     prompts: row.prompts ?? [],

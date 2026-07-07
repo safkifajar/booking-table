@@ -11,6 +11,7 @@ import {
   Heart,
   User,
   Globe,
+  Lock,
 } from "lucide-react";
 import { educationLabel } from "@/lib/education";
 import { religionLabel } from "@/lib/religion";
@@ -72,6 +73,8 @@ export default async function NetworkProfilePage({ params }: PageProps) {
 
   const isMe = me?.id === profile.id;
   const active = profile.active_session;
+  // Akun privat & bukan kita → tampilkan banner + kartu terkunci (blur).
+  const locked = profile.is_private && !isMe;
 
   const [history, myActiveSessionIds, hobbyGroups] = await Promise.all([
     getUserTableHistory(profile.id, 20),
@@ -197,6 +200,47 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             </p>
           )}
         </section>
+
+        {/* Akun privat — banner + kartu terkunci (blur + ikon kunci) ala IG.
+            Data privat sudah di-null-kan di getPublicProfile, jadi section lain
+            (bio, prompts, interests, more-about-me, history) otomatis kosong. */}
+        {locked && (
+          <>
+            <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5 text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-primary mb-3">
+                <Lock className="h-5 w-5" />
+              </span>
+              <h3 className="text-base font-semibold">This account is private</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Only their basic info is visible. Bio, interests, socials, and
+                hangout history are hidden.
+              </p>
+            </section>
+
+            {/* Preview terkunci: konten diblur + overlay kunci (decorative). */}
+            <section className="relative overflow-hidden rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
+              <div
+                aria-hidden
+                className="space-y-3 blur-sm select-none pointer-events-none"
+              >
+                <div className="h-4 w-1/3 rounded bg-muted-foreground/30" />
+                <div className="h-3 w-full rounded bg-muted-foreground/20" />
+                <div className="h-3 w-5/6 rounded bg-muted-foreground/20" />
+                <div className="flex gap-2 pt-1">
+                  <span className="h-8 w-20 rounded-full bg-muted-foreground/20" />
+                  <span className="h-8 w-24 rounded-full bg-muted-foreground/20" />
+                  <span className="h-8 w-16 rounded-full bg-muted-foreground/20" />
+                </div>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-background/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+                  <Lock className="h-3.5 w-3.5" />
+                  Hidden
+                </span>
+              </div>
+            </section>
+          </>
+        )}
 
         {/* Lagi di meja (kalau ada) — network-only */}
         {active && (

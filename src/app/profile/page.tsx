@@ -48,6 +48,7 @@ export default async function ProfilePage() {
         <ProfileMenuList
           avatarUrl={profile.avatarUrl ?? profile.photos[0] ?? null}
           displayName={profile.displayName}
+          isPrivate={profile.isPrivate}
         />
       </div>
     </main>

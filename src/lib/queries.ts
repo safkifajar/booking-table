@@ -849,6 +849,7 @@ export async function getPublicProfile(
       hide_location: profiles.hideLocation,
       hide_age: profiles.hideAge,
       hide_social: profiles.hideSocial,
+      is_private: profiles.isPrivate,
       hobbies: profiles.hobbies,
       prompts: profiles.prompts,
       is_guest: profiles.isGuest,
@@ -859,10 +860,16 @@ export async function getPublicProfile(
 
   // Pemilik & admin lihat semua; selain itu terapkan privacy.
   const bypass = opts?.admin === true || opts?.viewerId === p.id;
+  // Akun privat (ala IG): untuk viewer lain, tampilkan HANYA data yg juga ada
+  // di kartu list network (foto, nama, umur, area, education, rating, hobbies,
+  // at_soho). Sisanya (bio, social, prompts, religion, tinggi, gender,
+  // interested_in) di-null-kan → detail merender stub "terkunci" + blur.
+  // Hangout history disembunyikan total.
+  const locked = !bypass && p.is_private;
   const hideAge = !bypass && p.hide_age;
-  const hideSocial = !bypass && p.hide_social;
+  const hideSocial = locked || (!bypass && p.hide_social);
   const hideLocation = !bypass && p.hide_location;
-  const hideHistory = !bypass && p.hide_history;
+  const hideHistory = locked || (!bypass && p.hide_history);
 
   const [rating, visit_count, active] = await Promise.all([
     getUserRating(userId),
@@ -892,25 +899,28 @@ export async function getPublicProfile(
     id: p.id,
     display_name: p.display_name,
     avatar_url: p.avatar_url,
-    bio: p.bio,
+    // Data yg dikunci saat akun privat → null (detail render stub terkunci).
+    bio: locked ? null : p.bio,
     phone: p.phone,
     birth_date: hideAge ? null : p.birth_date,
     is_active: p.is_active,
-    gender: p.gender,
-    interested_in: p.interested_in,
+    gender: locked ? null : p.gender,
+    interested_in: locked ? null : p.interested_in,
     social_link: hideSocial ? null : p.social_link,
     area: hideLocation ? null : p.area,
     education: p.education,
-    height_cm: p.height_cm,
-    religion: p.religion,
+    height_cm: locked ? null : p.height_cm,
+    religion: locked ? null : p.religion,
     hide_history: hideHistory,
-    hobbies: p.hobbies,
+    is_private: locked,
+    hobbies: locked ? [] : p.hobbies,
     photos: p.photos ?? [],
-    prompts: p.prompts ?? [],
+    prompts: locked ? [] : p.prompts ?? [],
     rating,
     visit_count,
+    // Saat privat, sembunyikan juga status "sedang di meja".
     active_session:
-      hideLocation || !active[0]
+      locked || hideLocation || !active[0]
         ? null
         : {
             session_id: active[0].session_id,

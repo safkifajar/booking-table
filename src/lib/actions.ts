@@ -1976,6 +1976,22 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
   revalidatePath("/", "layout");
 }
 
+/**
+ * Set akun privat (ala Instagram) — true = user lain hanya lihat data list
+ * network, sisanya diblur+kunci di detail & hangout history disembunyikan.
+ */
+export async function updatePrivacy(isPrivate: boolean) {
+  const profile = await requireProfile();
+  await db
+    .update(profiles)
+    .set({ isPrivate: !!isPrivate })
+    .where(eq(profiles.id, profile.id));
+  revalidatePath("/profile");
+  revalidatePath("/profile/privacy");
+  // Detail profil publik ikut berubah gate-nya.
+  revalidatePath("/network");
+}
+
 // ============================================================
 // ONBOARDING (wizard step 2-3 saat daftar)
 // ============================================================

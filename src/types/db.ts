@@ -294,6 +294,11 @@ export interface PublicProfile {
   religion: string | null;
   /** Privacy: true = riwayat kunjungan disembunyikan dari viewer (bukan pemilik). */
   hide_history: boolean;
+  /**
+   * Akun privat (ala IG): true = viewer bukan pemilik/admin melihat versi
+   * terkunci (bio/social/prompts/dll di-null-kan → detail render stub + blur).
+   */
+  is_private: boolean;
   hobbies: string[];
   /** Galeri foto profil (carousel). */
   photos: string[];

@@ -14,7 +14,6 @@ import {
   Users,
   Heart,
   Link as LinkIcon,
-  Lock,
   MapPin,
   GraduationCap,
   Ruler,
@@ -56,10 +55,6 @@ interface Props {
   initialMusicPref: string;
   initialFavFood: string;
   initialFavDrink: string;
-  initialHideHistory: boolean;
-  initialHideLocation: boolean;
-  initialHideAge: boolean;
-  initialHideSocial: boolean;
   initialHobbies: string[];
   initialPhotos: string[];
   initialPrompts: { prompt: string; answer: string }[];
@@ -86,10 +81,6 @@ export function ProfileForm({
   initialMusicPref,
   initialFavFood,
   initialFavDrink,
-  initialHideHistory,
-  initialHideLocation,
-  initialHideAge,
-  initialHideSocial,
   initialHobbies,
   initialPhotos,
   initialPrompts,
@@ -117,10 +108,6 @@ export function ProfileForm({
   const musicPref = initialMusicPref;
   const favFood = initialFavFood;
   const favDrink = initialFavDrink;
-  const [hideHistory, setHideHistory] = React.useState(initialHideHistory);
-  const [hideLocation, setHideLocation] = React.useState(initialHideLocation);
-  const [hideAge, setHideAge] = React.useState(initialHideAge);
-  const [hideSocial, setHideSocial] = React.useState(initialHideSocial);
   const [hobbies, setHobbies] = React.useState<string[]>(initialHobbies);
   const [photos, setPhotos] = React.useState<string[]>(initialPhotos);
   const [prompts, setPrompts] = React.useState<
@@ -172,10 +159,6 @@ export function ProfileForm({
         musicPref: musicPref.trim() || undefined,
         favFood: favFood.trim() || undefined,
         favDrink: favDrink.trim() || undefined,
-        hideHistory,
-        hideLocation,
-        hideAge,
-        hideSocial,
         hobbies,
         prompts,
       });
@@ -465,45 +448,6 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
-      {/* PRIVASI */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-4 w-4 text-primary" />
-            Privacy
-          </CardTitle>
-          <CardDescription>
-            Control what other visitors can see on your profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="divide-y divide-border">
-          <PrivacyToggle
-            label="Hide visit history"
-            desc="List of tables you've joined"
-            checked={hideHistory}
-            onChange={setHideHistory}
-          />
-          <PrivacyToggle
-            label="Hide current location"
-            desc="'At a table' status & appearing in At SOHO now"
-            checked={hideLocation}
-            onChange={setHideLocation}
-          />
-          <PrivacyToggle
-            label="Hide age"
-            desc="Age from date of birth"
-            checked={hideAge}
-            onChange={setHideAge}
-          />
-          <PrivacyToggle
-            label="Hide social media"
-            desc="IG/TikTok/etc. link"
-            checked={hideSocial}
-            onChange={setHideSocial}
-          />
-        </CardContent>
-      </Card>
-
       {/* Submit — sticky bawah (ala onboarding), gold pill full-width. */}
       <StickyActionBar>
         <Button
@@ -526,40 +470,3 @@ export function ProfileForm({
   );
 }
 
-function PrivacyToggle({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground">{desc}</div>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-muted border border-border"
-        )}
-      >
-        <span
-          className={cn(
-            "inline-flex h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
-            checked ? "translate-x-[22px]" : "translate-x-0.5"
-          )}
-        />
-      </button>
-    </div>
-  );
-}

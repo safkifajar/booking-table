@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   ChevronRight,
   KeyRound,
+  Lock,
   History,
   LogOut,
   BellRing,
@@ -39,9 +40,11 @@ import { saveSubscription, removeSubscription } from "@/lib/push";
 export function ProfileMenuList({
   avatarUrl,
   displayName,
+  isPrivate,
 }: {
   avatarUrl: string | null;
   displayName: string;
+  isPrivate: boolean;
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -150,6 +153,12 @@ export function ProfileMenuList({
           iconBox={<AccountAvatar avatarUrl={avatarUrl} displayName={displayName} />}
           label="Account"
           description="Name, WhatsApp number, date of birth, bio, hobbies"
+        />
+        <MenuItem
+          href="/profile/privacy"
+          icon={<Lock className="h-4 w-4" />}
+          label="Private Account"
+          description={isPrivate ? "On" : "Off"}
         />
         <MenuItem
           href="/profile/password"
