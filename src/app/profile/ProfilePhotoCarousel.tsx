@@ -93,6 +93,10 @@ export function ProfilePhotoCarousel({
                 Math.abs(e.clientX - d.x) < 8 &&
                 Math.abs(e.clientY - d.y) < 8
               ) {
+                // Cegah klik nembus ke <Link> pembungkus kartu (kalau ada) →
+                // buka viewer foto SAJA, tak ikut navigasi ke halaman detail.
+                e.preventDefault();
+                e.stopPropagation();
                 setViewerIndex(i);
               }
             }}

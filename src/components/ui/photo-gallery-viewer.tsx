@@ -40,12 +40,30 @@ export function PhotoGalleryViewer({
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(initialIndex);
   const count = photos.length;
+  // LOOP: track punya clone di kedua ujung → [last, ...photos, first]. Slide 0
+  // = clone foto terakhir, slide count+1 = clone foto pertama. Saat scroll
+  // mendarat di clone, langsung lompat (tanpa animasi) ke slide asli yg sama →
+  // kesan geser MUTER tanpa henti. Hanya kalau > 1 foto.
+  const loop = count > 1;
+  const slides = loop ? [photos[count - 1], ...photos, photos[0]] : photos;
+  // Offset slide asli pertama di track (1 kalau ada clone di depan).
+  const OFF = loop ? 1 : 0;
+  const jumping = React.useRef(false);
 
-  // Scroll ke foto awal saat mount (tanpa animasi).
+  // Scroll ke foto awal saat mount (tanpa animasi). +OFF utk lewati clone depan.
   React.useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollLeft = initialIndex * el.clientWidth;
+    if (el) el.scrollLeft = (initialIndex + OFF) * el.clientWidth;
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Kunci scroll body selama viewer terbuka — konten di belakang tak ikut scroll.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, []);
 
   // ESC tutup, panah kiri/kanan navigasi.
@@ -64,17 +82,32 @@ export function PhotoGalleryViewer({
 
   function onScroll() {
     const el = scrollRef.current;
-    if (!el) return;
-    setActive(
-      Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)))
-    );
+    if (!el || jumping.current) return;
+    const raw = Math.round(el.scrollLeft / el.clientWidth); // index di `slides`
+    // Mendarat di clone → lompat ke slide asli padanannya (tanpa animasi).
+    if (loop && raw === 0) {
+      jumping.current = true;
+      el.scrollLeft = count * el.clientWidth; // foto terakhir (asli)
+      jumping.current = false;
+      setActive(count - 1);
+      return;
+    }
+    if (loop && raw === count + 1) {
+      jumping.current = true;
+      el.scrollLeft = 1 * el.clientWidth; // foto pertama (asli)
+      jumping.current = false;
+      setActive(0);
+      return;
+    }
+    setActive(Math.max(0, Math.min(count - 1, raw - OFF)));
   }
 
   function go(delta: number) {
     const el = scrollRef.current;
     if (!el) return;
-    const next = Math.max(0, Math.min(count - 1, active + delta));
-    el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    // Geser relatif dari posisi track sekarang → clone menangani wrap.
+    const cur = Math.round(el.scrollLeft / el.clientWidth);
+    el.scrollTo({ left: (cur + delta) * el.clientWidth, behavior: "smooth" });
   }
 
   return (
@@ -104,25 +137,25 @@ export function PhotoGalleryViewer({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden no-scrollbar"
         style={{ scrollbarWidth: "none" }}
       >
-        {photos.map((src, i) => (
+        {slides.map((src, i) => (
           <div
             key={`${src}-${i}`}
             className="relative h-full w-full shrink-0 snap-center"
           >
             <Image
               src={src}
-              alt={alt ? `${alt} — photo ${i + 1}` : `Photo ${i + 1}`}
+              alt={alt ? `${alt} — photo` : "Photo"}
               fill
               className="object-contain"
               unoptimized
-              priority={i === initialIndex}
+              priority={i === initialIndex + OFF}
             />
           </div>
         ))}
       </div>
 
-      {/* Panah prev/next (desktop) */}
-      {count > 1 && active > 0 && (
+      {/* Panah prev/next (desktop) — selalu tampil (loop muter). */}
+      {count > 1 && (
         <button
           type="button"
           onClick={(e) => {
@@ -135,7 +168,7 @@ export function PhotoGalleryViewer({
           <ChevronLeft className="h-6 w-6" />
         </button>
       )}
-      {count > 1 && active < count - 1 && (
+      {count > 1 && (
         <button
           type="button"
           onClick={(e) => {
