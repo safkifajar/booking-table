@@ -358,7 +358,10 @@ export function BarFloorView({
         {mainTab === "menu" ? (
           <MenuList menu={menu} />
         ) : (
-          <>
+          // Seluruh isi tab Floor jadi SATU area scroll (denah + jadwal). Yg
+          // di luar (tab Floor/Menu) tetap diam — persis pola tab Menu. Tinggi
+          // = sisa layar s/d tepat di atas bottom nav.
+          <div className="max-h-[calc(100dvh-13rem)] overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6">
         {/* Legend — denah cerminkan kondisi SEKARANG: Available (abu) & sedang
             dipakai (merah). Reservasi tak mewarnai meja (info di jadwal). */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
@@ -421,7 +424,7 @@ export function BarFloorView({
           activeDate={activeDate}
           onDateChange={setActiveDate}
         />
-          </>
+          </div>
         )}
       </div>
 
@@ -589,11 +592,9 @@ function BookingSchedule({
         })}
       </div>
 
-      {/* List booking tanggal terpilih — hanya bagian INI yg scroll (list
-          panjang tak mendorong denah/tab ke bawah). overscroll-contain cegah
-          scroll bocor ke halaman saat mentok. */}
+      {/* List booking tanggal terpilih — ikut aliran normal halaman. */}
       {dayBookings.length > 0 ? (
-        <Card className="divide-y divide-border max-h-[60vh] overflow-y-auto overscroll-contain">
+        <Card className="divide-y divide-border">
           {dayBookings.map((r) => {
             const ended =
               !!r.reservation_end_at &&
