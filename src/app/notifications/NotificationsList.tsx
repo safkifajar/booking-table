@@ -304,19 +304,30 @@ function NotificationItem({
     setDrag(null); // lepas kendali live → ikut `revealed`
   }
 
+  // Lebar area tersingkap = seberapa jauh digeser (0 saat tertutup). Tombol
+  // hidup di dalam area ini saja → saat tertutup lebar 0 = tak terlihat sama
+  // sekali (termasuk tepi atas/bawah). overflow-hidden meng-clip isinya.
+  const revealW = Math.min(REVEAL, -dx);
+
   return (
     <div className="relative overflow-hidden">
       {/* Tombol Hapus di belakang (tersingkap saat geser) */}
-      <button
-        type="button"
-        aria-label="Delete notification"
-        onClick={() => onAskDelete(n)}
-        className="absolute inset-y-0 right-0 flex items-center justify-center gap-1 bg-destructive text-destructive-foreground text-xs font-medium"
-        style={{ width: REVEAL }}
+      <div
+        className="absolute inset-y-0 right-0 overflow-hidden"
+        style={{ width: revealW }}
+        aria-hidden={revealW === 0}
       >
-        <Trash2 className="h-4 w-4" />
-        Delete
-      </button>
+        <button
+          type="button"
+          aria-label="Delete notification"
+          onClick={() => onAskDelete(n)}
+          className="absolute inset-y-0 right-0 flex items-center justify-center gap-1 bg-destructive text-destructive-foreground text-xs font-medium"
+          style={{ width: REVEAL }}
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </button>
+      </div>
 
       {/* Konten notif (geser di atas tombol) */}
       <div
