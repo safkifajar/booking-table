@@ -128,6 +128,10 @@ export default authMiddleware(async (req) => {
       path.startsWith("/open-table") ||
       path.startsWith("/onboarding") ||
       path.startsWith("/auth") ||
+      // Bell notif ada di dashboard staff (kasir/waiter) yg dibuka dari
+      // subdomain admin → /notifications harus bisa diakses (halaman customer,
+      // bukan /admin/*). Tanpa ini staff klik bell → 404.
+      path.startsWith("/notifications") ||
       path.startsWith("/api/") ||
       // Service worker & PWA manifest harus di-serve apa adanya (jangan
       // di-rewrite ke /admin/* → 404 → SW gagal register, push toggle hang).
