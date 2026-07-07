@@ -11,6 +11,6 @@ export const CONTACT_WA =
   process.env.NEXT_PUBLIC_CONTACT_WA ?? "6281234567890";
 
 /** URL wa.me + teks pembuka (opsional). */
-export function waUrl(text = "Hi SOHO Social House, saya mau bertanya "): string {
+export function waUrl(text = "Hi SOHO Social House, I'd like to ask about "): string {
   return `https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(text)}`;
 }

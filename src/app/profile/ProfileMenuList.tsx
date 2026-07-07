@@ -228,9 +228,9 @@ export function ProfileMenuList() {
             <MessageCircle className="h-4 w-4" />
           </span>
           <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium">Hubungi CS</span>
+            <span className="block text-sm font-medium">Contact Support</span>
             <span className="block text-xs text-muted-foreground truncate">
-              Chat admin SOHO via WhatsApp
+              Chat SOHO admin via WhatsApp
             </span>
           </span>
           <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
