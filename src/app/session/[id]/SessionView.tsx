@@ -370,8 +370,12 @@ export function SessionView(props: SessionViewProps) {
         className={cn(
           "flex-1 min-h-0 max-w-3xl w-full mx-auto px-4 sm:px-6",
           // Tab Menu mengatur scroll sendiri (search fixed + list scroll).
-          // Tab lain scroll normal di kontainer ini.
-          tab === "menu" ? "flex flex-col overflow-hidden pt-4 sm:pt-6" : "overflow-y-auto overscroll-contain py-4 sm:py-6"
+          // Tab lain scroll normal di kontainer ini. overflow-x-hidden +
+          // touch-action pan-y + overscroll contain → cegah swipe-back native
+          // (panah kembali saat geser kiri) di Bill/Pay/Table.
+          tab === "menu"
+            ? "flex flex-col overflow-hidden pt-4 sm:pt-6"
+            : "overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [touch-action:pan-y] py-4 sm:py-6"
         )}
         style={{
           animation: `${slideDir === 1 ? "tab-slide-right" : "tab-slide-left"} 0.22s ease-out`,
