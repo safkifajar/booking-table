@@ -257,8 +257,9 @@ export function StaffMenuGrid({
 
       {/* List menu — SATU area scroll (flex-1 mengisi sisa; search di atas
           diam). pb-28 beri ruang bar keranjang 'fixed' biar item terakhir tak
-          ketutupan. */}
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-28 -mx-1 px-1">
+          ketutupan. overflow-x-hidden + touch-action pan-y + overscroll-x
+          contain → cegah swipe-back native (panah kembali saat geser kiri). */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [touch-action:pan-y] space-y-4 pb-28">
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.
