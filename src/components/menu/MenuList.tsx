@@ -60,7 +60,9 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
           </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        // Hanya list menu yg scroll (search box di atas tetap diam).
+        // overscroll-contain cegah scroll bocor ke halaman saat mentok.
+        <div className="space-y-6 max-h-[60vh] overflow-y-auto overscroll-contain pr-0.5">
       {filtered.map((cat) =>
         cat.items.length === 0 ? null : (
           <section key={cat.id}>
