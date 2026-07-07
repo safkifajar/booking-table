@@ -48,6 +48,7 @@ export function NetworkView({
   const trimmed = query.trim();
   const hobbyKey = [...selectedHobbies].sort().join("\n");
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const feedScrollRef = React.useRef<HTMLDivElement | null>(null);
   const reqRef = React.useRef(0);
 
   function removeHobby(h: string) {
@@ -111,7 +112,8 @@ export function NetworkView({
       (entries) => {
         if (entries[0]?.isIntersecting) loadMore();
       },
-      { rootMargin: "300px" }
+      // root = kontainer feed (scroll internal), bukan viewport.
+      { root: feedScrollRef.current, rootMargin: "300px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -119,9 +121,10 @@ export function NetworkView({
 
   return (
     <div>
-      {/* Sticky: judul + search + filter — tetap terlihat saat scroll feed.
-          top-[57px] = tinggi header brand di page.tsx. */}
-      <div className="sticky top-[56px] z-20 border-b border-border bg-background/95 backdrop-blur-md">
+      {/* Judul + search + filter — DIAM (di luar area scroll feed). Feed
+          scroll di kontainernya sendiri → kontrol ini tak bergerak sedikit
+          pun (bukan sticky yg sempat geser saat mulai scroll). */}
+      <div className="border-b border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-3">
           <div className="flex items-center gap-2 mb-3">
             <Users className="h-5 w-5 text-primary" />
@@ -194,7 +197,12 @@ export function NetworkView({
         </div>
       </div>
 
-      {/* Konten feed */}
+      {/* Konten feed — SATU area scroll internal (kontrol di atas tetap diam,
+          persis pola tab Floor/Menu). Tinggi = sisa layar s/d atas bottom nav. */}
+      <div
+        ref={feedScrollRef}
+        className="max-h-[calc(100dvh-14rem)] overflow-y-auto overscroll-contain"
+      >
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-4">
       <HobbyFilterSheet
         key={filterOpen ? "open" : "closed"}
@@ -231,6 +239,7 @@ export function NetworkView({
           All members shown.
         </p>
       )}
+      </div>
       </div>
     </div>
   );
