@@ -148,9 +148,10 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
           </p>
         </div>
       ) : (
-        // Hanya list menu yg scroll (search box di atas tetap diam).
-        // overscroll-contain cegah scroll bocor ke halaman saat mentok.
-        <div className="space-y-6 max-h-[60vh] overflow-y-auto overscroll-contain pr-0.5">
+        // Hanya list menu yg scroll (search box di atas tetap diam). Tinggi =
+        // sisa layar dari bawah search s/d tepat di atas bottom nav (dvh utk
+        // mobile). overscroll-contain cegah scroll bocor ke halaman saat mentok.
+        <div className="space-y-6 max-h-[calc(100dvh-16rem)] overflow-y-auto overscroll-contain pr-0.5">
       {filtered.map((cat) =>
         cat.items.length === 0 ? null : (
           <section key={cat.id}>
