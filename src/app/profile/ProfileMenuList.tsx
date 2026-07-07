@@ -14,8 +14,10 @@ import {
   Loader2,
   Shield,
   FileText,
+  MessageCircle,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { waUrl } from "@/lib/contact";
 import { signOutAction } from "@/lib/auth-v2/actions";
 import { getActionErrorMessage } from "@/lib/utils";
 import {
@@ -213,6 +215,27 @@ export function ProfileMenuList() {
           </div>
         </MenuGroup>
       )}
+
+      {/* Group: Bantuan — Hubungi CS via WhatsApp (link eksternal) */}
+      <MenuGroup>
+        <a
+          href={waUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
+        >
+          <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+            <MessageCircle className="h-4 w-4" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium">Hubungi CS</span>
+            <span className="block text-xs text-muted-foreground truncate">
+              Chat admin SOHO via WhatsApp
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
+        </a>
+      </MenuGroup>
 
       {/* Group: Legal */}
       <MenuGroup>

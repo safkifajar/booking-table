@@ -12,21 +12,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Eye, EyeOff, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { waUrl } from "@/lib/contact";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
-
-// Nomor WhatsApp SOHO untuk tombol "Contact us" (format 62..., tanpa +/spasi).
-// TODO: ganti dengan nomor asli SOHO.
-const CONTACT_WA = "6281234567890";
-const CONTACT_WA_URL = `https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(
-  "Hi SOHO Social House, I'd like to ask about "
-)}`;
 
 /** Tombol Contact us — pill di kanan-atas, mengarah ke WhatsApp. */
 function ContactUsButton() {
   return (
     <a
-      href={CONTACT_WA_URL}
+      href={waUrl("Hi SOHO Social House, I'd like to ask about ")}
       target="_blank"
       rel="noopener noreferrer"
       className="fixed right-4 top-4 z-20 inline-flex items-center gap-1.5 h-10 rounded-full px-4 text-xs font-medium text-[#f0e6d2]/90 hover:text-[#8d1312] bg-[#f0e6d2]/10 hover:bg-[#f0e6d2] transition"
