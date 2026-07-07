@@ -756,6 +756,16 @@ function TableSheet({
     return () => clearTimeout(t);
   }, []);
 
+  // Ref chip tanggal yg aktif → auto-scroll strip supaya tanggal terpilih
+  // (dari denah) langsung kelihatan di tengah, bukan mulai dari kiri.
+  const activeChipRef = React.useRef<HTMLButtonElement>(null);
+  React.useLayoutEffect(() => {
+    activeChipRef.current?.scrollIntoView({
+      inline: "center",
+      block: "nearest",
+    });
+  }, []);
+
   // Kelompokkan reservasi per tanggal (groupKey).
   const byDate = React.useMemo(() => {
     const map = new Map<string, ActiveSessionView[]>();
@@ -963,6 +973,7 @@ function TableSheet({
                   return (
                     <button
                       key={gk}
+                      ref={active ? activeChipRef : undefined}
                       type="button"
                       onClick={() => changeDate(gk)}
                       className={cn(
