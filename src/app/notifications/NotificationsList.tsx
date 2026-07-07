@@ -14,6 +14,18 @@ import { acceptInvite, declineInvite } from "@/lib/actions";
 import { toast } from "sonner";
 import { getActionErrorMessage } from "@/lib/utils";
 
+/** Format tanggal+jam langsung, mis. "7 Jul 2026, 14.30" (WIB). */
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(iso));
+}
+
 /**
  * Halaman list notifikasi (full-page, ala mobile app). Realtime via SSE
  * /api/realtime/user/<userId>. Notif undangan meja punya tombol Terima/Tolak.
@@ -154,6 +166,12 @@ export function NotificationsList({
                           {n.body}
                         </p>
                       )}
+                      <p
+                        className="mt-1 text-[11px] text-muted-foreground/70"
+                        suppressHydrationWarning
+                      >
+                        {formatDateTime(n.created_at)}
+                      </p>
                     </div>
                   </div>
                 </button>
