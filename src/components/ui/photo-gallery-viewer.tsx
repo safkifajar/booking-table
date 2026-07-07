@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Image from "next/image";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,24 +41,32 @@ export function PhotoGalleryViewer({
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [active, setActive] = React.useState(initialIndex);
   const count = photos.length;
-  // LOOP: track punya clone di kedua ujung → [last, ...photos, first]. Slide 0
-  // = clone foto terakhir, slide count+1 = clone foto pertama. Saat scroll
-  // mendarat di clone, langsung lompat (tanpa animasi) ke slide asli yg sama →
-  // kesan geser MUTER tanpa henti. Hanya kalau > 1 foto.
+  // LOOP MULUS (recenter): track selalu punya 3 slot [kiri, TENGAH, kanan].
+  // Tengah = foto aktif; kiri = aktif-1 (wrap), kanan = aktif+1 (wrap). Track
+  // selalu berada di posisi tengah. Setelah geser mendarat di kiri/kanan →
+  // update `active` (wrap) lalu re-center diam2 (tanpa animasi). Geser terus
+  // muter mulus tanpa lompatan yg keliatan. Hanya kalau > 1 foto.
   const loop = count > 1;
-  const slides = loop ? [photos[count - 1], ...photos, photos[0]] : photos;
-  // Offset slide asli pertama di track (1 kalau ada clone di depan).
-  const OFF = loop ? 1 : 0;
-  const jumping = React.useRef(false);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mod = (n: number) => ((n % count) + count) % count;
 
-  // Scroll ke foto awal saat mount (tanpa animasi). +OFF utk lewati clone depan.
-  React.useEffect(() => {
+  const slots = loop
+    ? [photos[mod(active - 1)], photos[active], photos[mod(active + 1)]]
+    : photos;
+  const CENTER = loop ? 1 : initialIndex;
+
+  // Center track ke slot tengah (tanpa animasi).
+  const recenter = React.useCallback(() => {
     const el = scrollRef.current;
-    if (el) el.scrollLeft = (initialIndex + OFF) * el.clientWidth;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (el) el.scrollLeft = CENTER * el.clientWidth;
+  }, [CENTER]);
 
-  // Kunci scroll body selama viewer terbuka — konten di belakang tak ikut scroll.
+  // Saat mount / active berubah → center ke slot tengah.
+  React.useEffect(() => {
+    recenter();
+  }, [active, recenter]);
+
+  // Kunci scroll body selama viewer terbuka.
   React.useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -80,38 +89,46 @@ export function PhotoGalleryViewer({
 
   if (count === 0) return null;
 
+  // Debounce: setelah scroll berhenti, cek slot mana yg aktif → geser `active`.
   function onScroll() {
-    const el = scrollRef.current;
-    if (!el || jumping.current) return;
-    const raw = Math.round(el.scrollLeft / el.clientWidth); // index di `slides`
-    // Mendarat di clone → lompat ke slide asli padanannya (tanpa animasi).
-    if (loop && raw === 0) {
-      jumping.current = true;
-      el.scrollLeft = count * el.clientWidth; // foto terakhir (asli)
-      jumping.current = false;
-      setActive(count - 1);
+    if (!loop) {
+      const el = scrollRef.current;
+      if (el)
+        setActive(
+          Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)))
+        );
       return;
     }
-    if (loop && raw === count + 1) {
-      jumping.current = true;
-      el.scrollLeft = 1 * el.clientWidth; // foto pertama (asli)
-      jumping.current = false;
-      setActive(0);
-      return;
-    }
-    setActive(Math.max(0, Math.min(count - 1, raw - OFF)));
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const slot = Math.round(el.scrollLeft / el.clientWidth); // 0,1,2
+      if (slot === CENTER) return; // masih di tengah
+      // Geser ke kiri (slot 0) → foto sebelumnya; kanan (slot 2) → berikutnya.
+      setActive((a) => mod(a + (slot - CENTER)));
+    }, 90);
   }
 
   function go(delta: number) {
     const el = scrollRef.current;
     if (!el) return;
-    // Geser relatif dari posisi track sekarang → clone menangani wrap.
-    const cur = Math.round(el.scrollLeft / el.clientWidth);
-    el.scrollTo({ left: (cur + delta) * el.clientWidth, behavior: "smooth" });
+    if (!loop) {
+      const next = Math.max(0, Math.min(count - 1, active + delta));
+      el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+      return;
+    }
+    // Scroll ke slot tetangga → onScroll settle akan update active + recenter.
+    el.scrollTo({
+      left: (CENTER + delta) * el.clientWidth,
+      behavior: "smooth",
+    });
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/95" onClick={onClose}>
+  // Render via PORTAL ke document.body → viewer benar-benar fullscreen apa pun
+  // ancestor-nya (ancestor dgn transform/filter tak lagi membatasi `fixed`).
+  return createPortal(
+    <div className="fixed inset-0 z-[100] bg-black/95" onClick={onClose}>
       {/* Tombol tutup */}
       <button
         type="button"
@@ -137,7 +154,7 @@ export function PhotoGalleryViewer({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden no-scrollbar"
         style={{ scrollbarWidth: "none" }}
       >
-        {slides.map((src, i) => (
+        {slots.map((src, i) => (
           <div
             key={`${src}-${i}`}
             className="relative h-full w-full shrink-0 snap-center"
@@ -148,7 +165,7 @@ export function PhotoGalleryViewer({
               fill
               className="object-contain"
               unoptimized
-              priority={i === initialIndex + OFF}
+              priority={i === CENTER}
             />
           </div>
         ))}
@@ -196,6 +213,7 @@ export function PhotoGalleryViewer({
           ))}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
