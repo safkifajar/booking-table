@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { UtensilsCrossed, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 import type { MenuCategory, MenuItem } from "@/types/db";
 
 type MenuCategoryWithItems = MenuCategory & { items: MenuItem[] };
@@ -15,6 +16,8 @@ type MenuCategoryWithItems = MenuCategory & { items: MenuItem[] };
  */
 export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
   const [query, setQuery] = React.useState("");
+  // Filter kategori — "all" = semua. Hanya kategori yg punya item.
+  const [category, setCategory] = React.useState("all");
 
   const hasItems = menu.some((c) => c.items.length > 0);
   if (!hasItems) {
@@ -29,34 +32,57 @@ export function MenuList({ menu }: { menu: MenuCategoryWithItems[] }) {
     );
   }
 
-  // Filter by nama menu (case-insensitive). Kategori tanpa hasil disembunyikan.
+  // Opsi dropdown kategori: "All" + kategori yg punya item.
+  const categoryOptions = [
+    { value: "all", label: "All categories" },
+    ...menu
+      .filter((c) => c.items.length > 0)
+      .map((c) => ({ value: c.id, label: c.name })),
+  ];
+
+  // Filter: kategori terpilih (kalau bukan "all") + nama menu (case-insensitive).
+  // Kategori tanpa hasil disembunyikan.
   const q = query.trim().toLowerCase();
-  const filtered = q
-    ? menu.map((cat) => ({
-        ...cat,
-        items: cat.items.filter((i) => i.name.toLowerCase().includes(q)),
-      }))
-    : menu;
+  const filtered = menu
+    .filter((cat) => category === "all" || cat.id === category)
+    .map((cat) => ({
+      ...cat,
+      items: q
+        ? cat.items.filter((i) => i.name.toLowerCase().includes(q))
+        : cat.items,
+    }));
   const anyMatch = filtered.some((c) => c.items.length > 0);
 
   return (
     <div className="space-y-4">
-      {/* Search by nama menu */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search menu…"
-          className="w-full h-10 pl-9 pr-3 rounded-lg bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+      {/* Search by nama menu + filter kategori (dropdown di samping) */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search menu…"
+            className="w-full h-11 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+          />
+        </div>
+        <Select
+          value={category}
+          onChange={setCategory}
+          options={categoryOptions}
+          ariaLabel="Filter by category"
+          align="right"
+          className="w-36 shrink-0"
         />
       </div>
 
       {!anyMatch ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
           <p className="text-sm text-muted-foreground">
-            No menu matches &ldquo;{query}&rdquo;.
+            {q
+              ? `No menu matches “${query}”.`
+              : "No menu in this category."}
           </p>
         </div>
       ) : (
