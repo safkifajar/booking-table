@@ -170,7 +170,7 @@ export function NotificationsList({
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+        <div className="-mx-4 sm:-mx-6 border-y border-border bg-card overflow-hidden divide-y divide-border">
           {items.map((n) => (
             <NotificationItem
               key={n.id}
