@@ -187,11 +187,10 @@ export function StaffMenuGrid({
   }
 
   return (
-    <div className="space-y-4 pb-28">
-      {/* Search + tombol filter kategori — sticky di ATAS area scroll konten
-          tab (top-0), jadi tak bergerak sedikit pun saat list di-scroll.
-          Padding + bg solid biar item menu tak nembus di belakang. */}
-      <div className="sticky -top-4 sm:-top-6 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 bg-background flex items-center gap-2">
+    <div className="h-full flex flex-col min-h-0">
+      {/* Search + tombol filter kategori — DIAM (shrink-0, di luar area scroll
+          list di bawah). Tak bergerak sedikit pun saat list di-scroll. */}
+      <div className="shrink-0 pb-3 flex items-center gap-2">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -256,9 +255,10 @@ export function StaffMenuGrid({
         )}
       </div>
 
-      {/* List menu — ikut scroll parent tab (bukan scroll sendiri) → tak ada
-          scrollbar berlapis. */}
-      <div className="space-y-4">
+      {/* List menu — SATU area scroll (flex-1 mengisi sisa; search di atas
+          diam). pb-28 beri ruang bar keranjang 'fixed' biar item terakhir tak
+          ketutupan. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-4 pb-28 -mx-1 px-1">
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.

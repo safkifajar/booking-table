@@ -334,10 +334,11 @@ export function SessionView(props: SessionViewProps) {
         </div>
       </div>
 
-      {/* Konten (notice + tab) — SATU area scroll internal supaya header + tab
-          strip di atas benar-benar diam saat scroll (persis pola tab
-          Floor/Menu/Network). Tinggi = sisa layar antara tab strip & footer. */}
-      <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain">
+      {/* Konten (notice + tab) — tinggi tetap (sisa layar antara tab strip &
+          footer). Scroll ditangani PER-TAB (lihat wrapper di bawah) supaya
+          header/tab strip benar-benar diam & tab Menu bisa search fixed +
+          list scroll sendiri. */}
+      <div className="h-[calc(100dvh-12rem)] flex flex-col">
       {/* Notice meja sudah ditutup (closed/overdue) */}
       {isEnded && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
@@ -360,13 +361,18 @@ export function SessionView(props: SessionViewProps) {
           cegah swipe-back native (panah kembali saat geser dari tepi). Inner
           key={tab} → remount + animasi slide sesuai arah (slideDir). */}
       <div
-        className="[overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
+        className="flex-1 min-h-0 flex flex-col [overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
       <div
         key={tab}
-        className="max-w-3xl mx-auto px-4 sm:px-6 py-4 sm:py-6"
+        className={cn(
+          "flex-1 min-h-0 max-w-3xl w-full mx-auto px-4 sm:px-6",
+          // Tab Menu mengatur scroll sendiri (search fixed + list scroll).
+          // Tab lain scroll normal di kontainer ini.
+          tab === "menu" ? "flex flex-col overflow-hidden pt-4 sm:pt-6" : "overflow-y-auto overscroll-contain py-4 sm:py-6"
+        )}
         style={{
           animation: `${slideDir === 1 ? "tab-slide-right" : "tab-slide-left"} 0.22s ease-out`,
         }}
@@ -1180,7 +1186,7 @@ function MenuTab({
     );
   }
   return (
-    <div className="space-y-3">
+    <div className="h-full flex flex-col min-h-0">
       {/* Customer & staff sama-sama pakai keranjang: pilih +/- lalu Simpan
           sekali → semua masuk bill. Beda: staff atribusi ke host meja;
           customer atribusi ke diri sendiri (onBehalfOfMemberId undefined). */}
