@@ -61,8 +61,10 @@ export function PhotoGalleryViewer({
     if (el) el.scrollLeft = CENTER * el.clientWidth;
   }, [CENTER]);
 
-  // Saat mount / active berubah → center ke slot tengah.
-  React.useEffect(() => {
+  // Saat mount / active berubah → center ke slot tengah SEBELUM paint
+  // (useLayoutEffect) supaya tak ada frame glitch (track di slot samping
+  // sementara slots sudah re-render dgn foto baru di tengah).
+  React.useLayoutEffect(() => {
     recenter();
   }, [active, recenter]);
 

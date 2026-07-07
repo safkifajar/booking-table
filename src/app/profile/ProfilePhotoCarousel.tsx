@@ -34,17 +34,48 @@ export function ProfilePhotoCarousel({
   // Posisi pointer saat mulai tekan — untuk bedakan tap vs swipe.
   const downPos = React.useRef<{ x: number; y: number } | null>(null);
 
+  // LOOP MULUS (recenter, sama spt PhotoGalleryViewer): 3 slot [kiri,TENGAH,
+  // kanan]; tengah = foto aktif; re-center setelah geser → muter mulus.
+  const loop = count > 1;
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mod = (n: number) => ((n % count) + count) % count;
+  const slots = loop
+    ? [photos[mod(active - 1)], photos[active], photos[mod(active + 1)]]
+    : photos;
+  const CENTER = loop ? 1 : 0;
+
+  const recenter = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = CENTER * el.clientWidth;
+  }, [CENTER]);
+  React.useLayoutEffect(() => {
+    if (count > 0) recenter();
+  }, [active, recenter, count]);
+
   function onScroll() {
     const el = scrollRef.current;
     if (!el || count === 0) return;
-    const idx = Math.round(el.scrollLeft / el.clientWidth);
-    setActive(Math.max(0, Math.min(count - 1, idx)));
+    if (!loop) {
+      setActive(
+        Math.max(0, Math.min(count - 1, Math.round(el.scrollLeft / el.clientWidth)))
+      );
+      return;
+    }
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      const el2 = scrollRef.current;
+      if (!el2) return;
+      const slot = Math.round(el2.scrollLeft / el2.clientWidth);
+      if (slot === CENTER) return;
+      setActive((a) => mod(a + (slot - CENTER)));
+    }, 90);
   }
 
   function goTo(i: number) {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    if (loop) setActive(i);
+    else el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
   }
 
   if (count === 0) {
@@ -77,11 +108,11 @@ export function ProfilePhotoCarousel({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto no-scrollbar"
         style={{ scrollbarWidth: "none" }}
       >
-        {photos.map((src, i) => (
+        {slots.map((src, i) => (
           <button
-            key={src}
+            key={`${src}-${i}`}
             type="button"
-            aria-label={`View photo ${i + 1} full screen`}
+            aria-label="View photo full screen"
             onPointerDown={(e) => {
               downPos.current = { x: e.clientX, y: e.clientY };
             }}
@@ -97,18 +128,19 @@ export function ProfilePhotoCarousel({
                 // buka viewer foto SAJA, tak ikut navigasi ke halaman detail.
                 e.preventDefault();
                 e.stopPropagation();
-                setViewerIndex(i);
+                // Buka di foto yg SEDANG aktif (di tengah) — bukan index slot.
+                setViewerIndex(active);
               }
             }}
             className="relative h-full w-full shrink-0 snap-center cursor-zoom-in"
           >
             <Image
               src={src}
-              alt={`${displayName} — photo ${i + 1}`}
+              alt={`${displayName} — photo`}
               fill
               sizes="(max-width: 640px) 100vw, 640px"
               className="object-cover"
-              priority={i === 0}
+              priority={i === CENTER}
             />
           </button>
         ))}
