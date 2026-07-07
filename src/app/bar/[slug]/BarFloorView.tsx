@@ -589,9 +589,11 @@ function BookingSchedule({
         })}
       </div>
 
-      {/* List booking tanggal terpilih */}
+      {/* List booking tanggal terpilih — hanya bagian INI yg scroll (list
+          panjang tak mendorong denah/tab ke bawah). overscroll-contain cegah
+          scroll bocor ke halaman saat mentok. */}
       {dayBookings.length > 0 ? (
-        <Card className="divide-y divide-border">
+        <Card className="divide-y divide-border max-h-[60vh] overflow-y-auto overscroll-contain">
           {dayBookings.map((r) => {
             const ended =
               !!r.reservation_end_at &&
