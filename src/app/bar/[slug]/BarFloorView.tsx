@@ -340,7 +340,7 @@ export function BarFloorView({
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
         {/* Tab switcher: Denah vs Menu */}
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit mb-4">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-full mb-4">
           <MainTabButton
             icon={<MapIcon className="h-3.5 w-3.5" />}
             label="Floor"
@@ -469,7 +469,7 @@ function MainTabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition",
+        "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition",
         active
           ? "bg-primary/15 text-primary"
           : "text-muted-foreground hover:text-foreground"
