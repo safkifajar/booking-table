@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 import {
   ChevronRight,
-  User,
   KeyRound,
   History,
   LogOut,
@@ -36,7 +36,13 @@ import { saveSubscription, removeSubscription } from "@/lib/push";
  * terpisah (admin.bookingsoho.com). Pisahin entry point supaya user app
  * tidak punya clue admin panel ada (security best practice).
  */
-export function ProfileMenuList() {
+export function ProfileMenuList({
+  avatarUrl,
+  displayName,
+}: {
+  avatarUrl: string | null;
+  displayName: string;
+}) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
 
@@ -141,7 +147,7 @@ export function ProfileMenuList() {
       <MenuGroup>
         <MenuItem
           href="/profile/account"
-          icon={<User className="h-4 w-4" />}
+          iconBox={<AccountAvatar avatarUrl={avatarUrl} displayName={displayName} />}
           label="Account"
           description="Name, WhatsApp number, date of birth, bio, hobbies"
         />
@@ -275,6 +281,34 @@ export function ProfileMenuList() {
   );
 }
 
+/** Kotak ikon Account = foto profil user (bulat), fallback inisial nama. */
+function AccountAvatar({
+  avatarUrl,
+  displayName,
+}: {
+  avatarUrl: string | null;
+  displayName: string;
+}) {
+  if (avatarUrl) {
+    return (
+      <span className="relative h-8 w-8 rounded-full overflow-hidden shrink-0 border border-border">
+        <Image
+          src={avatarUrl}
+          alt={displayName}
+          fill
+          sizes="32px"
+          className="object-cover"
+        />
+      </span>
+    );
+  }
+  return (
+    <span className="h-8 w-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary text-sm font-semibold">
+      {displayName.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
 function MenuGroup({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card/70 backdrop-blur-sm overflow-hidden divide-y divide-border">
@@ -286,11 +320,15 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
 function MenuItem({
   href,
   icon,
+  iconBox,
   label,
   description,
 }: {
   href: string;
-  icon: React.ReactNode;
+  /** Ikon di dalam kotak default (bg primary). */
+  icon?: React.ReactNode;
+  /** Kotak ikon kustom (ganti seluruh kotak) — mis. foto profil bulat. */
+  iconBox?: React.ReactNode;
   label: string;
   description?: string;
 }) {
@@ -299,9 +337,11 @@ function MenuItem({
       href={href}
       className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
     >
-      <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
-        {icon}
-      </span>
+      {iconBox ?? (
+        <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+          {icon}
+        </span>
+      )}
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-medium">{label}</span>
         {description && (

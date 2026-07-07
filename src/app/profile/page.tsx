@@ -45,7 +45,10 @@ export default async function ProfilePage() {
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         {/* Menu list */}
-        <ProfileMenuList />
+        <ProfileMenuList
+          avatarUrl={profile.avatarUrl ?? profile.photos[0] ?? null}
+          displayName={profile.displayName}
+        />
       </div>
     </main>
   );
