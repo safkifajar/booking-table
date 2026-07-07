@@ -221,3 +221,14 @@ export async function markAllNotificationsRead(): Promise<void> {
       )
     );
 }
+
+/** Hapus satu notifikasi milik user login (scoped by profileId — aman). */
+export async function deleteNotification(id: string): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile) return;
+  await db
+    .delete(notifications)
+    .where(
+      and(eq(notifications.id, id), eq(notifications.profileId, profile.id))
+    );
+}
