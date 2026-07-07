@@ -12,6 +12,8 @@ import {
   ChevronDown,
   UtensilsCrossed,
   Trash2,
+  SlidersHorizontal,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
@@ -68,6 +70,26 @@ export function StaffMenuGrid({
   const [cartOpen, setCartOpen] = React.useState(false);
   // Filter kategori. ALL_SLUG = tampilkan semua kategori.
   const [activeCat, setActiveCat] = React.useState<string>(ALL_SLUG);
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const filterRef = React.useRef<HTMLDivElement>(null);
+
+  // Klik di luar panel filter → tutup.
+  React.useEffect(() => {
+    if (!filterOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [filterOpen]);
+
+  // Label kategori aktif utk badge tombol filter.
+  const activeCatName =
+    activeCat === ALL_SLUG
+      ? null
+      : (menu.find((c) => c.slug === activeCat)?.name ?? null);
 
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
@@ -166,9 +188,11 @@ export function StaffMenuGrid({
 
   return (
     <div className="space-y-4 pb-28">
-      {/* Search + kategori — DIAM (di luar area scroll list di bawah). */}
-      <div className="space-y-3">
-        <div className="relative">
+      {/* Search + tombol filter kategori — sticky di ATAS area scroll konten
+          tab (top-0), jadi tak bergerak sedikit pun saat list di-scroll.
+          Padding + bg solid biar item menu tak nembus di belakang. */}
+      <div className="sticky -top-4 sm:-top-6 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 bg-background flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="search"
@@ -178,44 +202,63 @@ export function StaffMenuGrid({
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
-
-        {/* Filter kategori — chip "All" + per kategori. */}
-        {!q && menu.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
-          <button
-            type="button"
-            onClick={() => setActiveCat(ALL_SLUG)}
-            className={cn(
-              "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
-              activeCat === ALL_SLUG
-                ? "bg-primary/15 border-primary/40 text-primary"
-                : "border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            All
-          </button>
-          {menu.map((c) => (
+        {menu.length > 1 && (
+          <div ref={filterRef} className="relative shrink-0">
             <button
-              key={c.id}
               type="button"
-              onClick={() => setActiveCat(c.slug)}
+              onClick={() => setFilterOpen((o) => !o)}
               className={cn(
-                "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
-                activeCat === c.slug
-                  ? "bg-primary/15 border-primary/40 text-primary"
-                  : "border-border text-muted-foreground hover:text-foreground"
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm transition",
+                activeCat !== ALL_SLUG
+                  ? "border-primary bg-primary/15 text-primary font-medium"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
               )}
+              aria-label="Filter by category"
+              aria-haspopup="listbox"
+              aria-expanded={filterOpen}
             >
-              {c.name}
+              <SlidersHorizontal className="h-4 w-4" />
+              <span>Filter</span>
+              {activeCatName && (
+                <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 leading-none">
+                  1
+                </span>
+              )}
             </button>
-          ))}
-        </div>
+
+            {filterOpen && (
+              <div
+                role="listbox"
+                className="absolute right-0 z-30 mt-1.5 min-w-44 max-h-60 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl"
+              >
+                <CatOption
+                  label="All categories"
+                  selected={activeCat === ALL_SLUG}
+                  onClick={() => {
+                    setActiveCat(ALL_SLUG);
+                    setFilterOpen(false);
+                  }}
+                />
+                {menu.map((c) => (
+                  <CatOption
+                    key={c.id}
+                    label={c.name}
+                    selected={activeCat === c.slug}
+                    onClick={() => {
+                      setActiveCat(c.slug);
+                      setFilterOpen(false);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* List menu — SATU area scroll internal (search+kategori di atas diam,
-          tak ikut geser saat scroll). space-y-4 dikembalikan di dalam. */}
-      <div className="space-y-4 max-h-[calc(100dvh-19rem)] overflow-y-auto overscroll-contain -mx-1 px-1">
+      {/* List menu — ikut scroll parent tab (bukan scroll sendiri) → tak ada
+          scrollbar berlapis. */}
+      <div className="space-y-4">
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.
@@ -427,5 +470,34 @@ export function StaffMenuGrid({
         </div>
       )}
     </div>
+  );
+}
+
+/** Opsi kategori di dropdown filter menu. */
+function CatOption({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm text-left transition",
+        selected
+          ? "bg-primary/15 text-primary"
+          : "text-foreground hover:bg-muted/60"
+      )}
+    >
+      <span className="truncate">{label}</span>
+      {selected && <Check className="h-4 w-4 shrink-0" />}
+    </button>
   );
 }
