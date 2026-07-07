@@ -166,10 +166,8 @@ export function StaffMenuGrid({
 
   return (
     <div className="space-y-4 pb-28">
-      {/* Search + kategori STICKY — nempel di ATAS area scroll konten (tab bar
-          session sudah di luar area scroll & diam). bg solid biar item menu tak
-          nembus di belakang saat scroll. */}
-      <div className="sticky -top-4 sm:-top-6 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 bg-background space-y-3">
+      {/* Search + kategori — DIAM (di luar area scroll list di bawah). */}
+      <div className="space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -215,6 +213,9 @@ export function StaffMenuGrid({
         )}
       </div>
 
+      {/* List menu — SATU area scroll internal (search+kategori di atas diam,
+          tak ikut geser saat scroll). space-y-4 dikembalikan di dalam. */}
+      <div className="space-y-4 max-h-[calc(100dvh-19rem)] overflow-y-auto overscroll-contain -mx-1 px-1">
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.
@@ -316,6 +317,7 @@ export function StaffMenuGrid({
           </div>
         </div>
       ))}
+      </div>
 
       {totalQty > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-30">
