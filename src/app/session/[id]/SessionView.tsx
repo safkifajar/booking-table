@@ -284,8 +284,8 @@ export function SessionView(props: SessionViewProps) {
       {/* Header */}
       <SessionHeader {...props} />
 
-      {/* Tab strip */}
-      <div className="sticky top-[57px] z-10 bg-background/85 backdrop-blur-md border-b border-border">
+      {/* Tab strip — DIAM (di luar area scroll konten). */}
+      <div className="z-10 bg-background/85 backdrop-blur-md border-b border-border">
         <div className="max-w-3xl mx-auto px-2">
           <div className="flex">
             <TabButton
@@ -334,6 +334,10 @@ export function SessionView(props: SessionViewProps) {
         </div>
       </div>
 
+      {/* Konten (notice + tab) — SATU area scroll internal supaya header + tab
+          strip di atas benar-benar diam saat scroll (persis pola tab
+          Floor/Menu/Network). Tinggi = sisa layar antara tab strip & footer. */}
+      <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain">
       {/* Notice meja sudah ditutup (closed/overdue) */}
       {isEnded && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
@@ -402,6 +406,7 @@ export function SessionView(props: SessionViewProps) {
             payFullOnly={isStaff}
           />
         )}
+      </div>
       </div>
       </div>
 
