@@ -103,14 +103,29 @@ export async function getAdminMenuCategories(
       )})`
     )
     .groupBy(menuItems.categoryId);
+  // Item hanya menempel di sub-kategori. countMap = jumlah item LANGSUNG per
+  // kategori (untuk sub = jumlah item-nya; untuk utama = biasanya 0).
   const countMap = new Map<string, number>();
   for (const r of countRows) {
     countMap.set(r.categoryId, Number(r.count));
   }
 
+  // Total per kategori = item langsung + total item dari sub-kategorinya.
+  // Sehingga kategori UTAMA menampilkan gabungan seluruh sub-nya.
+  const totalMap = new Map<string, number>();
+  for (const r of rows) totalMap.set(r.id, countMap.get(r.id) ?? 0);
+  for (const r of rows) {
+    if (r.parent_id != null) {
+      totalMap.set(
+        r.parent_id,
+        (totalMap.get(r.parent_id) ?? 0) + (countMap.get(r.id) ?? 0)
+      );
+    }
+  }
+
   return rows.map((r) => ({
     ...r,
-    itemCount: countMap.get(r.id) ?? 0,
+    itemCount: totalMap.get(r.id) ?? 0,
   }));
 }
 
