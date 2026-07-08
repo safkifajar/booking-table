@@ -18,6 +18,7 @@ import {
   Upload,
   Download,
   FileSpreadsheet,
+  Search,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ export function MenuManager({
   const [filterCategoryId, setFilterCategoryId] = React.useState<string | "all">(
     "all"
   );
+  const [itemQuery, setItemQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
   const [editingItem, setEditingItem] = React.useState<AdminMenuItem | null>(
@@ -93,9 +95,18 @@ export function MenuManager({
   const router = useRouter();
 
   const filteredItems = React.useMemo(() => {
-    if (filterCategoryId === "all") return items;
-    return items.filter((i) => i.categoryId === filterCategoryId);
-  }, [items, filterCategoryId]);
+    const q = itemQuery.trim().toLowerCase();
+    return items.filter((i) => {
+      if (filterCategoryId !== "all" && i.categoryId !== filterCategoryId)
+        return false;
+      if (!q) return true;
+      return (
+        i.name.toLowerCase().includes(q) ||
+        i.description?.toLowerCase().includes(q) ||
+        i.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+  }, [items, filterCategoryId, itemQuery]);
 
   // Reset ke page 0 kalau filter / pageSize ganti (atau items berkurang)
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
@@ -107,7 +118,7 @@ export function MenuManager({
 
   React.useEffect(() => {
     setPage(0);
-  }, [filterCategoryId, pageSize]);
+  }, [filterCategoryId, pageSize, itemQuery]);
 
   // Tabs
   return (
@@ -144,6 +155,8 @@ export function MenuManager({
           categories={categories}
           filterCategoryId={filterCategoryId}
           setFilterCategoryId={setFilterCategoryId}
+          query={itemQuery}
+          setQuery={setItemQuery}
           page={safePage}
           pageSize={pageSize}
           totalPages={totalPages}
@@ -315,6 +328,8 @@ function ItemsTab({
   categories,
   filterCategoryId,
   setFilterCategoryId,
+  query,
+  setQuery,
   page,
   pageSize,
   totalPages,
@@ -333,6 +348,8 @@ function ItemsTab({
   categories: AdminMenuCategory[];
   filterCategoryId: string | "all";
   setFilterCategoryId: (id: string | "all") => void;
+  query: string;
+  setQuery: (q: string) => void;
   page: number;
   pageSize: number;
   totalPages: number;
@@ -369,6 +386,11 @@ function ItemsTab({
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search items…"
+          />
           <Select
             value={filterCategoryId}
             onChange={(v) => setFilterCategoryId(v as string | "all")}
@@ -734,30 +756,39 @@ function CategoriesTab({
     [categories]
   );
 
-  // Filter kategori utama (khusus sub) + pagination (pola sama dgn Items).
+  // Search + filter kategori utama (khusus sub) + pagination (pola sama Items).
+  const [query, setQuery] = React.useState("");
   const [filterParentId, setFilterParentId] = React.useState<string | "all">(
     "all"
   );
   const [page, setPage] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
 
-  // Semua baris (sudah difilter varian + filter induk), diurutkan.
+  // Semua baris (difilter varian + search + filter induk), diurutkan.
   const allRows = React.useMemo(() => {
-    if (!isSub) return categories.filter((c) => c.parent_id == null);
-    return categories
-      .filter((c) => c.parent_id != null)
-      .filter((c) => filterParentId === "all" || c.parent_id === filterParentId)
-      .sort((a, b) => {
-        const pa = nameById.get(a.parent_id!) ?? "";
-        const pb = nameById.get(b.parent_id!) ?? "";
-        return pa.localeCompare(pb) || a.name.localeCompare(b.name);
-      });
-  }, [categories, isSub, nameById, filterParentId]);
+    const q = query.trim().toLowerCase();
+    const base = isSub
+      ? categories
+          .filter((c) => c.parent_id != null)
+          .filter(
+            (c) => filterParentId === "all" || c.parent_id === filterParentId
+          )
+      : categories.filter((c) => c.parent_id == null);
+    const searched = q
+      ? base.filter((c) => c.name.toLowerCase().includes(q))
+      : base;
+    if (!isSub) return searched;
+    return [...searched].sort((a, b) => {
+      const pa = nameById.get(a.parent_id!) ?? "";
+      const pb = nameById.get(b.parent_id!) ?? "";
+      return pa.localeCompare(pb) || a.name.localeCompare(b.name);
+    });
+  }, [categories, isSub, nameById, filterParentId, query]);
 
-  // Reset ke page 0 saat filter/pageSize berubah.
+  // Reset ke page 0 saat search/filter/pageSize berubah.
   React.useEffect(() => {
     setPage(0);
-  }, [filterParentId, pageSize]);
+  }, [filterParentId, pageSize, query]);
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -778,6 +809,11 @@ function CategoriesTab({
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={isSub ? "Search sub-categories…" : "Search categories…"}
+          />
           {/* Filter by kategori utama — khusus tab Sub-Categories. */}
           {isSub && mainCategories.length > 0 && (
             <Select
@@ -824,11 +860,15 @@ function CategoriesTab({
         <Card className="p-12 text-center border-dashed">
           <Layers className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium mb-1">
-            {isSub && filterParentId !== "all"
-              ? "No sub-categories in this category"
-              : `No ${noun} yet`}
+            {query.trim()
+              ? `No ${noun} match “${query.trim()}”`
+              : isSub && filterParentId !== "all"
+                ? "No sub-categories in this category"
+                : `No ${noun} yet`}
           </p>
-          <p className="text-xs text-muted-foreground">{emptyHint}</p>
+          <p className="text-xs text-muted-foreground">
+            {query.trim() ? "Try a different search." : emptyHint}
+          </p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -1642,6 +1682,30 @@ function ModalShell({
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/** Input search kecil (ikon + text) — dipakai ketiga tab admin menu. */
+function SearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-11 w-48 sm:w-56 rounded-md bg-input border border-border pl-8 pr-3 text-sm outline-none focus:border-primary/60 transition"
+      />
     </div>
   );
 }
