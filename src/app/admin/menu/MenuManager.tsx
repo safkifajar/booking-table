@@ -49,7 +49,7 @@ interface Props {
   initialItems: AdminMenuItem[];
 }
 
-type Tab = "items" | "categories";
+type Tab = "items" | "subcategories" | "categories";
 
 const ACCEPTED =
   "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif";
@@ -82,6 +82,9 @@ export function MenuManager({
   const [editingCategory, setEditingCategory] =
     React.useState<AdminMenuCategory | null>(null);
   const [creatingCategory, setCreatingCategory] = React.useState(false);
+  // Saat buat kategori: "main" (utama) atau "sub" (paksa punya induk).
+  const [creatingCategoryVariant, setCreatingCategoryVariant] =
+    React.useState<"main" | "sub">("main");
   const [importingMode, setImportingMode] = React.useState<
     "categories" | "items" | null
   >(null);
@@ -119,10 +122,17 @@ export function MenuManager({
         />
         <TabButton
           icon={<Layers className="h-3.5 w-3.5" />}
+          label="Sub-Categories"
+          active={tab === "subcategories"}
+          onClick={() => setTab("subcategories")}
+          badge={categories.filter((c) => c.parent_id != null).length}
+        />
+        <TabButton
+          icon={<Layers className="h-3.5 w-3.5" />}
           label="Categories"
           active={tab === "categories"}
           onClick={() => setTab("categories")}
-          badge={categories.length}
+          badge={categories.filter((c) => c.parent_id == null).length}
         />
       </div>
 
@@ -189,16 +199,25 @@ export function MenuManager({
             }
           }}
         />
-      ) : (
+      ) : tab === "subcategories" || tab === "categories" ? (
         <CategoriesTab
+          variant={tab === "subcategories" ? "sub" : "main"}
           categories={categories}
-          onCreate={() => setCreatingCategory(true)}
+          onCreate={() => {
+            setCreatingCategoryVariant(
+              tab === "subcategories" ? "sub" : "main"
+            );
+            setCreatingCategory(true);
+          }}
           onImport={() => setImportingMode("categories")}
           onEdit={setEditingCategory}
           onDelete={async (cat) => {
+            const isSub = cat.parent_id != null;
             const ok = await confirm({
-              title: "Delete this category?",
-              description: `"${cat.name}" will be deleted. Move its items out first.`,
+              title: `Delete this ${isSub ? "sub-category" : "category"}?`,
+              description: isSub
+                ? `"${cat.name}" will be deleted. Move its items out first.`
+                : `"${cat.name}" and its sub-categories will be deleted. Move items out first.`,
               confirmText: "Delete",
               cancelText: "Cancel",
               variant: "danger",
@@ -208,7 +227,9 @@ export function MenuManager({
             try {
               await deleteCategory(cat.id);
               setCategories((arr) => arr.filter((c) => c.id !== cat.id));
-              toast.success("Category deleted");
+              toast.success(
+                isSub ? "Sub-category deleted" : "Category deleted"
+              );
             } catch (err) {
               toast.error(getActionErrorMessage(err, "Failed to delete category"));
             } finally {
@@ -217,7 +238,7 @@ export function MenuManager({
           }}
           deletingId={deletingId}
         />
-      )}
+      ) : null}
 
       {(creatingItem || editingItem) && (
         <ItemFormModal
@@ -248,6 +269,7 @@ export function MenuManager({
           initial={editingCategory}
           categories={categories}
           barId={barId}
+          createVariant={creatingCategoryVariant}
           onClose={() => {
             setCreatingCategory(false);
             setEditingCategory(null);
@@ -655,6 +677,7 @@ function ItemThumb({
 // ============================================================
 
 function CategoriesTab({
+  variant,
   categories,
   onCreate,
   onImport,
@@ -662,6 +685,8 @@ function CategoriesTab({
   onDelete,
   deletingId,
 }: {
+  /** "main" = kategori utama saja; "sub" = sub-kategori saja. */
+  variant: "main" | "sub";
   categories: AdminMenuCategory[];
   onCreate: () => void;
   onImport: () => void;
@@ -669,54 +694,57 @@ function CategoriesTab({
   onDelete: (c: AdminMenuCategory) => void | Promise<void>;
   deletingId: string | null;
 }) {
-  // Susun hierarki: tiap kategori utama diikuti sub-kategorinya.
-  const mains = categories.filter((c) => c.parent_id == null);
-  const subsByParent = new Map<string, AdminMenuCategory[]>();
-  for (const c of categories) {
-    if (c.parent_id != null) {
-      const arr = subsByParent.get(c.parent_id) ?? [];
-      arr.push(c);
-      subsByParent.set(c.parent_id, arr);
-    }
-  }
-  // Sub-kategori yatim (parent tak ada di list) tetap ditampilkan di akhir.
-  const orphanSubs = categories.filter(
-    (c) => c.parent_id != null && !mains.some((m) => m.id === c.parent_id)
-  );
-  const ordered: { cat: AdminMenuCategory; isSub: boolean }[] = [];
-  for (const m of mains) {
-    ordered.push({ cat: m, isSub: false });
-    for (const s of subsByParent.get(m.id) ?? []) {
-      ordered.push({ cat: s, isSub: true });
-    }
-  }
-  for (const s of orphanSubs) ordered.push({ cat: s, isSub: true });
+  const isSub = variant === "sub";
+  const nameById = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
+
+  // Baris yg ditampilkan sesuai variant. Sub diurutkan berdasar induknya.
+  const rows = React.useMemo(() => {
+    if (!isSub) return categories.filter((c) => c.parent_id == null);
+    return categories
+      .filter((c) => c.parent_id != null)
+      .sort((a, b) => {
+        const pa = nameById.get(a.parent_id!) ?? "";
+        const pb = nameById.get(b.parent_id!) ?? "";
+        return pa.localeCompare(pb) || a.name.localeCompare(b.name);
+      });
+  }, [categories, isSub, nameById]);
+
+  const label = isSub ? "Sub-Category" : "Category";
+  const emptyHint = isSub
+    ? "Create a sub-category (e.g. Rice) under a main category."
+    : "Create a main category (e.g. Main Course) to start.";
 
   return (
     <>
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-muted-foreground">
-          {categories.length} categories
+          {rows.length} {isSub ? "sub-categories" : "categories"}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onImport}>
-            <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Import</span>
-          </Button>
+          {!isSub && (
+            <Button variant="outline" size="sm" onClick={onImport}>
+              <Upload className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Import</span>
+            </Button>
+          )}
           <Button variant="gold" size="sm" onClick={onCreate}>
             <Plus className="h-3.5 w-3.5" />
-            New Category
+            New {label}
           </Button>
         </div>
       </div>
 
-      {categories.length === 0 ? (
+      {rows.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Layers className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium mb-1">No categories yet</p>
-          <p className="text-xs text-muted-foreground">
-            Create a category to start adding menu items.
+          <p className="text-sm font-medium mb-1">
+            No {isSub ? "sub-categories" : "categories"} yet
           </p>
+          <p className="text-xs text-muted-foreground">{emptyHint}</p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
@@ -724,36 +752,28 @@ function CategoriesTab({
             <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="text-left p-3">Name</th>
+                {isSub && <th className="text-left p-3">Main category</th>}
                 <th className="text-center p-3">Items</th>
                 <th className="text-center p-3">Status</th>
                 <th className="text-right p-3">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {ordered.map(({ cat: c, isSub }) => (
+              {rows.map((c) => (
                 <tr
                   key={c.id}
-                  className={cn(
-                    "border-t border-border hover:bg-muted/20 transition",
-                    isSub && "bg-muted/10"
-                  )}
+                  className="border-t border-border hover:bg-muted/20 transition"
                 >
-                  <td className="p-3 font-medium">
-                    {isSub ? (
-                      <span className="flex items-center gap-2 pl-5">
-                        <span className="text-muted-foreground/60">└</span>
-                        <span>{c.name}</span>
-                        <Badge
-                          variant="secondary"
-                          className="text-[9px] uppercase tracking-wider"
-                        >
-                          sub
-                        </Badge>
-                      </span>
-                    ) : (
-                      c.name
-                    )}
-                  </td>
+                  <td className="p-3 font-medium">{c.name}</td>
+                  {isSub && (
+                    <td className="p-3 text-muted-foreground">
+                      {c.parent_id ? (
+                        nameById.get(c.parent_id) ?? "—"
+                      ) : (
+                        <span className="text-red-400">no parent</span>
+                      )}
+                    </td>
+                  )}
                   <td className="p-3 text-center">{c.itemCount}</td>
                   <td className="p-3 text-center">
                     {c.isActive ? (
@@ -788,8 +808,8 @@ function CategoriesTab({
                         disabled={c.itemCount > 0 || deletingId === c.id}
                         title={
                           c.itemCount > 0
-                            ? "Move items out before deleting the category"
-                            : "Delete category"
+                            ? "Move items out before deleting"
+                            : `Delete ${label.toLowerCase()}`
                         }
                       >
                         {deletingId === c.id ? (
@@ -1085,6 +1105,7 @@ function CategoryFormModal({
   initial,
   categories,
   barId,
+  createVariant = "main",
   onClose,
   onSaved,
 }: {
@@ -1092,9 +1113,14 @@ function CategoryFormModal({
   initial: AdminMenuCategory | null;
   categories: AdminMenuCategory[];
   barId: string;
+  /** Saat create: "sub" → wajib pilih induk; "main" → tanpa induk. */
+  createVariant?: "main" | "sub";
   onClose: () => void;
   onSaved: (cat: AdminMenuCategory) => void;
 }) {
+  // Saat edit, "sub" ditentukan dari data existing. Saat create, dari variant.
+  const isSubForm =
+    mode === "edit" ? initial?.parent_id != null : createVariant === "sub";
   const [name, setName] = React.useState(initial?.name ?? "");
   const [parentId, setParentId] = React.useState<string>(
     initial?.parent_id ?? ""
@@ -1114,6 +1140,11 @@ function CategoryFormModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || submitting) return;
+    // Sub-kategori wajib punya induk.
+    if (isSubForm && !parentId) {
+      toast.error("Pick a main category for this sub-category");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -1145,7 +1176,7 @@ function CategoryFormModal({
         itemCount: initial?.itemCount ?? 0,
       });
       toast.success(
-        mode === "create" ? "Category added" : "Category saved"
+        `${titleNoun} ${mode === "create" ? "added" : "saved"}`
       );
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save"));
@@ -1153,21 +1184,22 @@ function CategoryFormModal({
     }
   }
 
+  const titleNoun = isSubForm ? "Sub-Category" : "Category";
   return (
     <ModalShell
-      title={mode === "create" ? "New Category" : "Edit Category"}
+      title={mode === "create" ? `New ${titleNoun}` : `Edit ${titleNoun}`}
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4 p-4">
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Category name
+            {titleNoun} name
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Signature Cocktails"
+            placeholder={isSubForm ? "e.g. Rice" : "e.g. Main Course"}
             maxLength={60}
             autoFocus
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
@@ -1175,25 +1207,29 @@ function CategoryFormModal({
           />
         </div>
 
-        <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
-            Parent category
-          </label>
-          <Select
-            value={parentId}
-            onChange={setParentId}
-            options={[
-              { value: "", label: "— None (main category)" },
-              ...parentOptions.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-            placeholder="— None (main category)"
-            ariaLabel="Parent category"
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Leave as “None” for a main category, or pick a parent to make this
-            a sub-category.
-          </p>
-        </div>
+        {/* Induk hanya relevan utk sub-kategori. Kategori utama tak punya induk. */}
+        {isSubForm && (
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+              Main category
+            </label>
+            <Select
+              value={parentId}
+              onChange={setParentId}
+              options={parentOptions.map((c) => ({
+                value: c.id,
+                label: c.name,
+              }))}
+              placeholder="Select a main category…"
+              ariaLabel="Main category"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {parentOptions.length === 0
+                ? "Create a main category first."
+                : "This sub-category will live under the chosen main category."}
+            </p>
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
