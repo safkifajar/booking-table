@@ -85,19 +85,31 @@ export function StaffMenuGrid({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [filterOpen]);
 
-  // Label kategori aktif utk badge tombol filter.
-  const activeCatName =
-    activeCat === ALL_SLUG
-      ? null
-      : (menu.find((c) => c.slug === activeCat)?.name ?? null);
+  // Daftar MAIN category (parent_name) distinct, urut kemunculan pertama.
+  // Jadi opsi dropdown filter (2 level: filter by main category).
+  const mainCats = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    menu.forEach((c) => {
+      const p = c.parent_name ?? c.name; // fallback: pakai nama sub sendiri
+      if (!seen.has(p)) {
+        seen.add(p);
+        out.push(p);
+      }
+    });
+    return out;
+  }, [menu]);
+
+  // Label kategori aktif utk badge tombol filter (sekarang = main category).
+  const activeCatName = activeCat === ALL_SLUG ? null : activeCat;
 
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
-    // 1. Filter kategori (kalau bukan "All").
+    // 1. Filter MAIN kategori (kalau bukan "All"). activeCat = parent_name.
     const byCat =
       activeCat === ALL_SLUG
         ? menu
-        : menu.filter((c) => c.slug === activeCat);
+        : menu.filter((c) => (c.parent_name ?? c.name) === activeCat);
     // 2. Filter query (nama/deskripsi/tag).
     if (!q) return byCat;
     return byCat
@@ -201,7 +213,7 @@ export function StaffMenuGrid({
             className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
           />
         </div>
-        {menu.length > 1 && (
+        {mainCats.length > 1 && (
           <div ref={filterRef} className="relative shrink-0">
             <button
               type="button"
@@ -238,13 +250,13 @@ export function StaffMenuGrid({
                     setFilterOpen(false);
                   }}
                 />
-                {menu.map((c) => (
+                {mainCats.map((p) => (
                   <CatOption
-                    key={c.id}
-                    label={c.name}
-                    selected={activeCat === c.slug}
+                    key={p}
+                    label={p}
+                    selected={activeCat === p}
                     onClick={() => {
-                      setActiveCat(c.slug);
+                      setActiveCat(p);
                       setFilterOpen(false);
                     }}
                   />
@@ -267,8 +279,20 @@ export function StaffMenuGrid({
         </p>
       )}
 
-      {filtered.map((cat) => (
+      {filtered.map((cat, idx) => {
+          // Heading main-category muncul saat parent_name berganti dari
+          // sub-kategori SEBELUMNYA dalam list terfilter. Sub tanpa item (habis
+          // difilter search) sudah dibuang dari `filtered` → tak memicu heading.
+          const parent = cat.parent_name ?? null;
+          const prevParent = idx > 0 ? (filtered[idx - 1].parent_name ?? null) : null;
+          const showMain = parent !== null && parent !== prevParent;
+          return (
         <div key={cat.id}>
+          {showMain && (
+            <h2 className="text-sm font-bold uppercase tracking-wide text-foreground mt-5 mb-2 first:mt-0">
+              {parent}
+            </h2>
+          )}
           <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
             {cat.name}
           </h3>
@@ -361,7 +385,8 @@ export function StaffMenuGrid({
             })}
           </div>
         </div>
-      ))}
+          );
+        })}
       </div>
 
       {totalQty > 0 && (

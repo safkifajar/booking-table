@@ -23,6 +23,11 @@ export interface MenuPickerCategory {
   id: string;
   name: string;
   slug: string;
+  /**
+   * Nama kategori UTAMA (induk) — untuk heading 2 tingkat. Kategori di sini
+   * mewakili SUB-kategori (leaf tempat item berada). null = tanpa induk.
+   */
+  parent_name?: string | null;
   items: MenuPickerItem[];
 }
 
@@ -55,14 +60,29 @@ export function MenuPicker({ menu, onAdd }: Props) {
       .filter((c) => c.items.length > 0);
   }, [menu, query]);
 
-  // Kategori yg ditampilkan: "All" → semua kategori; else → 1 kategori terpilih.
+  // Nama kategori UTAMA (induk) yang berbeda, urut kemunculan pertama.
+  // Sub-kategori tanpa induk dikelompokkan di bawah label fallback.
+  const NO_PARENT = "Lainnya";
+  const parentOf = (cat: MenuPickerCategory) => cat.parent_name ?? NO_PARENT;
+
+  const mainCategories = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const cat of menu) {
+      const p = parentOf(cat);
+      if (!seen.has(p)) {
+        seen.add(p);
+        out.push(p);
+      }
+    }
+    return out;
+  }, [menu]);
+
+  // Kategori yg ditampilkan: "All" → semua; else → sub-kategori dgn induk terpilih.
   const shownCategories =
     activeCat === ALL_SLUG
       ? filtered
-      : (() => {
-          const c = filtered.find((cat) => cat.slug === activeCat);
-          return c ? [c] : filtered;
-        })();
+      : filtered.filter((cat) => parentOf(cat) === activeCat);
 
   return (
     <div className="space-y-3">
@@ -97,18 +117,18 @@ export function MenuPicker({ menu, onAdd }: Props) {
             >
               All
             </button>
-            {menu.map((c) => (
+            {mainCategories.map((p) => (
               <button
-                key={c.id}
-                onClick={() => setActiveCat(c.slug)}
+                key={p}
+                onClick={() => setActiveCat(p)}
                 className={cn(
                   "shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition",
-                  activeCat === c.slug
+                  activeCat === p
                     ? "bg-primary/15 border-primary/40 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
               >
-                {c.name}
+                {p}
               </button>
             ))}
           </div>
@@ -116,8 +136,24 @@ export function MenuPicker({ menu, onAdd }: Props) {
       </div>
 
       {/* Items — saat search pakai hasil filter; else kategori terpilih/All. */}
-      {(query ? filtered : shownCategories).map((cat) => (
+      {(() => {
+        const list = query ? filtered : shownCategories;
+        // Precompute: heading kategori UTAMA tampil saat induk berganti antar
+        // sub-kategori yang benar-benar dirender (list sudah difilter).
+        const rows = list.map((cat, i) => ({
+          cat,
+          parent: parentOf(cat),
+          showMainHeading: parentOf(cat) !== (i > 0 ? parentOf(list[i - 1]) : null),
+        }));
+        return rows.map(({ cat, parent, showMainHeading }) => {
+          return (
         <div key={cat.id} className="space-y-2">
+          {/* Heading kategori UTAMA (2 tingkat) — lebih besar/tebal dari header sub. */}
+          {showMainHeading && (
+            <h2 className="text-base font-bold tracking-tight text-foreground pt-3">
+              {parent}
+            </h2>
+          )}
           {/* Header kategori tampil saat search / mode "All" (multi kategori). */}
           {(query || activeCat === ALL_SLUG) && (
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pt-2">
@@ -173,7 +209,9 @@ export function MenuPicker({ menu, onAdd }: Props) {
             </Card>
           ))}
         </div>
-      ))}
+          );
+        });
+      })()}
 
       {filtered.length === 0 && (
         <Card className="p-6 text-center border-dashed">

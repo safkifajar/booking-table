@@ -13,6 +13,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import {
   getMenuByBar,
+  flattenMenuTree,
   getUserRatingsBatch,
   promoteSessionIfDue,
 } from "@/lib/queries";
@@ -185,8 +186,8 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         .where(eq(payments.orderId, order.id))
     : [];
 
-  // 6. Menu
-  const menu = await getMenuByBar(sessionRow.bar_id);
+  // 6. Menu — bentuk flat (sub-kategori + parent_name) utk picker order.
+  const menu = flattenMenuTree(await getMenuByBar(sessionRow.bar_id));
 
   // 7. Latest invite
   const [invite] = await db

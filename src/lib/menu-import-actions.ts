@@ -13,11 +13,14 @@
  *     Cocktail,true
  *
  * ITEMS (csv/xlsx):
- *   Header row: category_name, name, description, price, tags, is_available, image
+ *   Header row: category_name, subcategory_name, name, description, price, tags, is_available, image
+ *   - category_name    = kategori UTAMA (mis. "Main Course")
+ *   - subcategory_name = SUB-kategori (mis. "Rice") — WAJIB
+ *   Kategori utama & sub-kategori yg belum ada AKAN DIBUAT OTOMATIS saat import.
  *   Example:
- *     category_name,name,description,price,tags,is_available,image
- *     Coffee,Americano,Espresso + water,25000,"hot,coffee",true,americano.jpg
- *     Coffee,Latte,,30000,coffee,true,
+ *     category_name,subcategory_name,name,description,price,tags,is_available,image
+ *     Main Course,Rice,Hikiniku Rice,"Hamburg Beef, Onsen Egg",83000,"main,beef",true,hikiniku.jpg
+ *     Main Course,Rice,Saikoro Omelette Curry,Saikoro Beef + Curry,63000,curry,true,
  *
  * Untuk items dengan image:
  *   - Upload file ZIP yang berisi file CSV/Excel + folder images
@@ -249,7 +252,9 @@ const ACCEPTED_IMAGE_EXT = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"];
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 interface PreparedItem {
-  categoryId: string;
+  /** Nama kategori utama + sub (di-resolve/dibuat jadi id sub-kategori nanti). */
+  categoryName: string;
+  subcategoryName: string;
   name: string;
   description: string | null;
   price: number;
@@ -273,8 +278,9 @@ interface PreparedItem {
 export async function importMenuItems(
   formData: FormData
 ): Promise<ImportItemsResult> {
-  const barId = formData.get("barId");
-  if (typeof barId !== "string") throw new Error("barId is required");
+  const barIdRaw = formData.get("barId");
+  if (typeof barIdRaw !== "string") throw new Error("barId is required");
+  const barId: string = barIdRaw;
   await requireAdminForBar(barId);
 
   const file = formData.get("file");
@@ -313,16 +319,8 @@ export async function importMenuItems(
     throw new Error("Maximum 1000 items per import");
   }
 
-  // Load categories untuk match by name
-  const categoryRows = await db
-    .select({ id: menuCategories.id, name: menuCategories.name })
-    .from(menuCategories)
-    .where(eq(menuCategories.barId, barId));
-  const categoryByName = new Map(
-    categoryRows.map((c) => [c.name.toLowerCase().trim(), c.id])
-  );
-
-  // Validate semua row (all-or-nothing)
+  // Validate semua row (all-or-nothing). Kategori utama & sub-kategori
+  // di-resolve/dibuat saat insert (di dalam transaction).
   const prepared: PreparedItem[] = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -330,23 +328,28 @@ export async function importMenuItems(
     const categoryName = (row.category_name ?? row.Category ?? "")
       .toString()
       .trim();
+    const subcategoryName = (
+      row.subcategory_name ??
+      row.Subcategory ??
+      ""
+    )
+      .toString()
+      .trim();
     const name = (row.name ?? row.Name ?? "").toString().trim();
 
     if (!categoryName) {
       throw new Error(`Row ${rowNum}: column "category_name" is required`);
+    }
+    if (!subcategoryName) {
+      throw new Error(
+        `Row ${rowNum}: column "subcategory_name" is required (every item needs a sub-category)`
+      );
     }
     if (!name) {
       throw new Error(`Row ${rowNum}: column "name" is required`);
     }
     if (name.length > 80) {
       throw new Error(`Row ${rowNum}: name can be at most 80 characters`);
-    }
-
-    const categoryId = categoryByName.get(categoryName.toLowerCase());
-    if (!categoryId) {
-      throw new Error(
-        `Row ${rowNum}: category "${categoryName}" not found. Create it first in the Categories tab.`
-      );
     }
 
     const price = normalizePrice(row.price);
@@ -384,7 +387,8 @@ export async function importMenuItems(
     }
 
     prepared.push({
-      categoryId,
+      categoryName,
+      subcategoryName,
       name,
       description,
       price,
@@ -403,11 +407,75 @@ export async function importMenuItems(
     [];
 
   await db.transaction(async (tx) => {
+    // Cache kategori existing (main by name; sub by "parentId\nsubName").
+    const existing = await tx
+      .select({
+        id: menuCategories.id,
+        name: menuCategories.name,
+        parentId: menuCategories.parentId,
+        slug: menuCategories.slug,
+      })
+      .from(menuCategories)
+      .where(eq(menuCategories.barId, barId));
+
+    const takenSlugs = new Set(existing.map((c) => c.slug));
+    const mainByName = new Map<string, string>(); // nameLower → id
+    const subByKey = new Map<string, string>(); // parentId\nsubNameLower → id
+    for (const c of existing) {
+      if (c.parentId == null) mainByName.set(c.name.toLowerCase().trim(), c.id);
+      else subByKey.set(`${c.parentId}\n${c.name.toLowerCase().trim()}`, c.id);
+    }
+
+    function makeSlug(name: string): string {
+      const base =
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 36) || "kategori";
+      if (!takenSlugs.has(base)) {
+        takenSlugs.add(base);
+        return base;
+      }
+      let n = 2;
+      while (takenSlugs.has(`${base}-${n}`)) n++;
+      const s = `${base}-${n}`;
+      takenSlugs.add(s);
+      return s;
+    }
+
+    // Resolve/buat kategori utama.
+    async function ensureMain(name: string): Promise<string> {
+      const key = name.toLowerCase().trim();
+      const hit = mainByName.get(key);
+      if (hit) return hit;
+      const [c] = await tx
+        .insert(menuCategories)
+        .values({ barId, name, slug: makeSlug(name), parentId: null })
+        .returning({ id: menuCategories.id });
+      mainByName.set(key, c.id);
+      return c.id;
+    }
+    // Resolve/buat sub-kategori di bawah induk.
+    async function ensureSub(parentId: string, name: string): Promise<string> {
+      const key = `${parentId}\n${name.toLowerCase().trim()}`;
+      const hit = subByKey.get(key);
+      if (hit) return hit;
+      const [c] = await tx
+        .insert(menuCategories)
+        .values({ barId, name, slug: makeSlug(name), parentId })
+        .returning({ id: menuCategories.id });
+      subByKey.set(key, c.id);
+      return c.id;
+    }
+
     for (const p of prepared) {
+      const mainId = await ensureMain(p.categoryName);
+      const subId = await ensureSub(mainId, p.subcategoryName);
       const [row] = await tx
         .insert(menuItems)
         .values({
-          categoryId: p.categoryId,
+          categoryId: subId, // item selalu di sub-kategori (leaf)
           name: p.name,
           description: p.description,
           price: p.price,

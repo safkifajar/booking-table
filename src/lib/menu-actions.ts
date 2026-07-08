@@ -49,6 +49,8 @@ export interface AdminMenuCategory {
   id: string;
   name: string;
   slug: string;
+  /** null = kategori utama, terisi = sub-kategori di bawah parent tsb. */
+  parent_id: string | null;
   sortOrder: number;
   isActive: boolean;
   itemCount: number;
@@ -77,6 +79,7 @@ export async function getAdminMenuCategories(
       id: menuCategories.id,
       name: menuCategories.name,
       slug: menuCategories.slug,
+      parent_id: menuCategories.parentId,
       sortOrder: menuCategories.sortOrder,
       isActive: menuCategories.isActive,
     })
@@ -146,6 +149,8 @@ export async function getAdminMenuItems(
 const categorySchema = z.object({
   barId: z.string().uuid(),
   name: z.string().min(1).max(60),
+  /** Kategori induk (sub-kategori). null/undefined = kategori utama. */
+  parentId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().default(true),
 });
 
@@ -189,6 +194,19 @@ export async function createCategory(input: z.infer<typeof categorySchema>) {
   const data = categorySchema.parse(input);
   await requireAdminForBar(data.barId);
 
+  // Validasi parent: harus kategori utama (parent_id NULL) di bar yg sama —
+  // cegah nesting > 2 tingkat.
+  if (data.parentId) {
+    const [parent] = await db
+      .select({ barId: menuCategories.barId, parentId: menuCategories.parentId })
+      .from(menuCategories)
+      .where(eq(menuCategories.id, data.parentId));
+    if (!parent || parent.barId !== data.barId)
+      throw new Error("Invalid parent category");
+    if (parent.parentId != null)
+      throw new Error("Sub-category cannot be nested under another sub-category");
+  }
+
   const slug = await generateUniqueSlug(data.barId, data.name);
 
   try {
@@ -198,6 +216,7 @@ export async function createCategory(input: z.infer<typeof categorySchema>) {
         barId: data.barId,
         name: data.name.trim(),
         slug,
+        parentId: data.parentId ?? null,
         isActive: data.isActive,
       })
       .returning({ id: menuCategories.id });
@@ -226,6 +245,20 @@ export async function updateCategory(
   if (!existing) throw new Error("Category not found");
   if (existing.barId !== data.barId) throw new Error("Invalid bar access");
 
+  // Validasi parent (kalau dikirim): utama, bar sama, bukan diri sendiri.
+  if (data.parentId) {
+    if (data.parentId === data.id)
+      throw new Error("Category cannot be its own parent");
+    const [parent] = await db
+      .select({ barId: menuCategories.barId, parentId: menuCategories.parentId })
+      .from(menuCategories)
+      .where(eq(menuCategories.id, data.parentId));
+    if (!parent || parent.barId !== data.barId)
+      throw new Error("Invalid parent category");
+    if (parent.parentId != null)
+      throw new Error("Sub-category cannot be nested under another sub-category");
+  }
+
   // Kalau nama berubah, regenerate slug. Kalau tidak, slug tetap.
   const trimmedName = data.name.trim();
   const slug =
@@ -239,6 +272,8 @@ export async function updateCategory(
       .set({
         name: trimmedName,
         ...(slug !== undefined ? { slug } : {}),
+        // parentId dikirim → set (null = jadikan utama). undefined → biarkan.
+        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
         isActive: data.isActive,
       })
       .where(eq(menuCategories.id, data.id));

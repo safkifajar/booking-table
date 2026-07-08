@@ -5,7 +5,7 @@ import { db } from "@/lib/db/client";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
-import { getMenuByBar } from "@/lib/queries";
+import { getMenuByBar, flattenMenuTree } from "@/lib/queries";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
@@ -105,9 +105,12 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
     bookedSlotIsos = Array.from(getBookedSlotIsos(slots, existing));
   }
 
-  // Menu untuk picker (kalau perlu order awal — min spend / reservation)
+  // Menu untuk picker (kalau perlu order awal — min spend / reservation).
+  // Flat: tiap entri = sub-kategori (+ parent_name utk heading 2 tingkat).
   const needsMenu = (row.min_spend ?? 0) > 0 || resConfig.enabled;
-  const menu = needsMenu ? await getMenuByBar(row.bar_id) : [];
+  const menu = needsMenu
+    ? flattenMenuTree(await getMenuByBar(row.bar_id))
+    : [];
 
   return (
     <main className="flex-1 flex items-center justify-center px-4 py-8">
@@ -131,6 +134,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
           menu={menu.map((c) => ({
             id: c.id,
             name: c.name,
+            parent_name: c.parent_name,
             items: c.items
               .filter((i) => i.is_available)
               .map((i) => ({

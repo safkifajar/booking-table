@@ -23,8 +23,7 @@ import type {
   Bar,
   FloorArea,
   ActiveSessionView,
-  MenuCategory,
-  MenuItem,
+  MenuCategoryTree,
   SessionVisibility,
 } from "@/types/db";
 import type { OperatingHours } from "@/lib/settings-constants";
@@ -225,7 +224,7 @@ interface Props {
   /** Profile id user login (untuk bell notifikasi). null = anon. */
   userId?: string | null;
   /** Menu bar (per kategori + items) untuk tab Menu. */
-  menu?: Array<MenuCategory & { items: MenuItem[] }>;
+  menu?: MenuCategoryTree[];
 }
 
 export function BarFloorView({

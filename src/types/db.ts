@@ -116,11 +116,26 @@ export interface SessionInvite {
 export interface MenuCategory {
   id: string;
   bar_id: string;
+  /** NULL = kategori utama; terisi = sub-kategori (id kategori induk). */
+  parent_id: string | null;
   name: string;
   slug: string;
   sort_order: number;
   is_active: boolean;
   created_at: string;
+}
+
+/** Sub-kategori + item-nya (bagian dari MenuTree). */
+export interface MenuSubcategory extends MenuCategory {
+  items: MenuItem[];
+}
+
+/** Hirarki menu 2 tingkat: kategori utama → sub-kategori → item. */
+export interface MenuCategoryTree extends MenuCategory {
+  /** Item langsung di kategori ini (biasanya kosong — item ada di sub). */
+  items: MenuItem[];
+  /** Sub-kategori di bawah kategori utama ini. */
+  subcategories: MenuSubcategory[];
 }
 
 export interface MenuItem {

@@ -148,21 +148,35 @@ async function main() {
   // ============================================================
   // 4. MENU CATEGORIES + ITEMS
   // ============================================================
-  const categories = await db
+  // Kategori UTAMA (parent_id NULL).
+  const mainCats = await db
     .insert(schema.menuCategories)
     .values([
-      { barId: bar.id, name: "Signature Cocktails", slug: "signature", sortOrder: 0 },
-      { barId: bar.id, name: "Classic Cocktails", slug: "classic", sortOrder: 1 },
-      { barId: bar.id, name: "Mocktails", slug: "mocktails", sortOrder: 2 },
-      { barId: bar.id, name: "Wine & Spirits", slug: "wine", sortOrder: 3 },
-      { barId: bar.id, name: "Beer", slug: "beer", sortOrder: 4 },
-      { barId: bar.id, name: "Bar Bites", slug: "bites", sortOrder: 5 },
-      { barId: bar.id, name: "Main Course", slug: "mains", sortOrder: 6 },
+      { barId: bar.id, name: "Drinks", slug: "drinks", sortOrder: 0 },
+      { barId: bar.id, name: "Food", slug: "food", sortOrder: 1 },
     ])
     .returning();
-  console.log(`✅ Menu categories: ${categories.length}`);
+  const mainBySlug = Object.fromEntries(mainCats.map((c) => [c.slug, c.id]));
 
-  const catBySlug = Object.fromEntries(categories.map((c) => [c.slug, c.id]));
+  // SUB-kategori (parent_id → kategori utama). Item selalu di sub-kategori.
+  const subCats = await db
+    .insert(schema.menuCategories)
+    .values([
+      { barId: bar.id, parentId: mainBySlug.drinks, name: "Signature Cocktails", slug: "signature", sortOrder: 0 },
+      { barId: bar.id, parentId: mainBySlug.drinks, name: "Classic Cocktails", slug: "classic", sortOrder: 1 },
+      { barId: bar.id, parentId: mainBySlug.drinks, name: "Mocktails", slug: "mocktails", sortOrder: 2 },
+      { barId: bar.id, parentId: mainBySlug.drinks, name: "Wine & Spirits", slug: "wine", sortOrder: 3 },
+      { barId: bar.id, parentId: mainBySlug.drinks, name: "Beer", slug: "beer", sortOrder: 4 },
+      { barId: bar.id, parentId: mainBySlug.food, name: "Bar Bites", slug: "bites", sortOrder: 0 },
+      { barId: bar.id, parentId: mainBySlug.food, name: "Main Course", slug: "mains", sortOrder: 1 },
+    ])
+    .returning();
+  console.log(
+    `✅ Menu categories: ${mainCats.length} utama + ${subCats.length} sub`
+  );
+
+  // Item pakai slug sub-kategori (leaf).
+  const catBySlug = Object.fromEntries(subCats.map((c) => [c.slug, c.id]));
 
   const menuItems = [
     // Signature Cocktails
@@ -218,7 +232,9 @@ async function main() {
   console.log(`   - 1 bar: ${bar.name}`);
   console.log(`   - 2 floor areas`);
   console.log(`   - 24 tables`);
-  console.log(`   - ${categories.length} menu categories`);
+  console.log(
+    `   - ${mainCats.length + subCats.length} menu categories (${mainCats.length} main + ${subCats.length} sub)`
+  );
   console.log(`   - ${menuItems.length} menu items`);
 
   await client.end();

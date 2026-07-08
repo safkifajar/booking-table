@@ -53,6 +53,8 @@ interface MenuItemLite {
 interface MenuCategoryLite {
   id: string;
   name: string;
+  /** Nama kategori induk (mis. "Main Course"); entri ini adalah SUB-kategori (mis. "Rice"). */
+  parent_name: string | null;
   items: MenuItemLite[];
 }
 
@@ -656,11 +658,27 @@ function MenuPickerModal({
     return n;
   }, [local]);
 
-  // Filter: kategori terpilih (kalau bukan All) + query nama/deskripsi.
+  // Daftar kategori induk (parent_name) unik, urut kemunculan pertama.
+  const parentOptions = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of menu) {
+      const p = c.parent_name;
+      if (p && !seen.has(p)) {
+        seen.add(p);
+        out.push(p);
+      }
+    }
+    return out;
+  }, [menu]);
+
+  // Filter: kategori induk terpilih (kalau bukan All) + query nama/deskripsi.
   const q = query.trim().toLowerCase();
   const filtered = React.useMemo(() => {
     const byCat =
-      activeCat === ALL ? menu : menu.filter((c) => c.id === activeCat);
+      activeCat === ALL
+        ? menu
+        : menu.filter((c) => c.parent_name === activeCat);
     if (!q) return byCat;
     return byCat
       .map((c) => ({
@@ -676,10 +694,8 @@ function MenuPickerModal({
   }, [menu, activeCat, q]);
   const anyMatch = filtered.some((c) => c.items.length > 0);
 
-  const activeCatName =
-    activeCat === ALL
-      ? null
-      : (menu.find((c) => c.id === activeCat)?.name ?? null);
+  // activeCat menyimpan parent_name langsung (bukan id) saat difilter.
+  const activeCatName = activeCat === ALL ? null : activeCat;
 
   // Lookup item utk list keranjang.
   const itemMap = React.useMemo(() => {
@@ -728,7 +744,7 @@ function MenuPickerModal({
               className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
             />
           </div>
-          {menu.length > 1 && (
+          {parentOptions.length > 1 && (
             <div ref={filterRef} className="relative shrink-0">
               <button
                 type="button"
@@ -764,13 +780,13 @@ function MenuPickerModal({
                       setFilterOpen(false);
                     }}
                   />
-                  {menu.map((c) => (
+                  {parentOptions.map((p) => (
                     <ModalCatOption
-                      key={c.id}
-                      label={c.name}
-                      selected={activeCat === c.id}
+                      key={p}
+                      label={p}
+                      selected={activeCat === p}
                       onClick={() => {
-                        setActiveCat(c.id);
+                        setActiveCat(p);
                         setFilterOpen(false);
                       }}
                     />
@@ -788,9 +804,21 @@ function MenuPickerModal({
               {q ? `No menu matches “${query}”.` : "No menu items yet."}
             </p>
           ) : (
-            filtered.map((cat) =>
-              cat.items.length === 0 ? null : (
+            (() => {
+              // Hanya sub-kategori yg punya item tampil.
+              const visible = filtered.filter((c) => c.items.length > 0);
+              let prevParent: string | null | undefined = undefined;
+              return visible.map((cat) => {
+                // Judul kategori induk hanya saat parent_name berganti.
+                const showParentHeading = cat.parent_name !== prevParent;
+                prevParent = cat.parent_name;
+                return (
                 <div key={cat.id} className="space-y-2">
+                  {showParentHeading && cat.parent_name && (
+                    <h2 className="text-sm font-bold tracking-tight text-foreground">
+                      {cat.parent_name}
+                    </h2>
+                  )}
                   <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
                     {cat.name}
                   </h3>
@@ -879,8 +907,9 @@ function MenuPickerModal({
               );
                   })}
                 </div>
-              )
-            )
+                );
+              });
+            })()
           )}
         </div>
 

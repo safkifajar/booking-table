@@ -246,6 +246,7 @@ export function MenuManager({
         <CategoryFormModal
           mode={editingCategory ? "edit" : "create"}
           initial={editingCategory}
+          categories={categories}
           barId={barId}
           onClose={() => {
             setCreatingCategory(false);
@@ -668,6 +669,29 @@ function CategoriesTab({
   onDelete: (c: AdminMenuCategory) => void | Promise<void>;
   deletingId: string | null;
 }) {
+  // Susun hierarki: tiap kategori utama diikuti sub-kategorinya.
+  const mains = categories.filter((c) => c.parent_id == null);
+  const subsByParent = new Map<string, AdminMenuCategory[]>();
+  for (const c of categories) {
+    if (c.parent_id != null) {
+      const arr = subsByParent.get(c.parent_id) ?? [];
+      arr.push(c);
+      subsByParent.set(c.parent_id, arr);
+    }
+  }
+  // Sub-kategori yatim (parent tak ada di list) tetap ditampilkan di akhir.
+  const orphanSubs = categories.filter(
+    (c) => c.parent_id != null && !mains.some((m) => m.id === c.parent_id)
+  );
+  const ordered: { cat: AdminMenuCategory; isSub: boolean }[] = [];
+  for (const m of mains) {
+    ordered.push({ cat: m, isSub: false });
+    for (const s of subsByParent.get(m.id) ?? []) {
+      ordered.push({ cat: s, isSub: true });
+    }
+  }
+  for (const s of orphanSubs) ordered.push({ cat: s, isSub: true });
+
   return (
     <>
       <div className="flex items-center justify-between gap-3">
@@ -706,12 +730,30 @@ function CategoriesTab({
               </tr>
             </thead>
             <tbody>
-              {categories.map((c) => (
+              {ordered.map(({ cat: c, isSub }) => (
                 <tr
                   key={c.id}
-                  className="border-t border-border hover:bg-muted/20 transition"
+                  className={cn(
+                    "border-t border-border hover:bg-muted/20 transition",
+                    isSub && "bg-muted/10"
+                  )}
                 >
-                  <td className="p-3 font-medium">{c.name}</td>
+                  <td className="p-3 font-medium">
+                    {isSub ? (
+                      <span className="flex items-center gap-2 pl-5">
+                        <span className="text-muted-foreground/60">└</span>
+                        <span>{c.name}</span>
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] uppercase tracking-wider"
+                        >
+                          sub
+                        </Badge>
+                      </span>
+                    ) : (
+                      c.name
+                    )}
+                  </td>
                   <td className="p-3 text-center">{c.itemCount}</td>
                   <td className="p-3 text-center">
                     {c.isActive ? (
@@ -785,8 +827,27 @@ function ItemFormModal({
   onClose: () => void;
   onSaved: (item: AdminMenuItem) => void;
 }) {
+  // Item hanya boleh menempel di sub-kategori (leaf). Label pakai
+  // "Induk › Sub" biar jelas.
+  const nameById = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
+  const subCategoryOptions = React.useMemo(
+    () =>
+      categories
+        .filter((c) => c.parent_id != null)
+        .map((c) => ({
+          value: c.id,
+          label: c.parent_id
+            ? `${nameById.get(c.parent_id) ?? "?"} › ${c.name}`
+            : c.name,
+        })),
+    [categories, nameById]
+  );
   const [categoryId, setCategoryId] = React.useState(
-    initial?.categoryId ?? categories[0]?.id ?? ""
+    initial?.categoryId ?? subCategoryOptions[0]?.value ?? ""
   );
   const [name, setName] = React.useState(initial?.name ?? "");
   const [description, setDescription] = React.useState(
@@ -916,11 +977,16 @@ function ItemFormModal({
             onChange={setCategoryId}
             options={[
               { value: "", label: "— Select category —" },
-              ...categories.map((c) => ({ value: c.id, label: c.name })),
+              ...subCategoryOptions,
             ]}
             placeholder="— Select category —"
             ariaLabel="Category"
           />
+          {subCategoryOptions.length === 0 && (
+            <p className="text-[10px] text-amber-400 mt-1">
+              Create a sub-category first.
+            </p>
+          )}
         </div>
 
         <div>
@@ -1017,19 +1083,33 @@ function ItemFormModal({
 function CategoryFormModal({
   mode,
   initial,
+  categories,
   barId,
   onClose,
   onSaved,
 }: {
   mode: "create" | "edit";
   initial: AdminMenuCategory | null;
+  categories: AdminMenuCategory[];
   barId: string;
   onClose: () => void;
   onSaved: (cat: AdminMenuCategory) => void;
 }) {
   const [name, setName] = React.useState(initial?.name ?? "");
+  const [parentId, setParentId] = React.useState<string>(
+    initial?.parent_id ?? ""
+  );
   const [isActive, setIsActive] = React.useState(initial?.isActive ?? true);
   const [submitting, setSubmitting] = React.useState(false);
+
+  // Kandidat induk: kategori utama (parent_id null) selain diri sendiri.
+  const parentOptions = React.useMemo(
+    () =>
+      categories.filter(
+        (c) => c.parent_id == null && c.id !== initial?.id
+      ),
+    [categories, initial?.id]
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1037,9 +1117,11 @@ function CategoryFormModal({
 
     setSubmitting(true);
     try {
+      const parent = parentId || null;
       const payload = {
         barId,
         name: name.trim(),
+        parentId: parent,
         isActive,
       };
       let savedId: string;
@@ -1057,6 +1139,7 @@ function CategoryFormModal({
         id: savedId,
         name: name.trim(),
         slug: savedSlug,
+        parent_id: parent,
         sortOrder: initial?.sortOrder ?? 0,
         isActive,
         itemCount: initial?.itemCount ?? 0,
@@ -1090,6 +1173,26 @@ function CategoryFormModal({
             className="w-full h-10 px-3 bg-input border border-border rounded-md text-sm focus:outline-none focus:border-primary"
             required
           />
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            Parent category
+          </label>
+          <Select
+            value={parentId}
+            onChange={setParentId}
+            options={[
+              { value: "", label: "— None (main category)" },
+              ...parentOptions.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            placeholder="— None (main category)"
+            ariaLabel="Parent category"
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Leave as “None” for a main category, or pick a parent to make this
+            a sub-category.
+          </p>
         </div>
 
         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1160,7 +1263,7 @@ function ImportModal({
 
   function downloadTemplate() {
     const csv = isItems
-      ? "category_name,name,description,price,tags,is_available,image\nCoffee,Americano,Espresso + hot water,25000,\"hot,coffee\",true,\nCoffee,Latte,Espresso + steamed milk,30000,coffee,true,latte.jpg\n"
+      ? "category_name,subcategory_name,name,description,price,tags,is_available,image\nMain Course,Rice,Hikiniku Rice,\"Hamburg Beef, Onsen Egg, Miso Soup\",83000,\"main,beef\",true,\nMain Course,Rice,Saikoro Omelette Curry Rice,Saikoro Beef + Curry Sauce,63000,curry,true,saikoro.jpg\n"
       : "name,is_active\nCoffee,true\nCocktail,true\nFood,true\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1230,9 +1333,19 @@ function ImportModal({
                   <li>
                     <strong>CSV/Excel</strong>: columns{" "}
                     <code className="text-[10px] bg-muted px-1 rounded">
-                      category_name, name, description, price, tags,
-                      is_available, image
+                      category_name, subcategory_name, name, description, price,
+                      tags, is_available, image
                     </code>
+                  </li>
+                  <li>
+                    <strong>category_name</strong> = main category (e.g. Main
+                    Course), <strong>subcategory_name</strong> = sub-category
+                    (e.g. Rice) — <strong>required</strong> for every item.
+                  </li>
+                  <li>
+                    Main categories & sub-categories are{" "}
+                    <strong>auto-created</strong> if they don&apos;t exist yet
+                    (matched by name, case insensitive).
                   </li>
                   <li>
                     <strong>ZIP</strong>: to include photos. A ZIP containing
@@ -1241,10 +1354,6 @@ function ImportModal({
                       image
                     </code>{" "}
                     column with the file name (e.g. <code>americano.jpg</code>).
-                  </li>
-                  <li>
-                    Categories must already exist in the system (matched by
-                    name, case insensitive).
                   </li>
                   <li>Max 1000 items per import.</li>
                 </ul>

@@ -27,6 +27,7 @@ import type {
   BarTable,
   ActiveSessionView,
   MenuCategory,
+  MenuCategoryTree,
   MenuItem,
   RatableMember,
   UserRatingSummary,
@@ -533,7 +534,7 @@ export async function promoteSessionIfDue(sessionId: string): Promise<boolean> {
 
 export async function getMenuByBar(
   barId: string
-): Promise<Array<MenuCategory & { items: MenuItem[] }>> {
+): Promise<MenuCategoryTree[]> {
   const categories = await db.query.menuCategories.findMany({
     where: and(eq(menuCategories.barId, barId), eq(menuCategories.isActive, true)),
     orderBy: asc(menuCategories.sortOrder),
@@ -549,16 +550,19 @@ export async function getMenuByBar(
     orderBy: asc(menuItems.sortOrder),
   });
 
-  return categories.map((cat) => ({
+  const toCat = (cat: (typeof categories)[number]): MenuCategory => ({
     id: cat.id,
     bar_id: cat.barId,
+    parent_id: cat.parentId ?? null,
     name: cat.name,
     slug: cat.slug,
     sort_order: cat.sortOrder,
     is_active: cat.isActive,
     created_at: cat.createdAt.toISOString(),
-    items: items
-      .filter((i) => i.categoryId === cat.id)
+  });
+  const itemsOf = (categoryId: string): MenuItem[] =>
+    items
+      .filter((i) => i.categoryId === categoryId)
       .map((i) => ({
         id: i.id,
         category_id: i.categoryId,
@@ -571,8 +575,62 @@ export async function getMenuByBar(
         prep_minutes: i.prepMinutes ?? 0,
         sort_order: i.sortOrder,
         created_at: i.createdAt.toISOString(),
-      })),
+      }));
+
+  // Kategori utama = parent_id NULL; sub-kategori dikelompokkan di bawah induk.
+  const mains = categories.filter((c) => c.parentId == null);
+  return mains.map((main) => ({
+    ...toCat(main),
+    items: itemsOf(main.id), // item langsung (biasanya kosong)
+    subcategories: categories
+      .filter((c) => c.parentId === main.id)
+      .map((sub) => ({ ...toCat(sub), items: itemsOf(sub.id) })),
   }));
+}
+
+/**
+ * Bentuk RATA (flat) dari menu tree utk komponen order/picker: tiap entri =
+ * SUB-kategori (tempat item), membawa `parent_name` (kategori utama) utk
+ * heading 2 tingkat. Urut sesuai kategori utama → sub-kategori.
+ */
+export function flattenMenuTree(
+  tree: MenuCategoryTree[]
+): Array<{
+  id: string;
+  name: string;
+  slug: string;
+  parent_name: string | null;
+  items: MenuItem[];
+}> {
+  const out: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    parent_name: string | null;
+    items: MenuItem[];
+  }> = [];
+  for (const main of tree) {
+    for (const sub of main.subcategories) {
+      out.push({
+        id: sub.id,
+        name: sub.name,
+        slug: sub.slug,
+        parent_name: main.name,
+        items: sub.items,
+      });
+    }
+    // Kalau ada item langsung di kategori utama (tanpa sub) — jaga-jaga.
+    if (main.items.length > 0) {
+      out.push({
+        id: main.id,
+        name: main.name,
+        slug: main.slug,
+        parent_name: null,
+        items: main.items,
+      });
+    }
+  }
+  return out;
 }
 
 // ============================================================
