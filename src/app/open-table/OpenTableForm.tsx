@@ -797,7 +797,12 @@ function MenuPickerModal({
               return (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 p-2.5 rounded-md border border-border"
+                  className={cn(
+                    "flex items-start gap-3 rounded-lg border p-3 transition",
+                    qty > 0
+                      ? "border-primary/40 bg-primary/[0.06]"
+                      : "border-border bg-card/40"
+                  )}
                 >
                   {/* Thumbnail — klik utk perbesar */}
                   {item.image_url ? (
@@ -806,7 +811,7 @@ function MenuPickerModal({
                       onClick={() =>
                         setPhoto({ src: item.image_url!, alt: item.name })
                       }
-                      className="h-12 w-12 shrink-0 rounded-md overflow-hidden border border-border"
+                      className="h-12 w-12 shrink-0 rounded-md overflow-hidden bg-muted/40"
                       aria-label={`Enlarge photo of ${item.name}`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -817,53 +822,44 @@ function MenuPickerModal({
                       />
                     </button>
                   ) : (
-                    <div className="h-12 w-12 shrink-0 rounded-md border border-border bg-muted/40 flex items-center justify-center">
+                    <div className="h-12 w-12 shrink-0 rounded-md bg-muted/40 flex items-center justify-center">
                       <UtensilsCrossed className="h-4 w-4 text-muted-foreground/40" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {item.name}
-                    </div>
-                    {item.description && (
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        {item.description}
-                      </div>
-                    )}
-                    <div className="text-xs text-primary font-semibold mt-0.5">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-primary tabular-nums">
                       {formatIDR(item.price)}
-                    </div>
+                    </p>
+                    {item.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                        {item.description}
+                      </p>
+                    )}
                   </div>
-                  {qty === 0 ? (
-                    <Button
+                  {/* Stepper — selalu tampil (−/qty/+), pola tab Menu. */}
+                  <div className="flex items-center rounded-md border border-border shrink-0">
+                    <button
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQty(item.id, 1)}
+                      onClick={() => setQty(item.id, qty - 1)}
+                      disabled={qty === 0}
+                      className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      aria-label="Decrease"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-7 text-center text-sm tabular-nums">
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQty(item.id, qty + 1)}
+                      className="h-8 w-8 flex items-center justify-center text-primary hover:text-primary/80"
+                      aria-label="Add"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  ) : (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setQty(item.id, qty - 1)}
-                        className="h-7 w-7 rounded-md border border-border flex items-center justify-center hover:bg-muted"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-5 text-center text-sm font-medium tabular-nums">
-                        {qty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setQty(item.id, qty + 1)}
-                        className="h-7 w-7 rounded-md border border-primary/40 bg-primary/15 text-primary flex items-center justify-center hover:bg-primary/25"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                    </button>
+                  </div>
                 </div>
               );
                   })}
