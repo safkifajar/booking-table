@@ -1611,6 +1611,15 @@ function ModalShell({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  // Kunci scroll background selama modal (import/tambah/ubah) terbuka.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
