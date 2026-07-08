@@ -347,6 +347,24 @@ function ItemsTab({
 }) {
   const startIndex = page * pageSize;
   const endIndex = Math.min(startIndex + items.length, filteredCount);
+
+  // Label kategori item: "Kategori Utama - Sub Kategori". Item menempel di
+  // sub-kategori, jadi induknya dicari lewat parent_id.
+  const catById = React.useMemo(() => {
+    const m = new Map<string, AdminMenuCategory>();
+    for (const c of categories) m.set(c.id, c);
+    return m;
+  }, [categories]);
+  const categoryLabel = React.useCallback(
+    (item: AdminMenuItem): string => {
+      const cat = catById.get(item.categoryId);
+      if (!cat) return item.categoryName;
+      const parent = cat.parent_id ? catById.get(cat.parent_id) : null;
+      return parent ? `${parent.name} - ${cat.name}` : cat.name;
+    },
+    [catById]
+  );
+
   return (
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -356,10 +374,19 @@ function ItemsTab({
             onChange={(v) => setFilterCategoryId(v as string | "all")}
             options={[
               { value: "all", label: `All categories (${allItemCount})` },
-              ...categories.map((c) => ({
-                value: c.id,
-                label: `${c.name} (${c.itemCount})`,
-              })),
+              // Item menempel di sub-kategori → filter pakai sub-kat, label
+              // "Utama - Sub". Kategori tanpa induk (langsung punya item) tetap.
+              ...categories
+                .filter((c) => c.parent_id != null || c.itemCount > 0)
+                .map((c) => {
+                  const parent = c.parent_id
+                    ? categories.find((p) => p.id === c.parent_id)
+                    : null;
+                  return {
+                    value: c.id,
+                    label: `${parent ? `${parent.name} - ` : ""}${c.name} (${c.itemCount})`,
+                  };
+                }),
             ]}
             ariaLabel="Filter category"
           />
@@ -469,7 +496,7 @@ function ItemsTab({
                         </div>
                       </td>
                       <td className="p-3 text-muted-foreground">
-                        {item.categoryName}
+                        {categoryLabel(item)}
                       </td>
                       <td className="p-3 text-right font-semibold tabular-nums">
                         {formatIDR(item.price)}
@@ -547,7 +574,7 @@ function ItemsTab({
                       <div className="min-w-0">
                         <div className="font-medium truncate">{item.name}</div>
                         <div className="text-[11px] text-muted-foreground">
-                          {item.categoryName}
+                          {categoryLabel(item)}
                         </div>
                       </div>
                       <div className="text-sm font-semibold tabular-nums shrink-0">
