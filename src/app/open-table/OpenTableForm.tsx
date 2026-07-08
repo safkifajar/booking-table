@@ -873,9 +873,10 @@ function MenuPickerModal({
           )}
         </div>
 
-        {/* Keranjang (collapsible) — bar merah 'N items' + list, seperti tab. */}
+        {/* Keranjang (collapsible) — bar merah 'N items' + list, seperti tab.
+            Sudut atas dibulatkan (rounded-t) biar menonjol dari list di atas. */}
         {itemCount > 0 && (
-          <div className="shrink-0 border-t border-border">
+          <div className="shrink-0 rounded-t-2xl overflow-hidden">
             <button
               type="button"
               onClick={() => setCartOpen((v) => !v)}
