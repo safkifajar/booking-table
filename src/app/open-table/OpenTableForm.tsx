@@ -948,20 +948,25 @@ function MenuPickerModal({
           </div>
         )}
 
-        {/* Footer */}
-        <div className="p-4 border-t border-border shrink-0">
-          <Button
-            type="button"
-            variant="gold"
-            size="lg"
-            className="w-full"
-            onClick={handleConfirm}
-            disabled={itemCount === 0}
-          >
-            {itemCount === 0
-              ? "Pick at least 1 item"
-              : `Confirm · ${itemCount} items · ${formatIDR(total)}`}
-          </Button>
+        {/* Footer: Total order KIRI + tombol Save KANAN (pola tab Menu). */}
+        <div className="border-t border-border shrink-0">
+          <div className="px-4 py-3 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-muted-foreground">Total order</p>
+              <p className="text-lg font-bold text-primary tabular-nums leading-tight">
+                {formatIDR(total)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={itemCount === 0}
+              className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Save order
+            </button>
+          </div>
         </div>
       </div>
 
