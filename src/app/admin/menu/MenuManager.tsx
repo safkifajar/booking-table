@@ -701,28 +701,83 @@ function CategoriesTab({
     return m;
   }, [categories]);
 
-  // Baris yg ditampilkan sesuai variant. Sub diurutkan berdasar induknya.
-  const rows = React.useMemo(() => {
+  // Daftar kategori utama utk filter di tab Sub-Categories.
+  const mainCategories = React.useMemo(
+    () => categories.filter((c) => c.parent_id == null),
+    [categories]
+  );
+
+  // Filter kategori utama (khusus sub) + pagination (pola sama dgn Items).
+  const [filterParentId, setFilterParentId] = React.useState<string | "all">(
+    "all"
+  );
+  const [page, setPage] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(10);
+
+  // Semua baris (sudah difilter varian + filter induk), diurutkan.
+  const allRows = React.useMemo(() => {
     if (!isSub) return categories.filter((c) => c.parent_id == null);
     return categories
       .filter((c) => c.parent_id != null)
+      .filter((c) => filterParentId === "all" || c.parent_id === filterParentId)
       .sort((a, b) => {
         const pa = nameById.get(a.parent_id!) ?? "";
         const pb = nameById.get(b.parent_id!) ?? "";
         return pa.localeCompare(pb) || a.name.localeCompare(b.name);
       });
-  }, [categories, isSub, nameById]);
+  }, [categories, isSub, nameById, filterParentId]);
+
+  // Reset ke page 0 saat filter/pageSize berubah.
+  React.useEffect(() => {
+    setPage(0);
+  }, [filterParentId, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
+  const safePage = Math.min(page, totalPages - 1);
+  const rows = React.useMemo(
+    () => allRows.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [allRows, safePage, pageSize]
+  );
+  const startIndex = safePage * pageSize;
+  const endIndex = Math.min(startIndex + rows.length, allRows.length);
 
   const label = isSub ? "Sub-Category" : "Category";
+  const noun = isSub ? "sub-categories" : "categories";
   const emptyHint = isSub
     ? "Create a sub-category (e.g. Rice) under a main category."
     : "Create a main category (e.g. Main Course) to start.";
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground">
-          {rows.length} {isSub ? "sub-categories" : "categories"}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Filter by kategori utama — khusus tab Sub-Categories. */}
+          {isSub && mainCategories.length > 0 && (
+            <Select
+              value={filterParentId}
+              onChange={(v) => setFilterParentId(v as string | "all")}
+              options={[
+                {
+                  value: "all",
+                  label: `All categories (${
+                    categories.filter((c) => c.parent_id != null).length
+                  })`,
+                },
+                ...mainCategories.map((c) => ({
+                  value: c.id,
+                  label: `${c.name} (${
+                    categories.filter((s) => s.parent_id === c.id).length
+                  })`,
+                })),
+              ]}
+              ariaLabel="Filter by main category"
+            />
+          )}
+          <div className="text-xs text-muted-foreground">
+            {allRows.length === 0
+              ? `0 ${noun}`
+              : `${startIndex + 1}–${endIndex} of ${allRows.length} ${noun}`}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {!isSub && (
@@ -738,11 +793,13 @@ function CategoriesTab({
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {allRows.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
           <Layers className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-sm font-medium mb-1">
-            No {isSub ? "sub-categories" : "categories"} yet
+            {isSub && filterParentId !== "all"
+              ? "No sub-categories in this category"
+              : `No ${noun} yet`}
           </p>
           <p className="text-xs text-muted-foreground">{emptyHint}</p>
         </Card>
@@ -825,6 +882,38 @@ function CategoriesTab({
             </tbody>
           </table>
         </Card>
+      )}
+
+      {/* Footer pagination — pola sama dgn tab Items. */}
+      {allRows.length > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Per page
+            <Select
+              value={String(pageSize)}
+              onChange={(v) => setPageSize(Number(v))}
+              options={[
+                { value: "10", label: "10" },
+                { value: "25", label: "25" },
+                { value: "50", label: "50" },
+                { value: "100", label: "100" },
+              ]}
+              ariaLabel="Per page"
+            />
+          </label>
+          {totalPages > 1 && (
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              onChange={(p) => {
+                setPage(p);
+                if (typeof window !== "undefined") {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+            />
+          )}
+        </div>
       )}
     </>
   );
