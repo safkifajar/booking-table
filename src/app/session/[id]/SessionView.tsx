@@ -53,6 +53,8 @@ import { SplitPayment } from "@/components/session/SplitPayment";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
+import { CashierPaymentPanel } from "@/components/cashier/CashierPaymentPanel";
+import type { CashierSessionDetail } from "@/lib/cashier-actions";
 import { EditTableInfoModal } from "./EditTableInfoModal";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
@@ -167,6 +169,11 @@ interface SessionViewProps {
   openedByStaff: { id: string; display_name: string } | null;
   /** Request pindah meja yg menunggu approval (badge realtime). */
   pendingMove: { id?: string; toLabel: string; reservationAt: string } | null;
+  /**
+   * Detail bill/payment lengkap untuk panel kasir di tab Pay (hanya diisi saat
+   * viewer = cashier & bukan member). null utk selain itu.
+   */
+  cashierDetail: CashierSessionDetail | null;
 }
 
 export function SessionView(props: SessionViewProps) {
@@ -410,18 +417,27 @@ export function SessionView(props: SessionViewProps) {
             subtotal={subtotal}
           />
         )}
-        {tab === "pay" && canInteract && (
-          <SplitTab
-            sessionId={props.session.id}
-            items={props.orderItems}
-            payments={props.payments}
-            members={props.members.filter((m) => m.status === "joined")}
-            myMemberId={props.myMemberId}
-            subtotal={subtotal}
-            remaining={remaining}
-            payFullOnly={isStaff}
-          />
-        )}
+        {tab === "pay" &&
+          canInteract &&
+          // Cashier: panel pembayaran kaya (kalkulator kembalian, QRIS,
+          // pilih payer, mark-paid/cancel, close→receipt). Selain itu: SplitTab.
+          (props.cashierDetail ? (
+            <CashierPaymentPanel
+              detail={props.cashierDetail}
+              barId={props.bar.slug}
+            />
+          ) : (
+            <SplitTab
+              sessionId={props.session.id}
+              items={props.orderItems}
+              payments={props.payments}
+              members={props.members.filter((m) => m.status === "joined")}
+              myMemberId={props.myMemberId}
+              subtotal={subtotal}
+              remaining={remaining}
+              payFullOnly={isStaff}
+            />
+          ))}
       </div>
       </div>
       </div>

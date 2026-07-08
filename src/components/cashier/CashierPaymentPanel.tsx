@@ -4,8 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Crown,
-  Users,
   Wallet,
   CheckCircle2,
   Receipt,
@@ -22,7 +20,6 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
@@ -32,14 +29,8 @@ import {
   cashierCloseSession,
   type CashierSessionDetail,
 } from "@/lib/cashier-actions";
-import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
+import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
 import type { PaymentMethod } from "@/types/db";
-import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
-
-interface Props {
-  detail: CashierSessionDetail;
-  barId: string;
-}
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
@@ -55,23 +46,6 @@ function fmtDateTime(iso: string): string {
     year: "numeric",
   }).format(new Date(iso));
   return `${tgl} · ${fmtTime(iso)}`;
-}
-/** Waktu pemakaian meja: rentang reservasi kalau ada, else jam mulai. */
-function usageLabel(d: {
-  reservation_at: string | null;
-  reservation_end_at: string | null;
-  started_at: string;
-}): string {
-  const start = d.reservation_at ?? d.started_at;
-  const tgl = new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(start));
-  const waktu = d.reservation_end_at
-    ? `${fmtTime(start)}–${fmtTime(d.reservation_end_at)}`
-    : fmtTime(start);
-  return `${tgl} · ${waktu}`;
 }
 
 const PAYMENT_METHODS: {
@@ -112,7 +86,20 @@ const PAYMENT_METHODS: {
   },
 ];
 
-export function CashierSessionDetailView({ detail, barId }: Props) {
+/**
+ * Panel pembayaran cashier — dirender di dalam SessionView (tab Pay) saat viewer
+ * adalah cashier. Menjaga full payment power (kalkulator kembalian cash, QRIS,
+ * pilih payer, partial amount, mark-paid/cancel pending, tutup meja → receipt)
+ * tanpa duplikasi kode. Berfokus PEMBAYARAN saja: tidak menampilkan host card
+ * atau daftar bill (sudah ada di tab Table/Bill SessionView).
+ */
+export function CashierPaymentPanel({
+  detail,
+  barId,
+}: {
+  detail: CashierSessionDetail;
+  barId: string;
+}) {
   const router = useRouter();
   const confirm = useConfirm();
   const [paymentModalOpen, setPaymentModalOpen] = React.useState(false);
@@ -148,6 +135,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     try {
       await cashierMarkPaymentPaid(paymentId);
       toast.success("Payment confirmed");
+      router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to confirm"));
     } finally {
@@ -158,7 +146,8 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
   async function handleCancelPayment(paymentId: string) {
     const ok = await confirm({
       title: "Cancel this payment?",
-      description: "The payment will be marked as failed and won't count toward the total paid.",
+      description:
+        "The payment will be marked as failed and won't count toward the total paid.",
       confirmText: "Cancel payment",
       cancelText: "Never mind",
       variant: "danger",
@@ -169,6 +158,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
     try {
       await cashierCancelPayment(paymentId);
       toast.success("Payment cancelled");
+      router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel"));
     } finally {
@@ -201,147 +191,6 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Status banner kalau closed */}
-      {isClosed && (
-        <Card
-          className={cn(
-            "p-4 flex items-center gap-3",
-            detail.outstanding > 0
-              ? "bg-orange-500/10 border-orange-500/30"
-              : "bg-muted/40 border-muted-foreground/20"
-          )}
-        >
-          <Lock
-            className={cn(
-              "h-5 w-5",
-              detail.outstanding > 0 ? "text-orange-400" : "text-muted-foreground"
-            )}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium">Table is closed</div>
-            <div className="text-xs text-muted-foreground">
-              {detail.outstanding > 0
-                ? `Still has a balance of ${formatIDR(detail.outstanding)} — can be settled below.`
-                : "Can't accept new payments."}
-            </div>
-          </div>
-          <Button asChild variant="outline" size="sm">
-            <a href={`/staff/cashier/${detail.session_id}/receipt`}>
-              <Receipt className="h-3.5 w-3.5" /> View Receipt
-            </a>
-          </Button>
-        </Card>
-      )}
-
-      {/* Host card */}
-      <Card className="p-4">
-        <div className="flex items-start gap-3">
-          <Avatar className="h-12 w-12 ring-2 ring-primary/20 shrink-0">
-            {detail.host_avatar && (
-              <AvatarImage src={detail.host_avatar} alt={detail.host_name} />
-            )}
-            <AvatarFallback>{initials(detail.host_name)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/70 mb-0.5">
-              <Crown className="h-3 w-3" />
-              {detail.is_walk_in ? "Guest" : "Host"}
-              {detail.is_walk_in && (
-                <Badge
-                  variant="default"
-                  className="bg-primary/15 text-primary border-primary/30 text-[9px] px-1 gap-0.5 ml-1"
-                >
-                  Walk-in
-                </Badge>
-              )}
-            </div>
-            <div className="text-base font-semibold truncate">
-              {detail.host_name}
-            </div>
-            <div className="text-xs text-muted-foreground truncate">
-              {detail.title ?? "Open Table"}
-            </div>
-            {detail.is_walk_in && detail.opened_by_staff_name && (
-              <div className="text-[10px] text-primary/70 truncate mt-0.5">
-                Opened by {detail.opened_by_staff_name}
-              </div>
-            )}
-            <div className="flex items-center gap-2 mt-1 text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-0.5">
-                <Users className="h-2.5 w-2.5" />
-                {detail.members.length}/{detail.table_capacity}
-              </span>
-              <span>·</span>
-              <span className="text-[11px] tabular-nums">
-                {usageLabel(detail)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Bill items */}
-      <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Bill Detail</h2>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {detail.items.length} item
-          </span>
-        </div>
-        {detail.items.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground italic">
-            No orders yet
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {detail.items.map((item) => (
-              <div key={item.id} className="px-4 py-2.5 flex items-start gap-3">
-                <div className="text-xs text-muted-foreground tabular-nums shrink-0 w-8">
-                  {item.quantity}×
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">
-                    {item.menu_item_name}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground truncate">
-                    by {item.added_by_name}
-                    {item.notes && ` · note: ${item.notes}`}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold tabular-nums">
-                    {formatIDR(item.quantity * item.unit_price)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground tabular-nums">
-                    @ {formatIDR(item.unit_price)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Totals */}
-        <div className="px-4 py-3 border-t border-border space-y-1.5 bg-muted/20">
-          <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
-          <Row
-            label="Paid"
-            value={formatIDR(detail.paid_total)}
-            valueClass="text-emerald-400"
-          />
-          <Row
-            label="Outstanding"
-            value={formatIDR(detail.outstanding)}
-            valueClass={
-              detail.outstanding > 0
-                ? "text-amber-400 font-bold"
-                : "text-emerald-400 font-bold"
-            }
-            big
-          />
-        </div>
-      </Card>
-
       {/* Payments history */}
       {detail.payments.length > 0 && (
         <Card className="overflow-hidden">
@@ -429,19 +278,29 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
         </Card>
       )}
 
-      {/* Pindahkan meja (staff, langsung tanpa approval) — saat sesi belum tutup
-          & masih berstatus booking/aktif. */}
-      {(detail.status === "reserved" ||
-        detail.status === "open" ||
-        detail.status === "locked") && (
-        <div className="mt-3">
-          <StaffMoveTableButton sessionId={detail.session_id} />
-        </div>
-      )}
+      {/* Bill totals ringkas */}
+      <Card className="px-4 py-3 space-y-1.5 bg-muted/20">
+        <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
+        <Row
+          label="Paid"
+          value={formatIDR(detail.paid_total)}
+          valueClass="text-emerald-400"
+        />
+        <Row
+          label="Outstanding"
+          value={formatIDR(detail.outstanding)}
+          valueClass={
+            detail.outstanding > 0
+              ? "text-amber-400 font-bold"
+              : "text-emerald-400 font-bold"
+          }
+          big
+        />
+      </Card>
 
-      {/* Action buttons — sesi belum tutup: Bayar + Tutup Meja */}
+      {/* Action buttons — sesi belum tutup: Accept Payment + Close Table */}
       {!isClosed && (
-        <div className="grid grid-cols-2 gap-2 sticky bottom-0 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 border-t border-border">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
             size="lg"
@@ -449,7 +308,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             disabled={detail.subtotal === 0 || isPaid}
           >
             <Wallet className="h-4 w-4" />
-            Pay
+            Accept Payment
           </Button>
           <Button
             variant="gold"
@@ -474,7 +333,7 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
 
       {/* Sesi sudah closed TAPI masih ada sisa tagihan → tetap bisa lunasi. */}
       {isClosed && detail.outstanding > 0 && (
-        <div className="sticky bottom-0 bg-background/80 backdrop-blur-md py-3 -mx-4 px-4 border-t border-border">
+        <div className="space-y-2">
           <Button
             variant="gold"
             size="lg"
@@ -484,7 +343,21 @@ export function CashierSessionDetailView({ detail, barId }: Props) {
             <Wallet className="h-4 w-4" />
             Accept Payment ({formatIDR(detail.outstanding)})
           </Button>
+          <Button asChild variant="outline" size="lg" className="w-full">
+            <a href={`/staff/cashier/${detail.session_id}/receipt`}>
+              <Receipt className="h-4 w-4" /> View Receipt
+            </a>
+          </Button>
         </div>
+      )}
+
+      {/* Sesi closed & lunas → cukup lihat receipt. */}
+      {isClosed && detail.outstanding === 0 && (
+        <Button asChild variant="outline" size="lg" className="w-full">
+          <a href={`/staff/cashier/${detail.session_id}/receipt`}>
+            <Receipt className="h-4 w-4" /> View Receipt
+          </a>
+        </Button>
       )}
 
       {/* Payment modal */}
@@ -957,11 +830,14 @@ function MoneyInput({
   max?: number;
 }) {
   const [text, setText] = React.useState(formatNumber(value));
-
-  // Sync from external value changes (mis. preset button clicked)
-  React.useEffect(() => {
+  // Sync from external value changes (mis. preset button clicked) tanpa effect:
+  // simpan value sebelumnya, dan saat berubah dari luar → re-derive text
+  // langsung saat render (pola resmi React "adjust state while rendering").
+  const [prevValue, setPrevValue] = React.useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setText(formatNumber(value));
-  }, [value]);
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     // Strip non-digit characters (titik ribuan, koma, dst)

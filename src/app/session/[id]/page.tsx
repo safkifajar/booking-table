@@ -19,6 +19,7 @@ import {
 } from "@/lib/queries";
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
+import { getSessionDetailForCashier } from "@/lib/cashier-actions";
 import { SessionView } from "./SessionView";
 
 interface PageProps {
@@ -227,6 +228,13 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       ? await getMyPendingMove(sessionRow.id)
       : null;
 
+  // Cashier: sediakan detail bill/payment lengkap utk panel pembayaran kasir
+  // di tab Pay (kalkulator kembalian, QRIS, mark-paid/cancel, close→receipt).
+  const cashierDetail =
+    !isMember && staffRole === "cashier"
+      ? await getSessionDetailForCashier(id)
+      : null;
+
   return (
     <SessionView
       session={{
@@ -308,6 +316,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       staffRole={!isMember ? staffRole : null}
       openedByStaff={openedByStaff}
       pendingMove={pendingMove}
+      cashierDetail={cashierDetail}
     />
   );
 }

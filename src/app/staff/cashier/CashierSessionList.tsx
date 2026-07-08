@@ -395,7 +395,10 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
       ) : (
         <div className="grid sm:grid-cols-2 gap-3">
           {filtered.map((b) => (
-            <Link key={b.session_id} href={`/staff/cashier/${b.session_id}`}>
+            <Link
+              key={b.session_id}
+              href={`/session/${b.session_id}?from=/staff/cashier`}
+            >
               <Card className="p-4 hover:border-primary/40 transition">
                 <div className="flex items-start gap-2 mb-2">
                   <Avatar className="h-9 w-9 shrink-0">
@@ -485,7 +488,7 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
 
   return (
     <Link
-      href={`/staff/cashier/${session.session_id}`}
+      href={`/session/${session.session_id}?from=/staff/cashier`}
       className="block group"
     >
       <Card
