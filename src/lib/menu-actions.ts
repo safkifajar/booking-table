@@ -11,7 +11,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
@@ -309,19 +309,40 @@ export async function deleteCategory(categoryId: string) {
 
   await requireAdminForBar(existing.barId);
 
-  // Cek apakah ada items — kalau iya, blokir delete (safer)
+  // Kumpulkan id kategori ini + semua sub-kategorinya (item cuma di leaf, tapi
+  // kategori utama pun bisa punya item langsung utk data lama).
+  const subs = await db
+    .select({ id: menuCategories.id })
+    .from(menuCategories)
+    .where(eq(menuCategories.parentId, categoryId));
+  const catIds = [categoryId, ...subs.map((s) => s.id)];
+
+  // Blokir kalau masih ada item di kategori ini atau sub-kategorinya.
   const [first] = await db
     .select({ id: menuItems.id })
     .from(menuItems)
-    .where(eq(menuItems.categoryId, categoryId))
+    .where(inArray(menuItems.categoryId, catIds))
     .limit(1);
   if (first) {
     throw new Error(
-      "Category still has items. Move or delete the items first."
+      "This category still has items. Move or delete the items first."
     );
   }
 
-  await db.delete(menuCategories).where(eq(menuCategories.id, categoryId));
+  try {
+    await db.delete(menuCategories).where(eq(menuCategories.id, categoryId));
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code?: unknown }).code)
+        : "";
+    if (code === "23503") {
+      throw new Error(
+        "This category is still in use and can't be deleted yet."
+      );
+    }
+    throw new Error("Failed to delete category");
+  }
   revalidatePath("/admin/menu");
 }
 
@@ -605,11 +626,30 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
   const barId = await resolveBarIdForCategory(existing.categoryId);
   await requireAdminForBar(barId);
 
+  // Hapus row dulu. Kalau item sudah pernah dipesan (order_items → restrict),
+  // Postgres tolak dgn foreign_key_violation (23503). Ubah jadi pesan ramah,
+  // JANGAN bocorkan teks query mentah ke user.
+  try {
+    await db.delete(menuItems).where(eq(menuItems.id, itemId));
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code?: unknown }).code)
+        : "";
+    if (code === "23503") {
+      throw new Error(
+        "This item has been ordered before, so it can't be deleted. Set it to unavailable instead."
+      );
+    }
+    throw new Error("Failed to delete item");
+  }
+
+  // Hapus foto SETELAH row terhapus (best-effort) supaya tak kehilangan foto
+  // kalau delete di atas gagal.
   if (existing.imageUrl) {
     const { storage } = await import("@/lib/storage");
-    await storage.delete(existing.imageUrl);
+    await storage.delete(existing.imageUrl).catch(() => {});
   }
-  await db.delete(menuItems).where(eq(menuItems.id, itemId));
   revalidatePath("/admin/menu");
 }
 
