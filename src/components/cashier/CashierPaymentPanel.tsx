@@ -15,6 +15,7 @@ import {
   QrCode,
   X,
   ChevronRight,
+  ChevronLeft,
   Calculator,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -543,8 +544,20 @@ function PaymentModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center overflow-y-auto p-4">
       <Card className="w-full max-w-md my-auto max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h2 className="font-semibold">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border shrink-0">
+          {/* Back ke pilih metode (hanya di step amount) — di header, rapi. */}
+          {step === "amount" && (
+            <button
+              type="button"
+              onClick={() => setStep("method")}
+              disabled={loading}
+              className="h-8 w-8 -ml-1.5 rounded-full flex items-center justify-center hover:bg-muted/60 shrink-0"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+          <h2 className="font-semibold flex-1">
             {step === "method" && "Select Payment"}
             {step === "amount" && methodMeta?.label}
             {step === "qris-display" && "Scan QRIS"}
@@ -767,29 +780,14 @@ function PaymentModal({
         </div>
 
         {step !== "qris-display" && (
-          <div className="flex justify-end gap-2 px-5 py-4 border-t border-border shrink-0">
-            {step === "amount" && (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setStep("method")}
-                disabled={loading}
-              >
-                Back
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
+          <div className="px-5 py-4 border-t border-border shrink-0 space-y-2">
+            {/* Confirm — tombol utama full-width (hanya di step amount). */}
             {step === "amount" && (
               <Button
                 type="button"
                 variant="gold"
+                size="lg"
+                className="w-full"
                 onClick={handleSubmit}
                 disabled={loading || amount <= 0}
               >
@@ -806,6 +804,16 @@ function PaymentModal({
                 )}
               </Button>
             )}
+            {/* Satu tombol sekunder: Cancel (tutup modal). */}
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
           </div>
         )}
       </Card>
