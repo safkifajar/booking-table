@@ -256,10 +256,11 @@ export function StaffMenuGrid({
       </div>
 
       {/* List menu — SATU area scroll (flex-1 mengisi sisa; search di atas
-          diam). pb-28 beri ruang bar keranjang 'fixed' biar item terakhir tak
-          ketutupan. overflow-x-hidden + touch-action pan-y + overscroll-x
+          diam). Cart & footer di bawah ikut flow (shrink-0) → list menyusut
+          saat cart dibuka TAPI tetap bisa di-scroll sampai item terakhir
+          (tak ketutupan). overflow-x-hidden + touch-action pan-y + overscroll-x
           contain → cegah swipe-back native (panah kembali saat geser kiri). */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [touch-action:pan-y] space-y-4 pb-28">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [touch-action:pan-y] space-y-4">
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-6">
           No menu found.
@@ -364,9 +365,11 @@ export function StaffMenuGrid({
       </div>
 
       {totalQty > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30">
+        <div className="shrink-0 -mx-4 sm:-mx-6">
           {/* Container membesar saat dibuka: HEADER MERAH (rounded-top) + list
-              produk BG GELAP di bawahnya. Menyatu, nempel, radius atas saja. */}
+              produk BG GELAP di bawahnya. Menyatu, nempel, radius atas saja.
+              Ikut flow flex-column (bukan fixed) → list menu di atas menyusut
+              & tetap bisa di-scroll penuh saat cart dibuka. */}
           <div className="rounded-t-2xl overflow-hidden">
             {/* Header banner MERAH — klik toggle buka/tutup */}
             <button

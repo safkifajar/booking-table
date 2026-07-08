@@ -337,8 +337,14 @@ export function SessionView(props: SessionViewProps) {
       {/* Konten (notice + tab) — tinggi tetap (sisa layar antara tab strip &
           footer). Scroll ditangani PER-TAB (lihat wrapper di bawah) supaya
           header/tab strip benar-benar diam & tab Menu bisa search fixed +
-          list scroll sendiri. */}
-      <div className="h-[calc(100dvh-12rem)] flex flex-col">
+          list scroll sendiri. Di tab Menu, SessionFooter disembunyikan → beri
+          ruang lebih (footer Save order dari StaffMenuGrid ada di dalam). */}
+      <div
+        className={cn(
+          "flex flex-col",
+          tab === "menu" ? "h-[calc(100dvh-8rem)]" : "h-[calc(100dvh-12rem)]"
+        )}
+      >
       {/* Notice meja sudah ditutup (closed/overdue) */}
       {isEnded && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
@@ -420,7 +426,9 @@ export function SessionView(props: SessionViewProps) {
       </div>
       </div>
 
-      {/* Sticky bottom bar */}
+      {/* Sticky bottom bar — DISEMBUNYIKAN di tab Menu karena tab Menu punya
+          footer sendiri (Total order + Save order) yg mengalir di bawah list. */}
+      {tab !== "menu" && (
       <SessionFooter
         subtotal={subtotal}
         remaining={remaining}
@@ -430,6 +438,7 @@ export function SessionView(props: SessionViewProps) {
         isEnded={isEnded}
         sessionId={props.session.id}
       />
+      )}
     </main>
   );
 }
