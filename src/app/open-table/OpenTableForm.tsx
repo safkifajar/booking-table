@@ -23,6 +23,13 @@ import {
   X,
   Loader2,
   ChevronRight,
+  Search,
+  SlidersHorizontal,
+  Check,
+  ShoppingCart,
+  ChevronUp,
+  ChevronDown,
+  Trash2,
 } from "lucide-react";
 import { openTable } from "@/lib/actions";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -599,11 +606,28 @@ function MenuPickerModal({
   const [local, setLocal] = React.useState<Map<string, number>>(
     () => new Map(cart)
   );
-  const [activeCat, setActiveCat] = React.useState(menu[0]?.id ?? "");
+  const ALL = "__all__";
+  const [activeCat, setActiveCat] = React.useState(ALL);
+  const [query, setQuery] = React.useState("");
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [cartOpen, setCartOpen] = React.useState(false);
+  const filterRef = React.useRef<HTMLDivElement>(null);
   // Foto menu yg sedang diperbesar (lightbox).
   const [photo, setPhoto] = React.useState<{ src: string; alt: string } | null>(
     null
   );
+
+  // Klik di luar panel filter → tutup.
+  React.useEffect(() => {
+    if (!filterOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [filterOpen]);
 
   function setQty(id: string, qty: number) {
     setLocal((prev) => {
@@ -631,12 +655,42 @@ function MenuPickerModal({
     return n;
   }, [local]);
 
+  // Filter: kategori terpilih (kalau bukan All) + query nama/deskripsi.
+  const q = query.trim().toLowerCase();
+  const filtered = React.useMemo(() => {
+    const byCat =
+      activeCat === ALL ? menu : menu.filter((c) => c.id === activeCat);
+    if (!q) return byCat;
+    return byCat
+      .map((c) => ({
+        ...c,
+        items: c.items.filter(
+          (i) =>
+            i.name.toLowerCase().includes(q) ||
+            i.description?.toLowerCase().includes(q)
+        ),
+      }))
+      .filter((c) => c.items.length > 0);
+  }, [menu, activeCat, q]);
+  const anyMatch = filtered.some((c) => c.items.length > 0);
+
+  const activeCatName =
+    activeCat === ALL
+      ? null
+      : (menu.find((c) => c.id === activeCat)?.name ?? null);
+
+  // Lookup item utk list keranjang.
+  const itemMap = React.useMemo(() => {
+    const m = new Map<string, MenuItemLite>();
+    for (const c of menu) for (const it of c.items) m.set(it.id, it);
+    return m;
+  }, [menu]);
+  const cartLines = Array.from(local.entries());
+
   function handleConfirm() {
     onChange(new Map(local));
     onClose();
   }
-
-  const activeCategory = menu.find((c) => c.id === activeCat) ?? menu[0];
 
   return (
     <div
@@ -660,35 +714,85 @@ function MenuPickerModal({
           </button>
         </div>
 
-        {/* Category tabs */}
-        {menu.length > 1 && (
-          <div className="flex gap-1.5 p-3 overflow-x-auto border-b border-border shrink-0">
-            {menu.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setActiveCat(cat.id)}
-                className={cn(
-                  "shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition",
-                  activeCat === cat.id
-                    ? "bg-primary/15 border-primary/40 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {cat.name}
-              </button>
-            ))}
+        {/* Search + tombol filter kategori — seragam dgn tab Menu. */}
+        <div className="flex items-center gap-2 p-3 border-b border-border shrink-0">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search menu…"
+              className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+            />
           </div>
-        )}
+          {menu.length > 1 && (
+            <div ref={filterRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition",
+                  activeCat !== ALL
+                    ? "border-primary bg-primary/15 text-primary font-medium"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/60"
+                )}
+                aria-label="Filter by category"
+                aria-haspopup="listbox"
+                aria-expanded={filterOpen}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                <span>Filter</span>
+                {activeCatName && (
+                  <span className="rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 leading-none">
+                    1
+                  </span>
+                )}
+              </button>
+              {filterOpen && (
+                <div
+                  role="listbox"
+                  className="absolute right-0 z-30 mt-1.5 min-w-44 max-h-60 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl"
+                >
+                  <ModalCatOption
+                    label="All categories"
+                    selected={activeCat === ALL}
+                    onClick={() => {
+                      setActiveCat(ALL);
+                      setFilterOpen(false);
+                    }}
+                  />
+                  {menu.map((c) => (
+                    <ModalCatOption
+                      key={c.id}
+                      label={c.name}
+                      selected={activeCat === c.id}
+                      onClick={() => {
+                        setActiveCat(c.id);
+                        setFilterOpen(false);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-        {/* Items list */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {activeCategory?.items.length === 0 ? (
+        {/* Items list — dikelompokkan per kategori (seperti tab Menu). */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] p-3 space-y-4">
+          {!anyMatch ? (
             <p className="text-center text-xs text-muted-foreground py-8">
-              No menu items in this category yet.
+              {q ? `No menu matches “${query}”.` : "No menu items yet."}
             </p>
           ) : (
-            activeCategory?.items.map((item) => {
+            filtered.map((cat) =>
+              cat.items.length === 0 ? null : (
+                <div key={cat.id} className="space-y-2">
+                  <h3 className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    {cat.name}
+                  </h3>
+                  {cat.items.map((item) => {
               const qty = local.get(item.id) ?? 0;
               return (
                 <div
@@ -762,9 +866,86 @@ function MenuPickerModal({
                   )}
                 </div>
               );
-            })
+                  })}
+                </div>
+              )
+            )
           )}
         </div>
+
+        {/* Keranjang (collapsible) — bar merah 'N items' + list, seperti tab. */}
+        {itemCount > 0 && (
+          <div className="shrink-0 border-t border-border">
+            <button
+              type="button"
+              onClick={() => setCartOpen((v) => !v)}
+              className="w-full bg-primary text-primary-foreground flex items-center gap-2 px-4 py-2.5"
+            >
+              <ShoppingCart className="h-4 w-4 shrink-0" />
+              <span className="flex-1 min-w-0 text-sm font-medium truncate text-left">
+                {itemCount} item{itemCount > 1 ? "s" : ""} in your order
+              </span>
+              <span className="flex items-center gap-1 text-xs font-semibold shrink-0">
+                {cartOpen ? "Hide" : "View order"}
+                {cartOpen ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </span>
+            </button>
+            {cartOpen && (
+              <div className="max-h-[240px] overflow-y-auto [overscroll-behavior:contain] bg-card divide-y divide-border">
+                {cartLines.map(([id, qty]) => {
+                  const it = itemMap.get(id);
+                  if (!it) return null;
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-3 px-4 py-2.5"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{it.name}</p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {qty} × {formatIDR(it.price)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setQty(id, qty - 1)}
+                          className="h-7 w-7 rounded-md border border-border flex items-center justify-center hover:bg-muted"
+                          aria-label="Decrease"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="w-5 text-center text-sm font-medium tabular-nums">
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setQty(id, qty + 1)}
+                          className="h-7 w-7 rounded-md border border-primary/40 bg-primary/15 text-primary flex items-center justify-center hover:bg-primary/25"
+                          aria-label="Increase"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQty(id, 0)}
+                          className="h-7 w-7 rounded-md text-muted-foreground hover:text-red-400 flex items-center justify-center"
+                          aria-label="Remove"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="p-4 border-t border-border shrink-0">
@@ -798,9 +979,34 @@ function MenuPickerModal({
   );
 }
 
-// ============================================================
-// USER INVITE PICKER — cari & pilih user untuk diajak/diundang
-// ============================================================
+/** Opsi kategori di dropdown filter modal order awal. */
+function ModalCatOption({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm text-left transition",
+        selected
+          ? "bg-primary/15 text-primary"
+          : "text-foreground hover:bg-muted/60"
+      )}
+    >
+      <span className="truncate">{label}</span>
+      {selected && <Check className="h-4 w-4 shrink-0" />}
+    </button>
+  );
+}
 
 // ============================================================
 // SHARED
