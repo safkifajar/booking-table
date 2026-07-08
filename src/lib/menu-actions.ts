@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
+import { orderItems } from "@/lib/db/schema/orders";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { requireProfile } from "@/lib/auth-v2/current";
 
@@ -626,9 +627,20 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
   const barId = await resolveBarIdForCategory(existing.categoryId);
   await requireAdminForBar(barId);
 
-  // Hapus row dulu. Kalau item sudah pernah dipesan (order_items → restrict),
-  // Postgres tolak dgn foreign_key_violation (23503). Ubah jadi pesan ramah,
-  // JANGAN bocorkan teks query mentah ke user.
+  // CEK DULU: item yg sudah pernah dipesan (ada di order_items, FK restrict)
+  // tak bisa dihapus — beri pesan jelas SEBELUM query delete (andal di
+  // production, tak bergantung pada menangkap error DB mentah).
+  const [ordered] = await db
+    .select({ id: orderItems.id })
+    .from(orderItems)
+    .where(eq(orderItems.menuItemId, itemId))
+    .limit(1);
+  if (ordered) {
+    throw new Error(
+      "This item has already been ordered by customers, so it can't be deleted (order history would break). Turn it off with the availability toggle instead to hide it from the menu."
+    );
+  }
+
   try {
     await db.delete(menuItems).where(eq(menuItems.id, itemId));
   } catch (err) {
@@ -638,10 +650,12 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
         : "";
     if (code === "23503") {
       throw new Error(
-        "This item has been ordered before, so it can't be deleted. Set it to unavailable instead."
+        "This item is still referenced elsewhere, so it can't be deleted. Turn it off with the availability toggle instead."
       );
     }
-    throw new Error("Failed to delete item");
+    // Fallback — JANGAN bocorkan err.message (bisa berisi query mentah).
+    console.error("[deleteMenuItem] unexpected error:", err);
+    throw new Error("Failed to delete item. Please try again.");
   }
 
   // Hapus foto SETELAH row terhapus (best-effort) supaya tak kehilangan foto
