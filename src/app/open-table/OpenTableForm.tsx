@@ -48,6 +48,7 @@ interface MenuItemLite {
   description: string | null;
   price: number;
   image_url: string | null;
+  tags: string[];
 }
 interface MenuCategoryLite {
   id: string;
@@ -667,7 +668,8 @@ function MenuPickerModal({
         items: c.items.filter(
           (i) =>
             i.name.toLowerCase().includes(q) ||
-            i.description?.toLowerCase().includes(q)
+            i.description?.toLowerCase().includes(q) ||
+            i.tags.some((t) => t.toLowerCase().includes(q))
         ),
       }))
       .filter((c) => c.items.length > 0);
@@ -835,6 +837,19 @@ function MenuPickerModal({
                       <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                         {item.description}
                       </p>
+                    )}
+                    {/* Tag/chip (mis. signature, alcoholic, spicy) */}
+                    {item.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {item.tags.slice(0, 3).map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border/50"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                   {/* Stepper — selalu tampil (−/qty/+), pola tab Menu. */}

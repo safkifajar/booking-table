@@ -139,6 +139,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
                 description: i.description,
                 price: i.price,
                 image_url: i.image_url,
+                tags: i.tags,
               })),
           }))}
         />
