@@ -9,9 +9,6 @@ import {
   Receipt,
   Lock,
   Loader2,
-  Banknote,
-  CreditCard,
-  Smartphone,
   QrCode,
   X,
   ChevronRight,
@@ -50,6 +47,7 @@ function fmtDateTime(iso: string): string {
   return `${tgl} · ${fmtTime(iso)}`;
 }
 
+// Hanya QRIS yang diaktifkan (Duitku). Cash/card/gopay/ovo disembunyikan.
 const PAYMENT_METHODS: {
   value: PaymentMethod;
   label: string;
@@ -57,34 +55,10 @@ const PAYMENT_METHODS: {
   description: string;
 }[] = [
   {
-    value: "cash",
-    label: "Cash",
-    icon: <Banknote className="h-4 w-4" />,
-    description: "Pay with cash, automatic change calculator",
-  },
-  {
     value: "qris",
     label: "QRIS",
     icon: <QrCode className="h-4 w-4" />,
     description: "Scan QR code, connected to payment gateway",
-  },
-  {
-    value: "card",
-    label: "Card",
-    icon: <CreditCard className="h-4 w-4" />,
-    description: "Debit / Credit card via EDC",
-  },
-  {
-    value: "gopay",
-    label: "Gopay",
-    icon: <Smartphone className="h-4 w-4" />,
-    description: "Transfer via Gopay",
-  },
-  {
-    value: "ovo",
-    label: "OVO",
-    icon: <Smartphone className="h-4 w-4" />,
-    description: "Transfer via OVO",
   },
 ];
 
@@ -438,7 +412,7 @@ function PaymentModal({
     // Default: host
     return detail.members.find((m) => m.is_host) ?? detail.members[0];
   });
-  const [method, setMethod] = React.useState<PaymentMethod>("cash");
+  const [method, setMethod] = React.useState<PaymentMethod>("qris");
   const [amount, setAmount] = React.useState(detail.outstanding);
   const [cashReceived, setCashReceived] = React.useState(detail.outstanding);
   const [loading, setLoading] = React.useState(false);

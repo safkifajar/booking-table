@@ -393,7 +393,8 @@ export function SplitPayment(props: Props) {
       {/* Bottom sheet: pilih metode bayar */}
       {methodSheet && (
         <PickerSheet title="Payment method" onClose={() => setMethodSheet(false)}>
-          {(["qris", "gopay", "card", "cash"] as PaymentMethod[]).map((mth) => (
+          {/* Hanya QRIS yang diaktifkan (Duitku). Metode lain disembunyikan. */}
+          {(["qris"] as PaymentMethod[]).map((mth) => (
             <SheetRow
               key={mth}
               icon={methodIcon(mth)}
