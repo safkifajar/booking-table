@@ -556,6 +556,23 @@ function ConfigField({
   step?: number;
   onChange: (v: number) => void;
 }) {
+  // Teks lokal supaya bisa dikosongkan saat mengetik (mis. hapus "0" dulu).
+  const [text, setText] = React.useState(String(value));
+
+  // Sinkron kalau value dari luar berubah (mis. reset). Pola sama dgn MoneyInput.
+  React.useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  function commit(raw: string) {
+    const n = Number(raw);
+    if (raw === "" || !Number.isFinite(n)) {
+      onChange(min); // kosong → min (biasanya 0)
+      return;
+    }
+    onChange(Math.max(min, Math.min(max, n)));
+  }
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
@@ -565,12 +582,13 @@ function ConfigField({
       <div className="flex items-center gap-2">
         <input
           type="number"
-          value={value}
+          value={text}
+          onFocus={(e) => e.target.select()}
           onChange={(e) => {
-            const n = Number(e.target.value);
-            if (!Number.isFinite(n)) return;
-            onChange(Math.max(min, Math.min(max, n)));
+            setText(e.target.value);
+            commit(e.target.value);
           }}
+          onBlur={() => setText(String(value))}
           min={min}
           max={max}
           step={step}
