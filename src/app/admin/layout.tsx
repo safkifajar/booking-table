@@ -1,7 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { requireAdmin } from "@/lib/admin";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
-import { TrendingUp, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { AdminSidebarNav, AdminMobileNav } from "./AdminSidebarNav";
 import { AdminHeaderProfile } from "./AdminHeaderProfile";
 
@@ -21,7 +22,8 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const bar = await requireAdmin();
+  // Guard: hanya admin/manager boleh masuk (redirect kalau bukan).
+  await requireAdmin();
   const [user, profile] = await Promise.all([
     getCurrentUser(),
     getCurrentProfile(),
@@ -32,18 +34,19 @@ export default async function AdminLayout({
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-md overflow-hidden border border-border shrink-0">
+              <Image
+                src="/logo-soho.jpeg"
+                alt="SOHO"
+                width={36}
+                height={36}
+                className="h-full w-full object-cover"
+              />
             </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-widest text-primary/70">
-                Admin Panel · {bar.role}
-              </div>
-              <h1 className="text-sm font-semibold truncate leading-tight">
-                {bar.name}
-              </h1>
-            </div>
+            <h1 className="text-base font-semibold truncate leading-tight">
+              Dashboard
+            </h1>
           </div>
           <div className="flex-1" />
           {profile && (
