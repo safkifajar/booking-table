@@ -193,13 +193,6 @@ const duitkuGateway: PaymentGateway = {
       expiryPeriod: 60, // menit
     };
 
-    console.log("[duitku] inquiry →", `${cfg.base}/webapi/api/merchant/v2/inquiry`, {
-      merchantCode: cfg.merchantCode,
-      paymentAmount,
-      paymentMethod: body.paymentMethod,
-      merchantOrderId,
-      callbackUrl: cfg.callbackUrl,
-    });
     const res = await fetch(`${cfg.base}/webapi/api/merchant/v2/inquiry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -208,7 +201,6 @@ const duitkuGateway: PaymentGateway = {
       cache: "no-store",
     });
     const text = await res.text();
-    console.log("[duitku] inquiry ← HTTP", res.status, text.slice(0, 500));
     let data: {
       statusCode?: string;
       statusMessage?: string;
