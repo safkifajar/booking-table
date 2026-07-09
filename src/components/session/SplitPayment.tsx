@@ -45,6 +45,9 @@ interface Props {
   members: Member[];
   myMemberId: string | null;
   subtotal: number;
+  tax: number;
+  service: number;
+  total: number;
   remaining: number;
   /** Waiter/staff: hanya boleh BAYAR PENUH (sembunyikan patungan & pesanan saya). */
   payFullOnly?: boolean;
@@ -67,9 +70,9 @@ export function SplitPayment(props: Props) {
   const [typeSheet, setTypeSheet] = React.useState(false);
   const [methodSheet, setMethodSheet] = React.useState(false);
 
-  // Equal: subtotal / members count
+  // Equal: total (subtotal + tax + service) / members count
   const equalShare = props.members.length > 0
-    ? Math.ceil(props.subtotal / props.members.length)
+    ? Math.ceil(props.total / props.members.length)
     : 0;
 
   // Itemized: total of items added by me
@@ -117,8 +120,8 @@ export function SplitPayment(props: Props) {
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Total Bill
             </div>
-            <div className="text-2xl font-bold text-gold-gradient">
-              {formatIDR(props.subtotal)}
+            <div className="text-2xl font-bold text-gold-gradient tabular-nums">
+              {formatIDR(props.total)}
             </div>
           </div>
           <div className="text-right">
@@ -127,7 +130,7 @@ export function SplitPayment(props: Props) {
             </div>
             <div
               className={cn(
-                "text-lg font-semibold",
+                "text-lg font-semibold tabular-nums",
                 props.remaining <= 0 && props.subtotal > 0
                   ? "text-emerald-400"
                   : "text-primary"
@@ -137,6 +140,30 @@ export function SplitPayment(props: Props) {
                 ? "Paid"
                 : formatIDR(props.remaining)}
             </div>
+          </div>
+        </div>
+
+        {/* Breakdown: subtotal + tax + service = total */}
+        <div className="mt-4 pt-3 border-t border-primary/20 space-y-1.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="tabular-nums">{formatIDR(props.subtotal)}</span>
+          </div>
+          {props.tax > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tax</span>
+              <span className="tabular-nums">{formatIDR(props.tax)}</span>
+            </div>
+          )}
+          {props.service > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Service</span>
+              <span className="tabular-nums">{formatIDR(props.service)}</span>
+            </div>
+          )}
+          <div className="flex justify-between font-semibold pt-1.5 border-t border-primary/20">
+            <span>Total</span>
+            <span className="text-primary tabular-nums">{formatIDR(props.total)}</span>
           </div>
         </div>
       </Card>
@@ -153,7 +180,7 @@ export function SplitPayment(props: Props) {
                 Bill fully paid
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Total {formatIDR(props.subtotal)} has been paid in full. Wait for
+                Total {formatIDR(props.total)} has been paid in full. Wait for
                 the cashier to close the table, or keep ordering if you want more.
               </div>
             </div>

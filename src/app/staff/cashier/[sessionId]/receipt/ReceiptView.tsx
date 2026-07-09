@@ -112,11 +112,16 @@ export function ReceiptView({ detail }: Props) {
         {/* Totals */}
         <div className="space-y-1 text-[10px] mb-3">
           <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
-          <Row label="Tax" value={formatIDR(0)} />
+          {detail.tax > 0 && (
+            <Row label="Tax" value={formatIDR(detail.tax)} />
+          )}
+          {detail.service > 0 && (
+            <Row label="Service" value={formatIDR(detail.service)} />
+          )}
           <div className="border-t border-zinc-300 pt-1 mt-1">
             <Row
               label="TOTAL"
-              value={formatIDR(detail.subtotal)}
+              value={formatIDR(detail.total)}
               bold
             />
           </div>

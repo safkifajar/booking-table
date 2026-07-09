@@ -2,22 +2,26 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Clock, CalendarCheck, Loader2, Save } from "lucide-react";
+import { Clock, CalendarCheck, Loader2, Save, Percent } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cn, getActionErrorMessage } from "@/lib/utils";
+import { cn, getActionErrorMessage, formatIDR } from "@/lib/utils";
 import {
   updateOperatingHours,
   updateReservationConfig,
+  updateChargeConfig,
 } from "@/lib/settings-actions";
 import {
   DAY_KEYS,
   DAY_LABELS,
+  computeBillTotals,
   type BarSettings,
+  type ChargeConfig,
   type DayHours,
   type DayKey,
   type OperatingHours,
   type ReservationConfig,
+  type RoundingMode,
 } from "@/lib/settings-constants";
 
 interface Props {
@@ -30,6 +34,177 @@ export function SettingsManager({ barId, initial }: Props) {
     <div className="space-y-6">
       <OperatingHoursSection barId={barId} initial={initial.operatingHours} />
       <ReservationSection barId={barId} initial={initial.reservationConfig} />
+      <ChargeSection barId={barId} initial={initial.chargeConfig} />
+    </div>
+  );
+}
+
+// ============================================================
+// TAX & SERVICE CHARGE
+// ============================================================
+
+function ChargeSection({
+  barId,
+  initial,
+}: {
+  barId: string;
+  initial: ChargeConfig;
+}) {
+  const [config, setConfig] = React.useState<ChargeConfig>(initial);
+  const [saving, setSaving] = React.useState(false);
+  const [dirty, setDirty] = React.useState(false);
+
+  function patch(p: Partial<ChargeConfig>) {
+    setConfig((prev) => ({ ...prev, ...p }));
+    setDirty(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await updateChargeConfig(barId, config);
+      toast.success("Tax & service settings saved");
+      setDirty(false);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to save"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Preview dari contoh subtotal 150.000.
+  const preview = computeBillTotals(150000, config);
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start gap-2 mb-4">
+        <div className="h-9 w-9 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
+          <Percent className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-semibold">Tax &amp; Service Charge</h2>
+          <p className="text-xs text-muted-foreground">
+            Added on top of the bill subtotal. Set 0% to disable.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <ConfigField
+          label="Tax (PB1/PPN)"
+          hint="Percentage of the subtotal"
+          value={config.taxPercent}
+          unit="%"
+          min={0}
+          max={100}
+          step={0.5}
+          onChange={(v) => patch({ taxPercent: v })}
+        />
+        <ConfigField
+          label="Service charge"
+          hint="Percentage of the subtotal"
+          value={config.servicePercent}
+          unit="%"
+          min={0}
+          max={100}
+          step={0.5}
+          onChange={(v) => patch({ servicePercent: v })}
+        />
+
+        {/* Rounding mode */}
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
+            <label className="text-sm font-medium">Rounding</label>
+            <span className="text-[10px] text-muted-foreground">
+              how each tax/service value is rounded
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { v: "none", label: "None" },
+                { v: "up", label: "Round up" },
+                { v: "down", label: "Round down" },
+              ] as { v: RoundingMode; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => patch({ rounding: opt.v })}
+                className={cn(
+                  "px-3 py-2 rounded-md border text-sm font-medium transition",
+                  config.rounding === opt.v
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div className="mt-4 rounded-md border border-border bg-muted/10 p-3 text-xs space-y-1">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+          Preview (subtotal {formatIDR(150000)})
+        </div>
+        <PreviewRow label="Subtotal" value={preview.subtotal} />
+        <PreviewRow
+          label={`Tax (${config.taxPercent}%)`}
+          value={preview.tax}
+        />
+        <PreviewRow
+          label={`Service (${config.servicePercent}%)`}
+          value={preview.service}
+        />
+        <PreviewRow label="Total" value={preview.total} bold />
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-border flex items-center justify-end">
+        <Button
+          type="button"
+          variant="gold"
+          size="sm"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-3.5 w-3.5" />
+              Save
+            </>
+          )}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function PreviewRow({
+  label,
+  value,
+  bold,
+}: {
+  label: string;
+  value: number;
+  bold?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between",
+        bold && "font-semibold text-foreground pt-1 border-t border-border"
+      )}
+    >
+      <span className={cn(!bold && "text-muted-foreground")}>{label}</span>
+      <span className="tabular-nums">{formatIDR(value)}</span>
     </div>
   );
 }

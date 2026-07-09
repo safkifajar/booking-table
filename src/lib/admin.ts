@@ -26,6 +26,8 @@ import { staffRoles } from "@/lib/db/schema/extras";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { tableMoveRequests } from "@/lib/db/schema/move-requests";
 import { requireAdmin as requireAdminAuth } from "@/lib/auth-v2/current";
+import { getChargeConfig } from "@/lib/settings-actions";
+import { computeBillTotals } from "@/lib/settings-constants";
 import type { PaymentMethod } from "@/types/db";
 
 // ============================================================
@@ -630,6 +632,12 @@ export interface TransactionDetail {
   items: TransactionDetailItem[];
   payments: TransactionDetailPayment[];
   subtotal: number;
+  /** Pajak (dari config bar). */
+  tax: number;
+  /** Service charge (dari config bar). */
+  service: number;
+  /** subtotal + tax + service. */
+  total: number;
   total_paid: number;
   /** Riwayat pindah meja (dari→ke), terlama dulu. Kosong = tak pernah pindah. */
   move_history: TransactionMoveHistory[];
@@ -821,6 +829,8 @@ export async function getTransactionDetail(
   const totalPaid = paymentsList
     .filter((p) => p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
+  // Tax & service dari config bar → total tagihan.
+  const bill = computeBillTotals(subtotal, await getChargeConfig(barId));
 
   const moveHistory: TransactionMoveHistory[] = moveRows.map((m) => ({
     id: m.id,
@@ -850,6 +860,9 @@ export async function getTransactionDetail(
     items,
     payments: paymentsList,
     subtotal,
+    tax: bill.tax,
+    service: bill.service,
+    total: bill.total,
     total_paid: totalPaid,
     move_history: moveHistory,
   };

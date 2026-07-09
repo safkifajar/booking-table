@@ -20,6 +20,7 @@ import {
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
 import { getSessionDetailForCashier } from "@/lib/cashier-actions";
+import { getChargeConfig } from "@/lib/settings-actions";
 import { SessionView } from "./SessionView";
 
 interface PageProps {
@@ -235,6 +236,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       ? await getSessionDetailForCashier(id)
       : null;
 
+  // Config pajak & service charge bar (untuk hitung total tagihan).
+  const chargeConfig = await getChargeConfig(sessionRow.bar_id);
+
   return (
     <SessionView
       session={{
@@ -317,6 +321,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       openedByStaff={openedByStaff}
       pendingMove={pendingMove}
       cashierDetail={cashierDetail}
+      chargeConfig={chargeConfig}
     />
   );
 }

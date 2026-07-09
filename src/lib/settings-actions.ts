@@ -22,7 +22,9 @@ import {
   DAY_KEYS,
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
+  DEFAULT_CHARGE_CONFIG,
   type BarSettings,
+  type ChargeConfig,
   type DayHours,
   type DayKey,
   type OperatingHours,
@@ -63,6 +65,7 @@ export async function getBarSettings(barId: string): Promise<BarSettings> {
     .select({
       openingHours: bars.openingHours,
       reservationConfig: bars.reservationConfig,
+      chargeConfig: bars.chargeConfig,
     })
     .from(bars)
     .where(eq(bars.id, barId));
@@ -90,7 +93,28 @@ export async function getBarSettings(barId: string): Promise<BarSettings> {
     ...((row.reservationConfig as Partial<ReservationConfig>) ?? {}),
   };
 
-  return { operatingHours, reservationConfig };
+  const chargeConfig = {
+    ...DEFAULT_CHARGE_CONFIG,
+    ...((row.chargeConfig as Partial<ChargeConfig>) ?? {}),
+  };
+
+  return { operatingHours, reservationConfig, chargeConfig };
+}
+
+/**
+ * Baca chargeConfig SAJA — dipakai jalur pembayaran (cashier/payShare/receipt)
+ * yang butuh tax/service TANPA guard admin (dipanggil dari server actions
+ * staff/customer). Tak ada requireAdmin di sini.
+ */
+export async function getChargeConfig(barId: string): Promise<ChargeConfig> {
+  const [row] = await db
+    .select({ chargeConfig: bars.chargeConfig })
+    .from(bars)
+    .where(eq(bars.id, barId));
+  return {
+    ...DEFAULT_CHARGE_CONFIG,
+    ...((row?.chargeConfig as Partial<ChargeConfig>) ?? {}),
+  };
 }
 
 // ============================================================
@@ -172,4 +196,28 @@ export async function updateReservationConfig(
     .where(eq(bars.id, barId));
 
   revalidatePath("/admin/settings");
+}
+
+// ============================================================
+// UPDATE CHARGE CONFIG (tax & service)
+// ============================================================
+
+const chargeConfigSchema = z.object({
+  taxPercent: z.number().min(0).max(100),
+  servicePercent: z.number().min(0).max(100),
+  rounding: z.enum(["none", "up", "down"]),
+});
+
+export async function updateChargeConfig(
+  barId: string,
+  config: ChargeConfig
+): Promise<void> {
+  await requireAdminForBar(barId);
+  const parsed = chargeConfigSchema.parse(config);
+
+  await db.update(bars).set({ chargeConfig: parsed }).where(eq(bars.id, barId));
+
+  // Tax/service memengaruhi tagihan di banyak tempat → revalidate luas.
+  revalidatePath("/admin/settings");
+  revalidatePath("/staff/cashier");
 }

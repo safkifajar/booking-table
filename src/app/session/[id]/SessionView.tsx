@@ -56,6 +56,10 @@ import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 import { CashierPaymentPanel } from "@/components/cashier/CashierPaymentPanel";
 import type { CashierSessionDetail } from "@/lib/cashier-actions";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
+import {
+  computeBillTotals,
+  type ChargeConfig,
+} from "@/lib/settings-constants";
 import { EditTableInfoModal } from "./EditTableInfoModal";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
@@ -175,6 +179,8 @@ interface SessionViewProps {
    * viewer = cashier & bukan member). null utk selain itu.
    */
   cashierDetail: CashierSessionDetail | null;
+  /** Config pajak & service charge bar (untuk hitung total tagihan). */
+  chargeConfig: ChargeConfig;
 }
 
 export function SessionView(props: SessionViewProps) {
@@ -261,8 +267,10 @@ export function SessionView(props: SessionViewProps) {
   const totalPaid = props.payments
     .filter((p) => p.status === "paid")
     .reduce((acc, p) => acc + p.amount, 0);
-  const remaining = Math.max(0, subtotal - totalPaid);
-  const isLunas = subtotal > 0 && remaining === 0;
+  // Tax & service dari config bar → total yang harus dibayar.
+  const bill = computeBillTotals(subtotal, props.chargeConfig);
+  const remaining = Math.max(0, bill.total - totalPaid);
+  const isLunas = bill.total > 0 && remaining === 0;
 
   // Auto-redirect member ke halaman rate saat host menutup session — TAPI hanya
   // kalau sudah lunas. Kalau closed tapi masih nunggak (force-close / data lama),
@@ -416,6 +424,9 @@ export function SessionView(props: SessionViewProps) {
             isStaff={isStaff}
             sessionId={props.session.id}
             subtotal={subtotal}
+            tax={bill.tax}
+            service={bill.service}
+            total={bill.total}
           />
         )}
         {tab === "pay" &&
@@ -435,6 +446,9 @@ export function SessionView(props: SessionViewProps) {
               members={props.members.filter((m) => m.status === "joined")}
               myMemberId={props.myMemberId}
               subtotal={subtotal}
+              tax={bill.tax}
+              service={bill.service}
+              total={bill.total}
               remaining={remaining}
               payFullOnly={isStaff}
             />
@@ -1251,12 +1265,18 @@ function BillTab({
   isStaff,
   sessionId,
   subtotal,
+  tax,
+  service,
+  total,
 }: {
   items: SessionViewProps["orderItems"];
   myProfileId: string;
   isStaff: boolean;
   sessionId: string;
   subtotal: number;
+  tax: number;
+  service: number;
+  total: number;
 }) {
   const [removingId, setRemovingId] = React.useState<string | null>(null);
 
@@ -1381,11 +1401,29 @@ function BillTab({
         </Card>
       ))}
 
-      {/* Subtotal */}
-      <Card className="p-4 bg-muted/40">
+      {/* Subtotal + tax/service + total */}
+      <Card className="p-4 bg-muted/40 space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span className="font-semibold text-primary text-base">{formatIDR(subtotal)}</span>
+          <span className="tabular-nums">{formatIDR(subtotal)}</span>
+        </div>
+        {tax > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Tax</span>
+            <span className="tabular-nums">{formatIDR(tax)}</span>
+          </div>
+        )}
+        {service > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Service</span>
+            <span className="tabular-nums">{formatIDR(service)}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-sm pt-1.5 border-t border-border">
+          <span className="font-medium">Total</span>
+          <span className="font-semibold text-primary text-base tabular-nums">
+            {formatIDR(total)}
+          </span>
         </div>
       </Card>
     </div>
@@ -1400,6 +1438,9 @@ function SplitTab({
   members,
   myMemberId,
   subtotal,
+  tax,
+  service,
+  total,
   remaining,
   payFullOnly,
 }: {
@@ -1409,6 +1450,9 @@ function SplitTab({
   members: SessionViewProps["members"];
   myMemberId: string | null;
   subtotal: number;
+  tax: number;
+  service: number;
+  total: number;
   remaining: number;
   payFullOnly?: boolean;
 }) {
@@ -1429,6 +1473,9 @@ function SplitTab({
       members={members}
       myMemberId={myMemberId}
       subtotal={subtotal}
+      tax={tax}
+      service={service}
+      total={total}
       remaining={remaining}
       payFullOnly={payFullOnly}
       onPay={async (input) => {

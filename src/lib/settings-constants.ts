@@ -49,9 +49,27 @@ export interface ReservationConfig {
   minDownPaymentPercent: number;
 }
 
+/** Cara pembulatan nilai tax/service (rupiah tak berdesimal). */
+export type RoundingMode = "none" | "up" | "down";
+
+export interface ChargeConfig {
+  /** Pajak (%) dari subtotal. 0 = tidak dikenakan. */
+  taxPercent: number;
+  /** Service charge (%) dari subtotal. 0 = tidak dikenakan. */
+  servicePercent: number;
+  /**
+   * Pembulatan tiap komponen (tax & service):
+   * - "none" = tanpa pembulatan (dibulatkan ke bilangan bulat terdekat)
+   * - "up"   = dibulatkan ke atas (Math.ceil)
+   * - "down" = dibulatkan ke bawah (Math.floor)
+   */
+  rounding: RoundingMode;
+}
+
 export interface BarSettings {
   operatingHours: OperatingHours;
   reservationConfig: ReservationConfig;
+  chargeConfig: ChargeConfig;
 }
 
 export const DEFAULT_OPERATING_HOURS: OperatingHours = {
@@ -71,3 +89,44 @@ export const DEFAULT_RESERVATION_CONFIG: ReservationConfig = {
   slotIntervalMinutes: 60,
   minDownPaymentPercent: 0,
 };
+
+export const DEFAULT_CHARGE_CONFIG: ChargeConfig = {
+  taxPercent: 0,
+  servicePercent: 0,
+  rounding: "none",
+};
+
+/** Bulatkan nilai charge sesuai mode. */
+function roundCharge(value: number, mode: RoundingMode): number {
+  if (mode === "up") return Math.ceil(value);
+  if (mode === "down") return Math.floor(value);
+  return Math.round(value);
+}
+
+export interface BillTotals {
+  subtotal: number;
+  tax: number;
+  service: number;
+  /** subtotal + tax + service (yang dibayar user). */
+  total: number;
+}
+
+/**
+ * SATU SUMBER KEBENARAN perhitungan tagihan. Tax & service dihitung dari
+ * subtotal (bukan bertingkat), tiap komponen dibulatkan sesuai config.
+ * Dipakai di SEMUA titik (outstanding, receipt, split, laporan) supaya konsisten.
+ */
+export function computeBillTotals(
+  subtotal: number,
+  cfg: ChargeConfig | null | undefined
+): BillTotals {
+  const c = cfg ?? DEFAULT_CHARGE_CONFIG;
+  const sub = Math.max(0, Math.round(subtotal));
+  const tax =
+    c.taxPercent > 0 ? roundCharge((sub * c.taxPercent) / 100, c.rounding) : 0;
+  const service =
+    c.servicePercent > 0
+      ? roundCharge((sub * c.servicePercent) / 100, c.rounding)
+      : 0;
+  return { subtotal: sub, tax, service, total: sub + tax + service };
+}

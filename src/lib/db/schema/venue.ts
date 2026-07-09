@@ -25,6 +25,8 @@ export const bars = pgTable("bars", {
   theme: jsonb("theme").default({}).notNull(),
   openingHours: jsonb("opening_hours").default({}).notNull(),
   reservationConfig: jsonb("reservation_config").default({}).notNull(),
+  /** Pajak & service charge (%) + pembulatan. Lihat ChargeConfig. */
+  chargeConfig: jsonb("charge_config").default({}).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 

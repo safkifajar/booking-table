@@ -41,6 +41,8 @@ import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { notifyAll } from "@/lib/realtime/notify";
 import { settleOverdueIfPaid } from "@/lib/queries";
+import { getChargeConfig } from "@/lib/settings-actions";
+import { computeBillTotals } from "@/lib/settings-constants";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
 // ============================================================
@@ -179,9 +181,12 @@ export async function getActiveSessionsForCashier(): Promise<
     }
   }
 
+  const charge = await getChargeConfig(ctx.barId);
+
   return sessionRows.map((s) => {
     const subtotal = billMap.get(s.id) ?? 0;
     const paid = paidMap.get(s.id) ?? 0;
+    const bill = computeBillTotals(subtotal, charge);
     return {
       session_id: s.id,
       table_label: s.table_label,
@@ -198,8 +203,8 @@ export async function getActiveSessionsForCashier(): Promise<
         : null,
       subtotal,
       paid_total: paid,
-      outstanding: Math.max(0, subtotal - paid),
-      is_paid: subtotal > 0 && paid >= subtotal,
+      outstanding: Math.max(0, bill.total - paid),
+      is_paid: bill.total > 0 && paid >= bill.total,
       is_walk_in: !!s.opened_by_staff_id,
       opened_by_staff_name: s.opened_by_staff_id
         ? staffNameMap.get(s.opened_by_staff_id) ?? null
@@ -310,9 +315,12 @@ export async function getClosedSessionsForCashier(): Promise<
     for (const row of staffRows) staffNameMap.set(row.id, row.name);
   }
 
+  const charge = await getChargeConfig(ctx.barId);
+
   return sessionRows.map((s) => {
     const subtotal = billMap.get(s.id) ?? 0;
     const paid = paidMap.get(s.id) ?? 0;
+    const bill = computeBillTotals(subtotal, charge);
     return {
       session_id: s.id,
       table_label: s.table_label,
@@ -329,8 +337,8 @@ export async function getClosedSessionsForCashier(): Promise<
         : null,
       subtotal,
       paid_total: paid,
-      outstanding: Math.max(0, subtotal - paid),
-      is_paid: subtotal > 0 && paid >= subtotal,
+      outstanding: Math.max(0, bill.total - paid),
+      is_paid: bill.total > 0 && paid >= bill.total,
       is_walk_in: !!s.opened_by_staff_id,
       opened_by_staff_name: s.opened_by_staff_id
         ? staffNameMap.get(s.opened_by_staff_id) ?? null
@@ -474,7 +482,14 @@ export interface CashierSessionDetail {
   payments: CashierPayment[];
   members: CashierMember[];
   subtotal: number;
+  /** Pajak (dari config bar). */
+  tax: number;
+  /** Service charge (dari config bar). */
+  service: number;
+  /** subtotal + tax + service (yang harus dibayar). */
+  total: number;
   paid_total: number;
+  /** total - paid_total (sisa yang harus dibayar). */
   outstanding: number;
   /** True kalau session dibuka oleh staff (walk-in customer) */
   is_walk_in: boolean;
@@ -609,6 +624,9 @@ export async function getSessionDetailForCashier(
   const paid_total = paymentsRaw
     .filter((p) => p.status === "paid")
     .reduce((s, p) => s + p.amount, 0);
+  // Tax & service dari config bar → total yang harus dibayar.
+  const charge = await getChargeConfig(row.bar_id);
+  const bill = computeBillTotals(subtotal, charge);
 
   return {
     session_id: row.id,
@@ -652,8 +670,11 @@ export async function getSessionDetailForCashier(
       is_host: m.role === "host",
     })),
     subtotal,
+    tax: bill.tax,
+    service: bill.service,
+    total: bill.total,
     paid_total,
-    outstanding: Math.max(0, subtotal - paid_total),
+    outstanding: Math.max(0, bill.total - paid_total),
     is_walk_in: !!row.opened_by_staff_id,
     opened_by_staff_name: openedByStaffName,
     guest_names: row.guest_names ?? [],
@@ -729,8 +750,8 @@ export async function cashierCreatePayment(
     );
   if (!member) throw new Error("Invalid member");
 
-  // 3b. Cap ke sisa tagihan (outstanding = subtotal - paid). Cegah overpayment
-  //     yg bikin paid_revenue (basis subtotal) desync dari total payments.
+  // 3b. Cap ke sisa tagihan (outstanding = TOTAL - paid, di mana total =
+  //     subtotal + tax + service). Cegah overpayment yg bikin desync.
   const [billAgg] = await db
     .select({
       subtotal: sql<number>`coalesce(sum(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
@@ -743,10 +764,9 @@ export async function cashierCreatePayment(
     })
     .from(payments)
     .where(and(eq(payments.orderId, order.id), eq(payments.status, "paid")));
-  const outstanding = Math.max(
-    0,
-    Number(billAgg?.subtotal ?? 0) - Number(paidAgg?.paid ?? 0)
-  );
+  const charge = await getChargeConfig(ctx.barId);
+  const bill = computeBillTotals(Number(billAgg?.subtotal ?? 0), charge);
+  const outstanding = Math.max(0, bill.total - Number(paidAgg?.paid ?? 0));
   if (outstanding <= 0) {
     throw new Error("This bill is already fully paid");
   }

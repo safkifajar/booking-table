@@ -21,6 +21,8 @@ import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { profiles } from "@/lib/db/schema/profiles";
 import { memberRatings } from "@/lib/db/schema/extras";
+import { getChargeConfig } from "@/lib/settings-actions";
+import { computeBillTotals } from "@/lib/settings-constants";
 import type {
   Bar,
   FloorArea,
@@ -240,18 +242,23 @@ export async function getOutstandingMap(
   const out = new Map<string, number>();
   if (sessionIds.length === 0) return out;
 
+  // Subtotal per sesi + bar-nya (utk chargeConfig tax/service).
   const bills = await db
     .select({
       session_id: orders.sessionId,
+      bar_id: floorAreas.barId,
       subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
     })
     .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .leftJoin(
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
     .where(inArray(orders.sessionId, sessionIds))
-    .groupBy(orders.sessionId);
+    .groupBy(orders.sessionId, floorAreas.barId);
 
   const paidRows = await db
     .select({
@@ -265,11 +272,22 @@ export async function getOutstandingMap(
     )
     .groupBy(orders.sessionId);
 
+  // Cache chargeConfig per bar (biasanya cuma 1 bar — single-tenant).
+  const chargeByBar = new Map<
+    string,
+    Awaited<ReturnType<typeof getChargeConfig>>
+  >();
   const paidMap = new Map(paidRows.map((r) => [r.session_id, Number(r.paid)]));
   for (const b of bills) {
+    let charge = chargeByBar.get(b.bar_id);
+    if (!charge) {
+      charge = await getChargeConfig(b.bar_id);
+      chargeByBar.set(b.bar_id, charge);
+    }
+    const bill = computeBillTotals(Number(b.subtotal), charge);
     const outstanding = Math.max(
       0,
-      Number(b.subtotal) - (paidMap.get(b.session_id) ?? 0)
+      bill.total - (paidMap.get(b.session_id) ?? 0)
     );
     out.set(b.session_id, outstanding);
   }
