@@ -1820,6 +1820,8 @@ export async function checkPaymentStatus(
       status: payments.status,
       splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
+      sessionStatus: tableSessions.status,
+      dpPaidAt: tableSessions.dpPaidAt,
       barId: floorAreas.barId,
     })
     .from(payments)
@@ -1890,18 +1892,16 @@ export async function checkPaymentStatus(
       .set({ status: "failed", paidAt: null })
       .where(eq(payments.id, row.id));
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
-    if (meta.isDownPayment) {
-      const [sess] = await db
-        .select({ status: tableSessions.status })
-        .from(tableSessions)
+    if (
+      meta.isDownPayment &&
+      row.dpPaidAt == null &&
+      (row.sessionStatus === "reserved" || row.sessionStatus === "open")
+    ) {
+      await db
+        .update(tableSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
         .where(eq(tableSessions.id, row.sessionId));
-      if (sess?.status === "reserved") {
-        await db
-          .update(tableSessions)
-          .set({ status: "cancelled", closedAt: new Date() })
-          .where(eq(tableSessions.id, row.sessionId));
-        revalidatePath("/bar/[slug]", "page");
-      }
+      revalidatePath("/bar/[slug]", "page");
     }
     await notifySessionAndStaff(row.sessionId);
     revalidatePath(`/session/${row.sessionId}`);
@@ -1932,6 +1932,7 @@ export async function cancelPayment(
       splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       sessionStatus: tableSessions.status,
+      dpPaidAt: tableSessions.dpPaidAt,
       barId: floorAreas.barId,
       barSlug: bars.slug,
     })
@@ -1978,10 +1979,16 @@ export async function cancelPayment(
     .set({ status: "failed", paidAt: null })
     .where(eq(payments.id, row.id));
 
-  // DP booking pending → batalkan booking (meja bebas lagi).
+  // DP booking belum lunas → batalkan booking (meja bebas lagi). Batalkan
+  // selama DP belum benar-benar terkonfirmasi (dp_paid_at NULL), baik session
+  // masih 'reserved' maupun terlanjur 'open' (mis. ke-promote sebelum fix).
   const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
   let bookingCancelled = false;
-  if (meta.isDownPayment && row.sessionStatus === "reserved") {
+  if (
+    meta.isDownPayment &&
+    row.dpPaidAt == null &&
+    (row.sessionStatus === "reserved" || row.sessionStatus === "open")
+  ) {
     await db
       .update(tableSessions)
       .set({ status: "cancelled", closedAt: new Date() })

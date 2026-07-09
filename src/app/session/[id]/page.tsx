@@ -104,7 +104,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // aktif. Staff (kasir/waiter) TETAP boleh (bantu tamu). Host diarahkan ke
   // halaman lanjut-bayar (/booking/[id]/pay) yg menampilkan QRIS + countdown.
   if (
-    sessionRow.status === "reserved" &&
+    (sessionRow.status === "reserved" || sessionRow.status === "open") &&
     sessionRow.dp_paid_at == null &&
     !staffRole &&
     sessionRow.host_id === profile.id

@@ -405,7 +405,14 @@ export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
     })
     .from(tableSessions)
     .where(eq(tableSessions.id, sessionId));
-  if (!s || s.status !== "reserved" || s.dpPaidAt != null) return false;
+  // DP belum lunas & booking belum final (reserved/open). 'open' bisa terjadi
+  // kalau booking sempat ke-promote sebelum fix — tetap batalkan kalau DP basi.
+  if (
+    !s ||
+    (s.status !== "reserved" && s.status !== "open") ||
+    s.dpPaidAt != null
+  )
+    return false;
 
   const cutoff = new Date(Date.now() - DP_TIMEOUT_SECONDS * 1000);
   // Cari payment DP pending untuk sesi ini yg sudah lewat batas.
@@ -453,7 +460,7 @@ export async function expireOverdueDpBookings(barId: string): Promise<number> {
     .where(
       and(
         eq(floorAreas.barId, barId),
-        eq(tableSessions.status, "reserved"),
+        inArray(tableSessions.status, ["reserved", "open"]),
         sql`${tableSessions.dpPaidAt} IS NULL`,
         eq(payments.status, "pending"),
         sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
@@ -465,6 +472,33 @@ export async function expireOverdueDpBookings(barId: string): Promise<number> {
     if (await expireDpIfOverdue(r.sessionId)) n++;
   }
   return n;
+}
+
+/**
+ * True kalau session ini punya DP booking yang BELUM lunas (dp_paid_at NULL &
+ * ada payment DP pending). Selama true, booking TAK BOLEH dipromote jadi 'open'
+ * walau jamnya sudah tiba — DP adalah syarat konfirmasi. (Kalau sudah lewat
+ * batas, expireDpIfOverdue akan membatalkannya lebih dulu.)
+ */
+export async function hasUnpaidDp(sessionId: string): Promise<boolean> {
+  const [s] = await db
+    .select({ dpPaidAt: tableSessions.dpPaidAt })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
+  if (!s || s.dpPaidAt != null) return false;
+  const [dp] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
+      )
+    )
+    .limit(1);
+  return !!dp;
 }
 
 export async function expireFinishedSessions(barId: string): Promise<number> {
@@ -559,6 +593,8 @@ export async function promoteDueReservations(barId: string): Promise<number> {
         )
       );
     if (busy) continue;
+    // DP belum lunas → jangan promote (booking belum terkonfirmasi).
+    if (await hasUnpaidDp(r.id)) continue;
     try {
       await db
         .update(tableSessions)
@@ -601,6 +637,9 @@ export async function promoteSessionIfDue(sessionId: string): Promise<boolean> {
   ) {
     return false;
   }
+  // DP belum lunas → JANGAN promote. Booking DP baru terkonfirmasi setelah DP
+  // dibayar; sebelum itu meja tetap 'reserved' (atau dibatalkan kalau timeout).
+  if (await hasUnpaidDp(sessionId)) return false;
   // Meja dipakai sesi aktif lain (open/locked)? jangan promote (cegah konflik
   // index). 'overdue' TIDAK menghalangi — itu hutang lama, bukan okupansi fisik.
   const [busy] = await db
