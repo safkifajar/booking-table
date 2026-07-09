@@ -388,7 +388,7 @@ export async function settleOverdueIfPaid(sessionId: string): Promise<boolean> {
 }
 
 /** Batas waktu bayar DP booking (detik). Lewat ini → booking dibatalkan. */
-const DP_TIMEOUT_SECONDS = 60;
+export const DP_TIMEOUT_SECONDS = 60;
 
 /**
  * Batalkan booking yang DP-nya tak dibayar dalam DP_TIMEOUT_SECONDS.

@@ -41,7 +41,11 @@ import {
   markInviteResponded,
   markInviteCancelled,
 } from "@/lib/notifications";
-import { settleOverdueIfPaid, getOutstandingMap } from "@/lib/queries";
+import {
+  settleOverdueIfPaid,
+  getOutstandingMap,
+  DP_TIMEOUT_SECONDS,
+} from "@/lib/queries";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -545,7 +549,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
             isDownPayment: true,
             qrString: chargeResult.qrString ?? null,
             redirectUrl: chargeResult.redirectUrl ?? null,
-            expiresAt: chargeResult.expiresAt ?? null,
+            // DP punya batas 1 menit (DP_TIMEOUT_SECONDS), lebih ketat dari
+            // masa berlaku QR gateway → pakai ini utk countdown konsisten.
+            expiresAt: new Date(
+              Date.now() + DP_TIMEOUT_SECONDS * 1000
+            ).toISOString(),
             merchantOrderId: chargeResult.merchantOrderId ?? dpPaymentId,
           },
         })
