@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Clock, CalendarCheck, Loader2, Save, Percent } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { cn, getActionErrorMessage, formatIDR } from "@/lib/utils";
 import {
   updateOperatingHours,
@@ -119,29 +120,17 @@ function ChargeSection({
               how each tax/service value is rounded
             </span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {(
-              [
-                { v: "none", label: "None" },
-                { v: "up", label: "Round up" },
-                { v: "down", label: "Round down" },
-              ] as { v: RoundingMode; label: string }[]
-            ).map((opt) => (
-              <button
-                key={opt.v}
-                type="button"
-                onClick={() => patch({ rounding: opt.v })}
-                className={cn(
-                  "px-3 py-2 rounded-md border text-sm font-medium transition",
-                  config.rounding === opt.v
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <Select
+            value={config.rounding}
+            onChange={(v) => patch({ rounding: v as RoundingMode })}
+            options={[
+              { value: "none", label: "None" },
+              { value: "up", label: "Round up" },
+              { value: "down", label: "Round down" },
+            ]}
+            ariaLabel="Rounding mode"
+            className="w-40"
+          />
         </div>
       </div>
 
@@ -476,23 +465,22 @@ function ReservationSection({
               spacing between booking time slots
             </span>
           </div>
-          <div className="grid grid-cols-4 gap-2">
-            {([15, 30, 60, 120] as const).map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => patch({ slotIntervalMinutes: opt })}
-                className={cn(
-                  "px-3 py-2 rounded-md border text-sm font-medium transition",
-                  config.slotIntervalMinutes === opt
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {opt} min
-              </button>
-            ))}
-          </div>
+          <Select
+            value={String(config.slotIntervalMinutes)}
+            onChange={(v) =>
+              patch({
+                slotIntervalMinutes: Number(v) as 15 | 30 | 60 | 120,
+              })
+            }
+            options={[
+              { value: "15", label: "15 min" },
+              { value: "30", label: "30 min" },
+              { value: "60", label: "60 min" },
+              { value: "120", label: "120 min" },
+            ]}
+            ariaLabel="Slot interval"
+            className="w-40"
+          />
         </div>
 
         <ConfigField
