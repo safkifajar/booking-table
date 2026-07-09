@@ -8,6 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { QrCode, Wallet, CreditCard, Banknote, Check, Sparkles, CheckCircle2, ChevronRight, X, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
+import { checkPaymentStatus } from "@/lib/actions";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
@@ -83,6 +84,31 @@ export function SplitPayment(props: Props) {
   // Bottom sheet open state utk pilih payment type / metode bayar.
   const [typeSheet, setTypeSheet] = React.useState(false);
   const [methodSheet, setMethodSheet] = React.useState(false);
+
+  // Flush payment pending yg QR-nya sudah expired: panggil checkPaymentStatus
+  // sekali (server mem-persist 'failed' kalau Duitku bilang expired), lalu
+  // refresh supaya badge jadi 'cancelled' & tombol Show QR hilang — tanpa user
+  // harus reload manual.
+  const payments = props.payments;
+  React.useEffect(() => {
+    const expired = payments.filter(
+      (p) =>
+        p.status === "pending" &&
+        p.expires_at != null &&
+        new Date(p.expires_at).getTime() <= Date.now()
+    );
+    if (expired.length === 0) return;
+    let cancelled = false;
+    void Promise.allSettled(
+      expired.map((p) => checkPaymentStatus(p.id))
+    ).then(() => {
+      if (!cancelled) router.refresh();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payments]);
 
   // Equal: total (subtotal + tax + service) / members count
   const equalShare = props.members.length > 0
@@ -369,7 +395,7 @@ export function SplitPayment(props: Props) {
                       variant={
                         p.status === "paid"
                           ? "success"
-                          : p.status === "pending"
+                          : p.status === "pending" && !isPaymentExpired(p)
                             ? "warning"
                             : "secondary"
                       }
@@ -378,7 +404,11 @@ export function SplitPayment(props: Props) {
                       {p.status === "paid" && (
                         <Check className="h-2.5 w-2.5 mr-0.5" />
                       )}
-                      {p.status === "failed" ? "cancelled" : p.status}
+                      {p.status === "paid"
+                        ? p.status
+                        : isPaymentExpired(p)
+                          ? "cancelled"
+                          : p.status}
                     </Badge>
                   </div>
                 </div>
@@ -394,8 +424,9 @@ export function SplitPayment(props: Props) {
                   </span>
                 </div>
 
-                {/* Pending + ada QR → tombol tampilkan QRIS lagi */}
-                {p.status === "pending" && p.qr_string && (
+                {/* Pending & BELUM expired & ada QR → tombol tampilkan QRIS lagi.
+                    Kalau sudah expired, QR mati → jangan tampilkan. */}
+                {p.status === "pending" && !isPaymentExpired(p) && p.qr_string && (
                   <button
                     type="button"
                     onClick={() =>
@@ -501,6 +532,17 @@ export function SplitPayment(props: Props) {
       )}
     </div>
   );
+}
+
+/**
+ * Payment pending dianggap expired kalau QR-nya sudah lewat expires_at.
+ * (Status DB berubah 'failed' lewat polling; ini guard UI supaya QR mati
+ * tak ditampilkan sebelum polling sempat update.)
+ */
+function isPaymentExpired(p: Payment): boolean {
+  if (p.status !== "pending") return false;
+  if (!p.expires_at) return false;
+  return new Date(p.expires_at).getTime() <= Date.now();
 }
 
 /** Tanggal+jam ringkas pembayaran, mis. "9 Jul, 22:52" (WIB). */

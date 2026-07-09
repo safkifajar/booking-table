@@ -1880,6 +1880,35 @@ export async function checkPaymentStatus(
     revalidatePath("/staff/cashier");
     return { status: "paid" };
   }
+
+  // QR kadaluarsa / dibatalkan di Duitku (statusCode "02") → simpan 'failed'
+  // supaya UI berhenti menampilkan QR mati (tombol Show QR hilang). Kalau ini
+  // DP booking yg masih reserved, batalkan booking-nya juga (meja bebas).
+  if (gwStatus === "failed" && row.status !== "failed") {
+    await db
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(eq(payments.id, row.id));
+    const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
+    if (meta.isDownPayment) {
+      const [sess] = await db
+        .select({ status: tableSessions.status })
+        .from(tableSessions)
+        .where(eq(tableSessions.id, row.sessionId));
+      if (sess?.status === "reserved") {
+        await db
+          .update(tableSessions)
+          .set({ status: "cancelled", closedAt: new Date() })
+          .where(eq(tableSessions.id, row.sessionId));
+        revalidatePath("/bar/[slug]", "page");
+      }
+    }
+    await notifySessionAndStaff(row.sessionId);
+    revalidatePath(`/session/${row.sessionId}`);
+    revalidatePath("/staff/cashier");
+    return { status: "failed" };
+  }
+
   return { status: gwStatus };
 }
 

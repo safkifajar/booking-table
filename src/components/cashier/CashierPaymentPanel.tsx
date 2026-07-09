@@ -49,6 +49,16 @@ function fmtDateTime(iso: string): string {
   return `${tgl} · ${fmtTime(iso)}`;
 }
 
+/** Payment pending yg QR-nya sudah lewat expires_at → dianggap expired. */
+function isPaymentExpired(p: {
+  status: string;
+  expires_at: string | null;
+}): boolean {
+  if (p.status !== "pending") return false;
+  if (!p.expires_at) return false;
+  return new Date(p.expires_at).getTime() <= Date.now();
+}
+
 // Hanya QRIS yang diaktifkan (Duitku). Cash/card/gopay/ovo disembunyikan.
 const PAYMENT_METHODS: {
   value: PaymentMethod;
@@ -198,7 +208,7 @@ export function CashierPaymentPanel({
                       variant={
                         p.status === "paid"
                           ? "default"
-                          : p.status === "pending"
+                          : p.status === "pending" && !isPaymentExpired(p)
                             ? "warning"
                             : "secondary"
                       }
@@ -206,11 +216,13 @@ export function CashierPaymentPanel({
                     >
                       {p.status === "paid"
                         ? "Paid"
-                        : p.status === "pending"
-                          ? "Pending"
-                          : p.status === "failed"
-                            ? "Cancelled"
-                            : p.status}
+                        : isPaymentExpired(p)
+                          ? "Cancelled"
+                          : p.status === "pending"
+                            ? "Pending"
+                            : p.status === "failed"
+                              ? "Cancelled"
+                              : p.status}
                     </Badge>
                   </div>
                   <div className="text-[11px] text-muted-foreground capitalize">
@@ -233,7 +245,7 @@ export function CashierPaymentPanel({
                   >
                     {formatIDR(p.amount)}
                   </div>
-                  {p.status === "pending" && !isClosed && (
+                  {p.status === "pending" && !isPaymentExpired(p) && !isClosed && (
                     <div className="flex gap-1 mt-1 justify-end flex-wrap">
                       {p.qr_string && (
                         <Button

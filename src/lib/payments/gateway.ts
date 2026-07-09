@@ -129,6 +129,13 @@ const mockGateway: PaymentGateway = {
 
 import { createHash } from "node:crypto";
 
+/**
+ * Masa berlaku QR QRIS (menit) untuk pembayaran bill biasa (Treat/Split).
+ * Setelah lewat, Duitku menolak & transactionStatus jadi expired ("02").
+ * DP booking punya timeout sendiri (1 menit, di queries.ts) yg lebih ketat.
+ */
+const QRIS_EXPIRY_MINUTES = 5;
+
 function md5(input: string): string {
   return createHash("md5").update(input, "utf8").digest("hex");
 }
@@ -190,7 +197,7 @@ const duitkuGateway: PaymentGateway = {
       callbackUrl: cfg.callbackUrl,
       returnUrl: cfg.returnUrl,
       signature,
-      expiryPeriod: 60, // menit
+      expiryPeriod: QRIS_EXPIRY_MINUTES, // menit — QR kadaluarsa setelah ini
     };
 
     const res = await fetch(`${cfg.base}/webapi/api/merchant/v2/inquiry`, {
@@ -228,8 +235,10 @@ const duitkuGateway: PaymentGateway = {
       qrString: data.qrString ?? null,
       redirectUrl: data.paymentUrl ?? null,
       merchantOrderId,
-      // expiryPeriod 60 menit dari sekarang.
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      // Kadaluarsa QRIS_EXPIRY_MINUTES dari sekarang (samakan dgn expiryPeriod).
+      expiresAt: new Date(
+        Date.now() + QRIS_EXPIRY_MINUTES * 60 * 1000
+      ).toISOString(),
     };
   },
 
