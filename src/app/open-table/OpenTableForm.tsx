@@ -32,6 +32,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { openTable } from "@/lib/actions";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { type InviteCandidate } from "@/lib/customer-actions";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
@@ -148,6 +149,13 @@ export function OpenTableForm({
   // User yg diajak/diundang (friends/invite_only).
   const [invited, setInvited] = React.useState<InviteCandidate[]>([]);
   const [loading, setLoading] = React.useState(false);
+  // Dialog QRIS untuk DP booking (kalau DP wajib & pending pembayaran).
+  const [dpQris, setDpQris] = React.useState<{
+    paymentId: string;
+    qrString: string;
+    amount: number;
+    sessionId: string;
+  } | null>(null);
 
   // Form ini khusus reservasi customer — selalu mode reservation (pilih slot + DP).
   // Walk-in immediate ada di flow staff/waiter terpisah.
@@ -280,7 +288,7 @@ export function OpenTableForm({
         reservationAt: selectedSlot || null,
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
-        dpMethod: dpRequired ? "mock" : undefined,
+        dpMethod: dpRequired ? "qris" : undefined,
         // Public & friends → teman langsung join; invite_only → diundang.
         // Semua visibility boleh bawa teman spesifik.
         invitedUserIds:
@@ -295,6 +303,18 @@ export function OpenTableForm({
           router.push(`/bar/${barSlug}`);
           return;
         }
+        setLoading(false);
+        return;
+      }
+      // DP QRIS menunggu bayar → tampilkan QR dialog, jangan redirect.
+      // Setelah lunas (polling), baru masuk ke session.
+      if (result && result.ok === true && "dpQris" in result && result.dpQris) {
+        setDpQris({
+          paymentId: result.dpQris.paymentId,
+          qrString: result.dpQris.qrString,
+          amount: dpAmount,
+          sessionId: result.sessionId,
+        });
         setLoading(false);
         return;
       }
@@ -585,6 +605,27 @@ export function OpenTableForm({
           cart={cart}
           onChange={setCart}
           onClose={() => setMenuModalOpen(false)}
+        />
+      )}
+
+      {/* Dialog QRIS untuk DP booking — bayar DP dulu baru masuk sesi. */}
+      {dpQris && (
+        <QrisPaymentDialog
+          paymentId={dpQris.paymentId}
+          qrString={dpQris.qrString}
+          amount={dpQris.amount}
+          onPaid={() => {
+            const sid = dpQris.sessionId;
+            setDpQris(null);
+            router.push(`/session/${sid}`);
+          }}
+          onClose={() => {
+            // Tutup tanpa bayar → sesi sudah ke-buat (DP pending). Arahkan ke
+            // sesi supaya user bisa lanjut/bayar DP nanti.
+            const sid = dpQris.sessionId;
+            setDpQris(null);
+            router.push(`/session/${sid}`);
+          }}
         />
       )}
     </Card>

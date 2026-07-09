@@ -523,6 +523,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
   // 9. Call gateway untuk DP (kalau ada). Best-effort: kalau gagal, session
   // tetap created tapi DP pending — staff bisa konfirmasi manual nanti.
+  // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
+  let dpQris: { paymentId: string; qrString: string } | null = null;
   if (dpPaymentId && dpAmount > 0) {
     try {
       const gateway = getPaymentGateway();
@@ -539,6 +541,13 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           externalRef: chargeResult.externalRef,
           status: chargeResult.status,
           paidAt: chargeResult.status === "paid" ? new Date() : null,
+          splitMeta: {
+            isDownPayment: true,
+            qrString: chargeResult.qrString ?? null,
+            redirectUrl: chargeResult.redirectUrl ?? null,
+            expiresAt: chargeResult.expiresAt ?? null,
+            merchantOrderId: chargeResult.merchantOrderId ?? dpPaymentId,
+          },
         })
         .where(eq(payments.id, dpPaymentId));
       dpStatus = chargeResult.status === "paid" ? "paid" : "pending";
@@ -549,6 +558,9 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
           .where(eq(tableSessions.id, sessionId));
+      } else if (chargeResult.qrString) {
+        // DP QRIS menunggu bayar → client tampilkan QR (jangan redirect).
+        dpQris = { paymentId: dpPaymentId, qrString: chargeResult.qrString };
       }
     } catch (err) {
       console.error("[openTable] DP gateway charge failed:", err);
@@ -599,10 +611,19 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     );
   }
 
-  // Walk-in → langsung session view (mulai pesan). Reservation → session
-  // view juga (lihat status pending DP). Kalau DP pending (mis. QRIS), client
-  // bisa show QR. Untuk MVP, redirect ke session page.
   void dpStatus; // unused warning suppress
+
+  // DP QRIS menunggu bayar → JANGAN redirect; kembalikan qrString supaya
+  // client tampilkan QR + polling. Setelah lunas, client redirect sendiri.
+  if (dpQris) {
+    return {
+      ok: true as const,
+      sessionId,
+      dpQris,
+    };
+  }
+
+  // Walk-in / tanpa DP / DP sudah paid → langsung ke session view.
   redirect(`/session/${sessionId}`);
 }
 
