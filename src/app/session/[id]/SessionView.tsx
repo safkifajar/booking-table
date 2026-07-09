@@ -55,6 +55,7 @@ import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 import { CashierPaymentPanel } from "@/components/cashier/CashierPaymentPanel";
 import type { CashierSessionDetail } from "@/lib/cashier-actions";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { EditTableInfoModal } from "./EditTableInfoModal";
 import type { InviteCandidate } from "@/lib/customer-actions";
 import type {
@@ -1411,7 +1412,16 @@ function SplitTab({
   remaining: number;
   payFullOnly?: boolean;
 }) {
+  const router = useRouter();
+  // Dialog QRIS aktif (kalau gateway return qrString + pending).
+  const [qris, setQris] = React.useState<{
+    paymentId: string;
+    qrString: string;
+    amount: number;
+  } | null>(null);
+
   return (
+    <>
     <SplitPayment
       sessionId={sessionId}
       items={items}
@@ -1431,11 +1441,13 @@ function SplitTab({
             return;
           }
 
-          // QRIS: show QR di dialog. Untuk mock gateway, qrString bukan EMV valid
-          // — saat real gateway (Xendit/Midtrans), itu jadi valid scannable QR.
+          // QRIS: tampilkan QR asli di dialog + auto-poll status.
           if (result.qrString && result.status === "pending") {
-            // TODO: tampilkan QR dialog dengan poll status via /api/payments/[id]/status
-            toast.info("Scan the QR to pay (QR display coming soon)");
+            setQris({
+              paymentId: result.paymentId,
+              qrString: result.qrString,
+              amount: input.amount,
+            });
             return;
           }
 
@@ -1450,6 +1462,19 @@ function SplitTab({
         }
       }}
     />
+    {qris && (
+      <QrisPaymentDialog
+        paymentId={qris.paymentId}
+        qrString={qris.qrString}
+        amount={qris.amount}
+        onPaid={() => {
+          setQris(null);
+          router.refresh();
+        }}
+        onClose={() => setQris(null)}
+      />
+    )}
+    </>
   );
 }
 

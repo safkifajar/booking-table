@@ -162,6 +162,15 @@ function duitkuMethodCode(method: PaymentMethod): string {
 
 const duitkuGateway: PaymentGateway = {
   async createCharge(input: CreateChargeInput): Promise<ChargeResult> {
+    // Hanya QRIS yang lewat Duitku. Cash/card = pembayaran fisik (uang tunai /
+    // EDC) → langsung 'paid' tanpa panggil gateway (kasir konfirmasi manual).
+    if (input.method !== "qris") {
+      return {
+        externalRef: `manual_${input.method}_${input.paymentId}`,
+        status: "paid",
+      };
+    }
+
     const cfg = duitkuConfig();
     // merchantOrderId harus unik per transaksi. Pakai paymentId (uuid) —
     // tapi Duitku batasi panjang; ambil bentuk ringkas + timestamp.
@@ -184,6 +193,13 @@ const duitkuGateway: PaymentGateway = {
       expiryPeriod: 60, // menit
     };
 
+    console.log("[duitku] inquiry →", `${cfg.base}/webapi/api/merchant/v2/inquiry`, {
+      merchantCode: cfg.merchantCode,
+      paymentAmount,
+      paymentMethod: body.paymentMethod,
+      merchantOrderId,
+      callbackUrl: cfg.callbackUrl,
+    });
     const res = await fetch(`${cfg.base}/webapi/api/merchant/v2/inquiry`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -192,6 +208,7 @@ const duitkuGateway: PaymentGateway = {
       cache: "no-store",
     });
     const text = await res.text();
+    console.log("[duitku] inquiry ← HTTP", res.status, text.slice(0, 500));
     let data: {
       statusCode?: string;
       statusMessage?: string;
@@ -257,9 +274,9 @@ const duitkuGateway: PaymentGateway = {
 // GATEWAY SELECTOR
 // ============================================================
 
-const driver = process.env.PAYMENT_GATEWAY ?? "mock";
-
 export function getPaymentGateway(): PaymentGateway {
+  // Baca env saat dipanggil (bukan module-load) supaya tak ter-cache stale.
+  const driver = process.env.PAYMENT_GATEWAY ?? "mock";
   if (driver === "mock") return mockGateway;
   if (driver === "duitku") return duitkuGateway;
 

@@ -1640,6 +1640,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   externalRef: string;
   qrString: string | null;
   redirectUrl: string | null;
+  expiresAt: string | null;
 }> {
   const profile = await requireProfile();
   const data = paySchema.parse(input);
@@ -1742,13 +1743,20 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     description: `Self-pay meja - ${data.sessionId.slice(0, 8)}`,
   });
 
-  // 5. Update payment dengan hasil gateway
+  // 5. Update payment dengan hasil gateway (+ metadata QRIS di split_meta).
   await db
     .update(payments)
     .set({
       externalRef: chargeResult.externalRef,
       status: chargeResult.status,
       paidAt: chargeResult.status === "paid" ? new Date() : null,
+      splitMeta: {
+        ...(data.splitMeta ?? {}),
+        qrString: chargeResult.qrString ?? null,
+        redirectUrl: chargeResult.redirectUrl ?? null,
+        expiresAt: chargeResult.expiresAt ?? null,
+        merchantOrderId: chargeResult.merchantOrderId ?? newPayment.id,
+      },
     })
     .where(eq(payments.id, newPayment.id));
 
@@ -1770,7 +1778,78 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     externalRef: chargeResult.externalRef,
     qrString: chargeResult.qrString ?? null,
     redirectUrl: chargeResult.redirectUrl ?? null,
+    expiresAt: chargeResult.expiresAt ?? null,
   };
+}
+
+/**
+ * Cek status pembayaran (member/staff sesi) — poll ke gateway (mis. QRIS
+ * Duitku). Kalau lunas → tandai paid. Dipakai QR dialog customer/waiter.
+ * Akses: pemanggil harus member joined ATAU staff aktif di bar sesi.
+ */
+export async function checkPaymentStatus(
+  paymentId: string
+): Promise<{ status: string }> {
+  const profile = await requireProfile();
+
+  // Payment + sesi + bar.
+  const [row] = await db
+    .select({
+      id: payments.id,
+      status: payments.status,
+      sessionId: orders.sessionId,
+      barId: floorAreas.barId,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(payments.id, paymentId));
+  if (!row) throw new Error("Payment not found");
+  if (row.status === "paid") return { status: "paid" };
+
+  // Otorisasi: member joined sesi ATAU staff aktif di bar.
+  const [asMember] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, row.sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+  let allowed = !!asMember;
+  if (!allowed) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, row.barId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    allowed = !!staff;
+  }
+  if (!allowed) throw new Error("Not allowed");
+
+  const gateway = getPaymentGateway();
+  const gwStatus = await gateway.checkStatus(row.id);
+  if (gwStatus === "paid") {
+    await db
+      .update(payments)
+      .set({ status: "paid", paidAt: new Date() })
+      .where(eq(payments.id, row.id));
+    await settleOverdueIfPaid(row.sessionId);
+    await notifySessionAndStaff(row.sessionId);
+    revalidatePath(`/session/${row.sessionId}`);
+    revalidatePath("/staff/cashier");
+    return { status: "paid" };
+  }
+  return { status: gwStatus };
 }
 
 // ============================================================
