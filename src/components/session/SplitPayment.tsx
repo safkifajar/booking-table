@@ -5,7 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { QrCode, Wallet, CreditCard, Banknote, Check, Sparkles, CheckCircle2, ChevronRight, X } from "lucide-react";
+import { QrCode, Wallet, CreditCard, Banknote, Check, Sparkles, CheckCircle2, ChevronRight, X, Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
@@ -33,6 +35,9 @@ interface Payment {
   method: PaymentMethod;
   status: string;
   split_mode: SplitMode;
+  is_down_payment: boolean;
+  qr_string: string | null;
+  created_at: string;
   paid_at: string | null;
   paid_by: string;
   paid_by_avatar: string | null;
@@ -60,12 +65,19 @@ interface Props {
 }
 
 export function SplitPayment(props: Props) {
+  const router = useRouter();
   // payFullOnly (staff) → default & terkunci ke "custom" (bayar penuh sisa).
   const [mode, setMode] = React.useState<SplitMode>(
     props.payFullOnly ? "custom" : "equal"
   );
   const [method, setMethod] = React.useState<PaymentMethod>("qris");
   const [loading, setLoading] = React.useState(false);
+  // Payment pending yg QR-nya sedang ditampilkan ulang (klik "Show QR").
+  const [reshowQr, setReshowQr] = React.useState<{
+    paymentId: string;
+    qrString: string;
+    amount: number;
+  } | null>(null);
   // Bottom sheet open state utk pilih payment type / metode bayar.
   const [typeSheet, setTypeSheet] = React.useState(false);
   const [methodSheet, setMethodSheet] = React.useState(false);
@@ -322,31 +334,80 @@ export function SplitPayment(props: Props) {
           <h3 className="text-sm font-semibold mb-2 mt-6">Payments received</h3>
           <div className="space-y-2">
             {props.payments.map((p) => (
-              <Card key={p.id} className="p-3 flex items-center gap-3">
-                <Avatar className="h-8 w-8">
-                  {p.paid_by_avatar && <AvatarImage src={p.paid_by_avatar} />}
-                  <AvatarFallback className="text-[10px]">
-                    {initials(p.paid_by)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.paid_by}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.method.toUpperCase()} · {splitModeLabel(p.split_mode)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-primary text-sm">
-                    {formatIDR(p.amount)}
+              <Card key={p.id} className="p-3 space-y-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8">
+                    {p.paid_by_avatar && <AvatarImage src={p.paid_by_avatar} />}
+                    <AvatarFallback className="text-[10px]">
+                      {initials(p.paid_by)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">
+                        {p.paid_by}
+                      </p>
+                      {/* Tanda DP vs bukan */}
+                      <Badge
+                        variant={p.is_down_payment ? "default" : "secondary"}
+                        className="text-[9px] px-1 shrink-0"
+                      >
+                        {p.is_down_payment ? "DP" : "Bill"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {p.method.toUpperCase()} · {splitModeLabel(p.split_mode)}
+                    </p>
                   </div>
-                  <Badge
-                    variant={p.status === "paid" ? "success" : "warning"}
-                    className="text-[10px]"
-                  >
-                    {p.status === "paid" && <Check className="h-2.5 w-2.5 mr-0.5" />}
-                    {p.status}
-                  </Badge>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold text-primary text-sm tabular-nums">
+                      {formatIDR(p.amount)}
+                    </div>
+                    <Badge
+                      variant={
+                        p.status === "paid"
+                          ? "success"
+                          : p.status === "pending"
+                            ? "warning"
+                            : "secondary"
+                      }
+                      className="text-[10px]"
+                    >
+                      {p.status === "paid" && (
+                        <Check className="h-2.5 w-2.5 mr-0.5" />
+                      )}
+                      {p.status === "failed" ? "cancelled" : p.status}
+                    </Badge>
+                  </div>
                 </div>
+
+                {/* ID transaksi + waktu */}
+                <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground pl-11">
+                  <span className="font-mono select-all truncate">
+                    ID: {p.id}
+                  </span>
+                  <span className="tabular-nums shrink-0 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {fmtPaymentTime(p.paid_at ?? p.created_at)}
+                  </span>
+                </div>
+
+                {/* Pending + ada QR → tombol tampilkan QRIS lagi */}
+                {p.status === "pending" && p.qr_string && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReshowQr({
+                        paymentId: p.id,
+                        qrString: p.qr_string!,
+                        amount: p.amount,
+                      })
+                    }
+                    className="ml-11 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition"
+                  >
+                    <QrCode className="h-3.5 w-3.5" /> Show QR again
+                  </button>
+                )}
               </Card>
             ))}
           </div>
@@ -404,8 +465,33 @@ export function SplitPayment(props: Props) {
           ))}
         </PickerSheet>
       )}
+
+      {/* Tampilkan QRIS lagi untuk payment pending. */}
+      {reshowQr && (
+        <QrisPaymentDialog
+          paymentId={reshowQr.paymentId}
+          qrString={reshowQr.qrString}
+          amount={reshowQr.amount}
+          onPaid={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onClose={() => setReshowQr(null)}
+        />
+      )}
     </div>
   );
+}
+
+/** Tanggal+jam ringkas pembayaran, mis. "9 Jul, 22:52" (WIB). */
+function fmtPaymentTime(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(iso));
 }
 
 function splitModeLabel(mode: SplitMode): string {

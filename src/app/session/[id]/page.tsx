@@ -208,6 +208,8 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           method: payments.method,
           status: payments.status,
           split_mode: payments.splitMode,
+          split_meta: payments.splitMeta,
+          created_at: payments.createdAt,
           paid_at: payments.paidAt,
           paid_by_display_name: profiles.displayName,
           paid_by_avatar_url: profiles.avatarUrl,
@@ -333,16 +335,26 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           avatar_url: oi.member_avatar_url,
         },
       }))}
-      payments={paymentsRaw.map((p) => ({
-        id: p.id,
-        amount: p.amount,
-        method: p.method,
-        status: p.status,
-        split_mode: p.split_mode,
-        paid_at: p.paid_at ? p.paid_at.toISOString() : null,
-        paid_by: p.paid_by_display_name,
-        paid_by_avatar: p.paid_by_avatar_url,
-      }))}
+      payments={paymentsRaw.map((p) => {
+        const meta =
+          (p.split_meta as {
+            isDownPayment?: boolean;
+            qrString?: string | null;
+          } | null) ?? {};
+        return {
+          id: p.id,
+          amount: p.amount,
+          method: p.method,
+          status: p.status,
+          split_mode: p.split_mode,
+          is_down_payment: !!meta.isDownPayment,
+          qr_string: meta.qrString ?? null,
+          created_at: p.created_at.toISOString(),
+          paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+          paid_by: p.paid_by_display_name,
+          paid_by_avatar: p.paid_by_avatar_url,
+        };
+      })}
       menu={menu}
       myProfileId={profile.id}
       myMemberId={myMember?.id ?? null}

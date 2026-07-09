@@ -146,6 +146,9 @@ interface SessionViewProps {
     method: PaymentMethod;
     status: PaymentStatus;
     split_mode: SplitMode;
+    is_down_payment: boolean;
+    qr_string: string | null;
+    created_at: string;
     paid_at: string | null;
     paid_by: string;
     paid_by_avatar: string | null;
