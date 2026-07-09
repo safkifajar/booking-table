@@ -387,6 +387,86 @@ export async function settleOverdueIfPaid(sessionId: string): Promise<boolean> {
   return true;
 }
 
+/** Batas waktu bayar DP booking (detik). Lewat ini → booking dibatalkan. */
+const DP_TIMEOUT_SECONDS = 60;
+
+/**
+ * Batalkan booking yang DP-nya tak dibayar dalam DP_TIMEOUT_SECONDS.
+ * Kondisi: session 'reserved', dp_paid_at NULL, punya payment DP (isDownPayment)
+ * berstatus 'pending' yang dibuat > timeout lalu → set payment 'failed' +
+ * session 'cancelled'. Return true kalau session ini dibatalkan.
+ * Lazy: dipanggil saat buka /session, load denah, atau saat countdown habis.
+ */
+export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
+  const [s] = await db
+    .select({
+      status: tableSessions.status,
+      dpPaidAt: tableSessions.dpPaidAt,
+    })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, sessionId));
+  if (!s || s.status !== "reserved" || s.dpPaidAt != null) return false;
+
+  const cutoff = new Date(Date.now() - DP_TIMEOUT_SECONDS * 1000);
+  // Cari payment DP pending untuk sesi ini yg sudah lewat batas.
+  const [dp] = await db
+    .select({ id: payments.id, createdAt: payments.createdAt })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
+        lte(payments.createdAt, cutoff)
+      )
+    )
+    .limit(1);
+  if (!dp) return false;
+
+  // Batalkan: payment gagal + session cancelled (meja bebas lagi).
+  await db
+    .update(payments)
+    .set({ status: "failed", paidAt: null })
+    .where(eq(payments.id, dp.id));
+  await db
+    .update(tableSessions)
+    .set({ status: "cancelled", closedAt: new Date() })
+    .where(eq(tableSessions.id, sessionId));
+  return true;
+}
+
+/**
+ * Sweep semua DP booking basi (>1 menit belum bayar) di satu bar → batalkan.
+ * Dipanggil saat denah bar di-load supaya meja bebas lagi walau host tak balik.
+ */
+export async function expireOverdueDpBookings(barId: string): Promise<number> {
+  const cutoff = new Date(Date.now() - DP_TIMEOUT_SECONDS * 1000);
+  // Sesi 'reserved' di bar ini, dp belum dibayar, punya DP pending basi.
+  const rows = await db
+    .selectDistinct({ sessionId: tableSessions.id })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(orders, eq(orders.sessionId, tableSessions.id))
+    .innerJoin(payments, eq(payments.orderId, orders.id))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        eq(tableSessions.status, "reserved"),
+        sql`${tableSessions.dpPaidAt} IS NULL`,
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
+        lte(payments.createdAt, cutoff)
+      )
+    );
+  let n = 0;
+  for (const r of rows) {
+    if (await expireDpIfOverdue(r.sessionId)) n++;
+  }
+  return n;
+}
+
 export async function expireFinishedSessions(barId: string): Promise<number> {
   const now = new Date();
   const walkinCutoff = new Date(now.getTime() - WALKIN_MAX_HOURS * 60 * 60 * 1000);

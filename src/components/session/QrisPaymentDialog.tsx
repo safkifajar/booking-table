@@ -16,17 +16,24 @@ export function QrisPaymentDialog({
   paymentId,
   qrString,
   amount,
+  expirySeconds,
   onPaid,
+  onExpired,
   onClose,
 }: {
   paymentId: string;
   qrString: string;
   amount: number;
+  /** Batas waktu bayar (detik). Tampilkan countdown; habis → onExpired. */
+  expirySeconds?: number;
   onPaid: () => void;
+  /** Dipanggil saat countdown habis (mis. DP booking → booking dibatalkan). */
+  onExpired?: () => void;
   onClose: () => void;
 }) {
   const [qrImage, setQrImage] = React.useState<string | null>(null);
   const [checking, setChecking] = React.useState(false);
+  const [secondsLeft, setSecondsLeft] = React.useState(expirySeconds ?? 0);
 
   // Generate gambar QR dari qrString (EMV QRIS asli).
   React.useEffect(() => {
@@ -60,6 +67,35 @@ export function QrisPaymentDialog({
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentId]);
+
+  // Countdown (kalau ada batas waktu). Habis → onExpired.
+  React.useEffect(() => {
+    if (!expirySeconds || expirySeconds <= 0) return;
+    const t = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearInterval(t);
+          // Cek sekali lagi kalau-kalau baru saja lunas; kalau belum → expired.
+          void checkPaymentStatus(paymentId)
+            .then((r) => {
+              if (r.status === "paid") {
+                onPaid();
+              } else {
+                toast.error("Payment time is up — booking cancelled");
+                onExpired?.();
+              }
+            })
+            .catch(() => {
+              onExpired?.();
+            });
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expirySeconds, paymentId]);
 
   // Kunci scroll background.
   React.useEffect(() => {
@@ -145,9 +181,26 @@ export function QrisPaymentDialog({
               Transaction ID:{" "}
               <span className="font-mono select-all">{paymentId}</span>
             </div>
-            <div className="text-[10px] text-muted-foreground italic">
-              Waiting for payment — this updates automatically once paid.
-            </div>
+            {expirySeconds && expirySeconds > 0 ? (
+              <div className="text-xs font-medium">
+                Pay within{" "}
+                <span
+                  className={
+                    secondsLeft <= 15
+                      ? "text-red-400 tabular-nums"
+                      : "text-primary tabular-nums"
+                  }
+                >
+                  {Math.floor(secondsLeft / 60)}:
+                  {String(secondsLeft % 60).padStart(2, "0")}
+                </span>{" "}
+                or the booking is cancelled.
+              </div>
+            ) : (
+              <div className="text-[10px] text-muted-foreground italic">
+                Waiting for payment — this updates automatically once paid.
+              </div>
+            )}
           </div>
 
           {/* Download QR (PNG) — untuk cetak / kirim ke customer. */}

@@ -1478,19 +1478,20 @@ function SplitTab({
         try {
           const result = await payShare({ sessionId, ...input });
 
-          // Gateway return redirect URL (Snap/Checkout-based) → arahkan ke sana
-          if (result.redirectUrl) {
-            window.location.href = result.redirectUrl;
-            return;
-          }
-
-          // QRIS: tampilkan QR asli di dialog + auto-poll status.
+          // QRIS: render QR di dialog app SENDIRI (jangan redirect ke halaman
+          // Duitku). Utamakan qrString di atas redirectUrl.
           if (result.qrString && result.status === "pending") {
             setQris({
               paymentId: result.paymentId,
               qrString: result.qrString,
               amount: input.amount,
             });
+            return;
+          }
+
+          // Fallback: gateway hanya kasih redirect URL (tanpa qrString).
+          if (result.redirectUrl) {
+            window.location.href = result.redirectUrl;
             return;
           }
 

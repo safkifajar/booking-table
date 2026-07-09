@@ -942,6 +942,7 @@ export async function markPaymentPaidBySystem(
     .select({
       id: payments.id,
       status: payments.status,
+      splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
     })
@@ -960,6 +961,16 @@ export async function markPaymentPaidBySystem(
     .update(payments)
     .set({ status: "paid", paidAt: new Date() })
     .where(eq(payments.id, paymentId));
+
+  // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi).
+  const meta =
+    (payment.splitMeta as { isDownPayment?: boolean } | null) ?? {};
+  if (meta.isDownPayment) {
+    await db
+      .update(tableSessions)
+      .set({ dpPaidAt: new Date() })
+      .where(eq(tableSessions.id, payment.sessionId));
+  }
 
   await settleOverdueIfPaid(payment.sessionId);
   await notifyAll(payment.sessionId, payment.barId, { type: "payment.paid" });

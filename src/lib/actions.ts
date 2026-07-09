@@ -1818,6 +1818,7 @@ export async function checkPaymentStatus(
     .select({
       id: payments.id,
       status: payments.status,
+      splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
     })
@@ -1864,6 +1865,15 @@ export async function checkPaymentStatus(
       .update(payments)
       .set({ status: "paid", paidAt: new Date() })
       .where(eq(payments.id, row.id));
+    // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi, tak jadi
+    // dibatalkan oleh timeout).
+    const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
+    if (meta.isDownPayment) {
+      await db
+        .update(tableSessions)
+        .set({ dpPaidAt: new Date() })
+        .where(eq(tableSessions.id, row.sessionId));
+    }
     await settleOverdueIfPaid(row.sessionId);
     await notifySessionAndStaff(row.sessionId);
     revalidatePath(`/session/${row.sessionId}`);

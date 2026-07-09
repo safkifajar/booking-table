@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { and, eq, gte, lte } from "drizzle-orm";
-import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, getMenuByBar } from "@/lib/queries";
+import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, expireOverdueDpBookings, getMenuByBar } from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars, tables, floorAreas } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
@@ -45,6 +45,7 @@ export default async function BarPage({ params }: PageProps) {
   // 2. Promote reservasi yg waktunya tiba → open. Urutan ini penting: meja yg
   //    baru di-close bisa langsung dipakai reservasi berikutnya.
   await expireFinishedSessions(bar.id);
+  await expireOverdueDpBookings(bar.id);
   await promoteDueReservations(bar.id);
 
   const areas = await getFloorAreas(bar.id);

@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { and, eq, desc, asc, ne } from "drizzle-orm";
+import { and, eq, desc, asc, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   tableSessions,
@@ -16,6 +16,7 @@ import {
   flattenMenuTree,
   getUserRatingsBatch,
   promoteSessionIfDue,
+  expireDpIfOverdue,
 } from "@/lib/queries";
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
@@ -52,6 +53,10 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       `/onboarding?next=${encodeURIComponent(`/session/${id}`)}`
     );
 
+  // Batalkan booking yg DP-nya tak dibayar dalam 1 menit (lazy-expire). Cek
+  // SEBELUM promote — booking hangus tak boleh jadi 'open'.
+  await expireDpIfOverdue(id);
+
   // Promote reservasi yg jamnya sudah tiba → 'open' (lazy, supaya status fresh
   // saat buka session — denah & tombol gabung bergantung status open).
   await promoteSessionIfDue(id);
@@ -69,6 +74,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       reservation_end_at: tableSessions.reservationEndAt,
       host_id: tableSessions.hostId,
       opened_by_staff_id: tableSessions.openedByStaffId,
+      dp_paid_at: tableSessions.dpPaidAt,
       // table
       table_label: tables.label,
       table_capacity: tables.capacity,
@@ -92,6 +98,33 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
     .where(eq(tableSessions.id, id));
 
   if (!sessionRow) notFound();
+
+  // Blokir akses saat DP booking belum dibayar: host (yg booking) tak boleh
+  // buka halaman detail sampai DP lunas — meja "terbooking dulu" tapi belum
+  // aktif. Staff (kasir/waiter) TETAP boleh (bantu tamu). Diarahkan balik ke
+  // denah bar (user tetap bayar via dialog QRIS di alur booking).
+  if (
+    sessionRow.status === "reserved" &&
+    sessionRow.dp_paid_at == null &&
+    !staffRole &&
+    sessionRow.host_id === profile.id
+  ) {
+    const [pendingDp] = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .innerJoin(orders, eq(orders.id, payments.orderId))
+      .where(
+        and(
+          eq(orders.sessionId, id),
+          eq(payments.status, "pending"),
+          sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
+        )
+      )
+      .limit(1);
+    if (pendingDp) {
+      redirect(`/bar/${sessionRow.bar_slug}`);
+    }
+  }
 
   // Lookup nama staff yang buka meja (untuk display "Dibuka oleh Waiter X")
   let openedByStaff: { id: string; display_name: string } | null = null;

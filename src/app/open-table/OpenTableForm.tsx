@@ -614,17 +614,24 @@ export function OpenTableForm({
           paymentId={dpQris.paymentId}
           qrString={dpQris.qrString}
           amount={dpQris.amount}
+          expirySeconds={60}
           onPaid={() => {
+            // DP lunas → booking terkonfirmasi, masuk ke sesi.
             const sid = dpQris.sessionId;
             setDpQris(null);
             router.push(`/session/${sid}`);
           }}
-          onClose={() => {
-            // Tutup tanpa bayar → sesi sudah ke-buat (DP pending). Arahkan ke
-            // sesi supaya user bisa lanjut/bayar DP nanti.
-            const sid = dpQris.sessionId;
+          onExpired={() => {
+            // Waktu habis → booking dibatalkan (server set cancelled saat page
+            // diakses / denah di-load). Balik ke denah bar.
             setDpQris(null);
-            router.push(`/session/${sid}`);
+            router.push(`/bar/${barSlug}`);
+          }}
+          onClose={() => {
+            // Tutup tanpa bayar → booking belum terkonfirmasi (host tak boleh
+            // buka detail saat DP pending). Balik ke denah bar.
+            setDpQris(null);
+            router.push(`/bar/${barSlug}`);
           }}
         />
       )}
