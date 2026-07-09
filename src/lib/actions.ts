@@ -1883,6 +1883,90 @@ export async function checkPaymentStatus(
   return { status: gwStatus };
 }
 
+/**
+ * Batalkan payment (dari sisi user/host) — dipakai tombol "Batalkan transaksi"
+ * di dialog QRIS, dan saat countdown DP booking habis (00:00).
+ * Otorisasi: member joined sesi ATAU staff aktif di bar (sama seperti
+ * checkPaymentStatus). Kalau payment ini DP booking yg masih pending →
+ * sekalian batalkan booking-nya (session 'cancelled', meja bebas lagi).
+ * Idempotent: kalau sudah paid, tidak membatalkan (return paid).
+ */
+export async function cancelPayment(
+  paymentId: string
+): Promise<{ status: string; bookingCancelled: boolean }> {
+  const profile = await requireProfile();
+
+  const [row] = await db
+    .select({
+      id: payments.id,
+      status: payments.status,
+      splitMeta: payments.splitMeta,
+      sessionId: orders.sessionId,
+      sessionStatus: tableSessions.status,
+      barId: floorAreas.barId,
+      barSlug: bars.slug,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .where(eq(payments.id, paymentId));
+  if (!row) throw new Error("Payment not found");
+  if (row.status === "paid")
+    return { status: "paid", bookingCancelled: false };
+
+  // Otorisasi: member joined sesi ATAU staff aktif di bar.
+  const [asMember] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, row.sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+  let allowed = !!asMember;
+  if (!allowed) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, row.barId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    allowed = !!staff;
+  }
+  if (!allowed) throw new Error("Not allowed");
+
+  await db
+    .update(payments)
+    .set({ status: "failed", paidAt: null })
+    .where(eq(payments.id, row.id));
+
+  // DP booking pending → batalkan booking (meja bebas lagi).
+  const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
+  let bookingCancelled = false;
+  if (meta.isDownPayment && row.sessionStatus === "reserved") {
+    await db
+      .update(tableSessions)
+      .set({ status: "cancelled", closedAt: new Date() })
+      .where(eq(tableSessions.id, row.sessionId));
+    bookingCancelled = true;
+    revalidatePath("/bar/[slug]", "page");
+  }
+
+  await notifySessionAndStaff(row.sessionId);
+  revalidatePath(`/session/${row.sessionId}`);
+  revalidatePath("/staff/cashier");
+  return { status: "cancelled", bookingCancelled };
+}
+
 // ============================================================
 // STAFF / WAITER
 // ============================================================

@@ -5,8 +5,10 @@ import { createPortal } from "react-dom";
 import { Loader2, CheckCircle2, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
-import { checkPaymentStatus } from "@/lib/actions";
+import { checkPaymentStatus, cancelPayment } from "@/lib/actions";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ConfirmDialog";
+import { buildQrisFramePng } from "@/lib/qris-frame";
 
 /**
  * Dialog QRIS untuk customer/waiter: render QR asli (dari qrString Duitku) +
@@ -19,6 +21,7 @@ export function QrisPaymentDialog({
   expirySeconds,
   onPaid,
   onExpired,
+  onCancelled,
   onClose,
 }: {
   paymentId: string;
@@ -29,10 +32,14 @@ export function QrisPaymentDialog({
   onPaid: () => void;
   /** Dipanggil saat countdown habis (mis. DP booking → booking dibatalkan). */
   onExpired?: () => void;
+  /** Dipanggil saat user menekan "Batalkan transaksi" & berhasil dibatalkan. */
+  onCancelled?: () => void;
   onClose: () => void;
 }) {
+  const confirm = useConfirm();
   const [qrImage, setQrImage] = React.useState<string | null>(null);
   const [checking, setChecking] = React.useState(false);
+  const [cancelling, setCancelling] = React.useState(false);
   const [secondsLeft, setSecondsLeft] = React.useState(expirySeconds ?? 0);
 
   // Generate gambar QR dari qrString (EMV QRIS asli).
@@ -75,15 +82,22 @@ export function QrisPaymentDialog({
       setSecondsLeft((s) => {
         if (s <= 1) {
           clearInterval(t);
-          // Cek sekali lagi kalau-kalau baru saja lunas; kalau belum → expired.
+          // Cek sekali lagi kalau-kalau baru saja lunas; kalau belum → batalkan
+          // transaksi (server set payment failed + booking cancelled) supaya
+          // meja bebas lagi walau host tak balik ke denah.
           void checkPaymentStatus(paymentId)
-            .then((r) => {
+            .then(async (r) => {
               if (r.status === "paid") {
                 onPaid();
-              } else {
-                toast.error("Payment time is up — booking cancelled");
-                onExpired?.();
+                return;
               }
+              try {
+                await cancelPayment(paymentId);
+              } catch {
+                // best-effort; sweep denah tetap jadi jaring pengaman.
+              }
+              toast.error("Payment time is up — booking cancelled");
+              onExpired?.();
             })
             .catch(() => {
               onExpired?.();
@@ -123,13 +137,49 @@ export function QrisPaymentDialog({
     }
   }
 
-  // Unduh QR sebagai PNG (data-URL → anchor download).
-  function handleDownload() {
+  // Unduh QR ber-frame branded SOHO (logo + nama + nominal) sebagai PNG.
+  async function handleDownload() {
     if (!qrImage) return;
-    const a = document.createElement("a");
-    a.href = qrImage;
-    a.download = `qris-${paymentId}.png`;
-    a.click();
+    try {
+      const png = await buildQrisFramePng({
+        qrDataUrl: qrImage,
+        amountLabel: formatIDR(amount),
+        transactionId: paymentId,
+      });
+      const a = document.createElement("a");
+      a.href = png;
+      a.download = `qris-soho-${paymentId}.png`;
+      a.click();
+    } catch {
+      // Fallback: QR polos kalau frame gagal digenerate.
+      const a = document.createElement("a");
+      a.href = qrImage;
+      a.download = `qris-${paymentId}.png`;
+      a.click();
+    }
+  }
+
+  // Batalkan transaksi (tombol di dialog). Kalau DP booking → booking ikut batal.
+  async function handleCancel() {
+    const ok = await confirm({
+      title: "Cancel this transaction?",
+      description:
+        "The QRIS code will be voided. If this is a booking down payment, the booking will also be cancelled.",
+      confirmText: "Cancel transaction",
+      cancelText: "Keep",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await cancelPayment(paymentId);
+      toast.success("Transaction cancelled");
+      onCancelled?.();
+      onClose();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to cancel transaction"));
+      setCancelling(false);
+    }
   }
 
   return createPortal(
@@ -233,9 +283,24 @@ export function QrisPaymentDialog({
           <Button
             variant="ghost"
             size="sm"
+            className="w-full text-red-400 hover:text-red-300"
+            onClick={handleCancel}
+            disabled={checking || cancelling}
+          >
+            {cancelling ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Cancelling…
+              </>
+            ) : (
+              "Cancel transaction"
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             className="w-full"
             onClick={onClose}
-            disabled={checking}
+            disabled={checking || cancelling}
           >
             Close
           </Button>
