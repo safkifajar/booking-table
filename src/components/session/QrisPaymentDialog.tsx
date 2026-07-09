@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Loader2, CheckCircle2, X } from "lucide-react";
+import { Loader2, CheckCircle2, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { checkPaymentStatus } from "@/lib/actions";
@@ -87,6 +87,15 @@ export function QrisPaymentDialog({
     }
   }
 
+  // Unduh QR sebagai PNG (data-URL → anchor download).
+  function handleDownload() {
+    if (!qrImage) return;
+    const a = document.createElement("a");
+    a.href = qrImage;
+    a.download = `qris-${paymentId}.png`;
+    a.click();
+  }
+
   return createPortal(
     <div
       className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -131,11 +140,26 @@ export function QrisPaymentDialog({
             <div className="text-2xl font-bold tabular-nums text-primary">
               {formatIDR(amount)}
             </div>
+            {/* ID transaksi — untuk referensi & cek status di dashboard. */}
+            <div className="text-[10px] text-muted-foreground">
+              Transaction ID:{" "}
+              <span className="font-mono select-all">{paymentId}</span>
+            </div>
             <div className="text-[10px] text-muted-foreground italic">
               Waiting for payment — this updates automatically once paid.
             </div>
           </div>
 
+          {/* Download QR (PNG) — untuk cetak / kirim ke customer. */}
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={handleDownload}
+            disabled={!qrImage}
+          >
+            <Download className="h-4 w-4" /> Download QR
+          </Button>
           <Button
             variant="gold"
             size="lg"

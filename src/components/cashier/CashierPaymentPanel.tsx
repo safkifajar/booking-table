@@ -14,6 +14,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Calculator,
+  Download,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -492,6 +493,15 @@ function PaymentModal({
     }
   }
 
+  // Unduh QR sebagai PNG (data-URL → anchor download).
+  function handleDownloadQr() {
+    if (!qrImage) return;
+    const a = document.createElement("a");
+    a.href = qrImage;
+    a.download = `qris-${qrPaymentId ?? "payment"}.png`;
+    a.click();
+  }
+
   if (detail.members.length === 0) {
     return (
       <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
@@ -800,11 +810,27 @@ function PaymentModal({
                 <div className="text-2xl font-bold tabular-nums text-primary">
                   {formatIDR(amount)}
                 </div>
+                {qrPaymentId && (
+                  <div className="text-[10px] text-muted-foreground">
+                    Transaction ID:{" "}
+                    <span className="font-mono select-all">{qrPaymentId}</span>
+                  </div>
+                )}
                 <div className="text-[10px] text-muted-foreground italic">
                   Waiting for payment — updates automatically once paid.
                 </div>
               </div>
 
+              {/* Download QR (PNG) — untuk cetak / kirim ke customer. */}
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={handleDownloadQr}
+                disabled={!qrImage}
+              >
+                <Download className="h-4 w-4" /> Download QR
+              </Button>
               {/* Cek status manual (cadangan kalau callback telat). */}
               <Button
                 variant="gold"
