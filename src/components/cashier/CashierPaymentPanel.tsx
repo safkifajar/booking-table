@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import {
   cashierCreatePayment,
   cashierMarkPaymentPaid,
@@ -83,6 +84,12 @@ export function CashierPaymentPanel({
   const [cancelling, setCancelling] = React.useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = React.useState<string | null>(null);
   const [closing, setClosing] = React.useState(false);
+  // Payment pending yg QR-nya mau ditampilkan ulang.
+  const [reshowQr, setReshowQr] = React.useState<{
+    paymentId: string;
+    qrString: string;
+    amount: number;
+  } | null>(null);
 
   // Realtime
   React.useEffect(() => {
@@ -178,8 +185,14 @@ export function CashierPaymentPanel({
             {detail.payments.map((p) => (
               <div key={p.id} className="px-4 py-2.5 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-sm font-medium">{p.paid_by_name}</span>
+                    <Badge
+                      variant={p.is_down_payment ? "warning" : "secondary"}
+                      className="text-[9px] px-1.5"
+                    >
+                      {p.is_down_payment ? "DP" : "Bill"}
+                    </Badge>
                     <Badge
                       variant={
                         p.status === "paid"
@@ -201,12 +214,13 @@ export function CashierPaymentPanel({
                   </div>
                   <div className="text-[11px] text-muted-foreground capitalize">
                     {p.method.toUpperCase()}
-                    {p.paid_at && (
-                      <>
-                        {" · "}
-                        <span className="tabular-nums">{fmtDateTime(p.paid_at)}</span>
-                      </>
-                    )}
+                    {" · "}
+                    <span className="tabular-nums">
+                      {fmtDateTime(p.paid_at ?? p.created_at)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground/70 font-mono select-all mt-0.5">
+                    ID: {p.id}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
@@ -219,7 +233,24 @@ export function CashierPaymentPanel({
                     {formatIDR(p.amount)}
                   </div>
                   {p.status === "pending" && !isClosed && (
-                    <div className="flex gap-1 mt-1 justify-end">
+                    <div className="flex gap-1 mt-1 justify-end flex-wrap">
+                      {p.qr_string && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setReshowQr({
+                              paymentId: p.id,
+                              qrString: p.qr_string!,
+                              amount: p.amount,
+                            })
+                          }
+                          className="h-7 text-[10px] text-primary hover:text-primary/80 px-2"
+                        >
+                          <QrCode className="h-3 w-3 mr-1" />
+                          Show QR
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -357,6 +388,19 @@ export function CashierPaymentPanel({
             setPaymentModalOpen(false);
             router.refresh();
           }}
+        />
+      )}
+
+      {reshowQr && (
+        <QrisPaymentDialog
+          paymentId={reshowQr.paymentId}
+          qrString={reshowQr.qrString}
+          amount={reshowQr.amount}
+          onPaid={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onClose={() => setReshowQr(null)}
         />
       )}
     </div>

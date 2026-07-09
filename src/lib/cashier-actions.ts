@@ -453,6 +453,9 @@ export interface CashierPayment {
   method: PaymentMethod;
   status: string;
   paid_at: string | null;
+  created_at: string;
+  is_down_payment: boolean;
+  qr_string: string | null;
   paid_by_name: string;
 }
 
@@ -590,6 +593,8 @@ export async function getSessionDetailForCashier(
           method: payments.method,
           status: payments.status,
           paid_at: payments.paidAt,
+          created_at: payments.createdAt,
+          split_meta: payments.splitMeta,
           paid_by_name: profiles.displayName,
         })
         .from(payments)
@@ -658,14 +663,23 @@ export async function getSessionDetailForCashier(
       menu_item_name: i.menu_item_name,
       added_by_name: i.added_by_name,
     })),
-    payments: paymentsRaw.map((p) => ({
-      id: p.id,
-      amount: p.amount,
-      method: p.method,
-      status: p.status,
-      paid_at: p.paid_at ? p.paid_at.toISOString() : null,
-      paid_by_name: p.paid_by_name,
-    })),
+    payments: paymentsRaw.map((p) => {
+      const meta = (p.split_meta ?? {}) as {
+        isDownPayment?: boolean;
+        qrString?: string;
+      };
+      return {
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        status: p.status,
+        paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+        created_at: p.created_at.toISOString(),
+        is_down_payment: !!meta.isDownPayment,
+        qr_string: meta.qrString ?? null,
+        paid_by_name: p.paid_by_name,
+      };
+    }),
     members: membersRaw.map((m) => ({
       member_id: m.member_id,
       profile_id: m.profile_id,
