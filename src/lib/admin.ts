@@ -636,6 +636,10 @@ export interface TransactionDetail {
   tax: number;
   /** Service charge (dari config bar). */
   service: number;
+  /** Gabungan tax + service (1 baris). */
+  charge: number;
+  /** Persen gabungan (taxPercent + servicePercent). */
+  charge_percent: number;
   /** subtotal + tax + service. */
   total: number;
   total_paid: number;
@@ -862,6 +866,8 @@ export async function getTransactionDetail(
     subtotal,
     tax: bill.tax,
     service: bill.service,
+    charge: bill.charge,
+    charge_percent: bill.chargePercent,
     total: bill.total,
     total_paid: totalPaid,
     move_history: moveHistory,

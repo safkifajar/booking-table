@@ -257,11 +257,11 @@ export function CashierPaymentPanel({
       {/* Bill totals ringkas */}
       <Card className="px-4 py-3 space-y-1.5 bg-muted/20">
         <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
-        {detail.tax > 0 && (
-          <Row label="Tax" value={formatIDR(detail.tax)} />
-        )}
-        {detail.service > 0 && (
-          <Row label="Service" value={formatIDR(detail.service)} />
+        {detail.charge_percent > 0 && (
+          <Row
+            label={`Tax & Service (${detail.charge_percent}%)`}
+            value={formatIDR(detail.charge)}
+          />
         )}
         <Row
           label="Total"

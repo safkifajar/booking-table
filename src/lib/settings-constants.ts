@@ -107,6 +107,10 @@ export interface BillTotals {
   subtotal: number;
   tax: number;
   service: number;
+  /** Gabungan tax + service (ditampilkan 1 baris ke user). */
+  charge: number;
+  /** Persen gabungan (taxPercent + servicePercent) untuk label "(15%)". */
+  chargePercent: number;
   /** subtotal + tax + service (yang dibayar user). */
   total: number;
 }
@@ -128,5 +132,12 @@ export function computeBillTotals(
     c.servicePercent > 0
       ? roundCharge((sub * c.servicePercent) / 100, c.rounding)
       : 0;
-  return { subtotal: sub, tax, service, total: sub + tax + service };
+  return {
+    subtotal: sub,
+    tax,
+    service,
+    charge: tax + service,
+    chargePercent: c.taxPercent + c.servicePercent,
+    total: sub + tax + service,
+  };
 }

@@ -486,6 +486,10 @@ export interface CashierSessionDetail {
   tax: number;
   /** Service charge (dari config bar). */
   service: number;
+  /** Gabungan tax + service (ditampilkan 1 baris). */
+  charge: number;
+  /** Persen gabungan (taxPercent + servicePercent). */
+  charge_percent: number;
   /** subtotal + tax + service (yang harus dibayar). */
   total: number;
   paid_total: number;
@@ -672,6 +676,8 @@ export async function getSessionDetailForCashier(
     subtotal,
     tax: bill.tax,
     service: bill.service,
+    charge: bill.charge,
+    charge_percent: bill.chargePercent,
     total: bill.total,
     paid_total,
     outstanding: Math.max(0, bill.total - paid_total),

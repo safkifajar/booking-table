@@ -424,8 +424,8 @@ export function SessionView(props: SessionViewProps) {
             isStaff={isStaff}
             sessionId={props.session.id}
             subtotal={subtotal}
-            tax={bill.tax}
-            service={bill.service}
+            charge={bill.charge}
+            chargePercent={bill.chargePercent}
             total={bill.total}
           />
         )}
@@ -446,8 +446,8 @@ export function SessionView(props: SessionViewProps) {
               members={props.members.filter((m) => m.status === "joined")}
               myMemberId={props.myMemberId}
               subtotal={subtotal}
-              tax={bill.tax}
-              service={bill.service}
+              charge={bill.charge}
+              chargePercent={bill.chargePercent}
               total={bill.total}
               remaining={remaining}
               payFullOnly={isStaff}
@@ -1265,8 +1265,8 @@ function BillTab({
   isStaff,
   sessionId,
   subtotal,
-  tax,
-  service,
+  charge,
+  chargePercent,
   total,
 }: {
   items: SessionViewProps["orderItems"];
@@ -1274,8 +1274,8 @@ function BillTab({
   isStaff: boolean;
   sessionId: string;
   subtotal: number;
-  tax: number;
-  service: number;
+  charge: number;
+  chargePercent: number;
   total: number;
 }) {
   const [removingId, setRemovingId] = React.useState<string | null>(null);
@@ -1401,22 +1401,18 @@ function BillTab({
         </Card>
       ))}
 
-      {/* Subtotal + tax/service + total */}
+      {/* Subtotal + tax & service (1 baris) + total */}
       <Card className="p-4 bg-muted/40 space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
           <span className="tabular-nums">{formatIDR(subtotal)}</span>
         </div>
-        {tax > 0 && (
+        {chargePercent > 0 && (
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Tax</span>
-            <span className="tabular-nums">{formatIDR(tax)}</span>
-          </div>
-        )}
-        {service > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Service</span>
-            <span className="tabular-nums">{formatIDR(service)}</span>
+            <span className="text-muted-foreground">
+              Tax &amp; Service ({chargePercent}%)
+            </span>
+            <span className="tabular-nums">{formatIDR(charge)}</span>
           </div>
         )}
         <div className="flex justify-between text-sm pt-1.5 border-t border-border">
@@ -1438,8 +1434,8 @@ function SplitTab({
   members,
   myMemberId,
   subtotal,
-  tax,
-  service,
+  charge,
+  chargePercent,
   total,
   remaining,
   payFullOnly,
@@ -1450,8 +1446,8 @@ function SplitTab({
   members: SessionViewProps["members"];
   myMemberId: string | null;
   subtotal: number;
-  tax: number;
-  service: number;
+  charge: number;
+  chargePercent: number;
   total: number;
   remaining: number;
   payFullOnly?: boolean;
@@ -1473,8 +1469,8 @@ function SplitTab({
       members={members}
       myMemberId={myMemberId}
       subtotal={subtotal}
-      tax={tax}
-      service={service}
+      charge={charge}
+      chargePercent={chargePercent}
       total={total}
       remaining={remaining}
       payFullOnly={payFullOnly}

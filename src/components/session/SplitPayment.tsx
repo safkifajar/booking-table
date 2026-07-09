@@ -45,8 +45,8 @@ interface Props {
   members: Member[];
   myMemberId: string | null;
   subtotal: number;
-  tax: number;
-  service: number;
+  charge: number;
+  chargePercent: number;
   total: number;
   remaining: number;
   /** Waiter/staff: hanya boleh BAYAR PENUH (sembunyikan patungan & pesanan saya). */
@@ -149,16 +149,12 @@ export function SplitPayment(props: Props) {
             <span className="text-muted-foreground">Subtotal</span>
             <span className="tabular-nums">{formatIDR(props.subtotal)}</span>
           </div>
-          {props.tax > 0 && (
+          {props.chargePercent > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Tax</span>
-              <span className="tabular-nums">{formatIDR(props.tax)}</span>
-            </div>
-          )}
-          {props.service > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Service</span>
-              <span className="tabular-nums">{formatIDR(props.service)}</span>
+              <span className="text-muted-foreground">
+                Tax &amp; Service ({props.chargePercent}%)
+              </span>
+              <span className="tabular-nums">{formatIDR(props.charge)}</span>
             </div>
           )}
           <div className="flex justify-between font-semibold pt-1.5 border-t border-primary/20">

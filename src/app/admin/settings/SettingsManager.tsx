@@ -140,14 +140,12 @@ function ChargeSection({
           Preview (subtotal {formatIDR(150000)})
         </div>
         <PreviewRow label="Subtotal" value={preview.subtotal} />
-        <PreviewRow
-          label={`Tax (${config.taxPercent}%)`}
-          value={preview.tax}
-        />
-        <PreviewRow
-          label={`Service (${config.servicePercent}%)`}
-          value={preview.service}
-        />
+        {preview.chargePercent > 0 && (
+          <PreviewRow
+            label={`Tax & Service (${preview.chargePercent}%)`}
+            value={preview.charge}
+          />
+        )}
         <PreviewRow label="Total" value={preview.total} bold />
       </div>
 
