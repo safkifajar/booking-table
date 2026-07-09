@@ -101,8 +101,8 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
 
   // Blokir akses saat DP booking belum dibayar: host (yg booking) tak boleh
   // buka halaman detail sampai DP lunas — meja "terbooking dulu" tapi belum
-  // aktif. Staff (kasir/waiter) TETAP boleh (bantu tamu). Diarahkan balik ke
-  // denah bar (user tetap bayar via dialog QRIS di alur booking).
+  // aktif. Staff (kasir/waiter) TETAP boleh (bantu tamu). Host diarahkan ke
+  // halaman lanjut-bayar (/booking/[id]/pay) yg menampilkan QRIS + countdown.
   if (
     sessionRow.status === "reserved" &&
     sessionRow.dp_paid_at == null &&
@@ -122,7 +122,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       )
       .limit(1);
     if (pendingDp) {
-      redirect(`/bar/${sessionRow.bar_slug}`);
+      redirect(`/booking/${id}/pay`);
     }
   }
 
@@ -340,6 +340,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           (p.split_meta as {
             isDownPayment?: boolean;
             qrString?: string | null;
+            expiresAt?: string | null;
           } | null) ?? {};
         return {
           id: p.id,
@@ -349,6 +350,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           split_mode: p.split_mode,
           is_down_payment: !!meta.isDownPayment,
           qr_string: meta.qrString ?? null,
+          expires_at: meta.expiresAt ?? null,
           created_at: p.created_at.toISOString(),
           paid_at: p.paid_at ? p.paid_at.toISOString() : null,
           paid_by: p.paid_by_display_name,

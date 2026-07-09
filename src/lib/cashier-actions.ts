@@ -456,6 +456,7 @@ export interface CashierPayment {
   created_at: string;
   is_down_payment: boolean;
   qr_string: string | null;
+  expires_at: string | null;
   paid_by_name: string;
 }
 
@@ -667,6 +668,7 @@ export async function getSessionDetailForCashier(
       const meta = (p.split_meta ?? {}) as {
         isDownPayment?: boolean;
         qrString?: string;
+        expiresAt?: string | null;
       };
       return {
         id: p.id,
@@ -677,6 +679,7 @@ export async function getSessionDetailForCashier(
         created_at: p.created_at.toISOString(),
         is_down_payment: !!meta.isDownPayment,
         qr_string: meta.qrString ?? null,
+        expires_at: meta.expiresAt ?? null,
         paid_by_name: p.paid_by_name,
       };
     }),

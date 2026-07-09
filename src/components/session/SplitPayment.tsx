@@ -37,6 +37,7 @@ interface Payment {
   split_mode: SplitMode;
   is_down_payment: boolean;
   qr_string: string | null;
+  expires_at: string | null;
   created_at: string;
   paid_at: string | null;
   paid_by: string;
@@ -77,6 +78,7 @@ export function SplitPayment(props: Props) {
     paymentId: string;
     qrString: string;
     amount: number;
+    expirySeconds?: number;
   } | null>(null);
   // Bottom sheet open state utk pilih payment type / metode bayar.
   const [typeSheet, setTypeSheet] = React.useState(false);
@@ -401,6 +403,15 @@ export function SplitPayment(props: Props) {
                         paymentId: p.id,
                         qrString: p.qr_string!,
                         amount: p.amount,
+                        expirySeconds: p.expires_at
+                          ? Math.max(
+                              1,
+                              Math.round(
+                                (new Date(p.expires_at).getTime() - Date.now()) /
+                                  1000
+                              )
+                            )
+                          : undefined,
                       })
                     }
                     className="ml-11 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition"
@@ -472,7 +483,16 @@ export function SplitPayment(props: Props) {
           paymentId={reshowQr.paymentId}
           qrString={reshowQr.qrString}
           amount={reshowQr.amount}
+          expirySeconds={reshowQr.expirySeconds}
           onPaid={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onExpired={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onCancelled={() => {
             setReshowQr(null);
             router.refresh();
           }}

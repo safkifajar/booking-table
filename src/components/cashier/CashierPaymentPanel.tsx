@@ -89,6 +89,7 @@ export function CashierPaymentPanel({
     paymentId: string;
     qrString: string;
     amount: number;
+    expirySeconds?: number;
   } | null>(null);
 
   // Realtime
@@ -243,6 +244,16 @@ export function CashierPaymentPanel({
                               paymentId: p.id,
                               qrString: p.qr_string!,
                               amount: p.amount,
+                              expirySeconds: p.expires_at
+                                ? Math.max(
+                                    1,
+                                    Math.round(
+                                      (new Date(p.expires_at).getTime() -
+                                        Date.now()) /
+                                        1000
+                                    )
+                                  )
+                                : undefined,
                             })
                           }
                           className="h-7 text-[10px] text-primary hover:text-primary/80 px-2"
@@ -396,7 +407,16 @@ export function CashierPaymentPanel({
           paymentId={reshowQr.paymentId}
           qrString={reshowQr.qrString}
           amount={reshowQr.amount}
+          expirySeconds={reshowQr.expirySeconds}
           onPaid={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onExpired={() => {
+            setReshowQr(null);
+            router.refresh();
+          }}
+          onCancelled={() => {
             setReshowQr(null);
             router.refresh();
           }}

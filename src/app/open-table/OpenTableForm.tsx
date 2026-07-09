@@ -622,8 +622,13 @@ export function OpenTableForm({
             router.push(`/session/${sid}`);
           }}
           onExpired={() => {
-            // Waktu habis → booking dibatalkan (server set cancelled saat page
-            // diakses / denah di-load). Balik ke denah bar.
+            // Waktu habis → booking dibatalkan (dialog sudah panggil
+            // cancelPayment). Balik ke denah bar.
+            setDpQris(null);
+            router.push(`/bar/${barSlug}`);
+          }}
+          onCancelled={() => {
+            // Host batalkan transaksi → booking batal. Balik ke denah bar.
             setDpQris(null);
             router.push(`/bar/${barSlug}`);
           }}

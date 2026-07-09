@@ -148,6 +148,7 @@ interface SessionViewProps {
     split_mode: SplitMode;
     is_down_payment: boolean;
     qr_string: string | null;
+    expires_at: string | null;
     created_at: string;
     paid_at: string | null;
     paid_by: string;
@@ -1461,6 +1462,7 @@ function SplitTab({
     paymentId: string;
     qrString: string;
     amount: number;
+    expirySeconds?: number;
   } | null>(null);
 
   return (
@@ -1484,10 +1486,20 @@ function SplitTab({
           // QRIS: render QR di dialog app SENDIRI (jangan redirect ke halaman
           // Duitku). Utamakan qrString di atas redirectUrl.
           if (result.qrString && result.status === "pending") {
+            // Countdown dari expiresAt (masa berlaku QR dari Duitku) kalau ada.
+            const expirySeconds = result.expiresAt
+              ? Math.max(
+                  1,
+                  Math.round(
+                    (new Date(result.expiresAt).getTime() - Date.now()) / 1000
+                  )
+                )
+              : undefined;
             setQris({
               paymentId: result.paymentId,
               qrString: result.qrString,
               amount: input.amount,
+              expirySeconds,
             });
             return;
           }
@@ -1514,7 +1526,16 @@ function SplitTab({
         paymentId={qris.paymentId}
         qrString={qris.qrString}
         amount={qris.amount}
+        expirySeconds={qris.expirySeconds}
         onPaid={() => {
+          setQris(null);
+          router.refresh();
+        }}
+        onExpired={() => {
+          setQris(null);
+          router.refresh();
+        }}
+        onCancelled={() => {
           setQris(null);
           router.refresh();
         }}
