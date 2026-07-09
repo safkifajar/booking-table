@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { checkPaymentStatus, cancelPayment } from "@/lib/actions";
 import { toast } from "sonner";
-import { useConfirm } from "@/components/ConfirmDialog";
 import { buildQrisFramePng } from "@/lib/qris-frame";
 
 /**
@@ -36,10 +35,12 @@ export function QrisPaymentDialog({
   onCancelled?: () => void;
   onClose: () => void;
 }) {
-  const confirm = useConfirm();
   const [qrImage, setQrImage] = React.useState<string | null>(null);
   const [checking, setChecking] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
+  // Konfirmasi batalkan inline (bukan useConfirm) supaya tak bentrok z-index
+  // dgn portal dialog ini (dialog di z-[100], Radix confirm di z-50 → ketutup).
+  const [confirmingCancel, setConfirmingCancel] = React.useState(false);
   const [secondsLeft, setSecondsLeft] = React.useState(expirySeconds ?? 0);
 
   // Generate gambar QR dari qrString (EMV QRIS asli).
@@ -159,17 +160,8 @@ export function QrisPaymentDialog({
     }
   }
 
-  // Batalkan transaksi (tombol di dialog). Kalau DP booking → booking ikut batal.
+  // Batalkan transaksi (setelah konfirmasi inline). DP booking → booking batal.
   async function handleCancel() {
-    const ok = await confirm({
-      title: "Cancel this transaction?",
-      description:
-        "The QRIS code will be voided. If this is a booking down payment, the booking will also be cancelled.",
-      confirmText: "Cancel transaction",
-      cancelText: "Keep",
-      variant: "destructive",
-    });
-    if (!ok) return;
     setCancelling(true);
     try {
       await cancelPayment(paymentId);
@@ -179,6 +171,7 @@ export function QrisPaymentDialog({
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel transaction"));
       setCancelling(false);
+      setConfirmingCancel(false);
     }
   }
 
@@ -188,7 +181,7 @@ export function QrisPaymentDialog({
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-sm bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl"
+        className="relative w-full sm:max-w-sm bg-background border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -284,27 +277,60 @@ export function QrisPaymentDialog({
             variant="ghost"
             size="sm"
             className="w-full text-red-400 hover:text-red-300"
-            onClick={handleCancel}
+            onClick={() => setConfirmingCancel(true)}
             disabled={checking || cancelling}
           >
-            {cancelling ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Cancelling…
-              </>
-            ) : (
-              "Cancel transaction"
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full"
-            onClick={onClose}
-            disabled={checking || cancelling}
-          >
-            Close
+            Cancel transaction
           </Button>
         </div>
+
+        {/* Konfirmasi batalkan — inline di dalam portal yg sama (bukan
+            useConfirm) supaya selalu di atas dialog, tak ketutup z-index. */}
+        {confirmingCancel && (
+          <div
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 rounded-t-2xl sm:rounded-2xl p-5"
+            onClick={() => !cancelling && setConfirmingCancel(false)}
+          >
+            <div
+              className="w-full max-w-[300px] rounded-2xl border border-border bg-background p-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-semibold mb-1">
+                Cancel this transaction?
+              </h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                The QRIS code will be voided. If this is a booking down payment,
+                the booking will also be cancelled.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Cancelling…
+                    </>
+                  ) : (
+                    "Yes, cancel transaction"
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setConfirmingCancel(false)}
+                  disabled={cancelling}
+                >
+                  Keep
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body

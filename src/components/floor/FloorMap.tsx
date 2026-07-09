@@ -374,10 +374,11 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isOverdue = !!table.active_session && table.active_session.status === "overdue";
   const isAvailable = !table.active_session;
 
-  // Denah 2 warna: MERAH (terisi: open/reserved/locked/overdue) & ABU
-  // (available). Reserved TAK lagi biru — samakan dgn merah spy denah simpel.
+  // Denah 2 warna: MERAH (terisi: open/locked/overdue = meja sedang dipakai)
+  // & ABU (available). Reserved (booking belum masuk waktu aktif) TIDAK
+  // mewarnai meja — tetap available; info booking ada di jadwal.
   const fill =
-    isOpen || isReserved
+    isOpen
       ? "rgba(225, 29, 42, 0.25)"
       : isOverdue
         ? "rgba(249, 115, 22, 0.18)"
@@ -387,7 +388,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
 
   const stroke = selected
     ? "#ff4d57"
-    : isOpen || isReserved
+    : isOpen
       ? "#e11d2a"
       : isOverdue
         ? "#f97316"
@@ -462,7 +463,7 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         fontSize="13"
         fontWeight="600"
         fill={
-          isOpen || isReserved
+          isOpen
             ? "#ff4d57"
             : isOverdue
               ? "#fb923c"
