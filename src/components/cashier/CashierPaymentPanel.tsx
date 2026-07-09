@@ -28,6 +28,7 @@ import {
   cashierMarkPaymentPaid,
   cashierCancelPayment,
   cashierCloseSession,
+  cashierCheckPaymentStatus,
   type CashierSessionDetail,
 } from "@/lib/cashier-actions";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
@@ -432,6 +433,9 @@ function PaymentModal({
   const [loading, setLoading] = React.useState(false);
   const [qrPaymentId, setQrPaymentId] = React.useState<string | null>(null);
   const [qrString, setQrString] = React.useState<string | null>(null);
+  // Data-URL gambar QR (di-generate dari qrString via lib qrcode).
+  const [qrImage, setQrImage] = React.useState<string | null>(null);
+  const [checking, setChecking] = React.useState(false);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -440,6 +444,68 @@ function PaymentModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, loading]);
+
+  // Generate gambar QR dari qrString (EMV QRIS asli dari Duitku).
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!qrString) {
+      // Reset async supaya tak setState sinkron di badan effect.
+      Promise.resolve().then(() => {
+        if (!cancelled) setQrImage(null);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    import("qrcode").then((QR) => {
+      QR.toDataURL(qrString, { width: 320, margin: 1 })
+        .then((url: string) => {
+          if (!cancelled) setQrImage(url);
+        })
+        .catch(() => {
+          if (!cancelled) setQrImage(null);
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrString]);
+
+  // Auto-poll status tiap 5 detik saat QR tampil → tandai lunas begitu dibayar
+  // (cadangan kalau callback telat). Berhenti saat modal ditutup.
+  React.useEffect(() => {
+    if (step !== "qris-display" || !qrPaymentId) return;
+    const t = setInterval(() => {
+      void cashierCheckPaymentStatus(qrPaymentId)
+        .then((r) => {
+          if (r.status === "paid") {
+            toast.success("Payment received");
+            onSuccess();
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, qrPaymentId]);
+
+  async function handleCheckStatus() {
+    if (!qrPaymentId) return;
+    setChecking(true);
+    try {
+      const r = await cashierCheckPaymentStatus(qrPaymentId);
+      if (r.status === "paid") {
+        toast.success("Payment received");
+        onSuccess();
+      } else {
+        toast.info("Not paid yet — ask the customer to complete the scan");
+      }
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to check status"));
+    } finally {
+      setChecking(false);
+    }
+  }
 
   if (detail.members.length === 0) {
     return (
@@ -728,46 +794,70 @@ function PaymentModal({
             <div className="space-y-3">
               <div className="rounded-md border border-primary/30 bg-primary/[0.03] p-4 text-center space-y-3">
                 <div className="text-xs text-muted-foreground">
-                  Customer scans the QR code to pay
+                  Customer scans the QR code to pay (QRIS)
                 </div>
-                {/* QR placeholder — production akan render actual QR image */}
+                {/* QR asli dari Duitku — render qrString jadi gambar QR. */}
                 <div className="aspect-square max-w-[240px] mx-auto bg-white rounded-md p-3 flex items-center justify-center">
-                  <div className="text-center text-zinc-900 text-[10px] font-mono break-all">
-                    <QrCode className="h-16 w-16 mx-auto mb-2" />
-                    <div className="px-2">{qrString.slice(0, 50)}...</div>
-                  </div>
+                  {qrImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={qrImage}
+                      alt="QRIS payment code"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-zinc-500 flex flex-col items-center gap-2">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                      <span className="text-[10px]">Generating QR…</span>
+                    </div>
+                  )}
                 </div>
                 <div className="text-2xl font-bold tabular-nums text-primary">
                   {formatIDR(amount)}
                 </div>
-                <div className="text-[10px] text-amber-400 italic">
-                  ℹ️ Mock QR — production will connect to the gateway
+                <div className="text-[10px] text-muted-foreground italic">
+                  Waiting for payment — updates automatically once paid.
                 </div>
               </div>
 
+              {/* Cek status manual (cadangan kalau callback telat). */}
               <Button
                 variant="gold"
                 size="lg"
                 className="w-full"
-                onClick={handleQrConfirm}
-                disabled={loading}
+                onClick={handleCheckStatus}
+                disabled={checking || loading}
               >
-                {loading ? (
+                {checking ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Processing...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Checking…
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-4 w-4" /> Customer Has Paid
+                    <CheckCircle2 className="h-4 w-4" /> Check Payment Status
                   </>
+                )}
+              </Button>
+              {/* Konfirmasi manual (mis. terlihat sudah lunas di app Duitku). */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={handleQrConfirm}
+                disabled={loading || checking}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Mark as paid manually"
                 )}
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full"
+                className="w-full text-red-400 hover:text-red-300"
                 onClick={handleQrCancel}
-                disabled={loading}
+                disabled={loading || checking}
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

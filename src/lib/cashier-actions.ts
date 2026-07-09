@@ -678,6 +678,8 @@ export interface CreatePaymentResult {
   status: string;
   externalRef: string;
   qrString: string | null;
+  /** QRIS: waktu kedaluwarsa (ISO). Null untuk method lain. */
+  expiresAt: string | null;
   /** Untuk cash: kembalian (cashReceived - amount). Null untuk method lain. */
   change: number | null;
 }
@@ -791,13 +793,23 @@ export async function cashierCreatePayment(
     description: `Table payment - ${data.sessionId.slice(0, 8)}`,
   });
 
-  // 7. Update payment dengan hasil gateway (external ref, status awal)
+  // 7. Update payment dengan hasil gateway (external ref, status awal).
+  //    Simpan metadata QRIS (qrString/redirectUrl/expiry/merchantOrderId) di
+  //    split_meta jsonb supaya bisa di-render ulang & lookup saat callback.
   await db
     .update(payments)
     .set({
       externalRef: chargeResult.externalRef,
       status: chargeResult.status,
       paidAt: chargeResult.status === "paid" ? new Date() : null,
+      splitMeta: {
+        cashReceived: data.cashReceived,
+        change,
+        qrString: chargeResult.qrString ?? null,
+        redirectUrl: chargeResult.redirectUrl ?? null,
+        expiresAt: chargeResult.expiresAt ?? null,
+        merchantOrderId: chargeResult.merchantOrderId ?? newPayment.id,
+      },
     })
     .where(eq(payments.id, newPayment.id));
 
@@ -812,6 +824,7 @@ export async function cashierCreatePayment(
     status: chargeResult.status,
     externalRef: chargeResult.externalRef,
     qrString: chargeResult.qrString ?? null,
+    expiresAt: chargeResult.expiresAt ?? null,
     change,
   };
 }
@@ -888,6 +901,82 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
+}
+
+/**
+ * Tandai payment paid oleh SISTEM (callback gateway / hasil polling) — TANPA
+ * auth cashier. Dipakai callback Duitku & cashierCheckPaymentStatus.
+ * Idempotent: kalau sudah paid, tidak melakukan apa-apa. Return sessionId+barId
+ * (null kalau payment tak ada) untuk revalidate/notify di pemanggil.
+ */
+export async function markPaymentPaidBySystem(
+  paymentId: string
+): Promise<{ sessionId: string; barId: string } | null> {
+  const [payment] = await db
+    .select({
+      id: payments.id,
+      status: payments.status,
+      sessionId: orders.sessionId,
+      barId: floorAreas.barId,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(payments.id, paymentId));
+  if (!payment) return null;
+  if (payment.status === "paid") {
+    return { sessionId: payment.sessionId, barId: payment.barId };
+  }
+
+  await db
+    .update(payments)
+    .set({ status: "paid", paidAt: new Date() })
+    .where(eq(payments.id, paymentId));
+
+  await settleOverdueIfPaid(payment.sessionId);
+  await notifyAll(payment.sessionId, payment.barId, { type: "payment.paid" });
+  revalidatePath(`/staff/cashier/${payment.sessionId}`);
+  revalidatePath("/staff/cashier");
+  revalidatePath(`/session/${payment.sessionId}`);
+  return { sessionId: payment.sessionId, barId: payment.barId };
+}
+
+/**
+ * Poll status pembayaran ke gateway (mis. QRIS Duitku). Kalau gateway
+ * melaporkan lunas → tandai paid. Dipakai tombol "Cek Status" di UI kasir
+ * sebagai cadangan kalau callback telat/gagal.
+ */
+export async function cashierCheckPaymentStatus(
+  paymentId: string
+): Promise<{ status: string }> {
+  const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  const [payment] = await db
+    .select({
+      id: payments.id,
+      status: payments.status,
+      barId: floorAreas.barId,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(payments.id, paymentId));
+  if (!payment) throw new Error("Payment not found");
+  if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
+  if (payment.status === "paid") return { status: "paid" };
+
+  // Duitku transactionStatus di-lookup by merchantOrderId (= payment.id).
+  const gateway = getPaymentGateway();
+  const gwStatus = await gateway.checkStatus(payment.id);
+  if (gwStatus === "paid") {
+    await markPaymentPaidBySystem(payment.id);
+    return { status: "paid" };
+  }
+  return { status: gwStatus };
 }
 
 // ============================================================
