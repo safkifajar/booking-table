@@ -41,6 +41,7 @@ import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { notifyAll } from "@/lib/realtime/notify";
 import { settleOverdueIfPaid } from "@/lib/queries";
+import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import type { PaymentMethod, SplitMode } from "@/types/db";
@@ -941,6 +942,7 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
     .where(eq(payments.id, paymentId));
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.cancelled" });
+  await notifyPaymentEvent(paymentId, "cancelled");
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -991,6 +993,8 @@ export async function markPaymentPaidBySystem(
 
   await settleOverdueIfPaid(payment.sessionId);
   await notifyAll(payment.sessionId, payment.barId, { type: "payment.paid" });
+  // Notif in-app + push ke host/pembayar/staff.
+  await notifyPaymentEvent(payment.id, meta.isDownPayment ? "dp_confirmed" : "paid");
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/session/${payment.sessionId}`);

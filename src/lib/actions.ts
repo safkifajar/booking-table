@@ -46,6 +46,7 @@ import {
   getOutstandingMap,
   DP_TIMEOUT_SECONDS,
 } from "@/lib/queries";
+import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -1886,6 +1887,7 @@ export async function checkPaymentStatus(
     }
     await settleOverdueIfPaid(row.sessionId);
     await notifySessionAndStaff(row.sessionId);
+    await notifyPaymentEvent(row.id, meta.isDownPayment ? "dp_confirmed" : "paid");
     revalidatePath(`/session/${row.sessionId}`);
     revalidatePath("/staff/cashier");
     return { status: "paid" };
@@ -1912,6 +1914,7 @@ export async function checkPaymentStatus(
       revalidatePath("/bar/[slug]", "page");
     }
     await notifySessionAndStaff(row.sessionId);
+    await notifyPaymentEvent(row.id, "cancelled");
     revalidatePath(`/session/${row.sessionId}`);
     revalidatePath("/staff/cashier");
     return { status: "failed" };
@@ -2006,6 +2009,7 @@ export async function cancelPayment(
   }
 
   await notifySessionAndStaff(row.sessionId);
+  await notifyPaymentEvent(row.id, "cancelled");
   revalidatePath(`/session/${row.sessionId}`);
   revalidatePath("/staff/cashier");
   return { status: "cancelled", bookingCancelled };

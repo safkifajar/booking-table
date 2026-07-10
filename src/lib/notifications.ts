@@ -25,6 +25,8 @@ type NotifType =
   | "move_request"
   | "move_approved"
   | "move_rejected"
+  | "payment_received"
+  | "payment_cancelled"
   | "general";
 
 export interface AdminNotificationRow {

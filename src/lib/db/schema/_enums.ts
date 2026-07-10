@@ -51,6 +51,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "move_request", // staff: ada request pindah meja (migration 0042)
   "move_approved", // host: request pindah di-approve
   "move_rejected", // host: request pindah ditolak
+  "payment_received", // pembayaran QRIS lunas / DP booking dikonfirmasi (0054)
+  "payment_cancelled", // pembayaran gagal / kadaluarsa (0054)
 ]);
 
 export const orderStatusEnum = pgEnum("order_status", [

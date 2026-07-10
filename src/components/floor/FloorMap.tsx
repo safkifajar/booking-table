@@ -369,10 +369,8 @@ interface TableShapeProps {
 function TableShape({ table, selected, highlighted }: TableShapeProps) {
   const isOpen = !!table.active_session && table.active_session.status === "open";
   const isLocked = !!table.active_session && table.active_session.status === "locked";
-  const isReserved = !!table.active_session && table.active_session.status === "reserved";
   // Lewat waktu tapi belum lunas — meja masih terisi, butuh penyelesaian bayar.
   const isOverdue = !!table.active_session && table.active_session.status === "overdue";
-  const isAvailable = !table.active_session;
 
   // Denah 2 warna: MERAH (terisi: open/locked/overdue = meja sedang dipakai)
   // & ABU (available). Reserved (booking belum masuk waktu aktif) TIDAK
@@ -536,27 +534,8 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         </g>
       )}
 
-      {/* Reserved badge — "R" (merah, samakan warna denah 2-warna). */}
-      {isReserved && (
-        <g style={{ pointerEvents: "none" }}>
-          <circle
-            cx={table.pos_x + table.width - 6}
-            cy={table.pos_y + 6}
-            r="10"
-            fill="#e11d2a"
-          />
-          <text
-            x={table.pos_x + table.width - 6}
-            y={table.pos_y + 10}
-            textAnchor="middle"
-            fontSize="11"
-            fontWeight="700"
-            fill="#0a0a0a"
-          >
-            R
-          </text>
-        </g>
-      )}
+      {/* Reserved (booking belum masuk waktu aktif) TIDAK ditandai di denah —
+          meja tetap tampil available. Info booking ada di jadwal. */}
     </g>
   );
 }

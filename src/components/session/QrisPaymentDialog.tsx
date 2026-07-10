@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { Loader2, CheckCircle2, X, Download } from "lucide-react";
+import { Loader2, CheckCircle2, X, Download, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { checkPaymentStatus, cancelPayment } from "@/lib/actions";
@@ -285,47 +285,55 @@ export function QrisPaymentDialog({
         </div>
 
         {/* Konfirmasi batalkan — inline di dalam portal yg sama (bukan
-            useConfirm) supaya selalu di atas dialog, tak ketutup z-index. */}
+            useConfirm) supaya selalu di atas dialog, tak ketutup z-index.
+            Gaya disamakan dgn ConfirmDialog global: icon badge + title +
+            description, footer outline "Keep" + destructive "Cancel". */}
         {confirmingCancel && (
           <div
-            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 rounded-t-2xl sm:rounded-2xl p-5"
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-5"
             onClick={() => !cancelling && setConfirmingCancel(false)}
           >
             <div
-              className="w-full max-w-[300px] rounded-2xl border border-border bg-background p-5 shadow-2xl"
+              className="w-full max-w-[420px] rounded-lg border border-border bg-background p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-sm font-semibold mb-1">
-                Cancel this transaction?
-              </h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                The QRIS code will be voided. If this is a booking down payment,
-                the booking will also be cancelled.
-              </p>
-              <div className="flex flex-col gap-2">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-full border bg-red-500/15 text-red-400 border-red-500/30 flex items-center justify-center shrink-0">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold leading-none tracking-tight">
+                    Cancel this transaction?
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The QRIS code will be voided. If this is a booking down
+                    payment, the booking will also be cancelled.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <Button
+                  variant="outline"
+                  className="sm:min-w-[100px]"
+                  onClick={() => setConfirmingCancel(false)}
+                  disabled={cancelling}
+                >
+                  Keep
+                </Button>
                 <Button
                   variant="destructive"
-                  size="sm"
-                  className="w-full"
+                  className="sm:min-w-[100px]"
                   onClick={handleCancel}
                   disabled={cancelling}
+                  autoFocus
                 >
                   {cancelling ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Cancelling…
                     </>
                   ) : (
-                    "Yes, cancel transaction"
+                    "Cancel transaction"
                   )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setConfirmingCancel(false)}
-                  disabled={cancelling}
-                >
-                  Keep
                 </Button>
               </div>
             </div>

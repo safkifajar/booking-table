@@ -23,6 +23,7 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { memberRatings } from "@/lib/db/schema/extras";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
+import { notifyPaymentEvent } from "@/lib/payment-notify";
 import type {
   Bar,
   FloorArea,
@@ -440,6 +441,8 @@ export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
     .update(tableSessions)
     .set({ status: "cancelled", closedAt: new Date() })
     .where(eq(tableSessions.id, sessionId));
+  // Notif gagal ke host/pembayar/staff (best-effort, tak blokir sweep).
+  await notifyPaymentEvent(dp.id, "cancelled");
   return true;
 }
 

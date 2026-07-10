@@ -332,10 +332,6 @@ export function SplitPayment(props: Props) {
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
-          <p className="text-[10px] text-muted-foreground mt-2 italic">
-            * All methods are mocked for now. Midtrans/Xendit integration in the
-            next milestone.
-          </p>
         </div>
       )}
 
