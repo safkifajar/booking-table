@@ -76,20 +76,17 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Subtle brand scrollbar */
+/* Scrollbar disembunyikan di seluruh app (tetap bisa scroll, batang tak
+   tampil) — Chrome/Safari/Edge via ::-webkit-scrollbar, Firefox via
+   scrollbar-width. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 0;
+  height: 0;
+  display: none;
 }
-::-webkit-scrollbar-track {
-  background: var(--background);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* Utility: sembunyikan scrollbar (mis. wheel picker) */
