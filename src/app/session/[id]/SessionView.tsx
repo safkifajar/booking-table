@@ -244,13 +244,19 @@ export function SessionView(props: SessionViewProps) {
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
+  // Ref utk gating swipe ke tab Menu/Pay — ikut showOrderTabs (interact &
+  // bukan cancelled) supaya swipe tak nyasar ke tab yg disembunyikan.
   React.useEffect(() => {
-    canInteractRef.current = canInteract;
-  }, [canInteract]);
+    canInteractRef.current = canInteract && props.session.status !== "cancelled";
+  }, [canInteract, props.session.status]);
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
     props.session.status === "closed" || props.session.status === "overdue";
+  // Booking dibatalkan → tak ada order/pembayaran; sembunyikan tab Menu & Pay.
+  const isCancelled = props.session.status === "cancelled";
+  // Tab order (Menu & Pay) hanya utk yg bisa interact & booking tak dibatalkan.
+  const showOrderTabs = canInteract && !isCancelled;
   // Default target member untuk staff input order = host meja
   const joinedMembers = React.useMemo(
     () => props.members.filter((m) => m.status === "joined"),
@@ -323,9 +329,9 @@ export function SessionView(props: SessionViewProps) {
                 )
               }
             />
-            {/* Menu hanya untuk member/staff (yg bisa pesan). Non-member yg
-                cuma lihat meja tidak perlu tab Menu. */}
-            {canInteract && (
+            {/* Menu hanya untuk member/staff (yg bisa pesan) & booking tak
+                dibatalkan. Non-member / cancelled tidak perlu tab Menu. */}
+            {showOrderTabs && (
               <TabButton
                 icon={<Utensils className="h-4 w-4" />}
                 label="Menu"
@@ -340,9 +346,9 @@ export function SessionView(props: SessionViewProps) {
               onClick={() => changeTab("bill")}
               badge={props.orderItems.length || undefined}
             />
-            {/* Bayar hanya untuk member/staff — non-member yg cuma lihat meja
-                tidak perlu tab bayar. */}
-            {canInteract && (
+            {/* Bayar hanya untuk member/staff & booking tak dibatalkan —
+                non-member / cancelled tidak perlu tab bayar. */}
+            {showOrderTabs && (
               <TabButton
                 icon={<Wallet className="h-4 w-4" />}
                 label="Pay"

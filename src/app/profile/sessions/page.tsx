@@ -108,30 +108,32 @@ export default async function ProfileSessionsPage() {
 function usageLabel(session: SessionRow): string {
   const start = session.reservation_at ?? session.started_at;
   const end = session.reservation_end_at;
-  const tgl = new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(start);
+  const tgl = (d: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(d);
   const jam = (d: Date) =>
     new Intl.DateTimeFormat("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     }).format(d);
-  const waktu = end ? `${jam(start)}–${jam(end)}` : jam(start);
-  return `${tgl} · ${waktu}`;
+  if (!end) return `${tgl(start)} · ${jam(start)}`;
+  // Lintas hari → tampilkan tanggal di kedua sisi biar jelas ini menyeberang
+  // tengah malam (mis. "10 Jul 21:00 – 11 Jul 03:00").
+  if (start.toDateString() !== end.toDateString()) {
+    return `${tgl(start)} ${jam(start)} – ${tgl(end)} ${jam(end)}`;
+  }
+  return `${tgl(start)} · ${jam(start)}–${jam(end)}`;
 }
 
 function SessionListItem({ session }: { session: SessionRow }) {
-  // Buka detail (/session/[id]) untuk semua session yg punya isi nyata:
-  // reserved/open/locked/overdue (aktif) DAN closed (riwayat selesai — bill,
-  // pesanan, pembayaran tetap bisa dilihat, termasuk yg sudah lunas).
-  // Hanya 'cancelled' (booking batal, tak pernah jalan) → rate page yg handle
-  // empty state, biar tak nyasar ke detail kosong.
-  const openDetail = session.status !== "cancelled";
-  const href = openDetail
-    ? `/session/${session.id}?from=${encodeURIComponent("/profile/sessions")}`
-    : `/session/${session.id}/rate`;
+  // Semua session buka detail (/session/[id]) — termasuk cancelled (di detail,
+  // tab Menu & Pay disembunyikan karena booking batal, tak ada order/bayar).
+  const href = `/session/${session.id}?from=${encodeURIComponent(
+    "/profile/sessions"
+  )}`;
 
   return (
     <Link
@@ -157,7 +159,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
           )}
         </div>
         <div className="text-sm font-medium truncate">
-          {session.title ?? "Open Table"}
+          {session.title ?? "Table Details"}
         </div>
         <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
           <span className="tabular-nums">{usageLabel(session)}</span>
@@ -167,14 +169,16 @@ function SessionListItem({ session }: { session: SessionRow }) {
             memberStatus={session.member_status}
             isHost={session.is_host}
           />
-          {session.outstanding > 0 && session.status !== "reserved" && (
-            <>
-              <span>·</span>
-              <span className="inline-flex items-center gap-1 text-orange-400 font-medium">
-                Unpaid {formatIDR(session.outstanding)}
-              </span>
-            </>
-          )}
+          {session.outstanding > 0 &&
+            session.status !== "reserved" &&
+            session.status !== "cancelled" && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1 text-orange-400 font-medium">
+                  Unpaid {formatIDR(session.outstanding)}
+                </span>
+              </>
+            )}
         </div>
       </div>
       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
