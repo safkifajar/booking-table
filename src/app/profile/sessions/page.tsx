@@ -123,15 +123,15 @@ function usageLabel(session: SessionRow): string {
 }
 
 function SessionListItem({ session }: { session: SessionRow }) {
-  const isActive =
-    session.status === "reserved" ||
-    session.status === "open" ||
-    session.status === "locked" ||
-    session.status === "overdue";
-  // Reserved/aktif/overdue → /session/[id] (booking belum mulai & overdue masih
-  // relevan dibuka/dibayar). closed/cancelled → /session/[id]/rate (rate page
-  // handle empty state untuk solo, jadi aman).
-  const href = isActive ? `/session/${session.id}` : `/session/${session.id}/rate`;
+  // Buka detail (/session/[id]) untuk semua session yg punya isi nyata:
+  // reserved/open/locked/overdue (aktif) DAN closed (riwayat selesai — bill,
+  // pesanan, pembayaran tetap bisa dilihat, termasuk yg sudah lunas).
+  // Hanya 'cancelled' (booking batal, tak pernah jalan) → rate page yg handle
+  // empty state, biar tak nyasar ke detail kosong.
+  const openDetail = session.status !== "cancelled";
+  const href = openDetail
+    ? `/session/${session.id}?from=${encodeURIComponent("/profile/sessions")}`
+    : `/session/${session.id}/rate`;
 
   return (
     <Link
