@@ -515,6 +515,27 @@ function VisibilityIcon({ visibility }: { visibility: SessionVisibility }) {
   return <Lock className="h-3 w-3 text-muted-foreground" />;
 }
 
+/** Badge status meja di kartu Table Information (pojok kanan). */
+function TableStatusBadge({ status }: { status: SessionStatus }) {
+  const map: Record<
+    SessionStatus,
+    { label: string; variant: "default" | "secondary" | "success" | "warning" | "destructive" }
+  > = {
+    open: { label: "In use", variant: "destructive" },
+    locked: { label: "In use", variant: "destructive" },
+    reserved: { label: "Reserved", variant: "default" },
+    overdue: { label: "Unpaid", variant: "warning" },
+    closed: { label: "Closed", variant: "secondary" },
+    cancelled: { label: "Cancelled", variant: "secondary" },
+  };
+  const s = map[status] ?? { label: status, variant: "secondary" as const };
+  return (
+    <Badge variant={s.variant} className="text-[10px] px-1.5 shrink-0">
+      {s.label}
+    </Badge>
+  );
+}
+
 /** Label visibility meja utk ditampilkan ke user. */
 function visibilityLabel(visibility: SessionVisibility): string {
   if (visibility === "public") return "Public · anyone can join";
@@ -652,6 +673,7 @@ function VibeTab(
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Table information
           </h2>
+          <TableStatusBadge status={props.session.status} />
         </div>
         <div className="space-y-2 text-sm">
           {/* Deskripsi (dari field opsional saat open table) — kalau ada. */}
