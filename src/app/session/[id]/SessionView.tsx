@@ -380,22 +380,6 @@ export function SessionView(props: SessionViewProps) {
           effTab === "menu" ? "h-[calc(100dvh-8rem)]" : "h-[calc(100dvh-12rem)]"
         )}
       >
-      {/* Notice HANYA untuk overdue (masih ada tagihan → arahkan ke Bill).
-          Untuk 'closed' biasa banner dihapus — status 'Closed' sudah tampil di
-          badge Table Information, jadi banner cuma noise. */}
-      {props.session.status === "overdue" && (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
-          <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
-            <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium">Table closed</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Orders are locked. Settle the remaining payment in the Bill tab.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tab content — swipe kiri/kanan pindah tab. overflow-x clip cegah scroll
           horizontal saat animasi. overscroll-x contain + touch-action pan-y →
