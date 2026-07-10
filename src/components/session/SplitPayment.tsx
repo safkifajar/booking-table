@@ -110,6 +110,13 @@ export function SplitPayment(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payments]);
 
+  // Sudah dibayar = total − sisa (mencakup DP + pembayaran lain yg lunas).
+  const paidSoFar = Math.max(0, props.total - props.remaining);
+  // Ada pembayaran DP yg lunas? (untuk label 'Paid (incl. DP)')
+  const hasDp = props.payments.some(
+    (p) => p.is_down_payment && p.status === "paid"
+  );
+
   // Equal: total (subtotal + tax + service) / members count
   const equalShare = props.members.length > 0
     ? Math.ceil(props.total / props.members.length)
@@ -166,7 +173,11 @@ export function SplitPayment(props: Props) {
           </div>
           <div className="text-right">
             <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-              {props.remaining <= 0 && props.subtotal > 0 ? "Status" : "Unpaid"}
+              {props.remaining <= 0 && props.subtotal > 0
+                ? "Status"
+                : paidSoFar > 0
+                  ? "Remaining"
+                  : "Unpaid"}
             </div>
             <div
               className={cn(
@@ -201,6 +212,27 @@ export function SplitPayment(props: Props) {
             <span>Total</span>
             <span className="text-primary tabular-nums">{formatIDR(props.total)}</span>
           </div>
+          {/* Kalau sudah ada pembayaran (mis. DP booking), tampilkan berapa yg
+              sudah dibayar + sisa — biar jelas 'Unpaid' itu Total dikurangi DP,
+              bukan dibandingkan langsung dgn subtotal. */}
+          {paidSoFar > 0 && (
+            <>
+              <div className="flex justify-between pt-1.5 border-t border-primary/20">
+                <span className="text-muted-foreground">
+                  {hasDp ? "Paid (incl. DP)" : "Paid"}
+                </span>
+                <span className="tabular-nums text-emerald-400">
+                  −{formatIDR(paidSoFar)}
+                </span>
+              </div>
+              <div className="flex justify-between font-semibold">
+                <span>Remaining</span>
+                <span className="text-primary tabular-nums">
+                  {formatIDR(props.remaining)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </Card>
 
