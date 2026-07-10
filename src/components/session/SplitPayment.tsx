@@ -259,7 +259,10 @@ export function SplitPayment(props: Props) {
       {/* Payment type — tappable row → bottom sheet. Hide kalau lunas/waiter. */}
       {!isFullyPaid && !props.payFullOnly && (
         <div>
-          <h3 className="text-sm font-semibold mb-2">Payment type</h3>
+          <h3 className="text-sm font-semibold">Payment type</h3>
+          <p className="text-xs text-muted-foreground mb-2">
+            Choose how you&apos;d like to split the bill
+          </p>
           <button
             type="button"
             onClick={() => setTypeSheet(true)}
@@ -352,7 +355,10 @@ export function SplitPayment(props: Props) {
       {/* Payment method — tappable row → bottom sheet. Hide kalau lunas. */}
       {!isFullyPaid && (
         <div>
-          <h3 className="text-sm font-semibold mb-2">Payment method</h3>
+          <h3 className="text-sm font-semibold">Payment method</h3>
+          <p className="text-xs text-muted-foreground mb-2">
+            Choose how you&apos;d like to pay
+          </p>
           <button
             type="button"
             onClick={() => setMethodSheet(true)}
