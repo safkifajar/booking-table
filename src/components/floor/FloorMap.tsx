@@ -487,31 +487,6 @@ function TableShape({ table, selected, highlighted }: TableShapeProps) {
         {table.capacity} seats
       </text>
 
-      {/* Member count badge — HANYA utk sesi open/locked (meja bener2 dipakai).
-          Dulu pakai "!isReserved && !isOverdue" → sesi status lain (mis. closed/
-          basi) ikut munculin badge merah "0" walau meja tampil available (abu2).
-          Batasi eksplisit ke isOpen/isLocked biar konsisten dgn warna meja. */}
-      {(isOpen || isLocked) && table.active_session && (
-        <g style={{ pointerEvents: "none" }}>
-          <circle
-            cx={table.pos_x + table.width - 6}
-            cy={table.pos_y + 6}
-            r="10"
-            fill="#e11d2a"
-          />
-          <text
-            x={table.pos_x + table.width - 6}
-            y={table.pos_y + 10}
-            textAnchor="middle"
-            fontSize="10"
-            fontWeight="700"
-            fill="#0a0a0a"
-          >
-            {table.active_session.member_count}
-          </text>
-        </g>
-      )}
-
       {/* Overdue badge — tagihan belum lunas (oranye, tanda seru) */}
       {isOverdue && (
         <g style={{ pointerEvents: "none" }}>
