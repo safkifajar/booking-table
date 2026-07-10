@@ -206,19 +206,20 @@ export function SessionView(props: SessionViewProps) {
     setTab(next);
   }
 
-  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Tab menu/pay
-  // hanya dpt diakses kalau bisa interact (member/staff) — lewati saat swipe.
-  const canInteractRef = React.useRef(false);
+  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Menu & Pay
+  // punya syarat sendiri (lihat showMenuTab/showPayTab) — swipe ikut itu.
+  const showMenuRef = React.useRef(false);
+  const showPayRef = React.useRef(false);
   const touchStart = React.useRef<{ x: number; y: number } | null>(null);
   function goTab(dir: 1 | -1) {
     let idx = TAB_ORDER.indexOf(tab);
-    // Cari tab berikutnya yg boleh diakses (skip menu/pay kalau tak interact).
+    // Cari tab berikutnya yg boleh diakses (skip Menu/Pay kalau disembunyikan).
     while (true) {
       idx += dir;
       const next = TAB_ORDER[idx];
       if (!next) return;
-      if ((next === "menu" || next === "pay") && !canInteractRef.current)
-        continue;
+      if (next === "menu" && !showMenuRef.current) continue;
+      if (next === "pay" && !showPayRef.current) continue;
       changeTab(next);
       return;
     }
@@ -244,19 +245,29 @@ export function SessionView(props: SessionViewProps) {
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
-  // Ref utk gating swipe ke tab Menu/Pay — ikut showOrderTabs (interact &
-  // bukan cancelled) supaya swipe tak nyasar ke tab yg disembunyikan.
-  React.useEffect(() => {
-    canInteractRef.current = canInteract && props.session.status !== "cancelled";
-  }, [canInteract, props.session.status]);
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
     props.session.status === "closed" || props.session.status === "overdue";
   // Booking dibatalkan → tak ada order/pembayaran; sembunyikan tab Menu & Pay.
   const isCancelled = props.session.status === "cancelled";
-  // Tab order (Menu & Pay) hanya utk yg bisa interact & booking tak dibatalkan.
-  const showOrderTabs = canInteract && !isCancelled;
+  // Tab MENU: hanya kalau bisa interact, tak cancelled, & meja belum selesai
+  // (closed/overdue tak bisa order lagi → Menu disembunyikan).
+  const showMenuTab = canInteract && !isCancelled && !isEnded;
+  // Tab PAY: kalau bisa interact & tak cancelled. Tetap tampil saat closed/
+  // overdue (masih perlu lihat/lunasi pembayaran).
+  const showPayTab = canInteract && !isCancelled;
+  // Sinkronkan ref utk gating swipe (goTab dipanggil dari touch handler).
+  React.useEffect(() => {
+    showMenuRef.current = showMenuTab;
+    showPayRef.current = showPayTab;
+  }, [showMenuTab, showPayTab]);
+  // Tab efektif: kalau tab aktif jadi tersembunyi (mis. meja ditutup live saat
+  // di Menu), fallback ke Bill supaya konten tak kosong — dihitung saat render.
+  const effTab: Tab =
+    (tab === "menu" && !showMenuTab) || (tab === "pay" && !showPayTab)
+      ? "bill"
+      : tab;
   // Default target member untuk staff input order = host meja
   const joinedMembers = React.useMemo(
     () => props.members.filter((m) => m.status === "joined"),
@@ -315,7 +326,7 @@ export function SessionView(props: SessionViewProps) {
             <TabButton
               icon={<Users className="h-4 w-4" />}
               label="Table"
-              active={tab === "vibe"}
+              active={effTab === "vibe"}
               onClick={() => changeTab("vibe")}
               badge={props.members.filter((m) => m.status === "joined").length}
               alert={
@@ -327,30 +338,30 @@ export function SessionView(props: SessionViewProps) {
                 )
               }
             />
-            {/* Menu hanya untuk member/staff (yg bisa pesan) & booking tak
-                dibatalkan. Non-member / cancelled tidak perlu tab Menu. */}
-            {showOrderTabs && (
+            {/* Menu: member/staff yg bisa pesan, booking tak dibatalkan, & meja
+                belum selesai (closed/overdue tak bisa order lagi). */}
+            {showMenuTab && (
               <TabButton
                 icon={<Utensils className="h-4 w-4" />}
                 label="Menu"
-                active={tab === "menu"}
+                active={effTab === "menu"}
                 onClick={() => changeTab("menu")}
               />
             )}
             <TabButton
               icon={<Receipt className="h-4 w-4" />}
               label="Bill"
-              active={tab === "bill"}
+              active={effTab === "bill"}
               onClick={() => changeTab("bill")}
               badge={props.orderItems.length || undefined}
             />
-            {/* Bayar hanya untuk member/staff & booking tak dibatalkan —
-                non-member / cancelled tidak perlu tab bayar. */}
-            {showOrderTabs && (
+            {/* Bayar: member/staff & tak cancelled. Tetap tampil saat closed/
+                overdue (masih perlu lihat/lunasi pembayaran). */}
+            {showPayTab && (
               <TabButton
                 icon={<Wallet className="h-4 w-4" />}
                 label="Pay"
-                active={tab === "pay"}
+                active={effTab === "pay"}
                 onClick={() => changeTab("pay")}
               />
             )}
@@ -366,20 +377,20 @@ export function SessionView(props: SessionViewProps) {
       <div
         className={cn(
           "flex flex-col",
-          tab === "menu" ? "h-[calc(100dvh-8rem)]" : "h-[calc(100dvh-12rem)]"
+          effTab === "menu" ? "h-[calc(100dvh-8rem)]" : "h-[calc(100dvh-12rem)]"
         )}
       >
-      {/* Notice meja sudah ditutup (closed/overdue) */}
-      {isEnded && (
+      {/* Notice HANYA untuk overdue (masih ada tagihan → arahkan ke Bill).
+          Untuk 'closed' biasa banner dihapus — status 'Closed' sudah tampil di
+          badge Table Information, jadi banner cuma noise. */}
+      {props.session.status === "overdue" && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
           <div className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
             <Lock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-medium">Table closed</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {props.session.status === "overdue"
-                  ? "Orders are locked. Settle the remaining payment in the Bill tab."
-                  : "Orders are locked. Thanks for hanging out at SOHO."}
+                Orders are locked. Settle the remaining payment in the Bill tab.
               </p>
             </div>
           </div>
@@ -389,21 +400,21 @@ export function SessionView(props: SessionViewProps) {
       {/* Tab content — swipe kiri/kanan pindah tab. overflow-x clip cegah scroll
           horizontal saat animasi. overscroll-x contain + touch-action pan-y →
           cegah swipe-back native (panah kembali saat geser dari tepi). Inner
-          key={tab} → remount + animasi slide sesuai arah (slideDir). */}
+          key={effTab} → remount + animasi slide sesuai arah (slideDir). */}
       <div
         className="flex-1 min-h-0 flex flex-col [overflow-x:clip] [overscroll-behavior-x:contain] [touch-action:pan-y]"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
       <div
-        key={tab}
+        key={effTab}
         className={cn(
           "flex-1 min-h-0 max-w-3xl w-full mx-auto px-4 sm:px-6",
           // Tab Menu mengatur scroll sendiri (search fixed + list scroll).
           // Tab lain scroll normal di kontainer ini. overflow-x-hidden +
           // touch-action pan-y + overscroll contain → cegah swipe-back native
           // (panah kembali saat geser kiri) di Bill/Pay/Table.
-          tab === "menu"
+          effTab === "menu"
             ? "flex flex-col overflow-hidden pt-4 sm:pt-6"
             : "overflow-y-auto overflow-x-hidden [overscroll-behavior:contain] [touch-action:pan-y] py-4 sm:py-6"
         )}
@@ -411,10 +422,10 @@ export function SessionView(props: SessionViewProps) {
           animation: `${slideDir === 1 ? "tab-slide-right" : "tab-slide-left"} 0.22s ease-out`,
         }}
       >
-        {tab === "vibe" && (
+        {effTab === "vibe" && (
           <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
         )}
-        {tab === "menu" && canInteract && (
+        {effTab === "menu" && canInteract && (
           <MenuTab
             menu={props.menu}
             sessionId={props.session.id}
@@ -425,7 +436,7 @@ export function SessionView(props: SessionViewProps) {
             onCartChange={setMenuCart}
           />
         )}
-        {tab === "bill" && (
+        {effTab === "bill" && (
           <BillTab
             items={props.orderItems}
             myProfileId={props.myProfileId}
@@ -437,7 +448,7 @@ export function SessionView(props: SessionViewProps) {
             total={bill.total}
           />
         )}
-        {tab === "pay" &&
+        {effTab === "pay" &&
           canInteract &&
           // Cashier: panel pembayaran kaya (kalkulator kembalian, QRIS,
           // pilih payer, mark-paid/cancel, close→receipt). Selain itu: SplitTab.
