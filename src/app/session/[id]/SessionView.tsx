@@ -282,18 +282,16 @@ export function SessionView(props: SessionViewProps) {
   const remaining = Math.max(0, bill.total - totalPaid);
   const isLunas = bill.total > 0 && remaining === 0;
 
-  // Auto-redirect member ke halaman rate saat host menutup session — TAPI hanya
-  // kalau sudah lunas. Kalau closed tapi masih nunggak (force-close / data lama),
-  // tetap di sini supaya bisa LUNASI dulu (jangan paksa ke rating).
-  // Guard `redirectedToRate`: cegah pingpong /session ⇄ /rate kalau perhitungan
-  // lunas di sini & di RatePage sempat tidak sepakat (redirect cuma sekali).
+  // Auto-redirect member ke halaman rate HANYA saat meja BARU DITUTUP live
+  // (status berubah closed sambil halaman terbuka), bukan saat membuka riwayat
+  // yg SUDAH closed dari Session History — di history user cuma mau lihat
+  // detail, jangan dipaksa ke rating (yg utk solo = popup "Solo session").
+  // Status saat mount: kalau sudah closed dari awal → JANGAN redirect.
+  const wasClosedOnMount = React.useRef(props.session.status === "closed");
   const redirectedToRate = React.useRef(false);
   React.useEffect(() => {
-    // HANYA redirect ke /rate kalau benar-benar LUNAS (isLunas = subtotal>0 &
-    // remaining==0). Pakai `remaining <= 0` SALAH: saat belum lunas tapi subtotal
-    // 0, atau hitung beda dgn RatePage, jadi true → pingpong /session ⇄ /rate.
-    // RatePage juga menolak (redirect balik) kalau outstanding>0 — samakan syarat.
     if (
+      !wasClosedOnMount.current && // baru ditutup live, bukan buka dari history
       props.session.status === "closed" &&
       props.isMember &&
       isLunas &&
