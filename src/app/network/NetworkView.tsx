@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Search,
   Loader2,
@@ -9,7 +10,6 @@ import {
   X,
   MapPin,
   GraduationCap,
-  Users,
   Cake,
 } from "lucide-react";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
@@ -127,7 +127,15 @@ export function NetworkView({
       <div className="border-b border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-3">
           <div className="flex items-center gap-2 mb-3">
-            <Users className="h-5 w-5 text-primary" />
+            <span className="inline-flex h-7 w-7 rounded-md overflow-hidden border border-border shrink-0">
+              <Image
+                src="/logo-soho.jpeg"
+                alt="SOHO"
+                width={28}
+                height={28}
+                className="h-full w-full object-cover"
+              />
+            </span>
             <h1 className="text-xl font-bold tracking-tight">Discover</h1>
           </div>
 
