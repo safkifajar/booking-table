@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ProfileMenuList } from "./ProfileMenuList";
@@ -15,7 +15,10 @@ import { SohoGlow } from "@/components/ui/soho-glow";
  * Sub-pages: /profile/account, /profile/password, /profile/sessions, /profile/stories
  */
 export default async function ProfilePage() {
-  const profile = await getCurrentProfile();
+  const [profile, user] = await Promise.all([
+    getCurrentProfile(),
+    getCurrentUser(),
+  ]);
   if (!profile) {
     redirect("/auth?next=/profile");
   }
@@ -32,14 +35,9 @@ export default async function ProfilePage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Profile
-            </div>
-            <h1 className="text-base sm:text-lg font-semibold truncate">
-              {profile.displayName}
-            </h1>
-          </div>
+          <h1 className="flex-1 min-w-0 text-base sm:text-lg font-semibold truncate">
+            Profile
+          </h1>
         </div>
       </header>
 
@@ -48,6 +46,7 @@ export default async function ProfilePage() {
         <ProfileMenuList
           avatarUrl={profile.avatarUrl ?? profile.photos[0] ?? null}
           displayName={profile.displayName}
+          email={user?.email ?? null}
           isPrivate={profile.isPrivate}
         />
       </div>

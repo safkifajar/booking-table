@@ -16,6 +16,7 @@ import {
   Shield,
   FileText,
   MessageCircle,
+  UserCog,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
@@ -40,10 +41,12 @@ import { saveSubscription, removeSubscription } from "@/lib/push";
 export function ProfileMenuList({
   avatarUrl,
   displayName,
+  email,
   isPrivate,
 }: {
   avatarUrl: string | null;
   displayName: string;
+  email: string | null;
   isPrivate: boolean;
 }) {
   const confirm = useConfirm();
@@ -145,130 +148,143 @@ export function ProfileMenuList({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Group: Account */}
-      <MenuGroup>
-        <MenuItem
-          href="/profile/account"
-          iconBox={<AccountAvatar avatarUrl={avatarUrl} displayName={displayName} />}
-          label="Account"
-          description="Name, WhatsApp number, date of birth, bio, hobbies"
+    <div className="space-y-6">
+      {/* Kartu profil — avatar + nama + email (ala referensi) */}
+      <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-4">
+        <AccountAvatar
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+          size="lg"
         />
-        <MenuItem
-          href="/profile/privacy"
-          icon={<Lock className="h-4 w-4" />}
-          label="Private Account"
-          description={isPrivate ? "On" : "Off"}
-        />
-        <MenuItem
-          href="/profile/password"
-          icon={<KeyRound className="h-4 w-4" />}
-          label="Change Password"
-          description="Change or set a new password"
-        />
-        <MenuItem
-          href="/profile/sessions"
-          icon={<History className="h-4 w-4" />}
-          label="Session History"
-          description="Tables you've joined"
-        />
-      </MenuGroup>
+        <div className="min-w-0">
+          <div className="text-base font-semibold truncate">{displayName}</div>
+          {email && (
+            <div className="text-xs text-muted-foreground truncate">{email}</div>
+          )}
+        </div>
+      </div>
 
-      {/* Group: Notifikasi (toggle push per perangkat) — switch ala iOS */}
-      {pushState.supported && (
+      {/* Section: Account */}
+      <Section title="Account">
         <MenuGroup>
-          <div className="w-full flex items-center gap-3 px-4 py-3.5">
-            <span
-              className={
-                pushState.active
-                  ? "h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary"
-                  : "h-8 w-8 rounded-md bg-muted border border-border flex items-center justify-center shrink-0 text-muted-foreground"
-              }
-            >
-              {pushState.active ? (
-                <BellRing className="h-4 w-4" />
-              ) : (
-                <BellOff className="h-4 w-4" />
-              )}
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className="block text-sm font-medium">Notifications</span>
-              <span className="block text-xs text-muted-foreground truncate">
-                {pushState.active
-                  ? "On for this device"
-                  : "Off for this device"}
-              </span>
-            </span>
-            {/* Switch: geser kanan = aktif (emas), kiri = mati (abu) */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={pushState.active}
-              aria-label={
-                pushState.active ? "Turn off notifications" : "Turn on notifications"
-              }
-              onClick={handleTogglePush}
-              disabled={pushState.busy}
-              className={[
-                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
-                "disabled:cursor-not-allowed disabled:opacity-60",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
-                pushState.active ? "bg-primary" : "bg-muted-foreground/30",
-              ].join(" ")}
-            >
+          <MenuItem
+            href="/profile/account"
+            icon={<UserCog className="h-5 w-5" />}
+            label="Edit Account"
+          />
+          <MenuItem
+            href="/profile/privacy"
+            icon={<Lock className="h-5 w-5" />}
+            label="Private Account"
+            description={isPrivate ? "On" : "Off"}
+          />
+          <MenuItem
+            href="/profile/sessions"
+            icon={<History className="h-5 w-5" />}
+            label="Session History"
+          />
+        </MenuGroup>
+      </Section>
+
+      {/* Section: Settings */}
+      <Section title="Settings">
+        <MenuGroup>
+          <MenuItem
+            href="/profile/password"
+            icon={<KeyRound className="h-5 w-5" />}
+            label="Change Password"
+          />
+          {/* Notifikasi (toggle push per perangkat) — switch ala iOS */}
+          {pushState.supported && (
+            <div className="w-full flex items-center gap-3 px-4 py-3.5">
               <span
-                className={[
-                  "inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm transition-transform",
-                  pushState.active ? "translate-x-[22px]" : "translate-x-0.5",
-                ].join(" ")}
+                className={
+                  pushState.active
+                    ? "h-9 w-9 rounded-full border border-primary/30 flex items-center justify-center shrink-0 text-primary"
+                    : "h-9 w-9 rounded-full border border-border flex items-center justify-center shrink-0 text-muted-foreground"
+                }
               >
-                {pushState.busy && (
-                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                {pushState.active ? (
+                  <BellRing className="h-4 w-4" />
+                ) : (
+                  <BellOff className="h-4 w-4" />
                 )}
               </span>
-            </button>
-          </div>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium">Notifications</span>
+                <span className="block text-xs text-muted-foreground truncate">
+                  {pushState.active
+                    ? "On for this device"
+                    : "Off for this device"}
+                </span>
+              </span>
+              {/* Switch: geser kanan = aktif, kiri = mati */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={pushState.active}
+                aria-label={
+                  pushState.active ? "Turn off notifications" : "Turn on notifications"
+                }
+                onClick={handleTogglePush}
+                disabled={pushState.busy}
+                className={[
+                  "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                  pushState.active ? "bg-primary" : "bg-muted-foreground/30",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm transition-transform",
+                    pushState.active ? "translate-x-[22px]" : "translate-x-0.5",
+                  ].join(" ")}
+                >
+                  {pushState.busy && (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  )}
+                </span>
+              </button>
+            </div>
+          )}
         </MenuGroup>
-      )}
+      </Section>
 
-      {/* Group: Bantuan — Hubungi CS via WhatsApp (link eksternal) */}
-      <MenuGroup>
-        <a
-          href={waUrl()}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
-        >
-          <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
-            <MessageCircle className="h-4 w-4" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium">Contact Support</span>
-            <span className="block text-xs text-muted-foreground truncate">
-              Chat SOHO admin via WhatsApp
+      {/* Section: Help */}
+      <Section title="Help">
+        <MenuGroup>
+          <a
+            href={waUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
+          >
+            <span className="h-9 w-9 rounded-full border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+              <MessageCircle className="h-5 w-5" />
             </span>
-          </span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
-        </a>
-      </MenuGroup>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium">Contact Support</span>
+              <span className="block text-xs text-muted-foreground truncate">
+                Chat SOHO admin via WhatsApp
+              </span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
+          </a>
+          <MenuItem
+            href="/privacy"
+            icon={<Shield className="h-5 w-5" />}
+            label="Privacy Policy"
+          />
+          <MenuItem
+            href="/terms"
+            icon={<FileText className="h-5 w-5" />}
+            label="Terms & Conditions"
+          />
+        </MenuGroup>
+      </Section>
 
-      {/* Group: Legal */}
-      <MenuGroup>
-        <MenuItem
-          href="/privacy"
-          icon={<Shield className="h-4 w-4" />}
-          label="Privacy Policy"
-          description="How we handle your data"
-        />
-        <MenuItem
-          href="/terms"
-          icon={<FileText className="h-4 w-4" />}
-          label="Terms & Conditions"
-          description="Terms of service usage"
-        />
-      </MenuGroup>
-
-      {/* Group 2: Logout (separate card, danger style) */}
+      {/* Logout (kartu terpisah, danger) */}
       <MenuGroup>
         <button
           type="button"
@@ -276,8 +292,8 @@ export function ProfileMenuList({
           disabled={signingOut}
           className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-red-500/5 disabled:opacity-50 disabled:cursor-not-allowed transition group"
         >
-          <span className="h-8 w-8 rounded-md bg-red-500/15 border border-red-500/30 flex items-center justify-center shrink-0 text-red-400">
-            <LogOut className="h-4 w-4" />
+          <span className="h-9 w-9 rounded-full border border-red-500/30 flex items-center justify-center shrink-0 text-red-400">
+            <LogOut className="h-5 w-5" />
           </span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-medium text-red-400">
@@ -290,29 +306,52 @@ export function ProfileMenuList({
   );
 }
 
-/** Kotak ikon Account = foto profil user (bulat), fallback inisial nama. */
+/** Judul section (di luar kartu, teks tebal) — ala referensi. */
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-sm font-bold px-1">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+/** Avatar user (bulat), fallback inisial nama. size 'sm' (menu) / 'lg' (kartu). */
 function AccountAvatar({
   avatarUrl,
   displayName,
+  size = "sm",
 }: {
   avatarUrl: string | null;
   displayName: string;
+  size?: "sm" | "lg";
 }) {
+  const box = size === "lg" ? "h-14 w-14 text-lg" : "h-8 w-8 text-sm";
   if (avatarUrl) {
     return (
-      <span className="relative h-8 w-8 rounded-full overflow-hidden shrink-0 border border-border">
+      <span
+        className={`relative ${box} rounded-full overflow-hidden shrink-0 border border-border`}
+      >
         <Image
           src={avatarUrl}
           alt={displayName}
           fill
-          sizes="32px"
+          sizes={size === "lg" ? "56px" : "32px"}
           className="object-cover"
         />
       </span>
     );
   }
   return (
-    <span className="h-8 w-8 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary text-sm font-semibold">
+    <span
+      className={`${box} rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary font-semibold`}
+    >
       {displayName.charAt(0).toUpperCase()}
     </span>
   );
@@ -347,7 +386,7 @@ function MenuItem({
       className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
     >
       {iconBox ?? (
-        <span className="h-8 w-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0 text-primary">
+        <span className="h-9 w-9 rounded-full border border-primary/30 flex items-center justify-center shrink-0 text-primary">
           {icon}
         </span>
       )}
