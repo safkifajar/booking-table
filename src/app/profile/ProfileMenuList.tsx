@@ -197,17 +197,11 @@ export function ProfileMenuList({
           {/* Notifikasi (toggle push per perangkat) — switch ala iOS */}
           {pushState.supported && (
             <div className="w-full flex items-center gap-3 px-4 py-3.5">
-              <span
-                className={
-                  pushState.active
-                    ? "h-9 w-9 rounded-full border border-primary/30 flex items-center justify-center shrink-0 text-primary"
-                    : "h-9 w-9 rounded-full border border-border flex items-center justify-center shrink-0 text-muted-foreground"
-                }
-              >
+              <span className="h-9 w-9 rounded-full border border-primary/30 flex items-center justify-center shrink-0 text-primary">
                 {pushState.active ? (
-                  <BellRing className="h-4 w-4" />
+                  <BellRing className="h-5 w-5" />
                 ) : (
-                  <BellOff className="h-4 w-4" />
+                  <BellOff className="h-5 w-5" />
                 )}
               </span>
               <span className="flex-1 min-w-0">
