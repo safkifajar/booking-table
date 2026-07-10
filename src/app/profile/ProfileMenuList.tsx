@@ -171,17 +171,23 @@ export function ProfileMenuList({
             href="/profile/account"
             icon={<UserCog className="h-5 w-5" />}
             label="Edit Account"
+            description="Name, WhatsApp number, date of birth, bio, hobbies"
           />
           <MenuItem
             href="/profile/privacy"
             icon={<Lock className="h-5 w-5" />}
             label="Private Account"
-            description={isPrivate ? "On" : "Off"}
+            description={
+              isPrivate
+                ? "On — only network info is visible to others"
+                : "Off — your profile is public"
+            }
           />
           <MenuItem
             href="/profile/sessions"
             icon={<History className="h-5 w-5" />}
             label="Session History"
+            description="Tables you've joined"
           />
         </MenuGroup>
       </Section>
@@ -193,6 +199,7 @@ export function ProfileMenuList({
             href="/profile/password"
             icon={<KeyRound className="h-5 w-5" />}
             label="Change Password"
+            description="Change or set a new password"
           />
           {/* Notifikasi (toggle push per perangkat) — switch ala iOS */}
           {pushState.supported && (
@@ -269,11 +276,13 @@ export function ProfileMenuList({
             href="/privacy"
             icon={<Shield className="h-5 w-5" />}
             label="Privacy Policy"
+            description="How we handle your data"
           />
           <MenuItem
             href="/terms"
             icon={<FileText className="h-5 w-5" />}
             label="Terms & Conditions"
+            description="Terms of service usage"
           />
         </MenuGroup>
       </Section>
