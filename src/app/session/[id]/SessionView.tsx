@@ -652,9 +652,6 @@ function VibeTab(
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Table information
           </h2>
-          <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
-            Table {props.table.label}
-          </Badge>
         </div>
         <div className="space-y-2 text-sm">
           {/* Deskripsi (dari field opsional saat open table) — kalau ada. */}
@@ -675,10 +672,16 @@ function VibeTab(
               </span>
             </span>
           </div>
-          {/* Kapasitas */}
+          {/* Meja + kapasitas — mis. "Table T6 · 2 seats" */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Users className="h-3.5 w-3.5 shrink-0" />
-            <span>{props.table.capacity} seats</span>
+            <span>
+              <span className="text-foreground font-medium">
+                Table {props.table.label}
+              </span>
+              <span className="text-muted-foreground/60">{" · "}</span>
+              {props.table.capacity} seats
+            </span>
           </div>
           {/* Visibility meja — public / friends / invite only. */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
