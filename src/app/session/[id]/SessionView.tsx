@@ -492,15 +492,6 @@ function SessionHeader(props: SessionViewProps) {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <Badge variant="default" className="text-[10px]">
-              {props.table.label}
-            </Badge>
-            <VisibilityIcon visibility={props.session.visibility} />
-            <span className="text-xs text-muted-foreground truncate">
-              {props.areaName} · {props.bar.name}
-            </span>
-          </div>
           <h1 className="text-base sm:text-lg font-semibold truncate">
             {props.session.title ?? "Table Details"}
           </h1>
@@ -698,26 +689,31 @@ function VibeTab(
               rentangnya lintas hari, tampilkan tanggal DI KEDUA sisi biar
               jelas (mis. "Fri 10 Jul 21:00 → Sat 11 Jul 03:00"). */}
           {props.session.reservation_at && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Clock className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                {(() => {
-                  const start = props.session.reservation_at;
-                  const end = props.session.reservation_end_at;
-                  const crosses =
-                    end &&
-                    new Date(start).toDateString() !==
-                      new Date(end).toDateString();
-                  if (end && crosses) {
-                    return `Booked ${formatDateShort(start)} ${formatTime(
-                      start
-                    )} → ${formatDateShort(end)} ${formatTime(end)}`;
-                  }
-                  return `Booked ${formatDateShort(start)}, ${formatTime(start)}${
-                    end ? `–${formatTime(end)}` : ""
-                  }`;
-                })()}
-              </span>
+            <div className="flex items-start gap-1.5 text-muted-foreground text-sm">
+              <Clock className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              {(() => {
+                const start = props.session.reservation_at;
+                const end = props.session.reservation_end_at;
+                const crosses =
+                  end &&
+                  new Date(start).toDateString() !==
+                    new Date(end).toDateString();
+                if (end && crosses) {
+                  return (
+                    <span className="text-sm">
+                      Booked {formatDateShort(start)} {formatTime(start)}
+                      <span className="text-muted-foreground/60">{" – "}</span>
+                      {formatDateShort(end)} {formatTime(end)}
+                    </span>
+                  );
+                }
+                return (
+                  <span className="text-sm">
+                    Booked {formatDateShort(start)}, {formatTime(start)}
+                    {end ? `–${formatTime(end)}` : ""}
+                  </span>
+                );
+              })()}
             </div>
           )}
           {/* Vibe tags — dipindah ke dalam info (dulu mengambang di atas). */}

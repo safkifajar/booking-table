@@ -270,9 +270,9 @@ function rangeLabel(startIso: string, endIso: string): string {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
   // Lintas hari → sertakan tanggal di kedua sisi biar jelas (mis.
-  // "Fri 10 Jul 21:00 → Sat 11 Jul 03:00"). Sehari → cukup jam.
+  // "Fri 10 Jul 21:00 – Sat 11 Jul 03:00"). Sehari → cukup jam.
   if (calDayKey(startIso) !== calDayKey(endIso)) {
-    return `${dayHeaderLabel(startIso)} ${t(startIso)} → ${dayHeaderLabel(
+    return `${dayHeaderLabel(startIso)} ${t(startIso)} – ${dayHeaderLabel(
       endIso
     )} ${t(endIso)}`;
   }
