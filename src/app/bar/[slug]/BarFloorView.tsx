@@ -39,6 +39,18 @@ function formatTime(iso: string): string {
 }
 
 const HARI_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const BULAN_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Kunci hari kalender (YYYY-MM-DD) dari ISO — untuk deteksi ganti tanggal. */
+function calDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+/** Label tanggal separator, mis. "Fri, 10 Jul". */
+function dayHeaderLabel(iso: string): string {
+  const d = new Date(iso);
+  return `${HARI_SHORT[d.getDay()]}, ${d.getDate()} ${BULAN_SHORT[d.getMonth()]}`;
+}
 
 /** groupKey tanggal selaras dgn slot: "today" | "tomorrow" | "YYYY-MM-DD". */
 function dateGroupKey(date: Date): string {
@@ -1030,8 +1042,14 @@ function TableSheet({
 
               {/* List SEMUA jam operasi (booked / tersedia) */}
               {hourRows.length > 0 ? (
-                <div className="rounded-lg border border-border divide-y divide-border">
-                  {hourRows.map((h) => {
+                <div className="rounded-lg border border-border divide-y divide-border overflow-hidden">
+                  {hourRows.map((h, idx) => {
+                    // Separator tanggal: tampil kalau slot ini ganti hari
+                    // kalender dari slot sebelumnya (mis. 23:00 → 00:00 besok),
+                    // supaya jelas "00:00" itu hari berikutnya (lintas hari).
+                    const prev = idx > 0 ? hourRows[idx - 1] : null;
+                    const showDaySep =
+                      !prev || calDayKey(prev.startIso) !== calDayKey(h.startIso);
                     // Status & warna jam:
                     // - lewat + booking → "Selesai" (abu)
                     // - lewat + kosong → "Lewat" (abu redup)
@@ -1102,20 +1120,21 @@ function TableSheet({
                       selectable && "cursor-pointer"
                     );
 
+                    const daySep = showDaySep ? (
+                      <div className="px-3 py-1.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {dayHeaderLabel(h.startIso)}
+                      </div>
+                    ) : null;
+
                     // Slot ter-booking = info saja (siapa & kapan). JANGAN link
                     // ke /session — customer bukan member booking itu → 403.
                     // Slot tersedia → tombol pilih rentang.
+                    let rowEl: React.ReactNode;
                     if (h.sessionId) {
-                      return (
-                        <div key={h.startIso} className={rowClass}>
-                          {inner}
-                        </div>
-                      );
-                    }
-                    if (selectable) {
-                      return (
+                      rowEl = <div className={rowClass}>{inner}</div>;
+                    } else if (selectable) {
+                      rowEl = (
                         <button
-                          key={h.startIso}
                           type="button"
                           onClick={() => clickSlot(h)}
                           className={rowClass}
@@ -1123,11 +1142,14 @@ function TableSheet({
                           {inner}
                         </button>
                       );
+                    } else {
+                      rowEl = <div className={rowClass}>{inner}</div>;
                     }
                     return (
-                      <div key={h.startIso} className={rowClass}>
-                        {inner}
-                      </div>
+                      <React.Fragment key={h.startIso}>
+                        {daySep}
+                        {rowEl}
+                      </React.Fragment>
                     );
                   })}
                 </div>

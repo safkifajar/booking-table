@@ -195,6 +195,18 @@ function slotTime(label: string): string {
 }
 
 const HARI_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const BULAN_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Kunci hari kalender dari ISO — deteksi ganti tanggal utk separator. */
+function calDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+/** Label tanggal separator, mis. "Fri, 10 Jul". */
+function dayHeaderLabel(iso: string): string {
+  const d = new Date(iso);
+  return `${HARI_SHORT[d.getDay()]}, ${d.getDate()} ${BULAN_SHORT[d.getMonth()]}`;
+}
 
 interface DateChip {
   groupKey: string;
@@ -304,17 +316,20 @@ function TimeRangeList({
       ref={containerRef}
       className="max-h-64 overflow-y-auto rounded-md border border-border divide-y divide-border"
     >
-      {slots.map((s) => {
+      {slots.map((s, idx) => {
         const isBooked = bookedSet.has(s.iso);
         const inRange = rangeIsos.has(s.iso);
         const isTarget = s.iso === scrollToIso;
+        // Separator tanggal saat ganti hari kalender (mis. 23:00 → 00:00 besok).
+        const prev = idx > 0 ? slots[idx - 1] : null;
+        const showDaySep =
+          !prev || calDayKey(prev.iso) !== calDayKey(s.iso);
         const endLabel = (() => {
           const d = new Date(new Date(s.iso).getTime() + slotMs);
           return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
         })();
-        return (
+        const btn = (
           <button
-            key={s.iso}
             ref={isTarget ? targetRef : undefined}
             type="button"
             disabled={isBooked}
@@ -355,6 +370,16 @@ function TimeRangeList({
               </span>
             )}
           </button>
+        );
+        return (
+          <React.Fragment key={s.iso}>
+            {showDaySep && (
+              <div className="px-3 py-1.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {dayHeaderLabel(s.iso)}
+              </div>
+            )}
+            {btn}
+          </React.Fragment>
         );
       })}
     </div>
