@@ -694,15 +694,29 @@ function VibeTab(
             <VisibilityIcon visibility={props.session.visibility} />
             <span>{visibilityLabel(props.session.visibility)}</span>
           </div>
-          {/* Tanggal + jam booking (kalau reservasi, bukan walk-in) */}
+          {/* Tanggal + jam booking (kalau reservasi, bukan walk-in). Kalau
+              rentangnya lintas hari, tampilkan tanggal DI KEDUA sisi biar
+              jelas (mis. "Fri 10 Jul 21:00 → Sat 11 Jul 03:00"). */}
           {props.session.reservation_at && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="h-3.5 w-3.5 shrink-0" />
               <span>
-                Booked {formatDateShort(props.session.reservation_at)},{" "}
-                {formatTime(props.session.reservation_at)}
-                {props.session.reservation_end_at &&
-                  `–${formatTime(props.session.reservation_end_at)}`}
+                {(() => {
+                  const start = props.session.reservation_at;
+                  const end = props.session.reservation_end_at;
+                  const crosses =
+                    end &&
+                    new Date(start).toDateString() !==
+                      new Date(end).toDateString();
+                  if (end && crosses) {
+                    return `Booked ${formatDateShort(start)} ${formatTime(
+                      start
+                    )} → ${formatDateShort(end)} ${formatTime(end)}`;
+                  }
+                  return `Booked ${formatDateShort(start)}, ${formatTime(start)}${
+                    end ? `–${formatTime(end)}` : ""
+                  }`;
+                })()}
               </span>
             </div>
           )}

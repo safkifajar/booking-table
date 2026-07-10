@@ -131,8 +131,11 @@ export function SlotRangePicker({
                 type="button"
                 disabled={!d.hasSlots}
                 onClick={() => {
+                  // Cuma pindah tanggal yg dilihat — JANGAN hapus seleksi.
+                  // Rentang lintas hari tetap tampil di ringkasan bawah, dan
+                  // slot yg terpilih tetap ter-highlight bila tanggal ini
+                  // memuatnya. (Dulu onChange("","") menghapus pilihan.)
                   setSelectedDate(d.groupKey);
-                  onChange("", "");
                 }}
                 className={cn(
                   "shrink-0 w-14 py-2 rounded-lg border flex flex-col items-center gap-0.5 transition",
@@ -266,6 +269,13 @@ function rangeLabel(startIso: string, endIso: string): string {
     const d = new Date(iso);
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
+  // Lintas hari → sertakan tanggal di kedua sisi biar jelas (mis.
+  // "Fri 10 Jul 21:00 → Sat 11 Jul 03:00"). Sehari → cukup jam.
+  if (calDayKey(startIso) !== calDayKey(endIso)) {
+    return `${dayHeaderLabel(startIso)} ${t(startIso)} → ${dayHeaderLabel(
+      endIso
+    )} ${t(endIso)}`;
+  }
   return `${t(startIso)}–${t(endIso)}`;
 }
 
