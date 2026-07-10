@@ -185,15 +185,15 @@ function buildHourRows(
       visibility: r.visibility,
     }));
 
-  // Iterasi per slot dalam HARI KALENDER yg sama (00:00 s/d <24:00). Slot dini
-  // hari (mis. 00:00–03:00) = dini hari tanggal itu sendiri, jadi tampil di
-  // atas & dihitung 'lewat' kalau sudah berlalu — bukan digulung ke besok.
+  // Slot dibangun dalam URUTAN WAKTU NYATA (kontinu), bukan per hari kalender:
+  // - Hari NORMAL (tak wrap): slot open→close di tanggal itu.
+  // - Hari WRAP (tutup lewat tengah malam, mis. 18:00–02:00): satu daftar
+  //   kontinu — slot malam (open→24:00) di tanggal ini, LALU dini hari
+  //   (00:00→close) di tanggal BERIKUTNYA. Jadi 23:00 disusul 00:00 (besok),
+  //   memungkinkan booking lintas hari sebagai satu rentang yg nyambung.
   const rows: HourRow[] = [];
   const step = slotMinutes;
-  for (let m = 0; m + step <= 24 * 60; m += step) {
-    if (!inOperating(m)) continue;
-    const slotStart = new Date(date);
-    slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  const pushSlot = (slotStart: Date) => {
     const slotEnd = new Date(slotStart.getTime() + step * 60 * 1000);
     const sMs = slotStart.getTime();
     const hit = ranges.find((r) => sMs >= r.start && sMs < r.end);
@@ -207,6 +207,31 @@ function buildHourRows(
       sessionId: hit?.sessionId,
       visibility: hit?.visibility,
     });
+  };
+
+  if (wraps) {
+    // Malam tanggal ini: [open .. 24:00)
+    for (let m = openMin; m + step <= 24 * 60; m += step) {
+      const slotStart = new Date(date);
+      slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      pushSlot(slotStart);
+    }
+    // Dini hari BESOK: [00:00 .. close)
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    for (let m = 0; m + step <= closeRaw; m += step) {
+      const slotStart = new Date(next);
+      slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      pushSlot(slotStart);
+    }
+  } else {
+    // Hari normal: [open .. close) di tanggal ini.
+    for (let m = 0; m + step <= 24 * 60; m += step) {
+      if (!inOperating(m)) continue;
+      const slotStart = new Date(date);
+      slotStart.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      pushSlot(slotStart);
+    }
   }
   return rows;
 }
@@ -812,16 +837,19 @@ function TableSheet({
   const [nowMs] = React.useState(() => Date.now());
 
   // List SEMUA jam operasi di tanggal terpilih, ditandai booked/available.
+  // Kirim SEMUA reservasi (bukan cuma tanggal ini) — buildHourRows menandai
+  // slot berdasarkan rentang ms absolut, jadi slot dini hari lintas tanggal
+  // (wrap) tetap ketahuan booked walau reservasinya di grup tanggal berikutnya.
   const hourRows = React.useMemo(
     () =>
       buildHourRows(
         activeDate,
-        byDate.get(activeDate) ?? [],
+        reservations,
         operatingHours,
         slotIntervalMinutes ?? 60,
         nowMs
       ),
-    [activeDate, byDate, operatingHours, slotIntervalMinutes, nowMs]
+    [activeDate, reservations, operatingHours, slotIntervalMinutes, nowMs]
   );
 
   // ── Pilih rentang jam (untuk booking) — pola klik mulai→selesai spt form ──

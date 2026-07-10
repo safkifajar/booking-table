@@ -254,6 +254,34 @@ export function validateReservationTime(
 // ============================================================
 
 /**
+ * Group key "sesi malam operasi" untuk sebuah slot. Kalau bar tutup lewat
+ * tengah malam (wrap) dan slot ini jatuh di bagian dini hari (minute < close &
+ * < open), slot itu masuk grup MALAM SEBELUMNYA (tanggal - 1) — supaya slot
+ * dini hari tampil menyambung malam pembukaannya, bukan jadi tanggal terpisah.
+ * Selain itu, group key = tanggal kalender biasa.
+ */
+function operatingNightGroupKey(
+  date: Date,
+  hours: OperatingHours,
+  now: Date
+): string {
+  const dayHours = hours[getDayKey(date)];
+  if (dayHours && !dayHours.closed && dayHours.open && dayHours.close) {
+    const openMin = timeToMinutes(dayHours.open);
+    const closeMin =
+      dayHours.close === "00:00" ? 24 * 60 : timeToMinutes(dayHours.close);
+    const minuteOfDay = date.getHours() * 60 + date.getMinutes();
+    // Wrap + slot dini hari → attribute ke malam kemarin.
+    if (closeMin <= openMin && minuteOfDay < closeMin && minuteOfDay < openMin) {
+      const prev = new Date(date);
+      prev.setDate(prev.getDate() - 1);
+      return formatGroupKey(prev, now);
+    }
+  }
+  return formatGroupKey(date, now);
+}
+
+/**
  * Generate semua slot available dari now sampai max booking window.
  * Skip yang gak match operating hours / lead time.
  *
@@ -281,12 +309,14 @@ export function generateAvailableSlots(
     const candidate = new Date(t);
     const op = isWithinOperatingHours(candidate, hours);
     if (!op.ok) continue;
-    // Grouping by tanggal kalender asli (slot dini hari masuk tanggalnya
-    // sendiri, mis. 01:00 Senin → grup Senin).
+    // Grouping by SESI MALAM OPERASI: slot dini hari (mis. 01:00) di bar yg
+    // tutup lewat tengah malam masuk grup MALAM PEMBUKAAN-nya (tgl sebelumnya),
+    // bukan tanggal kalendernya — supaya booking lintas hari tampil kontinu
+    // sbg satu daftar & bisa dipilih berurutan.
     slots.push({
       iso: candidate.toISOString(),
       label: formatSlotLabel(candidate, now),
-      groupKey: formatGroupKey(candidate, now),
+      groupKey: operatingNightGroupKey(candidate, hours, now),
     });
     count++;
   }
