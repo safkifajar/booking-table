@@ -911,9 +911,6 @@ function VibeTab(
                   <p className="text-sm">
                     {rawSlots > 0 ? `${rawSlots} empty seats` : "Table full"}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Share invite link
-                  </p>
                 </div>
               </div>
             ))}
