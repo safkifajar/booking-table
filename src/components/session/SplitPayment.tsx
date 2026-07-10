@@ -68,11 +68,12 @@ interface Props {
 
 export function SplitPayment(props: Props) {
   const router = useRouter();
-  // payFullOnly (staff) → default & terkunci ke "custom" (bayar penuh sisa).
-  const [mode, setMode] = React.useState<SplitMode>(
-    props.payFullOnly ? "custom" : "equal"
+  // Belum ada pilihan default — user WAJIB pilih dulu ("" = belum dipilih).
+  // Kecuali payFullOnly (staff) → terkunci ke "custom" (bayar penuh sisa).
+  const [mode, setMode] = React.useState<SplitMode | "">(
+    props.payFullOnly ? "custom" : ""
   );
-  const [method, setMethod] = React.useState<PaymentMethod>("qris");
+  const [method, setMethod] = React.useState<PaymentMethod | "">("");
   const [loading, setLoading] = React.useState(false);
   // Payment pending yg QR-nya sedang ditampilkan ulang (klik "Show QR").
   const [reshowQr, setReshowQr] = React.useState<{
@@ -145,7 +146,8 @@ export function SplitPayment(props: Props) {
   const isFullyPaid = props.remaining <= 0 && props.subtotal > 0;
 
   async function handlePay() {
-    if (myAmount <= 0 || isFullyPaid) return;
+    // Wajib pilih type & method dulu.
+    if (!mode || !method || myAmount <= 0 || isFullyPaid) return;
     setLoading(true);
     try {
       await props.onPay({
@@ -269,10 +271,18 @@ export function SplitPayment(props: Props) {
             className="w-full flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-3 text-left hover:border-primary/40 transition"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium">{splitModeLabel(mode)}</p>
-              <p className="text-xs text-muted-foreground truncate">
-                {splitModeDesc(mode, equalShare)}
-              </p>
+              {mode ? (
+                <>
+                  <p className="text-sm font-medium">{splitModeLabel(mode)}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {splitModeDesc(mode, equalShare)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Select payment type…
+                </p>
+              )}
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
@@ -365,28 +375,42 @@ export function SplitPayment(props: Props) {
             className="w-full flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-3 text-left hover:border-primary/40 transition"
           >
             <div className="flex items-center gap-2 min-w-0">
-              {methodIcon(method)}
-              <span className="text-sm font-medium">{methodLabel(method)}</span>
+              {method ? (
+                <>
+                  {methodIcon(method)}
+                  <span className="text-sm font-medium">
+                    {methodLabel(method)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  Select payment method…
+                </span>
+              )}
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         </div>
       )}
 
-      {/* Pay button */}
+      {/* Pay button — aktif hanya kalau type & method sudah dipilih + ada nominal */}
       {!isFullyPaid && (
         <Button
           variant="gold"
           size="lg"
           className="w-full"
-          disabled={loading || myAmount <= 0}
+          disabled={loading || !mode || !method || myAmount <= 0}
           onClick={handlePay}
         >
           {loading
             ? "Processing..."
-            : myAmount > 0
-              ? `Pay ${formatIDR(myAmount)}`
-              : "Nothing to pay"}
+            : !mode
+              ? "Select payment type"
+              : !method
+                ? "Select payment method"
+                : myAmount > 0
+                  ? `Pay ${formatIDR(myAmount)}`
+                  : "Nothing to pay"}
         </Button>
       )}
 
