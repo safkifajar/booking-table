@@ -502,7 +502,7 @@ function SessionHeader(props: SessionViewProps) {
             </span>
           </div>
           <h1 className="text-base sm:text-lg font-semibold truncate">
-            {props.session.title ?? "Open Table"}
+            {props.session.title ?? "Table Details"}
           </h1>
           {props.openedByStaff && (
             <div className="flex items-center gap-1 mt-0.5">
