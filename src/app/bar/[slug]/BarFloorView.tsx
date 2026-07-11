@@ -369,10 +369,9 @@ export function BarFloorView({
             />
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-xs uppercase tracking-widest text-primary/70">
-              {bar.tagline}
-            </div>
-            <h1 className="text-base sm:text-lg font-semibold truncate">{bar.name}</h1>
+            <h1 className="text-base sm:text-lg font-semibold truncate">
+              Booking
+            </h1>
           </div>
           {userId && <NotificationBell userId={userId} />}
         </div>
