@@ -15,8 +15,9 @@ export default async function PrivacyPage() {
 
   return (
     <main className="flex-1 pb-16">
-      <ProfileSubpageHeader title={doc.title} backHref="/" />
+      <ProfileSubpageHeader title="Privacy Policy" backHref="/" />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
+        <h1 className="text-2xl font-bold tracking-tight mb-1">{doc.title}</h1>
         {doc.updated_at && (
           <p className="text-xs text-muted-foreground mb-5">
             Terakhir diperbarui{" "}
