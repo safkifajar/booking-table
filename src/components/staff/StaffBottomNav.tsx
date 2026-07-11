@@ -24,7 +24,7 @@ export function StaffBottomNav({
   topSlot?: React.ReactNode;
 }) {
   return (
-    <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed bottom-0 inset-x-0 z-40 bg-background pb-[env(safe-area-inset-bottom)]">
       {topSlot && (
         <div className="border-t border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>

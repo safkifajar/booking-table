@@ -218,7 +218,7 @@ export function WaiterDashboard({
   }
 
   return (
-    <div className="space-y-4 pb-[calc(11rem+env(safe-area-inset-bottom))]">
+    <div className="space-y-4 pb-[calc(13rem+env(safe-area-inset-bottom))]">
       {/* Audio toggle (kanan atas konten); navigasi tab → bottom nav di bawah */}
       <div className="flex items-center justify-end">
         <Button
