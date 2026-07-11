@@ -14,33 +14,44 @@ export function StaffBottomNav({
   tabs,
   active,
   onChange,
+  topSlot,
 }: {
   tabs: StaffTabItem[];
   active: string;
   onChange: (key: string) => void;
+  /** Konten opsional DI ATAS baris nav (mis. tombol Open Table) — dirender di
+   *  dalam container fixed yg sama supaya nempel tanpa celah. */
+  topSlot?: React.ReactNode;
 }) {
   return (
-    <nav
-      className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
-      aria-label="Staff navigation"
-    >
-      <div
-        className="max-w-md mx-auto px-1 grid items-stretch h-16"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+    <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
+      {topSlot && (
+        <div className="border-t border-border">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>
+        </div>
+      )}
+      <nav
+        className="border-t border-border"
+        aria-label="Staff navigation"
       >
-        {tabs.map((t) => (
-          <StaffNavItem
-            key={t.key}
-            icon={t.icon}
-            label={t.label}
-            badge={t.badge}
-            alert={t.alert}
-            active={active === t.key}
-            onClick={() => onChange(t.key)}
-          />
-        ))}
-      </div>
-    </nav>
+        <div
+          className="max-w-md mx-auto px-1 grid items-stretch h-16"
+          style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+        >
+          {tabs.map((t) => (
+            <StaffNavItem
+              key={t.key}
+              icon={t.icon}
+              label={t.label}
+              badge={t.badge}
+              alert={t.alert}
+              active={active === t.key}
+              onClick={() => onChange(t.key)}
+            />
+          ))}
+        </div>
+      </nav>
+    </div>
   );
 }
 
@@ -65,7 +76,7 @@ function StaffNavItem({
       onClick={onClick}
       title={label}
       className={cn(
-        "relative flex flex-col items-center justify-end gap-1 h-full pb-2 pt-2 text-[10px] leading-none transition min-w-0",
+        "relative flex flex-col items-center justify-center gap-1 h-full text-[10px] leading-none transition min-w-0",
         active ? "text-primary" : "text-muted-foreground hover:text-foreground"
       )}
     >

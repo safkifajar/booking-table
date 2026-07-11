@@ -208,10 +208,29 @@ export function CashierSessionList({
         )}
       </div>
 
-      {/* Navigasi tab → bottom nav (fixed, dirender di bawah return) */}
+      {/* Navigasi tab → bottom nav (fixed). Tombol Open Table di topSlot supaya
+          nempel di atas nav tanpa celah. */}
       <StaffBottomNav
         active={tab}
         onChange={(k) => setTab(k as Tab)}
+        topSlot={
+          <Button
+            type="button"
+            variant="gold"
+            size="lg"
+            className="w-full"
+            onClick={() => setOpenTableModal(true)}
+            disabled={availableTables.length === 0}
+          >
+            <UserPlus className="h-4 w-4" />
+            Open Table
+            {availableTables.length > 0 && (
+              <span className="ml-1 text-xs opacity-70">
+                ({availableTables.length} tables free)
+              </span>
+            )}
+          </Button>
+        }
         tabs={[
           {
             key: "active",
@@ -306,29 +325,6 @@ export function CashierSessionList({
           )}
         </div>
       )}
-
-      {/* Tombol "Buka Meja Baru" — fixed DI ATAS bottom nav (nav h-16 +
-          safe-area supaya konsisten di HP dgn home indicator). */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background/95 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
-          <Button
-            type="button"
-            variant="gold"
-            size="lg"
-            className="w-full"
-            onClick={() => setOpenTableModal(true)}
-            disabled={availableTables.length === 0}
-          >
-            <UserPlus className="h-4 w-4" />
-            Open Table
-            {availableTables.length > 0 && (
-              <span className="ml-1 text-xs opacity-70">
-                ({availableTables.length} tables free)
-              </span>
-            )}
-          </Button>
-        </div>
-      </div>
 
       {openTableModal && (
         <OpenTableModal
