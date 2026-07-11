@@ -31,7 +31,7 @@ export function StaffBottomNav({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed bottom-0 inset-x-0 z-50 bg-background pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed bottom-0 inset-x-0 z-50 bg-background">
       {topSlot && (
         <div className="border-t border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>
