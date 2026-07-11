@@ -24,7 +24,6 @@ export default async function ProfileAccountEditPage() {
     <main className="flex-1 pb-12">
       <ProfileSubpageHeader
         title="Edit profile"
-        eyebrow="Profile"
         backHref="/profile/account"
       />
 
