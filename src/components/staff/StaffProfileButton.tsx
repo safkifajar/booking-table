@@ -25,13 +25,8 @@ export function StaffProfileButton({
           {initials(displayName)}
         </AvatarFallback>
       </Avatar>
-      <span className="min-w-0">
-        <span className="block text-[10px] text-muted-foreground leading-tight">
-          Signed in as
-        </span>
-        <span className="block text-sm font-semibold truncate leading-tight">
-          {displayName}
-        </span>
+      <span className="text-sm font-semibold truncate min-w-0">
+        {displayName}
       </span>
     </Link>
   );

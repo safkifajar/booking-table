@@ -8,8 +8,6 @@ import {
   Utensils,
   Layers,
   CheckCircle2,
-  Volume2,
-  VolumeX,
   Crown,
   Users,
   Plus,
@@ -62,8 +60,6 @@ interface Props {
 
 type Tab = "queue" | "sessions" | "bookings" | "moves" | "done";
 
-const AUDIO_PREF_KEY = "waiter_audio_enabled";
-
 /** "22 Jun" — tanggal ringkas. */
 function fmtDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -114,37 +110,19 @@ export function WaiterDashboard({
             ? "done"
             : "queue";
   const [tab, setTab] = React.useState<Tab>(initialTab);
-  const [audioEnabled, setAudioEnabled] = React.useState(true);
   const [optimistic, setOptimistic] = React.useState<Set<string>>(new Set());
   const [joiningSession, setJoiningSession] = React.useState<string | null>(null);
   const [openTableModal, setOpenTableModal] = React.useState(false);
 
-  // Load audio preference dari localStorage
-  React.useEffect(() => {
-    const stored = localStorage.getItem(AUDIO_PREF_KEY);
-    if (stored !== null) setAudioEnabled(stored === "true");
-  }, []);
-
-  function toggleAudio() {
-    const next = !audioEnabled;
-    setAudioEnabled(next);
-    localStorage.setItem(AUDIO_PREF_KEY, String(next));
-    // Play beep saat enable supaya browser register user gesture untuk
-    // izinkan Web Audio API (autoplay policy), plus konfirmasi audio jalan.
-    if (next) {
-      playBeep();
-    }
-    toast.success(next ? "Notification sound on" : "Notification sound off");
-  }
-
-  // Play beep when new "sent" items arrive (queue length increases)
+  // Beep saat ada order 'sent' baru masuk (queue bertambah). Toggle sound
+  // dihapus — bunyi notifikasi selalu aktif.
   const lastQueueCountRef = React.useRef(initialQueue.length);
   React.useEffect(() => {
-    if (initialQueue.length > lastQueueCountRef.current && audioEnabled) {
+    if (initialQueue.length > lastQueueCountRef.current) {
       playBeep();
     }
     lastQueueCountRef.current = initialQueue.length;
-  }, [initialQueue.length, audioEnabled]);
+  }, [initialQueue.length]);
 
   // Realtime: subscribe SSE staff channel
   React.useEffect(() => {
@@ -218,29 +196,9 @@ export function WaiterDashboard({
   }
 
   return (
-    <div className="space-y-4 pb-[calc(13rem+env(safe-area-inset-bottom))]">
-      {/* Audio toggle (kanan atas konten); navigasi tab → bottom nav di bawah */}
-      <div className="flex items-center justify-end">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={toggleAudio}
-          className={cn(
-            "shrink-0 gap-1.5",
-            audioEnabled ? "text-primary" : "text-muted-foreground"
-          )}
-          title={audioEnabled ? "Mute sound" : "Unmute sound"}
-        >
-          {audioEnabled ? (
-            <Volume2 className="h-4 w-4" />
-          ) : (
-            <VolumeX className="h-4 w-4" />
-          )}
-          <span className="text-xs">{audioEnabled ? "Sound on" : "Sound off"}</span>
-        </Button>
-      </div>
-
+    // Flex column setinggi sisa layar → tab content scroll sendiri di dalamnya
+    // (filter/search di tiap view fix, tak ikut scroll — spt kasir).
+    <div className="flex flex-col h-[calc(100dvh-5.5rem)] -mb-6">
       <StaffBottomNav
         active={tab}
         onChange={(k) => setTab(k as Tab)}
@@ -297,32 +255,45 @@ export function WaiterDashboard({
         ]}
       />
 
-      {tab === "queue" && (
-        <QueueView
-          items={visibleQueue}
-          onMarkServed={handleMarkServed}
-          optimisticIds={optimistic}
-        />
-      )}
-      {tab === "sessions" && (
-        <SessionsView
-          sessions={initialSessions}
-          onAssist={handleAssistOrder}
-          joiningSession={joiningSession}
-        />
-      )}
-      {tab === "bookings" && <BookingsView bookings={initialBookings} />}
-
-      {tab === "moves" && <MoveRequestsPanel requests={moveRequests} />}
-
-      {tab === "done" && (
-        <SessionsView
-          sessions={closedSessions}
-          onAssist={handleAssistOrder}
-          joiningSession={joiningSession}
-          emptyLabel="No completed sessions yet"
-        />
-      )}
+      {/* Area konten tab — flex-1 min-h-0 supaya view di dalamnya bisa atur
+          scroll sendiri (filter fix + list scroll). pt-6 (page.tsx py-6 sudah
+          -mb-6 di root). */}
+      <div className="flex-1 min-h-0 flex flex-col pt-2">
+        {tab === "queue" && (
+          <ScrollArea>
+            <QueueView
+              items={visibleQueue}
+              onMarkServed={handleMarkServed}
+              optimisticIds={optimistic}
+            />
+          </ScrollArea>
+        )}
+        {tab === "sessions" && (
+          <SessionsView
+            sessions={initialSessions}
+            onAssist={handleAssistOrder}
+            joiningSession={joiningSession}
+          />
+        )}
+        {tab === "bookings" && (
+          <ScrollArea>
+            <BookingsView bookings={initialBookings} />
+          </ScrollArea>
+        )}
+        {tab === "moves" && (
+          <ScrollArea>
+            <MoveRequestsPanel requests={moveRequests} />
+          </ScrollArea>
+        )}
+        {tab === "done" && (
+          <SessionsView
+            sessions={closedSessions}
+            onAssist={handleAssistOrder}
+            joiningSession={joiningSession}
+            emptyLabel="No completed sessions yet"
+          />
+        )}
+      </div>
 
       {openTableModal && (
         <OpenTableModal
@@ -489,6 +460,16 @@ function QueueItemCard({
 // TAB: SESSIONS (Bantu Pesan)
 // ============================================================
 
+/** Kontainer scroll internal utk tab tanpa filter (queue/bookings/moves).
+ *  Full-bleed scrollbar + ruang bawah utk footer Open Table+nav. */
+function ScrollArea({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6 pb-[calc(13rem+env(safe-area-inset-bottom))]">
+      {children}
+    </div>
+  );
+}
+
 function SessionsView({
   sessions,
   onAssist,
@@ -514,43 +495,50 @@ function SessionsView({
 
   if (sessions.length === 0) {
     return (
-      <Card className="p-12 text-center border-dashed">
-        <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="text-sm font-medium mb-1">{emptyLabel}</p>
-        <p className="text-xs text-muted-foreground">
-          Tables opened by customers will appear here.
-        </p>
-      </Card>
+      <ScrollArea>
+        <Card className="p-12 text-center border-dashed">
+          <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium mb-1">{emptyLabel}</p>
+          <p className="text-xs text-muted-foreground">
+            Tables opened by customers will appear here.
+          </p>
+        </Card>
+      </ScrollArea>
     );
   }
 
+  // Filter/search DIAM (shrink-0) di atas; hanya list yg scroll internal.
   return (
-    <div className="space-y-3">
-      <SessionListFilters
-        filter={filter}
-        onFilter={setFilter}
-        query={query}
-        onQuery={setQuery}
-      />
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="shrink-0 pb-3">
+        <SessionListFilters
+          filter={filter}
+          onFilter={setFilter}
+          query={query}
+          onQuery={setQuery}
+        />
+      </div>
 
-      {filtered.length === 0 ? (
-        <Card className="p-8 text-center border-dashed">
-          <p className="text-sm text-muted-foreground">
-            No tables in this filter.
-          </p>
-        </Card>
-      ) : (
-        <div className="grid sm:grid-cols-2 gap-3">
-          {filtered.map((s) => (
-            <SessionCard
-              key={s.session_id}
-              session={s}
-              onAssist={onAssist}
-              isJoining={joiningSession === s.session_id}
-            />
-          ))}
-        </div>
-      )}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6 pb-[calc(13rem+env(safe-area-inset-bottom))]">
+        {filtered.length === 0 ? (
+          <Card className="p-8 text-center border-dashed">
+            <p className="text-sm text-muted-foreground">
+              No tables in this filter.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {filtered.map((s) => (
+              <SessionCard
+                key={s.session_id}
+                session={s}
+                onAssist={onAssist}
+                isJoining={joiningSession === s.session_id}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
