@@ -13,7 +13,7 @@ export default async function PrivacyPage() {
 
   return (
     <main className="flex-1 pb-12">
-      <ProfileSubpageHeader title="Private Account" eyebrow="Privacy" />
+      <ProfileSubpageHeader title="Private Account" />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         <PrivacyToggleSection initial={profile.isPrivate} />
       </div>

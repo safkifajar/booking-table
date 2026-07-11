@@ -16,7 +16,6 @@ export default async function ProfilePasswordPage() {
     <main className="flex-1 pb-12">
       <ProfileSubpageHeader
         title={hasPassword ? "Change Password" : "Set Password"}
-        eyebrow="Security"
       />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">

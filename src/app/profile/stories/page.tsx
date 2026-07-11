@@ -43,7 +43,7 @@ export default async function ProfileStoriesPage() {
 
   return (
     <main className="flex-1 pb-12">
-      <ProfileSubpageHeader title="My Story" eyebrow="Profile" />
+      <ProfileSubpageHeader title="My Story" />
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
         {rows.length === 0 ? (
