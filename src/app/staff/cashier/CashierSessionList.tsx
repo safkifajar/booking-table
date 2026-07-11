@@ -167,26 +167,45 @@ export function CashierSessionList({
     closedUnpaid.reduce((s, x) => s + x.paid_total, 0);
 
   return (
-    <div className="space-y-4 pb-40">
-      {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <StatCard
-          icon={<Users className="h-3.5 w-3.5" />}
-          label="Active tables"
-          value={totalOpen.toString()}
-        />
-        <StatCard
-          icon={<Wallet className="h-3.5 w-3.5" />}
-          label="Paid"
-          value={formatIDR(totalPaidPartial)}
-          tone="success"
-        />
-        <StatCard
-          icon={<Clock className="h-3.5 w-3.5" />}
-          label="Outstanding"
-          value={formatIDR(totalUnpaid)}
-          tone={totalUnpaid > 0 ? "warning" : "muted"}
-        />
+    <div className="pb-40 [&>*:not(:first-child)]:mt-4">
+      {/* Quick stats + filter — DIAM (sticky di bawah header) supaya tak ikut
+          scroll; hanya list di bawahnya yg bergulir. */}
+      <div className="sticky top-[64px] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-3 bg-background/95 backdrop-blur-md border-b border-border space-y-3">
+        <div className="grid grid-cols-3 gap-2">
+          <StatCard
+            icon={<Users className="h-3.5 w-3.5" />}
+            label="Active tables"
+            value={totalOpen.toString()}
+          />
+          <StatCard
+            icon={<Wallet className="h-3.5 w-3.5" />}
+            label="Paid"
+            value={formatIDR(totalPaidPartial)}
+            tone="success"
+          />
+          <StatCard
+            icon={<Clock className="h-3.5 w-3.5" />}
+            label="Outstanding"
+            value={formatIDR(totalUnpaid)}
+            tone={totalUnpaid > 0 ? "warning" : "muted"}
+          />
+        </div>
+        {tab === "active" && (
+          <SessionListFilters
+            filter={filter}
+            onFilter={setFilter}
+            query={query}
+            onQuery={setQuery}
+          />
+        )}
+        {tab === "done" && (
+          <SessionListFilters
+            filter={doneFilter}
+            onFilter={setDoneFilter}
+            query={doneQuery}
+            onQuery={setDoneQuery}
+          />
+        )}
       </div>
 
       {/* Navigasi tab → bottom nav (fixed, dirender di bawah return) */}
@@ -223,14 +242,7 @@ export function CashierSessionList({
 
       {tab === "active" && (
         <>
-          <SessionListFilters
-            filter={filter}
-            onFilter={setFilter}
-            query={query}
-            onQuery={setQuery}
-          />
-
-          {/* Session list */}
+          {/* Session list (filter sudah pindah ke area sticky di atas) */}
           {filtered.length === 0 ? (
             <Card className="p-12 text-center border-dashed">
               <Wallet className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
@@ -276,12 +288,7 @@ export function CashierSessionList({
             </Card>
           ) : (
             <>
-              <SessionListFilters
-                filter={doneFilter}
-                onFilter={setDoneFilter}
-                query={doneQuery}
-                onQuery={setDoneQuery}
-              />
+              {/* filter pindah ke area sticky di atas */}
               {filteredClosed.length === 0 ? (
                 <Card className="p-8 text-center border-dashed">
                   <p className="text-sm text-muted-foreground">
