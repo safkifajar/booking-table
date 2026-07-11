@@ -168,9 +168,11 @@ export function CashierSessionList({
 
   return (
     <div className="pb-[calc(13rem+env(safe-area-inset-bottom))] [&>*:not(:first-child)]:mt-4">
-      {/* Quick stats + filter — DIAM (sticky di bawah header) supaya tak ikut
-          scroll; hanya list di bawahnya yg bergulir. */}
-      <div className="sticky top-[64px] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-3 bg-background/95 backdrop-blur-md border-b border-border space-y-3">
+      {/* Quick stats + filter — FIX. Sticky nempel persis di bawah header
+          (header sticky ~64px). -mt-6 membatalkan py-6 wrapper di page.tsx
+          supaya stats mulai TEPAT di 64px & tak ada travel sebelum menempel
+          (tak lagi 'ter-scroll sedikit'). */}
+      <div className="sticky top-[63px] z-20 -mx-4 sm:-mx-6 -mt-6 px-4 sm:px-6 pt-4 pb-3 bg-background border-b border-border space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <StatCard
             icon={<Users className="h-3.5 w-3.5" />}

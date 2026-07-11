@@ -31,7 +31,10 @@ export function StaffBottomNav({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed bottom-0 inset-x-0 z-50 bg-background">
+    // after:* = backstop solid yg extend 40px ke bawah bottom-0 → kalau ada
+    // sliver viewport (device toolbar / scroll), tetap ketutup, tak ada konten
+    // yg mengintip di bawah nav.
+    <div className="fixed bottom-0 inset-x-0 z-50 bg-background after:absolute after:inset-x-0 after:top-full after:h-10 after:bg-background">
       {topSlot && (
         <div className="border-t border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>
