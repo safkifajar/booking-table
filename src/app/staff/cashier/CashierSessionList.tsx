@@ -468,12 +468,18 @@ function StatCard({
         ? "text-amber-400"
         : "text-foreground";
   return (
-    <Card className="p-3">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
-        {icon}
-        <span>{label}</span>
+    <Card className="p-3 min-w-0">
+      <div className="flex items-center gap-1 text-[9px] sm:text-[10px] uppercase tracking-wide text-muted-foreground mb-1 min-w-0">
+        <span className="shrink-0">{icon}</span>
+        <span className="truncate">{label}</span>
       </div>
-      <div className={cn("text-lg font-bold tabular-nums truncate", toneColor)}>
+      {/* Nominal: font mengecil di mobile supaya angka penuh tak terpotong. */}
+      <div
+        className={cn(
+          "font-bold tabular-nums leading-tight text-sm sm:text-lg",
+          toneColor
+        )}
+      >
         {value}
       </div>
     </Card>
