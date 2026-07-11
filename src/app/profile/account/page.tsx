@@ -88,11 +88,8 @@ export default async function ProfileAccountPage() {
             </Link>
           </Button>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Profile
-            </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
-              {profile.displayName}
+              Edit Account
             </h1>
           </div>
           <Button asChild variant="outline" size="sm" className="gap-1.5">
