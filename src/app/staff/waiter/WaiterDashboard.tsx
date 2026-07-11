@@ -45,7 +45,7 @@ import {
   currentMonthRange,
   type SessionFilterState,
 } from "@/components/staff/SessionListFilters";
-import { StaffTabs } from "@/components/staff/StaffTabs";
+import { StaffBottomNav } from "@/components/staff/StaffBottomNav";
 import type { MoveRequestRow } from "@/lib/move-approval-actions";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
@@ -219,53 +219,15 @@ export function WaiterDashboard({
 
   return (
     <div className="space-y-4 pb-24">
-      {/* Tab strip + audio toggle */}
-      <div className="flex items-center gap-2">
-        <StaffTabs
-          active={tab}
-          onChange={(k) => setTab(k as Tab)}
-          tabs={[
-            {
-              key: "queue",
-              label: "Incoming Orders",
-              icon: <Utensils className="h-3.5 w-3.5" />,
-              badge: visibleQueue.length,
-              alert: visibleQueue.length > 0,
-            },
-            {
-              key: "sessions",
-              label: "Active Tables",
-              icon: <Layers className="h-3.5 w-3.5" />,
-              badge: initialSessions.length,
-            },
-            {
-              key: "bookings",
-              label: "Bookings",
-              icon: <CalendarClock className="h-3.5 w-3.5" />,
-              badge: initialBookings.length,
-            },
-            {
-              key: "moves",
-              label: "Move Table",
-              icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
-              badge: countPending(moveRequests),
-              alert: countPending(moveRequests) > 0,
-            },
-            {
-              key: "done",
-              label: "Done",
-              icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-            },
-          ]}
-        />
-
+      {/* Audio toggle (kanan atas konten); navigasi tab → bottom nav di bawah */}
+      <div className="flex items-center justify-end">
         <Button
           type="button"
           variant="ghost"
           size="sm"
           onClick={toggleAudio}
           className={cn(
-            "shrink-0",
+            "shrink-0 gap-1.5",
             audioEnabled ? "text-primary" : "text-muted-foreground"
           )}
           title={audioEnabled ? "Mute sound" : "Unmute sound"}
@@ -275,8 +237,47 @@ export function WaiterDashboard({
           ) : (
             <VolumeX className="h-4 w-4" />
           )}
+          <span className="text-xs">{audioEnabled ? "Sound on" : "Sound off"}</span>
         </Button>
       </div>
+
+      <StaffBottomNav
+        active={tab}
+        onChange={(k) => setTab(k as Tab)}
+        tabs={[
+          {
+            key: "queue",
+            label: "Orders",
+            icon: <Utensils className="h-5 w-5" />,
+            badge: visibleQueue.length,
+            alert: visibleQueue.length > 0,
+          },
+          {
+            key: "sessions",
+            label: "Active",
+            icon: <Layers className="h-5 w-5" />,
+            badge: initialSessions.length,
+          },
+          {
+            key: "bookings",
+            label: "Bookings",
+            icon: <CalendarClock className="h-5 w-5" />,
+            badge: initialBookings.length,
+          },
+          {
+            key: "moves",
+            label: "Move",
+            icon: <ArrowRightLeft className="h-5 w-5" />,
+            badge: countPending(moveRequests),
+            alert: countPending(moveRequests) > 0,
+          },
+          {
+            key: "done",
+            label: "Done",
+            icon: <CheckCircle2 className="h-5 w-5" />,
+          },
+        ]}
+      />
 
       {tab === "queue" && (
         <QueueView

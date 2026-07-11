@@ -34,7 +34,7 @@ import {
   MoveRequestsPanel,
   countPending,
 } from "@/components/staff/MoveRequestsPanel";
-import { StaffTabs } from "@/components/staff/StaffTabs";
+import { StaffBottomNav } from "@/components/staff/StaffBottomNav";
 import {
   SessionListFilters,
   filterSessions,
@@ -189,34 +189,34 @@ export function CashierSessionList({
         />
       </div>
 
-      {/* Tab strip (komponen bersama dgn waiter) */}
-      <StaffTabs
+      {/* Navigasi tab → bottom nav (fixed, dirender di bawah return) */}
+      <StaffBottomNav
         active={tab}
         onChange={(k) => setTab(k as Tab)}
         tabs={[
           {
             key: "active",
-            label: "Active Tables",
-            icon: <Layers className="h-3.5 w-3.5" />,
+            label: "Active",
+            icon: <Layers className="h-5 w-5" />,
             badge: sessions.length,
           },
           {
             key: "bookings",
             label: "Bookings",
-            icon: <CalendarClock className="h-3.5 w-3.5" />,
+            icon: <CalendarClock className="h-5 w-5" />,
             badge: bookings.length,
           },
           {
             key: "moves",
-            label: "Move Table",
-            icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
+            label: "Move",
+            icon: <ArrowRightLeft className="h-5 w-5" />,
             badge: countPending(moveRequests),
             alert: countPending(moveRequests) > 0,
           },
           {
             key: "done",
             label: "Done",
-            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            icon: <CheckCircle2 className="h-5 w-5" />,
           },
         ]}
       />
