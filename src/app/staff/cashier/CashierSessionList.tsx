@@ -167,12 +167,13 @@ export function CashierSessionList({
     closedUnpaid.reduce((s, x) => s + x.paid_total, 0);
 
   return (
-    <div className="pb-[calc(13rem+env(safe-area-inset-bottom))] [&>*:not(:first-child)]:mt-4">
-      {/* Quick stats + filter — FIX. Sticky nempel persis di bawah header
-          (header sticky ~64px). -mt-6 membatalkan py-6 wrapper di page.tsx
-          supaya stats mulai TEPAT di 64px & tak ada travel sebelum menempel
-          (tak lagi 'ter-scroll sedikit'). */}
-      <div className="sticky top-[63px] z-20 -mx-4 sm:-mx-6 -mt-6 px-4 sm:px-6 pt-4 pb-3 bg-background border-b border-border space-y-3">
+    // Flex column setinggi sisa layar (di bawah header ~64px, minus py-6
+    // wrapper = ~112px). Stats+filter shrink-0 (DIAM), list flex-1 scroll
+    // sendiri → stats tak ikut scroll sama sekali (pola tab Floor/Menu/Network,
+    // bukan sticky yg sempat travel).
+    <div className="flex flex-col h-[calc(100dvh-5.5rem)] -mb-6">
+      {/* Quick stats + filter — DIAM (di luar area scroll). */}
+      <div className="shrink-0 pb-3 border-b border-border space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <StatCard
             icon={<Users className="h-3.5 w-3.5" />}
@@ -261,6 +262,11 @@ export function CashierSessionList({
         ]}
       />
 
+      {/* List: SATU area scroll internal (flex-1). Hanya ini yg bergulir →
+          stats+filter di atas benar2 diam. pb utk ruang footer Open Table+nav.
+          -mx utk full-bleed scrollbar. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-[calc(13rem+env(safe-area-inset-bottom))] [&>*:not(:first-child)]:mt-4">
+
       {tab === "active" && (
         <>
           {/* Session list (filter sudah pindah ke area sticky di atas) */}
@@ -327,6 +333,7 @@ export function CashierSessionList({
           )}
         </div>
       )}
+      </div>{/* /scroll container */}
 
       {openTableModal && (
         <OpenTableModal
