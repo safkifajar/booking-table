@@ -9,7 +9,7 @@ import {
   getAvailableTablesForWaiter,
   getReservationDataForWaiter,
 } from "@/lib/waiter-actions";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
   expireFinishedSessions,
   promoteDueReservations,
@@ -17,9 +17,9 @@ import {
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import { eq } from "drizzle-orm";
-import { Wallet, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
+import { StaffProfileButton } from "@/components/staff/StaffProfileButton";
 import { CashierSessionList } from "./CashierSessionList";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getMoveRequests } from "@/lib/move-approval-actions";
@@ -37,13 +37,12 @@ export default async function CashierPage() {
     "/staff/cashier"
   );
 
-  const [bar, user, profile] = await Promise.all([
+  const [bar, profile] = await Promise.all([
     db
       .select({ id: bars.id, name: bars.name })
       .from(bars)
       .where(eq(bars.id, ctx.barId))
       .then((rows) => rows[0]),
-    getCurrentUser(),
     getCurrentProfile(),
   ]);
   if (!bar) {
@@ -79,14 +78,13 @@ export default async function CashierPage() {
     <main className="flex-1 pb-12">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <div className="h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center">
-            <Wallet className="h-5 w-5 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg font-semibold truncate">
-              Cashier
-            </h1>
-          </div>
+          {profile && (
+            <StaffProfileButton
+              displayName={profile.displayName}
+              avatarUrl={profile.avatarUrl}
+            />
+          )}
+          <div className="flex-1" />
 
           <Button asChild variant="outline" size="sm">
             <Link href="/staff/cashier/shift">
@@ -96,14 +94,6 @@ export default async function CashierPage() {
             </Link>
           </Button>
           {profile && <NotificationBell userId={profile.id} />}
-          {profile && (
-            <AdminHeaderProfile
-              displayName={profile.displayName}
-              email={user?.email ?? ""}
-              avatarUrl={profile.avatarUrl}
-              profileHref="/staff/profile"
-            />
-          )}
         </div>
       </header>
 
