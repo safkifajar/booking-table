@@ -218,7 +218,7 @@ export function WaiterDashboard({
   }
 
   return (
-    <div className="space-y-4 pb-40">
+    <div className="space-y-4 pb-[calc(11rem+env(safe-area-inset-bottom))]">
       {/* Audio toggle (kanan atas konten); navigasi tab → bottom nav di bawah */}
       <div className="flex items-center justify-end">
         <Button
@@ -306,8 +306,9 @@ export function WaiterDashboard({
         />
       )}
 
-      {/* Tombol "Buka Meja Baru" — fixed DI ATAS bottom nav (nav = h-16). */}
-      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+      {/* Tombol "Buka Meja Baru" — fixed DI ATAS bottom nav (nav h-16 +
+          safe-area supaya konsisten di HP dgn home indicator). */}
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
           <Button
             type="button"

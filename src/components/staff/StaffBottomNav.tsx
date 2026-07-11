@@ -21,7 +21,7 @@ export function StaffBottomNav({
 }) {
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md"
+      className="fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]"
       aria-label="Staff navigation"
     >
       <div

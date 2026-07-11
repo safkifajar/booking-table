@@ -167,7 +167,7 @@ export function CashierSessionList({
     closedUnpaid.reduce((s, x) => s + x.paid_total, 0);
 
   return (
-    <div className="pb-40 [&>*:not(:first-child)]:mt-4">
+    <div className="pb-[calc(11rem+env(safe-area-inset-bottom))] [&>*:not(:first-child)]:mt-4">
       {/* Quick stats + filter — DIAM (sticky di bawah header) supaya tak ikut
           scroll; hanya list di bawahnya yg bergulir. */}
       <div className="sticky top-[64px] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-3 bg-background/95 backdrop-blur-md border-b border-border space-y-3">
@@ -307,8 +307,9 @@ export function CashierSessionList({
         </div>
       )}
 
-      {/* Tombol "Buka Meja Baru" — fixed DI ATAS bottom nav (nav = h-16). */}
-      <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-background/95 backdrop-blur-md">
+      {/* Tombol "Buka Meja Baru" — fixed DI ATAS bottom nav (nav h-16 +
+          safe-area supaya konsisten di HP dgn home indicator). */}
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
           <Button
             type="button"
