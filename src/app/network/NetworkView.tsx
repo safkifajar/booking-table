@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Search,
   Loader2,
@@ -126,20 +125,7 @@ export function NetworkView({
           pun (bukan sticky yg sempat geser saat mulai scroll). */}
       <div className="border-b border-border bg-background/95 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-3">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex h-7 w-7 rounded-md overflow-hidden border border-border shrink-0">
-              <Image
-                src="/logo-soho.jpeg"
-                alt="SOHO"
-                width={28}
-                height={28}
-                className="h-full w-full object-cover"
-              />
-            </span>
-            <h1 className="text-xl font-bold tracking-tight">Discover</h1>
-          </div>
-
-          {/* Search + Filter */}
+          {/* Search + Filter (judul 'Network' + logo ada di header atas) */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
