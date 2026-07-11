@@ -192,10 +192,11 @@ export function NetworkView({
       </div>
 
       {/* Konten feed — SATU area scroll internal (kontrol di atas tetap diam,
-          persis pola tab Floor/Menu). Tinggi = sisa layar s/d atas bottom nav. */}
+          persis pola tab Floor/Menu). Tinggi = sisa layar s/d atas bottom nav.
+          Header global (logo+Network) + search/filter + bottom nav ≈ 11.5rem. */}
       <div
         ref={feedScrollRef}
-        className="max-h-[calc(100dvh-14rem)] overflow-y-auto overscroll-contain"
+        className="max-h-[calc(100dvh-11.5rem)] overflow-y-auto overscroll-contain"
       >
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-4">
       <HobbyFilterSheet
