@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import type { StaffTabItem } from "@/components/staff/StaffTabs";
 
@@ -23,8 +24,14 @@ export function StaffBottomNav({
    *  dalam container fixed yg sama supaya nempel tanpa celah. */
   topSlot?: React.ReactNode;
 }) {
-  return (
-    <div className="fixed bottom-0 inset-x-0 z-40 bg-background pb-[env(safe-area-inset-bottom)]">
+  // Portal ke document.body → fixed benar-benar viewport-relative, kebal dari
+  // ancestor stacking/transform context yg bisa bikin fixed jadi "ngambang".
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed bottom-0 inset-x-0 z-50 bg-background pb-[env(safe-area-inset-bottom)]">
       {topSlot && (
         <div className="border-t border-border">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>
@@ -51,7 +58,8 @@ export function StaffBottomNav({
           ))}
         </div>
       </nav>
-    </div>
+    </div>,
+    document.body
   );
 }
 
