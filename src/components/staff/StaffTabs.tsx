@@ -34,7 +34,7 @@ export function StaffTabs({
   return (
     <div
       className={cn(
-        "flex-1 min-w-0 flex items-center gap-1.5 p-1 rounded-lg bg-muted/40 border border-border overflow-x-auto",
+        "flex-1 min-w-0 flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border",
         className
       )}
     >
@@ -74,14 +74,16 @@ function StaffTabButton({
       onClick={onClick}
       title={label}
       className={cn(
-        "relative flex items-center justify-center gap-1.5 h-9 px-3 rounded-md text-xs font-medium transition shrink-0",
-        // Tab aktif melebar (isi label), non-aktif kotak icon rapi seukuran.
-        active ? "bg-primary/15 text-primary" : "w-9 sm:w-auto text-muted-foreground hover:text-foreground hover:bg-muted/60"
+        // Tiap tab flex-1 → bagi rata seluruh lebar (tak ada space kosong).
+        "relative flex-1 min-w-0 flex items-center justify-center gap-1.5 h-9 px-2 rounded-md text-xs font-medium transition",
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
       )}
     >
-      {icon}
+      <span className="shrink-0">{icon}</span>
       {/* Layar kecil: tab non-aktif icon-only; tab aktif tetap tampil label. */}
-      <span className={cn("whitespace-nowrap", active ? "inline" : "hidden sm:inline")}>
+      <span className={cn("truncate", active ? "inline" : "hidden sm:inline")}>
         {label}
       </span>
       {badge !== undefined && badge > 0 && (
