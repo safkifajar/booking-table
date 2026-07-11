@@ -83,9 +83,6 @@ export default async function CashierPage() {
             <Wallet className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-primary/70 truncate">
-              {bar.name}
-            </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
               Cashier
             </h1>

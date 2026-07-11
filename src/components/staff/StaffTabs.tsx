@@ -34,7 +34,7 @@ export function StaffTabs({
   return (
     <div
       className={cn(
-        "flex-1 min-w-0 flex gap-1 p-1 rounded-lg bg-muted/40 border border-border overflow-x-auto",
+        "flex-1 min-w-0 flex items-center gap-1.5 p-1 rounded-lg bg-muted/40 border border-border overflow-x-auto",
         className
       )}
     >
@@ -74,29 +74,30 @@ function StaffTabButton({
       onClick={onClick}
       title={label}
       className={cn(
-        "relative flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition shrink-0",
-        active
-          ? "bg-primary/15 text-primary"
-          : "text-muted-foreground hover:text-foreground"
+        "relative flex items-center justify-center gap-1.5 h-9 px-3 rounded-md text-xs font-medium transition shrink-0",
+        // Tab aktif melebar (isi label), non-aktif kotak icon rapi seukuran.
+        active ? "bg-primary/15 text-primary" : "w-9 sm:w-auto text-muted-foreground hover:text-foreground hover:bg-muted/60"
       )}
     >
       {icon}
       {/* Layar kecil: tab non-aktif icon-only; tab aktif tetap tampil label. */}
-      <span className={cn(active ? "inline" : "hidden sm:inline")}>{label}</span>
+      <span className={cn("whitespace-nowrap", active ? "inline" : "hidden sm:inline")}>
+        {label}
+      </span>
       {badge !== undefined && badge > 0 && (
         <span
           className={cn(
             "inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1",
             active
               ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground"
+              : "bg-muted text-foreground hidden sm:inline-flex"
           )}
         >
           {badge}
         </span>
       )}
       {alert && (
-        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+        <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
       )}
     </button>
   );
