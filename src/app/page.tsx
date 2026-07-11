@@ -82,7 +82,7 @@ export default async function HomePage() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Link href="/" className="flex items-center gap-2.5 min-w-0">
             <span className="inline-flex h-9 w-9 rounded-lg overflow-hidden border border-border shadow-md shrink-0">
               <Image
                 src="/logo-soho.jpeg"
@@ -92,9 +92,20 @@ export default async function HomePage() {
                 className="h-full w-full object-cover"
               />
             </span>
-            <span className="text-[10px] uppercase tracking-widest text-primary/70 hidden sm:inline">
-              Social House
-            </span>
+            {!isAnon && firstName ? (
+              <span className="min-w-0">
+                <span className="block text-[10px] text-muted-foreground leading-tight">
+                  {greet},
+                </span>
+                <span className="block text-sm font-bold tracking-tight truncate leading-tight">
+                  {firstName} 👋
+                </span>
+              </span>
+            ) : (
+              <span className="text-[10px] uppercase tracking-widest text-primary/70 hidden sm:inline">
+                Social House
+              </span>
+            )}
           </Link>
 
           <div className="flex-1" />
@@ -110,15 +121,7 @@ export default async function HomePage() {
       </header>
 
       <div className="max-w-2xl mx-auto">
-        {/* Sapaan kontekstual (user login) */}
-        {!isAnon && firstName && (
-          <div className="px-4 sm:px-6 pt-4">
-            <p className="text-xs text-muted-foreground">{greet},</p>
-            <h1 className="text-xl font-bold tracking-tight">
-              {firstName} <span className="font-normal">👋</span>
-            </h1>
-          </div>
-        )}
+        {/* Sapaan (greeting + nama) sudah pindah ke header, di samping logo. */}
 
         {/* Soft-banner aktifkan notifikasi (user login) — proaktif tanpa
             auto-prompt. Klik Aktifkan baru minta izin browser. */}
