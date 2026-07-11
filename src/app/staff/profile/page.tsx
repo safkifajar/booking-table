@@ -79,7 +79,7 @@ export default async function StaffProfilePage() {
               href="/staff/profile/account"
               icon={<UserCog className="h-5 w-5" />}
               label="Edit Account"
-              description="Name, WhatsApp number, birth date, bio, hobbies"
+              description="Profile photo & display name"
             />
             <MenuItem
               href="/staff/profile/password"

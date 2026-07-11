@@ -1,25 +1,24 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import {
+  getCurrentUser,
+  getCurrentProfile,
+  getStaffRole,
+} from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { ProfileForm } from "@/app/profile/ProfileForm";
-import { getHobbyGroups } from "@/lib/hobby-actions";
-import { getPromptTexts } from "@/lib/prompt-actions";
+import { StaffAccountForm } from "./StaffAccountForm";
 
 export default async function StaffProfileAccountPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
-  const [user, interestCatalog, promptOptions] = await Promise.all([
-    getCurrentUser(),
-    getHobbyGroups(),
-    getPromptTexts(),
-  ]);
+  const [user, staff] = await Promise.all([getCurrentUser(), getStaffRole()]);
+  if (!staff) redirect("/login");
 
   return (
     <main className="flex-1 pb-12">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
             <Link href="/staff/profile" aria-label="Back to Profile">
               <ArrowLeft className="h-5 w-5" />
@@ -30,30 +29,11 @@ export default async function StaffProfileAccountPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-        <ProfileForm
-          email={user?.email ?? ""}
+        <StaffAccountForm
+          initialAvatarUrl={profile.avatarUrl}
           initialDisplayName={profile.displayName}
-          initialPhone={profile.phone ?? ""}
-          initialBirthDate={profile.birthDate ?? ""}
-          initialBio={profile.bio ?? ""}
-          initialGender={(profile.gender as "" | "male" | "female") ?? ""}
-          initialInterestedIn={
-            (profile.interestedIn as "" | "male" | "female" | "both") ?? ""
-          }
-          initialSocialLink={profile.socialLink ?? ""}
-          initialArea={profile.area ?? ""}
-          initialLookingFor={profile.lookingFor ?? ""}
-          initialEducation={profile.education ?? ""}
-          initialHeightCm={profile.heightCm ?? null}
-          initialReligion={profile.religion ?? ""}
-          initialMusicPref={profile.musicPref ?? ""}
-          initialFavFood={profile.favFood ?? ""}
-          initialFavDrink={profile.favDrink ?? ""}
-          initialHobbies={profile.hobbies ?? []}
-          initialPhotos={profile.photos ?? []}
-          initialPrompts={profile.prompts ?? []}
-          interestCatalog={interestCatalog}
-          promptOptions={promptOptions}
+          role={staff.role}
+          email={user?.email ?? ""}
         />
       </div>
     </main>

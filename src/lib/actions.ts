@@ -2219,6 +2219,28 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
 }
 
 /**
+ * Update profil STAFF (kasir/waiter) — minimal: hanya nama tampilan. Field
+ * lain (WA, bio, gender, dll) TIDAK disentuh (staff tak punya form itu). Foto
+ * ditangani AvatarUploader terpisah.
+ */
+export async function updateStaffProfile(input: { displayName: string }) {
+  const profile = await requireProfile();
+  const displayName = z
+    .string()
+    .min(2, "Name must be at least 2 characters")
+    .max(40)
+    .parse(input.displayName.trim());
+
+  await db
+    .update(profiles)
+    .set({ displayName })
+    .where(eq(profiles.id, profile.id));
+
+  revalidatePath("/staff/profile");
+  revalidatePath("/", "layout");
+}
+
+/**
  * Set akun privat (ala Instagram) — true = user lain hanya lihat data list
  * network, sisanya diblur+kunci di detail & hangout history disembunyikan.
  */
