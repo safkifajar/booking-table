@@ -7,8 +7,10 @@ import {
 } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronRight, UserCog, KeyRound } from "lucide-react";
-import { AvatarUploader } from "@/app/profile/AvatarUploader";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { initials } from "@/lib/utils";
 import { PushToggle } from "@/components/PushToggle";
+import { StaffLogoutButton } from "./StaffLogoutButton";
 
 /**
  * Staff profile (cashier, waiter) — gaya card grouped list, disamakan dgn
@@ -40,14 +42,21 @@ export default async function StaffProfilePage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Kartu profil — avatar (upload) + nama + email */}
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <AvatarUploader
-            initialAvatarUrl={profile.avatarUrl}
-            displayName={profile.displayName}
-          />
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="text-base font-semibold">{profile.displayName}</div>
+        {/* Kartu profil — avatar + nama + email (display; ganti foto di Edit
+            Account) — samakan dgn profil customer. */}
+        <div className="rounded-2xl border border-border bg-card p-4 flex items-center gap-4">
+          <Avatar className="h-14 w-14 shrink-0 border border-border">
+            {profile.avatarUrl && (
+              <AvatarImage src={profile.avatarUrl} alt={profile.displayName} />
+            )}
+            <AvatarFallback className="text-lg">
+              {initials(profile.displayName)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="text-base font-semibold truncate">
+              {profile.displayName}
+            </div>
             {user?.email && (
               <div className="text-xs text-muted-foreground truncate">
                 {user.email}
@@ -80,6 +89,9 @@ export default async function StaffProfilePage() {
             />
           </MenuGroup>
         </Section>
+
+        {/* Logout (kartu merah terpisah, spt profil customer) */}
+        <StaffLogoutButton />
       </div>
     </main>
   );

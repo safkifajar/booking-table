@@ -25,12 +25,7 @@ export default async function StaffProfileAccountPage() {
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Profile
-            </div>
-            <h1 className="text-base sm:text-lg font-semibold">Account</h1>
-          </div>
+          <h1 className="text-base sm:text-lg font-semibold">Edit Account</h1>
         </div>
       </header>
 
