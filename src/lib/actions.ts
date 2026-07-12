@@ -1703,13 +1703,18 @@ export async function createOrder(
     memberId = member.id;
   }
 
-  // 2. Guard Q1: tak boleh ada order 'unpaid' yang masih menggantung.
-  const [pendingOrder] = await db
+  // 2. Guard: tak boleh buat order baru kalau masih ada order BELUM LUNAS
+  //    (unpaid ATAU order yg masih punya sisa/DP, outstanding > 0). Order closed
+  //    diabaikan. (Revisi Q1: "belum lunas" mencakup sisa DP, bukan cuma unpaid.)
+  const activeOrders = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, data.sessionId), eq(orders.status, "unpaid")));
-  if (pendingOrder) {
-    throw new Error("Please settle the previous order before creating a new one");
+    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
+  for (const o of activeOrders) {
+    const { outstanding } = await getOrderOutstanding(o.id);
+    if (outstanding > 0) {
+      throw new Error("Please settle the previous order before creating a new one");
+    }
   }
 
   // 3. Snapshot harga menu (tolak item tak tersedia).

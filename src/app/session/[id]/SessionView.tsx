@@ -248,8 +248,11 @@ export function SessionView(props: SessionViewProps) {
   // Tambah order = HANYA host (atau staff atas nama meja). Anggota non-host tak
   // bisa memesan — mereka minta host menambahkan. (PRD Order Control FR1/FR3.)
   const canOrder = props.isHost || isStaff;
-  // Multi-order: ada order 'unpaid' menggantung → tak boleh buat order baru (Q1).
-  const hasUnpaidOrder = props.orders.some((o) => o.status === "unpaid");
+  // Multi-order: ada order BELUM LUNAS (unpaid atau masih ada sisa/DP) → tak
+  // boleh buat order baru. Order 'closed' diabaikan.
+  const hasUnpaidOrder = props.orders.some(
+    (o) => o.status !== "closed" && o.outstanding > 0
+  );
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
@@ -422,10 +425,6 @@ export function SessionView(props: SessionViewProps) {
           <BillTab
             orders={props.orders}
             sessionId={props.session.id}
-            subtotal={subtotal}
-            charge={bill.charge}
-            chargePercent={bill.chargePercent}
-            total={bill.total}
             cashierDetail={props.cashierDetail}
             barSlug={props.bar.slug}
           />
@@ -1298,19 +1297,11 @@ function MenuTab({
 function BillTab({
   orders,
   sessionId,
-  subtotal,
-  charge,
-  chargePercent,
-  total,
   cashierDetail,
   barSlug,
 }: {
   orders: SessionOrderSummary[];
   sessionId: string;
-  subtotal: number;
-  charge: number;
-  chargePercent: number;
-  total: number;
   cashierDetail: SessionViewProps["cashierDetail"];
   barSlug: string;
 }) {
@@ -1338,24 +1329,6 @@ function BillTab({
   return (
     <div className="space-y-4">
       <OrderList orders={orders} sessionId={sessionId} heading="Orders" />
-
-      {/* Ringkasan tagihan meja (agregat semua order). */}
-      <Card className="p-4 bg-muted/40 space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal (all orders)</span>
-          <span className="tabular-nums">{formatIDR(subtotal)}</span>
-        </div>
-        {chargePercent > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Tax &amp; Service ({chargePercent}%)</span>
-            <span className="tabular-nums">{formatIDR(charge)}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-sm pt-1.5 border-t border-border">
-          <span className="font-medium">Table total</span>
-          <span className="font-semibold text-primary text-base tabular-nums">{formatIDR(total)}</span>
-        </div>
-      </Card>
     </div>
   );
 }
@@ -1386,7 +1359,7 @@ function OrderList({
                 <span className="text-sm font-medium font-mono">
                   #{o.id.slice(0, 8).toUpperCase()}
                 </span>
-                <OrderStatusBadge status={o.status} />
+                <OrderStatusBadge status={o.status} outstanding={o.outstanding} />
               </div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
                 {o.itemCount} item{o.itemCount > 1 ? "s" : ""} ·{" "}
@@ -1411,13 +1384,18 @@ function OrderList({
   );
 }
 
-/** Badge status order (unpaid/paid/closed). */
-function OrderStatusBadge({ status }: { status: string }) {
-  const label =
-    status === "paid" ? "Paid" : status === "unpaid" ? "Unpaid" : status === "closed" ? "Closed" : status;
+/**
+ * Badge status order berbasis SISA tagihan (bukan cuma kolom status). Order yg
+ * di-DP masih punya sisa → "Unpaid" (belum lunas), bukan "Paid". "Paid" hanya
+ * kalau sisa 0. Closed = sesi ditutup.
+ */
+function OrderStatusBadge({ status, outstanding }: { status: string; outstanding: number }) {
+  const isClosed = status === "closed";
+  const isPaid = !isClosed && outstanding <= 0;
+  const label = isClosed ? "Closed" : isPaid ? "Paid" : "Unpaid";
   return (
     <Badge
-      variant={status === "paid" ? "success" : status === "unpaid" ? "warning" : "secondary"}
+      variant={isPaid ? "success" : isClosed ? "secondary" : "warning"}
       className="text-[10px]"
     >
       {label}
