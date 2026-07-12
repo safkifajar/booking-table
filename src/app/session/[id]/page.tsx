@@ -22,6 +22,7 @@ import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
 import { getSessionDetailForCashier } from "@/lib/cashier-actions";
 import { getChargeConfig } from "@/lib/settings-actions";
+import { getSessionOrders } from "@/lib/actions";
 import { SessionView } from "./SessionView";
 
 interface PageProps {
@@ -304,8 +305,12 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // Config pajak & service charge bar (untuk hitung total tagihan).
   const chargeConfig = await getChargeConfig(sessionRow.bar_id);
 
+  // Multi-order: daftar order utk tab Bill (list order).
+  const sessionOrders = await getSessionOrders(id);
+
   return (
     <SessionView
+      orders={sessionOrders}
       session={{
         id: sessionRow.id,
         title: sessionRow.title,

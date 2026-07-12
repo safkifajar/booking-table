@@ -296,6 +296,88 @@ export async function getOutstandingMap(
 }
 
 /**
+ * Outstanding untuk SATU order (multi-order model). Total order (subtotal item
+ * non-void + tax/service) − Σ(payment lunas order itu). Order 'paid'/lunas = 0.
+ * (PRD Multi-Order Prepaid.)
+ */
+export async function getOrderOutstanding(orderId: string): Promise<{
+  subtotal: number;
+  total: number;
+  paid: number;
+  outstanding: number;
+}> {
+  const [row] = await db
+    .select({
+      barId: floorAreas.barId,
+      subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+    })
+    .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .leftJoin(
+      orderItems,
+      and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
+    )
+    .where(eq(orders.id, orderId))
+    .groupBy(floorAreas.barId);
+  if (!row) return { subtotal: 0, total: 0, paid: 0, outstanding: 0 };
+
+  const [paidRow] = await db
+    .select({
+      paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+    })
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "paid")));
+
+  const charge = await getChargeConfig(row.barId);
+  const bill = computeBillTotals(Number(row.subtotal), charge);
+  const paid = Number(paidRow?.paid ?? 0);
+  return {
+    subtotal: bill.subtotal,
+    total: bill.total,
+    paid,
+    outstanding: Math.max(0, bill.total - paid),
+  };
+}
+
+/**
+ * Prepaid hook: kalau order berstatus 'unpaid' dan sudah lunas (untuk order DP,
+ * cukup DP lunas — Q7), maka order "MASUK": status → 'paid', paid_at di-set, dan
+ * item order (status 'draft') diubah 'sent' (masuk antrian dapur).
+ * Dipanggil setelah tiap pembayaran lunas. Return true kalau order baru "masuk".
+ * (PRD Multi-Order Prepaid FR7.)
+ */
+export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
+  const [order] = await db
+    .select({ id: orders.id, status: orders.status })
+    .from(orders)
+    .where(eq(orders.id, orderId));
+  if (!order || order.status !== "unpaid") return false;
+
+  // Order dianggap "masuk" kalau ada DP lunas (order DP) ATAU lunas penuh.
+  // Cek: ada payment lunas utk order ini? (DP lunas sudah cukup — Q7.)
+  const [paidRow] = await db
+    .select({ paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int` })
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "paid")));
+  const paid = Number(paidRow?.paid ?? 0);
+  if (paid <= 0) return false; // belum ada pembayaran lunas → belum masuk.
+
+  const now = new Date();
+  await db
+    .update(orders)
+    .set({ status: "paid", paidAt: now })
+    .where(eq(orders.id, orderId));
+  // Item draft → sent (masuk dapur).
+  await db
+    .update(orderItems)
+    .set({ status: "sent" })
+    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.status, "draft")));
+  return true;
+}
+
+/**
  * Kalau session berstatus 'overdue' dan tagihannya sudah lunas (outstanding
  * <= 0), tutup jadi 'closed'. Dipanggil setelah pembayaran berhasil (payShare /
  * cashier mark-paid). No-op kalau session bukan overdue atau masih ada sisa.

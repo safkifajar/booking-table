@@ -40,7 +40,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { notifyAll } from "@/lib/realtime/notify";
-import { settleOverdueIfPaid } from "@/lib/queries";
+import { settleOverdueIfPaid, settleOrderIfPaid } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
@@ -555,17 +555,17 @@ export async function getSessionDetailForCashier(
     if (staffRow) openedByStaffName = staffRow.name;
   }
 
-  // Order sesi (terbaru). JANGAN filter status — sesi closed punya order closed,
-  // tapi bill/item-nya tetap harus ditampilkan & sisa tagihan tetap bisa dibayar.
-  const [order] = await db
+  // Multi-order: kasir melihat SEMUA order yang sudah "masuk" (paid/closed),
+  // BUKAN order 'unpaid' (belum dibayar → belum masuk ke kasir/dapur).
+  const orderRows = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(eq(orders.sessionId, sessionId))
-    .orderBy(desc(orders.createdAt))
-    .limit(1);
+    .where(and(eq(orders.sessionId, sessionId), ne(orders.status, "unpaid")))
+    .orderBy(orders.createdAt);
+  const orderIds = orderRows.map((o) => o.id);
 
-  // Items
-  const itemsRaw = order
+  // Items (dari semua order yang masuk)
+  const itemsRaw = orderIds.length
     ? await db
         .select({
           id: orderItems.id,
@@ -583,13 +583,13 @@ export async function getSessionDetailForCashier(
         )
         .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
         .where(
-          and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void"))
+          and(inArray(orderItems.orderId, orderIds), ne(orderItems.status, "void"))
         )
         .orderBy(orderItems.createdAt)
     : [];
 
-  // Payments
-  const paymentsRaw = order
+  // Payments (dari semua order yang masuk)
+  const paymentsRaw = orderIds.length
     ? await db
         .select({
           id: payments.id,
@@ -607,12 +607,12 @@ export async function getSessionDetailForCashier(
           eq(sessionMembers.id, payments.paidByMemberId)
         )
         .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
-        .where(eq(payments.orderId, order.id))
+        .where(inArray(payments.orderId, orderIds))
         .orderBy(payments.createdAt)
     : [];
 
   // Payment items (rincian item per pembayaran itemized) — untuk riwayat kasir.
-  const paymentItemsRaw = order
+  const paymentItemsRaw = orderIds.length
     ? await db
         .select({
           payment_id: paymentItems.paymentId,
@@ -624,7 +624,7 @@ export async function getSessionDetailForCashier(
         .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
         .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
         .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
-        .where(eq(payments.orderId, order.id))
+        .where(inArray(payments.orderId, orderIds))
     : [];
   const itemsByPayment = new Map<
     string,
@@ -683,7 +683,7 @@ export async function getSessionDetailForCashier(
     reservation_end_at: row.reservation_end_at
       ? row.reservation_end_at.toISOString()
       : null,
-    order_id: order?.id ?? null,
+    order_id: orderIds[orderIds.length - 1] ?? null,
     items: itemsRaw.map((i) => ({
       id: i.id,
       quantity: i.quantity,
@@ -775,12 +775,13 @@ export async function cashierCreatePayment(
     throw new Error("Invalid bar access");
   }
 
-  // 2. Get order sesi. Sesi closed yg masih punya sisa tagihan tetap boleh
-  //    dibayar (tamu bayar belakangan) → jangan filter status order.
+  // 2. Get order sesi. Multi-order: kasir menerima pembayaran utk order yang
+  //    sudah "masuk" (bukan 'unpaid' — itu dibayar customer via QR). Ambil order
+  //    non-unpaid terbaru (yg masih ada sisa tagihan).
   const [order] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(eq(orders.sessionId, data.sessionId))
+    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "unpaid")))
     .orderBy(desc(orders.createdAt))
     .limit(1);
   if (!order) throw new Error("Order not found");
@@ -990,6 +991,7 @@ export async function markPaymentPaidBySystem(
       id: payments.id,
       status: payments.status,
       splitMeta: payments.splitMeta,
+      orderId: payments.orderId,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
     })
@@ -1019,6 +1021,9 @@ export async function markPaymentPaidBySystem(
       .where(eq(tableSessions.id, payment.sessionId));
   }
 
+  // Prepaid hook: kalau order 'unpaid' & kini ada pembayaran lunas → order MASUK
+  // (status 'paid' + item draft→sent). (PRD Multi-Order Prepaid.)
+  await settleOrderIfPaid(payment.orderId);
   await settleOverdueIfPaid(payment.sessionId);
   await notifyAll(payment.sessionId, payment.barId, { type: "payment.paid" });
   // Notif in-app + push ke host/pembayar/staff.

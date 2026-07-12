@@ -45,6 +45,8 @@ import {
 import {
   settleOverdueIfPaid,
   getOutstandingMap,
+  getOrderOutstanding,
+  settleOrderIfPaid,
   DP_TIMEOUT_SECONDS,
 } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
@@ -416,6 +418,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // 8. Transaction: create session + members + order + items + invite + DP
   let sessionId: string;
   let dpPaymentId: string | null = null;
+  let firstOrderId: string | null = null;
   let dpStatus: "paid" | "pending" = "pending";
   try {
     const result = await db.transaction(async (tx) => {
@@ -514,13 +517,14 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
             paidAt: null,
           })
           .returning({ id: payments.id });
-        return { sessionId: newSession.id, dpPaymentId: newPayment.id };
+        return { sessionId: newSession.id, dpPaymentId: newPayment.id, orderId: newOrder.id };
       }
 
-      return { sessionId: newSession.id, dpPaymentId: null };
+      return { sessionId: newSession.id, dpPaymentId: null, orderId: newOrder.id };
     });
     sessionId = result.sessionId;
     dpPaymentId = result.dpPaymentId;
+    firstOrderId = result.orderId;
   } catch (err) {
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
       throw new Error("This table already has an active session/reservation");
@@ -570,12 +574,14 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         .where(eq(payments.id, dpPaymentId));
       dpStatus = chargeResult.status === "paid" ? "paid" : "pending";
 
-      // Kalau DP paid, set dp_paid_at di session
+      // Kalau DP paid, set dp_paid_at di session + order pertama MASUK (Q7:
+      // DP lunas cukup utk order pertama masuk dapur).
       if (chargeResult.status === "paid") {
         await db
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
           .where(eq(tableSessions.id, sessionId));
+        if (firstOrderId) await settleOrderIfPaid(firstOrderId);
       } else if (chargeResult.qrString) {
         // DP QRIS menunggu bayar → client tampilkan QR (jangan redirect).
         dpQris = { paymentId: dpPaymentId, qrString: chargeResult.qrString };
@@ -1410,6 +1416,23 @@ export async function closeSession(sessionId: string) {
     staffRoleName = staff.role;
   }
 
+  // Close guard host/customer (Q6): host TIDAK boleh menutup meja bila masih ada
+  // order belum lunas (unpaid) atau sisa tagihan. Staff kasir tetap boleh
+  // force-close (meng-void order unpaid). Waiter punya guardrail sendiri di bawah.
+  if (isHost) {
+    const [unpaidOrder] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.sessionId, sessionId), eq(orders.status, "unpaid")));
+    const outstanding =
+      (await getOutstandingMap([sessionId])).get(sessionId) ?? 0;
+    if (unpaidOrder || outstanding > 0) {
+      throw new Error(
+        "Settle all payments before closing the table."
+      );
+    }
+  }
+
   // Guardrail waiter: hanya boleh close kalau meja lunas
   if (staffRoleName === "waiter") {
     const [billRow] = await db
@@ -1442,6 +1465,20 @@ export async function closeSession(sessionId: string) {
         `Not fully paid — Rp ${outstanding.toLocaleString("id-ID")} remaining. Direct the guest to the cashier.`
       );
     }
+  }
+
+  // Q6: order 'unpaid' menggantung saat close (staff force-close) → VOID item-nya
+  // supaya tak ditagih (order belum "masuk"). Item void tak dihitung outstanding.
+  const unpaidOrders = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, sessionId), eq(orders.status, "unpaid")));
+  if (unpaidOrders.length > 0) {
+    const ids = unpaidOrders.map((o) => o.id);
+    await db
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(inArray(orderItems.orderId, ids));
   }
 
   // Tentukan outstanding saat tutup. Kalau masih nunggak → status 'overdue'
@@ -1713,6 +1750,267 @@ export async function createOrder(
   return { orderId };
 }
 
+export interface SessionOrderSummary {
+  id: string;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+  itemCount: number;
+  subtotal: number;
+  total: number;
+  outstanding: number;
+}
+
+/**
+ * Daftar order untuk sebuah sesi (multi-order). Tiap order dgn status, jumlah
+ * item, total, outstanding. Dipakai tab Bill (list order). Terbaru dulu.
+ * (PRD Multi-Order Prepaid FR12.)
+ */
+export async function getSessionOrders(
+  sessionId: string
+): Promise<SessionOrderSummary[]> {
+  await requireProfile();
+  const rows = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      createdAt: orders.createdAt,
+      paidAt: orders.paidAt,
+      barId: floorAreas.barId,
+      itemCount: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.status} <> 'void' THEN ${orderItems.quantity} ELSE 0 END), 0)::int`,
+      subtotal: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.status} <> 'void' THEN ${orderItems.quantity} * ${orderItems.unitPrice} ELSE 0 END), 0)::int`,
+      paid: sql<number>`0`,
+    })
+    .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .where(eq(orders.sessionId, sessionId))
+    .groupBy(orders.id, floorAreas.barId)
+    .orderBy(desc(orders.createdAt));
+
+  // Paid per order.
+  const paidRows = await db
+    .select({
+      orderId: payments.orderId,
+      paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(and(eq(orders.sessionId, sessionId), eq(payments.status, "paid")))
+    .groupBy(payments.orderId);
+  const paidMap = new Map(paidRows.map((r) => [r.orderId, Number(r.paid)]));
+
+  // Charge config (single-tenant: 1 bar).
+  const barId = rows[0]?.barId;
+  const charge = barId ? await getChargeConfig(barId) : null;
+
+  return rows.map((r) => {
+    const bill = computeBillTotals(Number(r.subtotal), charge);
+    const paid = paidMap.get(r.id) ?? 0;
+    return {
+      id: r.id,
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+      paidAt: r.paidAt ? r.paidAt.toISOString() : null,
+      itemCount: Number(r.itemCount),
+      subtotal: bill.subtotal,
+      total: bill.total,
+      outstanding: Math.max(0, bill.total - paid),
+    };
+  });
+}
+
+export interface OrderDetail {
+  id: string;
+  sessionId: string;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+  subtotal: number;
+  charge: number;
+  chargePercent: number;
+  total: number;
+  paid: number;
+  outstanding: number;
+  isHost: boolean;
+  isStaff: boolean;
+  /** Boleh membuat pembayaran utk order ini (host/staff & masih ada sisa). */
+  canPay: boolean;
+  items: {
+    id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    added_by: string;
+  }[];
+  payments: {
+    id: string;
+    amount: number;
+    method: string;
+    status: string;
+    split_mode: string;
+    is_down_payment: boolean;
+    created_at: string;
+    paid_at: string | null;
+    paid_by: string;
+    paid_by_member_id: string;
+    qr_string: string | null;
+    expires_at: string | null;
+  }[];
+  /** Anggota joined (utk split di PaymentSheet). */
+  membersCount: number;
+  myMemberId: string | null;
+}
+
+/**
+ * Detail satu ORDER dalam sesi (halaman detail order). Info + item + history
+ * payment + izin bayar. qr_string hanya utk pemilik payment/staff.
+ * (PRD Multi-Order Prepaid FR14.)
+ */
+export async function getOrderDetail(
+  sessionId: string,
+  orderId: string
+): Promise<OrderDetail | null> {
+  const profile = await requireProfile();
+
+  const [order] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      createdAt: orders.createdAt,
+      paidAt: orders.paidAt,
+      hostId: tableSessions.hostId,
+      barId: floorAreas.barId,
+    })
+    .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(and(eq(orders.id, orderId), eq(orders.sessionId, sessionId)));
+  if (!order) return null;
+
+  const isHost = order.hostId === profile.id;
+  const [staff] = await db
+    .select({ id: staffRoles.id })
+    .from(staffRoles)
+    .where(
+      and(
+        eq(staffRoles.profileId, profile.id),
+        eq(staffRoles.barId, order.barId),
+        eq(staffRoles.isActive, true)
+      )
+    );
+  const isStaff = !!staff;
+
+  const [myMember] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+  const myMemberId = myMember?.id ?? null;
+
+  // Items.
+  const itemRows = await db
+    .select({
+      id: orderItems.id,
+      name: menuItems.name,
+      quantity: orderItems.quantity,
+      unit_price: orderItems.unitPrice,
+      added_by: profiles.displayName,
+    })
+    .from(orderItems)
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, orderItems.addedByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(and(eq(orderItems.orderId, orderId), ne(orderItems.status, "void")))
+    .orderBy(orderItems.createdAt);
+
+  // Payments (history).
+  const payRows = await db
+    .select({
+      id: payments.id,
+      amount: payments.amount,
+      method: payments.method,
+      status: payments.status,
+      split_mode: payments.splitMode,
+      split_meta: payments.splitMeta,
+      created_at: payments.createdAt,
+      paid_at: payments.paidAt,
+      paid_by_member_id: payments.paidByMemberId,
+      paid_by: profiles.displayName,
+    })
+    .from(payments)
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(eq(payments.orderId, orderId))
+    .orderBy(payments.createdAt);
+
+  const charge = await getChargeConfig(order.barId);
+  const subtotal = itemRows.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const bill = computeBillTotals(subtotal, charge);
+  const paid = payRows
+    .filter((p) => p.status === "paid")
+    .reduce((s, p) => s + p.amount, 0);
+  const outstanding = Math.max(0, bill.total - paid);
+
+  const [{ n: membersCount }] = await db
+    .select({ n: sql<number>`COUNT(*)::int` })
+    .from(sessionMembers)
+    .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined")));
+
+  return {
+    id: order.id,
+    sessionId,
+    status: order.status,
+    createdAt: order.createdAt.toISOString(),
+    paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+    subtotal: bill.subtotal,
+    charge: bill.charge,
+    chargePercent: bill.chargePercent,
+    total: bill.total,
+    paid,
+    outstanding,
+    isHost,
+    isStaff,
+    canPay: (isHost || isStaff) && outstanding > 0,
+    items: itemRows.map((i) => ({
+      id: i.id,
+      name: i.name,
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+      added_by: i.added_by,
+    })),
+    payments: payRows.map((p) => {
+      const meta =
+        (p.split_meta as { isDownPayment?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+      const isMine = p.paid_by_member_id === myMemberId;
+      return {
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        status: p.status,
+        split_mode: p.split_mode,
+        is_down_payment: !!meta.isDownPayment,
+        created_at: p.created_at.toISOString(),
+        paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+        paid_by: p.paid_by,
+        paid_by_member_id: p.paid_by_member_id,
+        qr_string: isMine || isStaff ? meta.qrString ?? null : null,
+        expires_at: meta.expiresAt ?? null,
+      };
+    }),
+    membersCount: Number(membersCount),
+    myMemberId,
+  };
+}
+
 export async function removeOrderItem(itemId: string, sessionId: string) {
   const profile = await requireProfile();
 
@@ -1793,6 +2091,9 @@ export async function createInvite(sessionId: string) {
 
 const paySchema = z.object({
   sessionId: z.string().uuid(),
+  /** Multi-order: order spesifik yang dibayar. Kalau tak diberi → fallback ke
+   *  order aktif sesi (kompat lama). (PRD Multi-Order Prepaid FR17.) */
+  orderId: z.string().uuid().optional(),
   amount: z.number().int().positive(),
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
   splitMode: z.enum(["equal", "itemized", "custom"]),
@@ -1881,26 +2182,36 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     member = hostMember;
   }
 
-  // 2. Order untuk dibayar. Normal = order open. Tapi sesi yang sudah closed
-  // (force-close / overdue / data lama) order-nya juga closed — tetap boleh
-  // dilunasi SELAMA masih ada sisa tagihan. Cari open dulu, fallback ke order
-  // mana pun kalau sesi masih nunggak.
-  const [openOrder] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
-  let order = openOrder;
-  if (!order) {
-    const outstanding =
-      (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
-    if (outstanding <= 0) throw new Error("The bill is already paid");
-    const [anyOrder] = await db
+  // 2. Order untuk dibayar. Multi-order: kalau orderId diberi → pakai order itu
+  // (dicek milik sesi). Kalau tidak → fallback lama (order non-closed sesi).
+  let order: { id: string } | undefined;
+  if (data.orderId) {
+    const [byId] = await db
       .select({ id: orders.id })
       .from(orders)
-      .where(eq(orders.sessionId, data.sessionId))
+      .where(and(eq(orders.id, data.orderId), eq(orders.sessionId, data.sessionId)));
+    order = byId;
+    if (!order) throw new Error("Order not found for this table");
+  } else {
+    const [openOrder] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
       .orderBy(desc(orders.createdAt))
       .limit(1);
-    order = anyOrder;
+    order = openOrder;
+    if (!order) {
+      const outstanding =
+        (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
+      if (outstanding <= 0) throw new Error("The bill is already paid");
+      const [anyOrder] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.sessionId, data.sessionId))
+        .orderBy(desc(orders.createdAt))
+        .limit(1);
+      order = anyOrder;
+    }
   }
   if (!order) throw new Error("Order not found");
 
@@ -1971,6 +2282,8 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 
   // Kalau sesi 'overdue' (lewat waktu tapi nunggak) dan kini lunas → tutup.
   if (chargeResult.status === "paid") {
+    // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK (paid + item sent).
+    await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
   }
 
@@ -1997,6 +2310,8 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 
 const splitBatchSchema = z.object({
   sessionId: z.string().uuid(),
+  /** Multi-order: order spesifik yang di-split. Fallback ke order aktif sesi. */
+  orderId: z.string().uuid().optional(),
   mode: z.enum(["equal", "itemized"]),
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
 });
@@ -2036,13 +2351,25 @@ export async function createSplitBatch(
   // 1. Auth: host atau staff aktif di bar sesi.
   const { barId } = await assertHostOrActiveStaff(data.sessionId, profile.id);
 
-  // 2. Order terbuka.
-  const [order] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(
-      and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed"))
-    );
+  // 2. Order yang di-split. Multi-order: pakai orderId kalau diberi (dicek milik
+  // sesi); else fallback ke order aktif terbaru.
+  let order: { id: string } | undefined;
+  if (data.orderId) {
+    const [byId] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.id, data.orderId), eq(orders.sessionId, data.sessionId)));
+    order = byId;
+    if (!order) throw new Error("Order not found for this table");
+  } else {
+    const [openOrder] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+    order = openOrder;
+  }
   if (!order) throw new Error("No open order for this session");
 
   // 3. Bill: subtotal (non-void) + charge → total; remaining = total − paid.
@@ -2054,9 +2381,9 @@ export async function createSplitBatch(
     .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
   const charge = await getChargeConfig(barId);
   const bill = computeBillTotals(Number(subRow?.subtotal ?? 0), charge);
-  const remaining =
-    (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
-  if (remaining <= 0) throw new Error("The bill is already paid");
+  // Remaining PER-ORDER (bukan sesi): total order − Σ(payment lunas order ini).
+  const remaining = (await getOrderOutstanding(order.id)).outstanding;
+  if (remaining <= 0) throw new Error("This order is already paid");
 
   // 4. Anggota joined + profil.
   const joined = await db
@@ -2213,6 +2540,8 @@ export async function createSplitBatch(
     }
   }
 
+  // Prepaid hook: kalau order kini lunas (semua share paid) → order MASUK.
+  await settleOrderIfPaid(order.id);
   // Kalau ada yang langsung paid (mock) & sesi overdue → settle.
   if (results.some((r) => r.status === "paid")) {
     await settleOverdueIfPaid(data.sessionId);
