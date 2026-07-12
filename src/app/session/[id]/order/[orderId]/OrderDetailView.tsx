@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
+import { cashierCreatePayment } from "@/lib/cashier-actions";
 import {
   payShare,
   createSplitBatch,
-  checkPaymentStatus,
   type OrderDetail,
 } from "@/lib/actions";
 import type { PaymentMethod } from "@/types/db";
@@ -28,38 +29,26 @@ function fmtTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** Hitung sisa detik dari expiresAt ISO string (untuk countdown QRIS). */
+function toExpirySeconds(expiresAt: string | null | undefined): number | undefined {
+  if (!expiresAt) return undefined;
+  return Math.max(1, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000));
+}
+
 export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   const router = useRouter();
   const [paySheet, setPaySheet] = React.useState(false);
-  // QR yang sedang ditampilkan inline (payment id + qr).
+  // QR yang sedang ditampilkan (via QrisPaymentDialog — data seragam: ID, amount,
+  // countdown, poll, cancel). Sama seperti tampilan QRIS di tempat lain.
   const [activeQr, setActiveQr] = React.useState<{
     paymentId: string;
     qrString: string;
-    expiresAt: string | null;
+    amount: number;
+    expirySeconds?: number;
   } | null>(null);
-  const [qrImage, setQrImage] = React.useState<string | null>(null);
 
-  // Render QR image saat activeQr berubah.
-  React.useEffect(() => {
-    let cancelled = false;
-    if (!activeQr) {
-      // async agar tak setState sinkron di dalam effect.
-      Promise.resolve().then(() => !cancelled && setQrImage(null));
-      return () => {
-        cancelled = true;
-      };
-    }
-    import("qrcode").then((QR) => {
-      QR.toDataURL(activeQr.qrString, { width: 280, margin: 1 })
-        .then((url: string) => !cancelled && setQrImage(url))
-        .catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeQr]);
-
-  // Waktu sekarang (di-refresh tiap 10 dtk) utk cek expired tanpa Date.now() saat render.
+  // Waktu sekarang (di-refresh tiap 10 dtk) utk cek expired di history tanpa
+  // Date.now() saat render.
   const [now, setNow] = React.useState(0);
   React.useEffect(() => {
     let cancelled = false;
@@ -70,23 +59,6 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       clearInterval(t);
     };
   }, []);
-
-  // Poll status saat ada QR aktif (pending).
-  React.useEffect(() => {
-    if (!activeQr) return;
-    const poll = setInterval(async () => {
-      try {
-        const r = await checkPaymentStatus(activeQr.paymentId);
-        if (r.status !== "pending") {
-          setActiveQr(null);
-          router.refresh();
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 5000);
-    return () => clearInterval(poll);
-  }, [activeQr, router]);
 
   // Single payment (treat/staff) → buat 1 payment → tampilkan QR inline.
   async function handleSingle(amount: number, method: PaymentMethod) {
@@ -100,7 +72,12 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       });
       setPaySheet(false);
       if (result.qrString && result.status === "pending") {
-        setActiveQr({ paymentId: result.paymentId, qrString: result.qrString, expiresAt: result.expiresAt });
+        setActiveQr({
+          paymentId: result.paymentId,
+          qrString: result.qrString,
+          amount,
+          expirySeconds: toExpirySeconds(result.expiresAt),
+        });
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -124,7 +101,12 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       if (created.length > 0) {
         toast.success(`QRIS created for ${created.length} member${created.length > 1 ? "s" : ""}`);
         if (mine?.qrString && mine.paymentId) {
-          setActiveQr({ paymentId: mine.paymentId, qrString: mine.qrString, expiresAt: mine.expiresAt });
+          setActiveQr({
+            paymentId: mine.paymentId,
+            qrString: mine.qrString,
+            amount: mine.amount,
+            expirySeconds: toExpirySeconds(mine.expiresAt),
+          });
         }
       } else {
         toast.info("No QRIS created (already have active ones?)");
@@ -206,32 +188,20 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           </div>
         </Card>
 
-        {/* QRIS inline (kalau aktif) */}
-        {activeQr && (
-          <Card className="p-5 text-center">
-            <div className="mb-2 text-sm font-semibold">Scan to pay (QRIS)</div>
-            {qrImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={qrImage} alt="QRIS" className="mx-auto h-56 w-56 rounded-lg bg-white p-2" />
-            ) : (
-              <div className="mx-auto flex h-56 w-56 items-center justify-center text-sm text-muted-foreground">
-                Generating QR…
-              </div>
-            )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              Waiting for payment… this page updates automatically.
-            </p>
-            <Button variant="ghost" size="sm" className="mt-2" onClick={() => setActiveQr(null)}>
-              Close QR
-            </Button>
-          </Card>
-        )}
-
-        {/* Pay button */}
-        {detail.canPay && !activeQr && (
+        {/* Pay button — customer/host/waiter (non-cashier). Kasir pakai box khusus. */}
+        {detail.canPay && !detail.isCashier && (
           <Button variant="gold" size="lg" className="w-full" onClick={() => setPaySheet(true)}>
             Pay this order
           </Button>
+        )}
+
+        {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). */}
+        {detail.canPay && detail.isCashier && (
+          <CashierPayBox
+            detail={detail}
+            onQr={(qr) => setActiveQr(qr)}
+            onDone={() => router.refresh()}
+          />
         )}
         {detail.status === "paid" && detail.outstanding <= 0 && (
           <Card className="p-4 bg-emerald-500/10 border-emerald-500/30 text-sm text-emerald-400 font-medium text-center">
@@ -276,7 +246,12 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                       <button
                         type="button"
                         onClick={() =>
-                          setActiveQr({ paymentId: p.id, qrString: p.qr_string!, expiresAt: p.expires_at })
+                          setActiveQr({
+                            paymentId: p.id,
+                            qrString: p.qr_string!,
+                            amount: p.amount,
+                            expirySeconds: toExpirySeconds(p.expires_at),
+                          })
                         }
                         className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition"
                       >
@@ -309,6 +284,162 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           onBatch={handleBatch}
         />
       )}
+
+      {/* QRIS dialog — tampilan seragam: ID transaksi, nominal, countdown, poll,
+          cancel. Sama seperti QRIS di flow lain. */}
+      {activeQr && (
+        <QrisPaymentDialog
+          paymentId={activeQr.paymentId}
+          qrString={activeQr.qrString}
+          amount={activeQr.amount}
+          expirySeconds={activeQr.expirySeconds}
+          onPaid={() => {
+            setActiveQr(null);
+            router.refresh();
+          }}
+          onExpired={() => {
+            setActiveQr(null);
+            router.refresh();
+          }}
+          onCancelled={() => {
+            setActiveQr(null);
+            router.refresh();
+          }}
+          onClose={() => setActiveQr(null)}
+        />
+      )}
     </main>
+  );
+}
+
+/**
+ * Box kasir di halaman detail order: pilih payer + metode (QRIS/Cash). Cash →
+ * input diterima + kembalian. Accept → cashierCreatePayment (QRIS mock/duitku
+ * auto-handle; cash langsung paid). (PRD Multi-Order — fitur kasir di detail.)
+ */
+function CashierPayBox({
+  detail,
+  onQr,
+  onDone,
+}: {
+  detail: OrderDetail;
+  onQr: (qr: { paymentId: string; qrString: string; amount: number; expirySeconds?: number }) => void;
+  onDone: () => void;
+}) {
+  const [payerId, setPayerId] = React.useState(detail.members[0]?.id ?? "");
+  const [method, setMethod] = React.useState<"qris" | "cash">("qris");
+  const [cashReceived, setCashReceived] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  const amount = detail.outstanding;
+  const received = parseInt(cashReceived || "0", 10) || 0;
+  const change = method === "cash" ? Math.max(0, received - amount) : 0;
+  const cashValid = method !== "cash" || received >= amount;
+
+  async function accept() {
+    if (!payerId) {
+      toast.error("Select a payer");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await cashierCreatePayment({
+        sessionId: detail.sessionId,
+        orderId: detail.id,
+        payerMemberId: payerId,
+        amount,
+        method,
+        cashReceived: method === "cash" ? received : undefined,
+      });
+      if (result.qrString && result.status === "pending") {
+        onQr({
+          paymentId: result.paymentId,
+          qrString: result.qrString,
+          amount,
+          expirySeconds: toExpirySeconds(result.expiresAt),
+        });
+      } else {
+        toast.success(
+          method === "cash" && change > 0
+            ? `Paid — change ${formatIDR(change)}`
+            : "Payment received"
+        );
+      }
+      onDone();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to accept payment"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="text-sm font-semibold">Accept payment (cashier)</div>
+
+      {/* Payer */}
+      <div>
+        <label className="text-xs text-muted-foreground">Payer</label>
+        <select
+          value={payerId}
+          onChange={(e) => setPayerId(e.target.value)}
+          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        >
+          {detail.members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Method */}
+      <div className="flex gap-2">
+        {(["qris", "cash"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={
+              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
+              (method === m ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/40")
+            }
+          >
+            {m === "qris" ? "QRIS" : "Cash"}
+          </button>
+        ))}
+      </div>
+
+      {/* Cash received + change */}
+      {method === "cash" && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Cash received</label>
+          <input
+            inputMode="numeric"
+            value={cashReceived}
+            onChange={(e) => setCashReceived(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder={String(amount)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
+          />
+          {received > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Change</span>
+              <span className={change >= 0 ? "text-emerald-400 tabular-nums" : "text-red-400 tabular-nums"}>
+                {formatIDR(change)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-between text-sm pt-1 border-t border-border">
+        <span className="text-muted-foreground">Amount due</span>
+        <span className="font-semibold text-primary tabular-nums">{formatIDR(amount)}</span>
+      </div>
+
+      <Button variant="gold" size="lg" className="w-full" disabled={loading || !cashValid} onClick={accept}>
+        {loading ? "Processing…" : method === "cash" ? "Accept cash" : "Generate QRIS"}
+      </Button>
+    </Card>
   );
 }

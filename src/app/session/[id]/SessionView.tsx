@@ -50,7 +50,6 @@ import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
-import { CashierPaymentPanel } from "@/components/cashier/CashierPaymentPanel";
 import type { CashierSessionDetail } from "@/lib/cashier-actions";
 import {
   computeBillTotals,
@@ -422,12 +421,7 @@ export function SessionView(props: SessionViewProps) {
           />
         )}
         {effTab === "bill" && (
-          <BillTab
-            orders={props.orders}
-            sessionId={props.session.id}
-            cashierDetail={props.cashierDetail}
-            barSlug={props.bar.slug}
-          />
+          <BillTab orders={props.orders} sessionId={props.session.id} />
         )}
       </div>
       </div>
@@ -1297,24 +1291,12 @@ function MenuTab({
 function BillTab({
   orders,
   sessionId,
-  cashierDetail,
-  barSlug,
 }: {
   orders: SessionOrderSummary[];
   sessionId: string;
-  cashierDetail: SessionViewProps["cashierDetail"];
-  barSlug: string;
 }) {
-  // Kasir: panel kaya (tetap), + list order di bawahnya sbg konteks.
-  if (cashierDetail) {
-    return (
-      <div className="space-y-4">
-        <CashierPaymentPanel detail={cashierDetail} barId={barSlug} />
-        <OrderList orders={orders} sessionId={sessionId} heading="Orders" />
-      </div>
-    );
-  }
-
+  // Semua peran (customer/kasir/waiter) melihat LIST ORDER yang sama. Aksi bayar
+  // dilakukan lewat halaman detail order (kasir sbg staff tetap bisa). (Konsisten.)
   if (orders.length === 0) {
     return (
       <Card className="p-6 text-center border-dashed">

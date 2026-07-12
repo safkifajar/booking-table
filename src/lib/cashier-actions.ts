@@ -739,6 +739,8 @@ export async function getSessionDetailForCashier(
 
 const createPaymentSchema = z.object({
   sessionId: z.string().uuid(),
+  /** Multi-order: order spesifik yang dibayar. Fallback ke order non-unpaid terbaru. */
+  orderId: z.string().uuid().optional(),
   payerMemberId: z.string().uuid(),
   amount: z.number().int().positive(),
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
@@ -775,15 +777,24 @@ export async function cashierCreatePayment(
     throw new Error("Invalid bar access");
   }
 
-  // 2. Get order sesi. Multi-order: kasir menerima pembayaran utk order yang
-  //    sudah "masuk" (bukan 'unpaid' — itu dibayar customer via QR). Ambil order
-  //    non-unpaid terbaru (yg masih ada sisa tagihan).
-  const [order] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "unpaid")))
-    .orderBy(desc(orders.createdAt))
-    .limit(1);
+  // 2. Order yang dibayar. Multi-order: pakai orderId kalau diberi (dicek milik
+  //    sesi); else fallback ke order non-unpaid terbaru.
+  let order: { id: string } | undefined;
+  if (data.orderId) {
+    const [byId] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.id, data.orderId), eq(orders.sessionId, data.sessionId)));
+    order = byId;
+  } else {
+    const [latest] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "unpaid")))
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+    order = latest;
+  }
   if (!order) throw new Error("Order not found");
 
   // 3. Validate payer is joined member

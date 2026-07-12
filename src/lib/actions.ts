@@ -1841,8 +1841,12 @@ export interface OrderDetail {
   outstanding: number;
   isHost: boolean;
   isStaff: boolean;
+  /** Pemanggil kasir (staff role cashier) — utk opsi bayar cash/mark-paid. */
+  isCashier: boolean;
   /** Boleh membuat pembayaran utk order ini (host/staff & masih ada sisa). */
   canPay: boolean;
+  /** Anggota joined (id + nama) — utk kasir pilih payer saat terima cash. */
+  members: { id: string; name: string }[];
   items: {
     id: string;
     name: string;
@@ -1898,7 +1902,7 @@ export async function getOrderDetail(
 
   const isHost = order.hostId === profile.id;
   const [staff] = await db
-    .select({ id: staffRoles.id })
+    .select({ role: staffRoles.role })
     .from(staffRoles)
     .where(
       and(
@@ -1908,6 +1912,7 @@ export async function getOrderDetail(
       )
     );
   const isStaff = !!staff;
+  const isCashier = staff?.role === "cashier";
 
   const [myMember] = await db
     .select({ id: sessionMembers.id })
@@ -1920,6 +1925,14 @@ export async function getOrderDetail(
       )
     );
   const myMemberId = myMember?.id ?? null;
+
+  // Anggota joined (utk kasir pilih payer saat terima cash).
+  const memberRows = await db
+    .select({ id: sessionMembers.id, name: profiles.displayName })
+    .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined")))
+    .orderBy(sessionMembers.joinedAt);
 
   // Items.
   const itemRows = await db
@@ -1984,7 +1997,9 @@ export async function getOrderDetail(
     outstanding,
     isHost,
     isStaff,
+    isCashier,
     canPay: (isHost || isStaff) && outstanding > 0,
+    members: memberRows.map((m) => ({ id: m.id, name: m.name })),
     items: itemRows.map((i) => ({
       id: i.id,
       name: i.name,
