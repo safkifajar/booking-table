@@ -23,7 +23,11 @@ import {
 } from "./_enums";
 
 /**
- * Order = bill/tab untuk session. Biasanya 1 session = 1 order yang terus ditambah.
+ * Order = satu batch pesanan untuk session. Multi-order: satu session bisa punya
+ * BANYAK order (tiap tambah pesanan = order baru), tapi maks 1 order 'unpaid'
+ * sekaligus (harus lunas dulu baru bisa buat order baru).
+ * Lifecycle: unpaid → paid (masuk dapur) → closed.
+ * (PRD Multi-Order Prepaid.)
  */
 export const orders = pgTable(
   "orders",
@@ -32,14 +36,18 @@ export const orders = pgTable(
     sessionId: uuid("session_id")
       .notNull()
       .references(() => tableSessions.id, { onDelete: "cascade" }),
-    status: orderStatusEnum("status").notNull().default("open"),
+    status: orderStatusEnum("status").notNull().default("unpaid"),
+    /** Kapan order lunas & "masuk" ke dapur/staff. NULL = belum lunas. */
+    paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
-    uniqueIndex("uq_open_order_per_session")
+    // Maks 1 order 'unpaid' per sesi (Q1) — harus lunas dulu baru buat order baru.
+    uniqueIndex("uq_unpaid_order_per_session")
       .on(t.sessionId)
-      .where(sql`status <> 'closed'`),
+      .where(sql`status = 'unpaid'`),
+    index("idx_orders_session").on(t.sessionId),
   ]
 );
 

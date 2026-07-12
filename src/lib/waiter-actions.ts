@@ -852,9 +852,12 @@ export async function staffOpenTableForCustomer(
         }
       }
 
+      // Walk-in dibuka staff untuk tamu yang sudah duduk → order langsung 'paid'
+      // (masuk dapur; staff proses pembayaran di kasir). Multi-order model.
       await tx.insert(orders).values({
         sessionId: newSession.id,
-        status: "open",
+        status: "paid",
+        paidAt: new Date(),
       });
 
       await tx.insert(sessionInvites).values({

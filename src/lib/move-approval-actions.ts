@@ -296,7 +296,7 @@ export async function requestMoveTableWithOrder(
     if (!order) {
       [order] = await tx
         .insert(orders)
-        .values({ sessionId: session.id, status: "open" })
+        .values({ sessionId: session.id, status: "paid", paidAt: new Date() })
         .returning({ id: orders.id });
     }
     await tx.insert(orderItems).values(

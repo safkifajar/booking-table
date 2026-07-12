@@ -441,11 +441,17 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         status: "joined",
       });
 
+      // Order pertama (multi-order model): kalau wajib bayar dulu (DP) → order
+      // 'unpaid' + item 'draft' (masuk dapur setelah DP lunas, Q7). Kalau tak
+      // wajib → langsung 'paid' + item 'sent' (bayar di akhir, Q3).
+      const firstOrderPaid = !dpRequired;
+      const firstItemStatus: "sent" | "draft" = firstOrderPaid ? "sent" : "draft";
       const [newOrder] = await tx
         .insert(orders)
         .values({
           sessionId: newSession.id,
-          status: "open",
+          status: firstOrderPaid ? "paid" : "unpaid",
+          paidAt: firstOrderPaid ? new Date() : null,
         })
         .returning({ id: orders.id });
 
@@ -469,7 +475,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
             quantity: it.quantity,
             unitPrice: it.unitPrice,
             notes: it.notes,
-            status: "sent" as const,
+            status: firstItemStatus,
           }))
         );
       }
@@ -1585,6 +1591,126 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
 
   await notifySessionAndStaff(data.sessionId);
   revalidatePath(`/session/${data.sessionId}`);
+}
+
+const createOrderSchema = z.object({
+  sessionId: z.string().uuid(),
+  items: z
+    .array(
+      z.object({
+        menuItemId: z.string().uuid(),
+        quantity: z.number().int().positive().max(20),
+        notes: z.string().max(200).optional(),
+      })
+    )
+    .min(1)
+    .max(50),
+  onBehalfOfMemberId: z.string().uuid().optional(),
+});
+
+/**
+ * Buat ORDER BARU dari cart (multi-order model). Tiap penambahan pesanan = order
+ * terpisah berstatus 'unpaid' yang HARUS dibayar dulu baru "masuk" ke dapur/staff.
+ *
+ * - Auth: host meja (customer) ATAU staff aktif (atas nama meja).
+ * - Guard (Q1): maks 1 order 'unpaid' per sesi — kalau masih ada order unpaid
+ *   menggantung, tolak (harus lunas dulu).
+ * - Item di-insert status 'draft' (belum masuk dapur; jadi 'sent' saat order paid).
+ *
+ * Return orderId supaya UI bisa arahkan ke halaman detail order utk bayar.
+ * (PRD Multi-Order Prepaid FR3/FR5.)
+ */
+export async function createOrder(
+  input: z.infer<typeof createOrderSchema>
+): Promise<{ orderId: string }> {
+  const profile = await requireProfile();
+  const data = createOrderSchema.parse(input);
+
+  // 1. Auth + tentukan member atribusi.
+  let memberId: string;
+  let inputByStaffId: string | null = null;
+  if (data.onBehalfOfMemberId) {
+    const [staff] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(and(eq(staffRoles.profileId, profile.id), eq(staffRoles.isActive, true)));
+    if (!staff) throw new Error("Only staff can input on behalf of a guest");
+    const [targetMember] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.id, data.onBehalfOfMemberId),
+          eq(sessionMembers.sessionId, data.sessionId),
+          eq(sessionMembers.status, "joined")
+        )
+      );
+    if (!targetMember) throw new Error("Target member not found at this table");
+    memberId = targetMember.id;
+    inputByStaffId = profile.id;
+  } else {
+    if (!(await isSessionHost(data.sessionId, profile.id))) {
+      throw new Error("Only the table host can add orders");
+    }
+    const [member] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, data.sessionId),
+          eq(sessionMembers.profileId, profile.id),
+          eq(sessionMembers.status, "joined")
+        )
+      );
+    if (!member) throw new Error("You're not a member of this table");
+    memberId = member.id;
+  }
+
+  // 2. Guard Q1: tak boleh ada order 'unpaid' yang masih menggantung.
+  const [pendingOrder] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, data.sessionId), eq(orders.status, "unpaid")));
+  if (pendingOrder) {
+    throw new Error("Please settle the previous order before creating a new one");
+  }
+
+  // 3. Snapshot harga menu (tolak item tak tersedia).
+  const menuIds = [...new Set(data.items.map((i) => i.menuItemId))];
+  const menuRows = await db
+    .select({ id: menuItems.id, price: menuItems.price, is_available: menuItems.isAvailable })
+    .from(menuItems)
+    .where(inArray(menuItems.id, menuIds));
+  const menuMap = new Map(menuRows.map((m) => [m.id, m]));
+  for (const it of data.items) {
+    const m = menuMap.get(it.menuItemId);
+    if (!m) throw new Error("Menu item not found");
+    if (!m.is_available) throw new Error("A selected menu item is currently unavailable");
+  }
+
+  // 4. Buat order baru 'unpaid' + item status 'draft' (belum masuk dapur).
+  const orderId = await db.transaction(async (tx) => {
+    const [newOrder] = await tx
+      .insert(orders)
+      .values({ sessionId: data.sessionId, status: "unpaid" })
+      .returning({ id: orders.id });
+    await tx.insert(orderItems).values(
+      data.items.map((it) => ({
+        orderId: newOrder.id,
+        menuItemId: it.menuItemId,
+        addedByMemberId: memberId,
+        inputByStaffId,
+        quantity: it.quantity,
+        unitPrice: menuMap.get(it.menuItemId)!.price,
+        notes: it.notes ?? null,
+        status: "draft" as const,
+      }))
+    );
+    return newOrder.id;
+  });
+
+  revalidatePath(`/session/${data.sessionId}`);
+  return { orderId };
 }
 
 export async function removeOrderItem(itemId: string, sessionId: string) {
