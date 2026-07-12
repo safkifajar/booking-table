@@ -121,6 +121,12 @@ export default async function ProfileAccountPage() {
             )}
           </div>
 
+          {profile.username && (
+            <div className="mt-0.5 text-sm text-muted-foreground">
+              @{profile.username}
+            </div>
+          )}
+
           <div className="mt-3 space-y-2 text-sm">
             {profile.area && (
               <InfoRow icon={<MapPin className="h-4 w-4" />} text={profile.area} />

@@ -160,6 +160,12 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             )}
           </div>
 
+          {profile.username && (
+            <div className="mt-0.5 text-sm text-muted-foreground">
+              @{profile.username}
+            </div>
+          )}
+
           <div className="mt-1.5">
             <RatingStars rating={profile.rating} />
           </div>

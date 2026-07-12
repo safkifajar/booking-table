@@ -243,6 +243,8 @@ export interface ActiveNetworkUser {
 export interface NetworkSearchUser {
   id: string;
   display_name: string;
+  /** Username unik (handle). Null utk user lama/guest. */
+  username: string | null;
   avatar_url: string | null;
   /** Galeri foto (carousel). Kosong = pakai avatar_url / placeholder. */
   photos: string[];

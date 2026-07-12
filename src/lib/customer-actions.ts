@@ -615,6 +615,7 @@ export async function listAllMembers(opts?: {
     .select({
       id: users.id,
       display_name: profiles.displayName,
+      username: profiles.username,
       avatar_url: profiles.avatarUrl,
       photos: profiles.photos,
       gender: profiles.gender,
@@ -649,6 +650,7 @@ export async function listAllMembers(opts?: {
     users: pageRows.map((r) => ({
       id: r.id,
       display_name: r.display_name,
+      username: r.username,
       avatar_url: r.avatar_url,
       photos: r.photos ?? [],
       // Privasi: hormati hide_age / hide_location.

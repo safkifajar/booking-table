@@ -282,6 +282,10 @@ function MemberCard({
           )}
         </div>
 
+        {user.username && (
+          <div className="text-sm text-muted-foreground">@{user.username}</div>
+        )}
+
         {user.area && (
           <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
             <MapPin className="h-3.5 w-3.5 shrink-0" />
