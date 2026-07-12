@@ -169,9 +169,10 @@ export function TransactionsList({
                     year: "numeric",
                   })}
                   <span className="block opacity-70">
-                    {new Date(t.closed_at ?? t.started_at).toLocaleTimeString("en-US", {
+                    {new Date(t.closed_at ?? t.started_at).toLocaleTimeString("en-GB", {
                       hour: "2-digit",
                       minute: "2-digit",
+                      hour12: false,
                     })}
                   </span>
                 </div>

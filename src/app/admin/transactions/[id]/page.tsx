@@ -20,6 +20,21 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+/**
+ * Status TAMPILAN pembayaran: pending yg QR-nya lewat expiry → "cancelled"
+ * (samakan sisi customer/kasir/waiter). failed juga "cancelled".
+ * `nowMs` di-pass supaya tak panggil Date.now() saat render.
+ */
+function nowMs(): number {
+  return Date.now();
+}
+function paymentDisplayStatus(status: string, expiresAt: string | null): string {
+  const expired =
+    status === "pending" && expiresAt != null && new Date(expiresAt).getTime() <= nowMs();
+  if (expired || status === "failed") return "cancelled";
+  return status;
+}
+
 export default async function InvoiceDetailPage({ params }: PageProps) {
   const bar = await requireAdmin();
   const { id } = await params;
@@ -346,12 +361,13 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       </span>
                       <span>
                         {p.paid_at
-                          ? new Date(p.paid_at).toLocaleString("en-US", {
+                          ? new Date(p.paid_at).toLocaleString("en-GB", {
                               day: "numeric",
                               month: "short",
                               year: "numeric",
                               hour: "2-digit",
                               minute: "2-digit",
+                              hour12: false,
                             })
                           : "Not paid yet"}
                       </span>
@@ -381,7 +397,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     {formatIDR(p.amount)}
                     {p.status !== "paid" && (
                       <span className="ml-1 text-[10px] text-amber-400">
-                        ({p.status})
+                        ({paymentDisplayStatus(p.status, p.expires_at)})
                       </span>
                     )}
                   </span>

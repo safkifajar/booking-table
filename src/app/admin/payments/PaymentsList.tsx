@@ -17,12 +17,28 @@ function payId(id: string): string {
 const METHODS = ["qris", "cash", "card", "gopay", "ovo", "mock"] as const;
 const STATUSES = ["paid", "pending", "failed", "refunded"] as const;
 
+/**
+ * Status TAMPILAN pembayaran: pending yang QR-nya sudah lewat expiry ditampilkan
+ * "cancelled" — sama seperti sisi customer/kasir/waiter (bukan "pending" abadi).
+ * failed juga ditampilkan "cancelled".
+ */
+function displayStatus(p: AdminPayment): string {
+  const expired =
+    p.status === "pending" &&
+    p.expires_at != null &&
+    new Date(p.expires_at).getTime() <= Date.now();
+  if (p.status === "paid") return "paid";
+  if (expired || p.status === "failed") return "cancelled";
+  if (p.status === "pending") return "pending";
+  return p.status; // refunded, dst
+}
+
 function statusBadgeVariant(
   status: string
 ): "success" | "warning" | "destructive" | "secondary" {
   if (status === "paid") return "success";
   if (status === "pending") return "warning";
-  if (status === "failed") return "destructive";
+  if (status === "cancelled" || status === "failed") return "destructive";
   return "secondary"; // refunded
 }
 
@@ -145,10 +161,10 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                       {p.method.toUpperCase()}
                     </Badge>
                     <Badge
-                      variant={statusBadgeVariant(p.status)}
+                      variant={statusBadgeVariant(displayStatus(p))}
                       className="text-[9px] px-1.5"
                     >
-                      {p.status}
+                      {displayStatus(p)}
                     </Badge>
                   </div>
                   <div className="text-[11px] text-muted-foreground tabular-nums">
@@ -158,9 +174,10 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                       year: "numeric",
                     })}
                     <span className="block opacity-70">
-                      {new Date(p.at).toLocaleTimeString("en-US", {
+                      {new Date(p.at).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                       })}
                     </span>
                   </div>
@@ -191,7 +208,7 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                         {p.method.toUpperCase()}
                       </Badge>
                       <Badge
-                        variant={statusBadgeVariant(p.status)}
+                        variant={statusBadgeVariant(displayStatus(p))}
                         className="text-[9px] px-1.5"
                       >
                         {p.status}
@@ -202,11 +219,12 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                         {formatIDR(p.amount)}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
-                        {new Date(p.at).toLocaleString("en-US", {
+                        {new Date(p.at).toLocaleString("en-GB", {
                           day: "numeric",
                           month: "short",
                           hour: "2-digit",
                           minute: "2-digit",
+                          hour12: false,
                         })}
                       </div>
                     </div>

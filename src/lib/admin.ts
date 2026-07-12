@@ -426,6 +426,8 @@ export interface AdminPayment {
   split_mode: string;
   /** Waktu proses bayar (paidAt kalau ada, fallback createdAt). */
   at: string;
+  /** Kadaluarsa QR (dari split_meta). Utk tampilkan 'cancelled' bila pending expired. */
+  expires_at: string | null;
   paid_by_name: string;
   table_label: string;
   area_name: string;
@@ -451,6 +453,7 @@ export async function getPayments(
       method: payments.method,
       status: payments.status,
       split_mode: payments.splitMode,
+      split_meta: payments.splitMeta,
       at: atExpr,
       paid_by_name: profiles.displayName,
       table_label: tables.label,
@@ -475,18 +478,22 @@ export async function getPayments(
     .orderBy(desc(atExpr))
     .limit(limit);
 
-  return rows.map((r) => ({
-    id: r.id,
-    session_id: r.session_id,
-    amount: Number(r.amount),
-    method: r.method,
-    status: r.status,
-    split_mode: r.split_mode,
-    at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
-    paid_by_name: r.paid_by_name,
-    table_label: r.table_label,
-    area_name: r.area_name,
-  }));
+  return rows.map((r) => {
+    const meta = (r.split_meta as { expiresAt?: string | null } | null) ?? {};
+    return {
+      id: r.id,
+      session_id: r.session_id,
+      amount: Number(r.amount),
+      method: r.method,
+      status: r.status,
+      split_mode: r.split_mode,
+      at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
+      expires_at: meta.expiresAt ?? null,
+      paid_by_name: r.paid_by_name,
+      table_label: r.table_label,
+      area_name: r.area_name,
+    };
+  });
 }
 
 /** Detail satu pembayaran (halaman /admin/payments/[id]). */
@@ -587,6 +594,8 @@ export interface TransactionDetailPayment {
   split_mode: string;
   paid_at: string | null;
   paid_by_name: string;
+  /** Kadaluarsa QR (split_meta) — utk tampilkan 'cancelled' bila pending expired. */
+  expires_at: string | null;
   /** Meja saat pembayaran ini (ter-infer dari riwayat pindah). null = tak ada pindah. */
   at_table: string | null;
   /** Rincian item yang dicakup pembayaran itemized (kosong utk DP/equal/treat). */
@@ -720,6 +729,7 @@ export async function getTransactionDetail(
           method: payments.method,
           status: payments.status,
           split_mode: payments.splitMode,
+          split_meta: payments.splitMeta,
           paid_at: payments.paidAt,
           created_at: payments.createdAt,
           paid_by_name: profiles.displayName,
@@ -844,6 +854,7 @@ export async function getTransactionDetail(
 
   const paymentsList: TransactionDetailPayment[] = paymentsRaw.map((p) => {
     const ts = (p.paid_at ?? p.created_at).getTime();
+    const meta = (p.split_meta as { expiresAt?: string | null } | null) ?? {};
     return {
       id: p.id,
       amount: p.amount,
@@ -851,6 +862,7 @@ export async function getTransactionDetail(
       status: p.status,
       split_mode: p.split_mode,
       paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+      expires_at: meta.expiresAt ?? null,
       paid_by_name: p.paid_by_name,
       at_table: moveRows.length > 0 ? tableAt(ts) : null,
       items: itemsByPayment.get(p.id) ?? [],
