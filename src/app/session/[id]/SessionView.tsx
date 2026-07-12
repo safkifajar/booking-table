@@ -1235,10 +1235,9 @@ function MenuTab({
   isStaff: boolean;
   /** Member tujuan atribusi order waiter (default host meja). */
   hostMemberId: string | null;
-  /** Sisa tagihan belum lunas. > 0 → host tak boleh tambah order dulu (staff
-   *  dikecualikan). (PRD Order Control FR4/FR6.) */
+  /** Sisa tagihan belum lunas (pay-before-order gate, sementara). */
   outstanding: number;
-  /** Dipanggil setelah order tersimpan (staff → diarahkan ke tab Pay). */
+  /** Dipanggil setelah order tersimpan (→ tab Bill). */
   onSaved?: () => void;
   /** Cart diangkat ke SessionView biar tak hilang saat pindah tab. */
   cart: Record<string, number>;
@@ -1251,7 +1250,6 @@ function MenuTab({
       </Card>
     );
   }
-  // Pay-before-order: hanya untuk host/customer (staff boleh terus input).
   const blockedByOutstanding = !isStaff && outstanding > 0;
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -1262,13 +1260,10 @@ function MenuTab({
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
             {formatIDR(outstanding)} still outstanding. Complete payment in the
-            Pay tab before adding new orders.
+            Bill tab before adding new orders.
           </div>
         </Card>
       )}
-      {/* Customer & staff sama-sama pakai keranjang: pilih +/- lalu Simpan
-          sekali → semua masuk bill. Beda: staff atribusi ke host meja;
-          customer atribusi ke diri sendiri (onBehalfOfMemberId undefined). */}
       <StaffMenuGrid
         menu={menu}
         cart={cart}
@@ -1294,8 +1289,6 @@ function MenuTab({
             });
           }
           if (isStaff) {
-            // Staff: setelah order tersimpan, arahkan ke tab Pay untuk proses
-            // pembayaran (pilih metode → QRIS). (#3)
             toast.success("Order saved — proceed to payment");
             onSaved?.();
           } else {
