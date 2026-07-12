@@ -18,7 +18,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, ne, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
@@ -1709,7 +1709,12 @@ export async function createOrder(
   const activeOrders = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
+    .where(
+      and(
+        eq(orders.sessionId, data.sessionId),
+        notInArray(orders.status, ["closed", "cancelled"])
+      )
+    );
   for (const o of activeOrders) {
     const { outstanding } = await getOrderOutstanding(o.id);
     if (outstanding > 0) {
@@ -1791,7 +1796,13 @@ export async function getSessionOrders(
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
-    .where(eq(orders.sessionId, sessionId))
+    // Order 'cancelled' (dibatalkan customer) tak ditampilkan di list order.
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        ne(orders.status, "cancelled")
+      )
+    )
     .groupBy(orders.id, floorAreas.barId)
     .orderBy(desc(orders.createdAt));
 
@@ -1845,6 +1856,8 @@ export interface OrderDetail {
   isCashier: boolean;
   /** Boleh membuat pembayaran utk order ini (host/staff & masih ada sisa). */
   canPay: boolean;
+  /** View-only: penonton non-member — nominal/pemesan/pembayaran di-redaksi. */
+  viewOnly: boolean;
   /** Anggota joined (id + nama) — utk kasir pilih payer saat terima cash. */
   members: { id: string; name: string }[];
   items: {
@@ -1852,7 +1865,7 @@ export interface OrderDetail {
     name: string;
     quantity: number;
     unit_price: number;
-    added_by: string;
+    added_by: string | null;
   }[];
   payments: {
     id: string;
@@ -1983,49 +1996,60 @@ export async function getOrderDetail(
     .from(sessionMembers)
     .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined")));
 
+  // View-only: user login tapi BUKAN host/staff/member. Boleh lihat item meja
+  // (biar tahu pesan apa) TAPI nominal, nama pemesan/pembayar, & data pembayaran
+  // DI-REDAKSI di server (privasi sosial: siapa bayar berapa). Order 'cancelled'
+  // tak perlu penanganan khusus di sini — memang tampil sbg detail biasa.
+  const isViewOnly = !isHost && !isStaff && myMemberId === null;
+
   return {
     id: order.id,
     sessionId,
     status: order.status,
     createdAt: order.createdAt.toISOString(),
     paidAt: order.paidAt ? order.paidAt.toISOString() : null,
-    subtotal: bill.subtotal,
-    charge: bill.charge,
+    subtotal: isViewOnly ? 0 : bill.subtotal,
+    charge: isViewOnly ? 0 : bill.charge,
     chargePercent: bill.chargePercent,
-    total: bill.total,
-    paid,
-    outstanding,
+    total: isViewOnly ? 0 : bill.total,
+    paid: isViewOnly ? 0 : paid,
+    outstanding: isViewOnly ? 0 : outstanding,
     isHost,
     isStaff,
     isCashier,
     canPay: (isHost || isStaff) && outstanding > 0,
-    members: memberRows.map((m) => ({ id: m.id, name: m.name })),
+    viewOnly: isViewOnly,
+    members: isViewOnly ? [] : memberRows.map((m) => ({ id: m.id, name: m.name })),
     items: itemRows.map((i) => ({
       id: i.id,
       name: i.name,
       quantity: i.quantity,
-      unit_price: i.unit_price,
-      added_by: i.added_by,
+      // Nominal & nama pemesan di-redaksi utk view-only.
+      unit_price: isViewOnly ? 0 : i.unit_price,
+      added_by: isViewOnly ? null : i.added_by,
     })),
-    payments: payRows.map((p) => {
-      const meta =
-        (p.split_meta as { isDownPayment?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
-      const isMine = p.paid_by_member_id === myMemberId;
-      return {
-        id: p.id,
-        amount: p.amount,
-        method: p.method,
-        status: p.status,
-        split_mode: p.split_mode,
-        is_down_payment: !!meta.isDownPayment,
-        created_at: p.created_at.toISOString(),
-        paid_at: p.paid_at ? p.paid_at.toISOString() : null,
-        paid_by: p.paid_by,
-        paid_by_member_id: p.paid_by_member_id,
-        qr_string: isMine || isStaff ? meta.qrString ?? null : null,
-        expires_at: meta.expiresAt ?? null,
-      };
-    }),
+    // View-only tak melihat riwayat pembayaran sama sekali.
+    payments: isViewOnly
+      ? []
+      : payRows.map((p) => {
+          const meta =
+            (p.split_meta as { isDownPayment?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+          const isMine = p.paid_by_member_id === myMemberId;
+          return {
+            id: p.id,
+            amount: p.amount,
+            method: p.method,
+            status: p.status,
+            split_mode: p.split_mode,
+            is_down_payment: !!meta.isDownPayment,
+            created_at: p.created_at.toISOString(),
+            paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+            paid_by: p.paid_by,
+            paid_by_member_id: p.paid_by_member_id,
+            qr_string: isMine || isStaff ? meta.qrString ?? null : null,
+            expires_at: meta.expiresAt ?? null,
+          };
+        }),
     membersCount: Number(membersCount),
     myMemberId,
   };
@@ -2971,6 +2995,131 @@ export async function cancelPayment(
   revalidatePath(`/session/${row.sessionId}`);
   revalidatePath("/staff/cashier");
   return { status: "cancelled", bookingCancelled };
+}
+
+/**
+ * Batalkan order yang MASIH UNPAID (belum dibayar) beserta pembayaran pending-nya.
+ * Dipakai saat customer klik "kembali" dari halaman pembayaran order baru lalu
+ * konfirmasi batal.
+ *
+ * Efek: order.status = 'cancelled', semua item order → 'void', payment pending
+ * (belum paid) → 'failed'. Order 'cancelled' tak muncul di dapur/kasir/tagihan.
+ *
+ * GUARD: hanya order berstatus 'unpaid' (order paid/closed tak bisa dibatalkan
+ * lewat sini). Auth: member joined sesi ATAU staff aktif di bar (pola sama
+ * dengan cancelPayment). Idempotent-ish: order yg sudah 'cancelled' → no-op.
+ */
+export async function cancelUnpaidOrder(
+  orderId: string
+): Promise<{ status: "cancelled" | "already_paid" }> {
+  const profile = await requireProfile();
+
+  const [row] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      sessionId: orders.sessionId,
+      barId: floorAreas.barId,
+    })
+    .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(orders.id, orderId));
+  if (!row) throw new Error("Order not found");
+
+  // Order yg sudah lunas/closed tak boleh dibatalkan lewat sini.
+  if (row.status === "paid" || row.status === "closed") {
+    return { status: "already_paid" };
+  }
+  if (row.status === "cancelled") {
+    return { status: "cancelled" }; // sudah batal → no-op
+  }
+
+  // Otorisasi: member joined sesi ATAU staff aktif di bar (pola cancelPayment).
+  const [asMember] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, row.sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+  let allowed = !!asMember;
+  if (!allowed) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, row.barId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    allowed = !!staff;
+  }
+  if (!allowed) throw new Error("Not allowed");
+
+  // ANTI MONEY-LOSS: sebelum membatalkan, cek ke gateway apakah ada pembayaran
+  // pending yg SEBENARNYA sudah lunas (dibayar di bank tapi belum ke-refleksi
+  // di DB via polling). Kalau ada → JANGAN batalkan; settle order jadi paid.
+  const pendingPays = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), eq(payments.status, "pending")));
+  if (pendingPays.length > 0) {
+    const gateway = getPaymentGateway();
+    for (const p of pendingPays) {
+      let gwStatus: Awaited<ReturnType<typeof gateway.checkStatus>>;
+      try {
+        gwStatus = await gateway.checkStatus(p.id);
+      } catch {
+        // Gagal cek gateway → jangan ambil risiko membatalkan pembayaran yg
+        // mungkin sudah lunas. Tolak cancel; user bisa coba lagi / lanjut bayar.
+        throw new Error(
+          "Tidak bisa memverifikasi status pembayaran. Coba lagi sebentar."
+        );
+      }
+      if (gwStatus === "paid") {
+        // Pembayaran ternyata lunas → settle order (jadi paid), batal cancel.
+        await db
+          .update(payments)
+          .set({ status: "paid", paidAt: new Date() })
+          .where(eq(payments.id, p.id));
+        await settleOrderIfPaid(orderId);
+        await notifySessionAndStaff(row.sessionId);
+        revalidatePath(`/session/${row.sessionId}`);
+        return { status: "already_paid" };
+      }
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    // Batalkan pembayaran pending/failed (belum paid) yang menempel di order.
+    await tx
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(and(eq(payments.orderId, orderId), ne(payments.status, "paid")));
+    // Void semua item (biar tak terhitung di agregat manapun).
+    await tx
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(eq(orderItems.orderId, orderId));
+    // Tandai order cancelled.
+    await tx
+      .update(orders)
+      .set({ status: "cancelled" })
+      .where(eq(orders.id, orderId));
+  });
+
+  await notifySessionAndStaff(row.sessionId);
+  revalidatePath(`/session/${row.sessionId}`);
+  revalidatePath("/staff/cashier");
+  revalidatePath("/staff/waiter");
+  return { status: "cancelled" };
 }
 
 // ============================================================

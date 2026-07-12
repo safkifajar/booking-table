@@ -2,18 +2,19 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { ArrowLeft, QrCode } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { cashierCreatePayment } from "@/lib/cashier-actions";
 import {
   payShare,
   createSplitBatch,
+  cancelUnpaidOrder,
   type OrderDetail,
 } from "@/lib/actions";
 import type { PaymentMethod } from "@/types/db";
@@ -37,7 +38,40 @@ function toExpirySeconds(expiresAt: string | null | undefined): number | undefin
 
 export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [paySheet, setPaySheet] = React.useState(false);
+  const [backBusy, setBackBusy] = React.useState(false);
+
+  // Back handler: kalau order MASIH UNPAID & belum ada pembayaran lunas, klik
+  // "kembali" = konfirmasi batal. Jika ya → order + pembayaran pending dibatalkan.
+  // Order yg sudah paid/closed → back biasa tanpa konfirmasi.
+  const backHref = `/session/${detail.sessionId}`;
+  // Non-member (viewOnly) tak boleh memicu batal — mereka cuma menonton.
+  const canCancel =
+    !detail.viewOnly && detail.status === "unpaid" && detail.paid === 0;
+  async function handleBack() {
+    if (!canCancel) {
+      router.push(backHref);
+      return;
+    }
+    const ok = await confirm({
+      title: "Batalkan pesanan?",
+      description:
+        "Kalau kamu kembali sekarang, pesanan baru ini beserta pembayarannya akan dibatalkan.",
+      confirmText: "Ya, batalkan",
+      cancelText: "Lanjut bayar",
+      variant: "danger",
+    });
+    if (!ok) return;
+    setBackBusy(true);
+    try {
+      await cancelUnpaidOrder(detail.id);
+      router.push(backHref);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Gagal membatalkan pesanan"));
+      setBackBusy(false);
+    }
+  }
   // QR yang sedang ditampilkan (via QrisPaymentDialog — data seragam: ID, amount,
   // countdown, poll, cancel). Sama seperti tampilan QRIS di tempat lain.
   const [activeQr, setActiveQr] = React.useState<{
@@ -123,13 +157,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   return (
     <main className="min-h-dvh bg-background">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 backdrop-blur px-4 py-3">
-        <Link
-          href={`/session/${detail.sessionId}`}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={backBusy}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted disabled:opacity-50"
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
-        </Link>
+        </button>
         <h1 className="text-base font-semibold">Order Detail</h1>
       </div>
 
@@ -157,35 +193,40 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
             {detail.items.map((i) => (
               <div key={i.id} className="flex justify-between gap-2">
                 <span className="text-muted-foreground truncate">
-                  {i.quantity}× {i.name}{" "}
-                  <span className="text-[10px]">· {i.added_by}</span>
+                  {i.quantity}× {i.name}
+                  {i.added_by ? <span className="text-[10px]"> · {i.added_by}</span> : null}
                 </span>
-                <span className="tabular-nums shrink-0">{formatIDR(i.quantity * i.unit_price)}</span>
+                {!detail.viewOnly && (
+                  <span className="tabular-nums shrink-0">{formatIDR(i.quantity * i.unit_price)}</span>
+                )}
               </div>
             ))}
           </div>
-          <div className="mt-3 space-y-1 border-t border-border pt-2 text-sm">
-            <div className="flex justify-between text-muted-foreground">
-              <span>Subtotal</span>
-              <span className="tabular-nums">{formatIDR(detail.subtotal)}</span>
-            </div>
-            {detail.chargePercent > 0 && (
+          {/* Rincian nominal disembunyikan utk penonton non-member. */}
+          {!detail.viewOnly && (
+            <div className="mt-3 space-y-1 border-t border-border pt-2 text-sm">
               <div className="flex justify-between text-muted-foreground">
-                <span>Tax &amp; Service ({detail.chargePercent}%)</span>
-                <span className="tabular-nums">{formatIDR(detail.charge)}</span>
+                <span>Subtotal</span>
+                <span className="tabular-nums">{formatIDR(detail.subtotal)}</span>
               </div>
-            )}
-            <div className="flex justify-between font-semibold pt-1 border-t border-border">
-              <span>Total</span>
-              <span className="text-primary tabular-nums">{formatIDR(detail.total)}</span>
+              {detail.chargePercent > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Tax &amp; Service ({detail.chargePercent}%)</span>
+                  <span className="tabular-nums">{formatIDR(detail.charge)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold pt-1 border-t border-border">
+                <span>Total</span>
+                <span className="text-primary tabular-nums">{formatIDR(detail.total)}</span>
+              </div>
+              {detail.paid > 0 && detail.outstanding > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Remaining</span>
+                  <span className="tabular-nums text-primary">{formatIDR(detail.outstanding)}</span>
+                </div>
+              )}
             </div>
-            {detail.paid > 0 && detail.outstanding > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>Remaining</span>
-                <span className="tabular-nums text-primary">{formatIDR(detail.outstanding)}</span>
-              </div>
-            )}
-          </div>
+          )}
         </Card>
 
         {/* Pay button — customer/host/waiter (non-cashier). Kasir pakai box khusus. */}

@@ -58,6 +58,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
 // Multi-order lifecycle (PRD Multi-Order Prepaid): unpaid → paid → closed.
 // Nilai lama (open/submitted/preparing/served) dipertahankan utk kompat data
 // existing & backfill; kode baru hanya memakai unpaid/paid/closed.
+// "cancelled": order unpaid yg dibatalkan customer (back dari halaman bayar) —
+// order + pembayaran pending dibatalkan, order tak masuk dapur/kasir/tagihan.
 export const orderStatusEnum = pgEnum("order_status", [
   "open",
   "submitted",
@@ -66,6 +68,7 @@ export const orderStatusEnum = pgEnum("order_status", [
   "closed",
   "unpaid",
   "paid",
+  "cancelled",
 ]);
 
 export const orderItemStatusEnum = pgEnum("order_item_status", [

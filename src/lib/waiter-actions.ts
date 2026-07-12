@@ -186,7 +186,8 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
 
   const sessionIds = sessionRows.map((s) => s.id);
 
-  // Bill aggregate (subtotal + item count)
+  // Bill aggregate (subtotal + item count). Exclude order unpaid (belum dibayar)
+  // & cancelled (dibatalkan customer) — belum "masuk" ke waiter.
   const bills = await db
     .select({
       session_id: orders.sessionId,
@@ -198,7 +199,12 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .groupBy(orders.sessionId);
   const billMap = new Map(bills.map((b) => [b.session_id, b]));
 
@@ -211,7 +217,12 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(
-      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(payments.status, "paid"),
+        // Konsisten dgn subtotal: payment milik order unpaid/cancelled tak dihitung.
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
     )
     .groupBy(orders.sessionId);
   const paidMap = new Map(paidRows.map((p) => [p.session_id, Number(p.paid)]));
@@ -310,7 +321,12 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .groupBy(orders.sessionId);
   const billMap = new Map(bills.map((b) => [b.session_id, b]));
 
@@ -322,7 +338,12 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(
-      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(payments.status, "paid"),
+        // Konsisten dgn subtotal: payment milik order unpaid/cancelled tak dihitung.
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
     )
     .groupBy(orders.sessionId);
   const paidMap = new Map(paidRows.map((p) => [p.session_id, Number(p.paid)]));
@@ -1005,6 +1026,3 @@ export async function staffAddGuestToTable(
   revalidatePath(`/session/${sessionId}`);
   revalidatePath("/staff/waiter");
 }
-
-// Suppress unused import warnings
-void notInArray;

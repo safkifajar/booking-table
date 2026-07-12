@@ -25,6 +25,7 @@ import {
   isNotNull,
   lt,
   ne,
+  notInArray,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -124,7 +125,14 @@ export async function getActiveSessionsForCashier(): Promise<
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    // Kasir hanya lihat order yg sudah "masuk": exclude unpaid (belum dibayar)
+    // & cancelled (dibatalkan customer).
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .groupBy(orders.sessionId);
 
   const billMap = new Map(bills.map((b) => [b.session_id, Number(b.subtotal)]));
@@ -138,7 +146,13 @@ export async function getActiveSessionsForCashier(): Promise<
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(
-      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(payments.status, "paid"),
+        // Konsisten dgn subtotal: payment milik order unpaid/cancelled tak
+        // dihitung (mis. order cancelled yg terlanjur punya payment paid).
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
     )
     .groupBy(orders.sessionId);
 
@@ -266,7 +280,12 @@ export async function getClosedSessionsForCashier(): Promise<
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .groupBy(orders.sessionId);
   const billMap = new Map(bills.map((b) => [b.session_id, Number(b.subtotal)]));
 
@@ -278,7 +297,13 @@ export async function getClosedSessionsForCashier(): Promise<
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(
-      and(inArray(orders.sessionId, sessionIds), eq(payments.status, "paid"))
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(payments.status, "paid"),
+        // Konsisten dgn subtotal: payment milik order unpaid/cancelled tak
+        // dihitung (mis. order cancelled yg terlanjur punya payment paid).
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
     )
     .groupBy(orders.sessionId);
   const paidMap = new Map(paidRows.map((p) => [p.session_id, Number(p.paid)]));
@@ -560,7 +585,12 @@ export async function getSessionDetailForCashier(
   const orderRows = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, sessionId), ne(orders.status, "unpaid")))
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .orderBy(orders.createdAt);
   const orderIds = orderRows.map((o) => o.id);
 
@@ -790,7 +820,12 @@ export async function cashierCreatePayment(
     const [latest] = await db
       .select({ id: orders.id })
       .from(orders)
-      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "unpaid")))
+      .where(
+        and(
+          eq(orders.sessionId, data.sessionId),
+          notInArray(orders.status, ["unpaid", "cancelled"])
+        )
+      )
       .orderBy(desc(orders.createdAt))
       .limit(1);
     order = latest;
@@ -1187,6 +1222,9 @@ export async function getShiftReport(
       and(
         eq(floorAreas.barId, ctx.barId),
         eq(payments.status, "paid"),
+        // Jangan hitung uang dari order unpaid/cancelled (mis. race cancel vs
+        // paid) — supaya revenue shift & rekonsiliasi kas tetap benar.
+        notInArray(orders.status, ["unpaid", "cancelled"]),
         isNotNull(payments.paidAt),
         gte(payments.paidAt, from),
         lt(payments.paidAt, to)
@@ -1259,7 +1297,12 @@ export async function getShiftReport(
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        notInArray(orders.status, ["unpaid", "cancelled"])
+      )
+    )
     .groupBy(orders.sessionId);
   const billMap = new Map(
     billRows.map((b) => [b.session_id, Number(b.subtotal)])

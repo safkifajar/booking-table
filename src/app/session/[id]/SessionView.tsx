@@ -244,6 +244,10 @@ export function SessionView(props: SessionViewProps) {
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
+  // View-only: user login tapi BUKAN member & BUKAN staff. Boleh lihat list order
+  // meja (biar tahu meja pesan apa) TANPA nominal & tanpa aksi. Nominal + nama
+  // pembayar/pemesan sudah di-redaksi di server (page.tsx) utk peran ini.
+  const viewOnly = !canInteract;
   // Tambah order = HANYA host (atau staff atas nama meja). Anggota non-host tak
   // bisa memesan — mereka minta host menambahkan. (PRD Order Control FR1/FR3.)
   const canOrder = props.isHost || isStaff;
@@ -261,8 +265,9 @@ export function SessionView(props: SessionViewProps) {
   // Tab MENU: hanya untuk yang bisa order (host/staff), tak cancelled, & meja
   // belum selesai (closed/overdue tak bisa order lagi → Menu disembunyikan).
   const showMenuTab = canOrder && !isCancelled && !isEnded;
-  // Bill selalu tampil (kecuali cancelled) — pembayaran + riwayat ada di sini.
-  const showBillTab = canInteract && !isCancelled;
+  // Bill tampil utk member/staff (aksi penuh) DAN non-member view-only (list
+  // order tanpa nominal). Kecuali sesi cancelled.
+  const showBillTab = (canInteract || viewOnly) && !isCancelled;
   // Sinkronkan ref utk gating swipe (goTab dipanggil dari touch handler).
   React.useEffect(() => {
     showMenuRef.current = showMenuTab;
@@ -421,7 +426,11 @@ export function SessionView(props: SessionViewProps) {
           />
         )}
         {effTab === "bill" && (
-          <BillTab orders={props.orders} sessionId={props.session.id} />
+          <BillTab
+            orders={props.orders}
+            sessionId={props.session.id}
+            hideAmount={viewOnly}
+          />
         )}
       </div>
       </div>
@@ -1291,9 +1300,12 @@ function MenuTab({
 function BillTab({
   orders,
   sessionId,
+  hideAmount = false,
 }: {
   orders: SessionOrderSummary[];
   sessionId: string;
+  /** View-only non-member: sembunyikan nominal (biar cuma tahu meja pesan apa). */
+  hideAmount?: boolean;
 }) {
   // Semua peran (customer/kasir/waiter) melihat LIST ORDER yang sama. Aksi bayar
   // dilakukan lewat halaman detail order (kasir sbg staff tetap bisa). (Konsisten.)
@@ -1302,7 +1314,7 @@ function BillTab({
       <Card className="p-6 text-center border-dashed">
         <Receipt className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">
-          No orders yet. Open the Menu tab to start ordering.
+          {hideAmount ? "No orders yet." : "No orders yet. Open the Menu tab to start ordering."}
         </p>
       </Card>
     );
@@ -1310,7 +1322,12 @@ function BillTab({
 
   return (
     <div className="space-y-4">
-      <OrderList orders={orders} sessionId={sessionId} heading="Orders" />
+      <OrderList
+        orders={orders}
+        sessionId={sessionId}
+        heading="Orders"
+        hideAmount={hideAmount}
+      />
     </div>
   );
 }
@@ -1320,10 +1337,12 @@ function OrderList({
   orders,
   sessionId,
   heading,
+  hideAmount = false,
 }: {
   orders: SessionOrderSummary[];
   sessionId: string;
   heading: string;
+  hideAmount?: boolean;
 }) {
   if (orders.length === 0) return null;
   return (
@@ -1348,16 +1367,18 @@ function OrderList({
                 {fmtTxTime(o.paidAt ?? o.createdAt)}
               </div>
             </div>
-            <div className="text-right shrink-0">
-              <div className="text-sm font-semibold text-primary tabular-nums">
-                {formatIDR(o.total)}
-              </div>
-              {o.outstanding > 0 && (
-                <div className="text-[10px] text-amber-400 tabular-nums">
-                  {formatIDR(o.outstanding)} due
+            {!hideAmount && (
+              <div className="text-right shrink-0">
+                <div className="text-sm font-semibold text-primary tabular-nums">
+                  {formatIDR(o.total)}
                 </div>
-              )}
-            </div>
+                {o.outstanding > 0 && (
+                  <div className="text-[10px] text-amber-400 tabular-nums">
+                    {formatIDR(o.outstanding)} due
+                  </div>
+                )}
+              </div>
+            )}
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </Link>
         ))}

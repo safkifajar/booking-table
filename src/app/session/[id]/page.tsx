@@ -306,7 +306,21 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   const chargeConfig = await getChargeConfig(sessionRow.bar_id);
 
   // Multi-order: daftar order utk tab Bill (list order).
-  const sessionOrders = await getSessionOrders(id);
+  const sessionOrdersRaw = await getSessionOrders(id);
+
+  // View-only: user login tapi BUKAN member & BUKAN staff. Boleh lihat meja
+  // pesan apa, tapi nominal DI-REDAKSI di server (bukan cuma disembunyikan di
+  // client) supaya tak bocor lewat network response. Nama pembayar/pemesan &
+  // detail order sensitif ditangani di halaman detail order (getOrderDetail).
+  const isViewOnly = !isMember && !staffRole;
+  const sessionOrders = isViewOnly
+    ? sessionOrdersRaw.map((o) => ({
+        ...o,
+        subtotal: 0,
+        total: 0,
+        outstanding: 0,
+      }))
+    : sessionOrdersRaw;
 
   return (
     <SessionView
@@ -350,56 +364,64 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         },
         rating: ratingsBatch[m.profile_id] ?? null,
       }))}
-      orderItems={orderItemsRaw.map((oi) => ({
-        id: oi.id,
-        quantity: oi.quantity,
-        unit_price: oi.unit_price,
-        notes: oi.notes,
-        status: oi.status,
-        created_at: oi.created_at.toISOString(),
-        queue_number: oi.queue_number,
-        menu_item: {
-          id: oi.menu_item_id,
-          name: oi.menu_item_name,
-          image_url: oi.menu_item_image_url,
-        },
-        added_by: {
-          member_id: oi.member_id,
-          profile_id: oi.member_profile_id,
-          display_name: oi.member_display_name,
-          avatar_url: oi.member_avatar_url,
-        },
-      }))}
-      payments={paymentsRaw.map((p) => {
-        const meta =
-          (p.split_meta as {
-            isDownPayment?: boolean;
-            qrString?: string | null;
-            expiresAt?: string | null;
-            batchId?: string | null;
-          } | null) ?? {};
-        // Visibilitas QR per-anggota (PRD Host-Only Payment FR9/FR11): qr_string
-        // HANYA diserahkan ke pemiliknya. Anggota lain — termasuk host — tak
-        // menerima QR anggota lain. Status & nominal tetap dikirim ke semua.
-        const isMine = p.paid_by_member_id === (myMember?.id ?? null);
-        return {
-          id: p.id,
-          amount: p.amount,
-          method: p.method,
-          status: p.status,
-          split_mode: p.split_mode,
-          is_down_payment: !!meta.isDownPayment,
-          batch_id: meta.batchId ?? null,
-          qr_string: isMine ? meta.qrString ?? null : null,
-          expires_at: meta.expiresAt ?? null,
-          created_at: p.created_at.toISOString(),
-          paid_at: p.paid_at ? p.paid_at.toISOString() : null,
-          paid_by_member_id: p.paid_by_member_id,
-          paid_by: p.paid_by_display_name,
-          paid_by_avatar: p.paid_by_avatar_url,
-          items: itemsByPayment.get(p.id) ?? [],
-        };
-      })}
+      orderItems={
+        isViewOnly
+          ? [] // Non-member tak menerima detail item (nominal & pemesan) mentah.
+          : orderItemsRaw.map((oi) => ({
+              id: oi.id,
+              quantity: oi.quantity,
+              unit_price: oi.unit_price,
+              notes: oi.notes,
+              status: oi.status,
+              created_at: oi.created_at.toISOString(),
+              queue_number: oi.queue_number,
+              menu_item: {
+                id: oi.menu_item_id,
+                name: oi.menu_item_name,
+                image_url: oi.menu_item_image_url,
+              },
+              added_by: {
+                member_id: oi.member_id,
+                profile_id: oi.member_profile_id,
+                display_name: oi.member_display_name,
+                avatar_url: oi.member_avatar_url,
+              },
+            }))
+      }
+      payments={
+        isViewOnly
+          ? [] // Non-member tak menerima data pembayaran (nominal & pembayar).
+          : paymentsRaw.map((p) => {
+              const meta =
+                (p.split_meta as {
+                  isDownPayment?: boolean;
+                  qrString?: string | null;
+                  expiresAt?: string | null;
+                  batchId?: string | null;
+                } | null) ?? {};
+              // Visibilitas QR per-anggota (PRD Host-Only Payment FR9/FR11):
+              // qr_string HANYA diserahkan ke pemiliknya. Anggota lain — termasuk
+              // host — tak menerima QR anggota lain. Status & nominal ke semua member.
+              const isMine = p.paid_by_member_id === (myMember?.id ?? null);
+              return {
+                id: p.id,
+                amount: p.amount,
+                method: p.method,
+                status: p.status,
+                split_mode: p.split_mode,
+                is_down_payment: !!meta.isDownPayment,
+                batch_id: meta.batchId ?? null,
+                qr_string: isMine ? meta.qrString ?? null : null,
+                expires_at: meta.expiresAt ?? null,
+                created_at: p.created_at.toISOString(),
+                paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+                paid_by_member_id: p.paid_by_member_id,
+                paid_by: p.paid_by_display_name,
+                paid_by_avatar: p.paid_by_avatar_url,
+                items: itemsByPayment.get(p.id) ?? [],
+              };
+            })
+      }
       menu={menu}
       myProfileId={profile.id}
       myMemberId={myMember?.id ?? null}
