@@ -42,6 +42,7 @@ async function main() {
     email: TEST_EMAIL,
     password: TEST_PASSWORD,
     displayName: TEST_NAME,
+    username: "testuser_a",
   });
   console.log(`   ✅ User created: id=${result.userId.slice(0, 8)}...`);
 
@@ -79,6 +80,7 @@ async function main() {
       email: TEST_EMAIL,
       password: "anotherpass",
       displayName: "Another User",
+      username: "testuser_b",
     });
     throw new Error("Duplicate signup should have failed");
   } catch (err) {

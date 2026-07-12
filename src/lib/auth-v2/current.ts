@@ -42,6 +42,8 @@ export interface AuthUser {
 export interface Profile {
   id: string;
   displayName: string;
+  /** Username unik (handle). Null utk user lama/guest yg belum set. */
+  username: string | null;
   avatarUrl: string | null;
   photos: string[];
   phone: string | null;
@@ -114,6 +116,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
   return {
     id: row.id,
     displayName: row.displayName,
+    username: row.username,
     avatarUrl: row.avatarUrl,
     photos: row.photos ?? [],
     phone: row.phone,

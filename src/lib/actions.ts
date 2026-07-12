@@ -34,7 +34,7 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
-import { generateInviteCode, isDbConstraintError } from "@/lib/utils";
+import { generateInviteCode, isDbConstraintError, normalizeUsername } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import {
@@ -3064,6 +3064,8 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(2, "Name must be at least 2 characters").max(40),
+  /** Username unik. Kosong = tak diubah (biarkan yg ada). */
+  username: z.string().optional().or(z.literal("")),
   phone: z
     .string()
     .max(20)
@@ -3143,10 +3145,26 @@ export async function updateProfile(input: z.infer<typeof updateProfileSchema>) 
     .filter((p) => p.prompt && p.answer)
     .slice(0, 5);
 
+  // Username: kalau dikirim & tak kosong → validasi + cek unik (kecuali milik
+  // sendiri). Kosong = tak diubah.
+  let usernameUpdate: { username: string } | Record<string, never> = {};
+  const rawUsername = data.username?.trim();
+  if (rawUsername) {
+    const u = normalizeUsername(rawUsername);
+    if (!u.ok) throw new Error(u.error);
+    const [clash] = await db
+      .select({ id: profiles.id })
+      .from(profiles)
+      .where(and(eq(profiles.username, u.value), ne(profiles.id, profile.id)));
+    if (clash) throw new Error("Username already taken");
+    usernameUpdate = { username: u.value };
+  }
+
   await db
     .update(profiles)
     .set({
       displayName: data.displayName,
+      ...usernameUpdate,
       phone: data.phone?.trim() || null,
       birthDate: data.birthDate || null,
       bio: data.bio?.trim() || null,

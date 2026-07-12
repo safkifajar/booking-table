@@ -21,6 +21,7 @@ type InterestedIn = "" | "male" | "female" | "both";
 interface CustomerData {
   id: string;
   name: string;
+  username: string | null;
   email: string;
   phone: string | null;
   birthDate: string | null;
@@ -159,6 +160,7 @@ function DetailTab({ customer }: { customer: CustomerData }) {
       </div>
       <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
         <Row label="Name" value={customer.name} />
+        <Row label="Username" value={customer.username ? `@${customer.username}` : "—"} />
         <Row
           label="Email"
           value={customer.email}
@@ -259,6 +261,7 @@ function EditForm({
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(customer.name);
+  const [username, setUsername] = React.useState(customer.username ?? "");
   const [email, setEmail] = React.useState(customer.email);
   const [phone, setPhone] = React.useState(customer.phone ?? "");
   const [birthDate, setBirthDate] = React.useState(customer.birthDate ?? "");
@@ -287,6 +290,7 @@ function EditForm({
       await updateCustomer({
         id: customer.id,
         name: name.trim(),
+        username: username.trim().toLowerCase(),
         email: email.trim(),
         phone: phone.trim() || undefined,
         birthDate: birthDate || undefined,
@@ -340,6 +344,19 @@ function EditForm({
           onChange={(e) => setName(e.target.value)}
           required
           maxLength={80}
+          className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+        />
+      </Field>
+      <Field label="Username (optional)">
+        <input
+          type="text"
+          value={username}
+          onChange={(e) =>
+            setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+          }
+          minLength={3}
+          maxLength={20}
+          placeholder="e.g. budi_santoso"
           className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </Field>

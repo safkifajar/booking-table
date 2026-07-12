@@ -106,7 +106,10 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
                   {profile.is_active ? "Aktif" : "Nonaktif"}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground truncate">{email}</p>
+              <p className="text-sm text-muted-foreground truncate">
+                {profile.username ? `@${profile.username} · ` : ""}
+                {email}
+              </p>
             </div>
           </div>
         </div>
@@ -116,6 +119,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
           customer={{
             id: profile.id,
             name: profile.display_name,
+            username: profile.username,
             email,
             phone: profile.phone,
             birthDate: profile.birth_date,

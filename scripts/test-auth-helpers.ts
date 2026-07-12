@@ -43,6 +43,7 @@ async function main() {
     email: TEST_EMAIL,
     password: TEST_PASSWORD,
     displayName: TEST_NAME,
+    username: "testuser_h",
   });
   console.log(`   ✅ User created: ${userId.slice(0, 8)}...`);
 

@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth-v2/actions";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Eye, EyeOff, MessageCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeUsername } from "@/lib/utils";
 import { waUrl } from "@/lib/contact";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
@@ -170,6 +170,7 @@ function PasswordForm({
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [displayName, setDisplayName] = React.useState("");
+  const [username, setUsername] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -180,6 +181,10 @@ function PasswordForm({
     if (password.length < 6) return toast.error("Password must be at least 6 characters");
     if (mode === "signup" && displayName.trim().length < 2)
       return toast.error("Name must be at least 2 characters");
+    if (mode === "signup") {
+      const u = normalizeUsername(username);
+      if (!u.ok) return toast.error(u.error);
+    }
 
     setLoading(true);
     try {
@@ -199,6 +204,7 @@ function PasswordForm({
               email,
               password,
               displayName: displayName.trim(),
+              username: username.trim().toLowerCase(),
               phone: phone.trim() || undefined,
               next,
             })
@@ -232,6 +238,22 @@ function PasswordForm({
           required
           minLength={2}
           maxLength={40}
+          className={inputCls}
+        />
+      )}
+      {mode === "signup" && (
+        <input
+          type="text"
+          placeholder="Username (e.g. budi_setiawan)"
+          value={username}
+          onChange={(e) =>
+            setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+          }
+          required
+          minLength={3}
+          maxLength={20}
+          autoCapitalize="none"
+          autoCorrect="off"
           className={inputCls}
         />
       )}

@@ -8,6 +8,7 @@ import {
   jsonb,
   integer,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { users } from "./auth";
@@ -29,6 +30,11 @@ export const profiles = pgTable(
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
+    /**
+     * Username unik (handle). Format app-level: ^[a-z0-9_]{3,20}$, lowercase.
+     * Nullable: user lama & guest walk-in tak punya (NULL). Registrasi baru wajib.
+     */
+    username: text("username"),
     avatarUrl: text("avatar_url"),
     /** Galeri foto profil (URL storage). Maks 3; foto[0] = avatar utama. */
     photos: text("photos").array().notNull().default([]),
@@ -82,7 +88,11 @@ export const profiles = pgTable(
     onboarded: boolean("onboarded").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
-  (t) => [index("idx_profiles_hobbies").using("gin", t.hobbies)]
+  (t) => [
+    index("idx_profiles_hobbies").using("gin", t.hobbies),
+    // Username unik (NULL diperbolehkan banyak — Postgres unique mengabaikan NULL).
+    unique("uq_profiles_username").on(t.username),
+  ]
 );
 
 export const profilesRelations = relations(profiles, ({ one }) => ({

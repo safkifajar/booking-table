@@ -21,18 +21,33 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { hashPassword } from "./password";
+import { USERNAME_REGEX, isDbConstraintError } from "@/lib/utils";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email").max(255),
   password: z.string().min(6, "Password must be at least 6 characters").max(100),
   displayName: z.string().min(2, "Name must be at least 2 characters").max(40),
+  username: z
+    .string()
+    .transform((s) => s.trim().toLowerCase())
+    .pipe(
+      z
+        .string()
+        .regex(
+          USERNAME_REGEX,
+          "Username must be 3-20 chars: lowercase letters, numbers, _"
+        )
+    ),
   phone: z.string().max(20).optional().or(z.literal("")),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
 
 export class SignupError extends Error {
-  constructor(public code: "email_taken" | "validation" | "db", message: string) {
+  constructor(
+    public code: "email_taken" | "username_taken" | "validation" | "db",
+    message: string
+  ) {
     super(message);
     this.name = "SignupError";
   }
@@ -53,6 +68,7 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
   const data = parsed.data;
   const email = data.email.toLowerCase().trim();
   const displayName = data.displayName.trim();
+  const username = data.username; // sudah lowercase + tervalidasi via schema
 
   // Check duplicate email
   const existing = await db.query.users.findFirst({
@@ -60,6 +76,15 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
   });
   if (existing) {
     throw new SignupError("email_taken", "Email already registered");
+  }
+
+  // Check duplicate username (pre-flight; constraint jadi backstop).
+  const usernameTaken = await db.query.profiles.findFirst({
+    where: eq(profiles.username, username),
+    columns: { id: true },
+  });
+  if (usernameTaken) {
+    throw new SignupError("username_taken", "Username already taken");
   }
 
   // Hash password
@@ -82,6 +107,7 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
       await tx.insert(profiles).values({
         id: newUser.id,
         displayName,
+        username,
         phone: data.phone?.trim() || null,
         // onboarded default false → user diarahkan ke /onboarding (step 2-3).
       });
@@ -91,7 +117,10 @@ export async function signup(input: SignupInput): Promise<SignupResult> {
 
     return { userId: result.id, email: result.email };
   } catch (err) {
-    // Race condition: kalau ada concurrent signup dengan email sama
+    // Race condition: concurrent signup (constraint jadi backstop).
+    if (isDbConstraintError(err, "uq_profiles_username")) {
+      throw new SignupError("username_taken", "Username already taken");
+    }
     if (err instanceof Error && err.message.includes("unique")) {
       throw new SignupError("email_taken", "Email already registered");
     }

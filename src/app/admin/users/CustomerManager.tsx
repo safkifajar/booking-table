@@ -104,10 +104,11 @@ export function CustomerManager({
   }
 
   function exportCsv() {
-    const header = ["Name", "Email", "WhatsApp number", "Visits", "Registered"];
+    const header = ["Name", "Username", "Email", "WhatsApp number", "Visits", "Registered"];
     const lines = initialRows.map((r) =>
       [
         r.name,
+        r.username ?? "",
         r.email,
         r.phone ?? "",
         r.visit_count,
@@ -136,7 +137,7 @@ export function CustomerManager({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or email…"
+            placeholder="Search name, username, or email…"
             className="w-full h-10 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           />
         </form>
@@ -198,6 +199,7 @@ export function CustomerManager({
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">
+                    {r.username ? `@${r.username} · ` : ""}
                     {r.email}
                     {r.phone ? ` · ${r.phone}` : ""}
                   </p>
@@ -270,6 +272,7 @@ function CustomerFormDialog({
   onSaved: () => void;
 }) {
   const [name, setName] = React.useState("");
+  const [username, setUsername] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -324,6 +327,7 @@ function CustomerFormDialog({
     try {
       await createCustomer({
         name: name.trim(),
+        username: username.trim().toLowerCase() || undefined,
         email: email.trim(),
         password,
         ...profilePayload,
@@ -357,6 +361,21 @@ function CustomerFormDialog({
               required
               maxLength={80}
               placeholder="e.g. Budi Santoso"
+              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            />
+          </Field>
+          <Field label="Username (optional)">
+            <input
+              type="text"
+              value={username}
+              onChange={(e) =>
+                setUsername(
+                  e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
+                )
+              }
+              minLength={3}
+              maxLength={20}
+              placeholder="e.g. budi_santoso"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>

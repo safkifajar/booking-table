@@ -24,6 +24,7 @@ import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
+import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
   getUserRatingsBatch,
@@ -51,6 +52,7 @@ function ageFromISO(iso: string | null): number | null {
 export interface AdminCustomerRow {
   id: string;
   name: string;
+  username: string | null;
   email: string;
   phone: string | null;
   gender: string | null;
@@ -104,7 +106,8 @@ export async function listCustomers(
     search
       ? or(
           ilike(profiles.displayName, `%${search}%`),
-          ilike(users.email, `%${search}%`)
+          ilike(users.email, `%${search}%`),
+          ilike(profiles.username, `%${search}%`)
         )
       : undefined
   );
@@ -135,6 +138,7 @@ export async function listCustomers(
       .select({
         id: users.id,
         name: profiles.displayName,
+        username: profiles.username,
         email: users.email,
         phone: profiles.phone,
         gender: profiles.gender,
@@ -172,6 +176,7 @@ export async function listCustomers(
     rows: rows.map((r) => ({
       id: r.id,
       name: r.name,
+      username: r.username,
       email: r.email,
       phone: r.phone,
       gender: r.gender,
@@ -205,6 +210,8 @@ export async function listCustomers(
  * user sendiri (butuh upload/picker).
  */
 const profileFields = {
+  /** Username unik (opsional saat create/update — kosong = tak set/ubah). */
+  username: z.string().optional().or(z.literal("")),
   phone: z.string().max(20).optional(),
   birthDate: z
     .string()
@@ -269,6 +276,30 @@ function profileValues(data: {
   };
 }
 
+/**
+ * Validasi + cek unik username (admin create/update). Return normalized value
+ * atau null (kalau kosong = tak diset). Throw kalau format salah / sudah dipakai.
+ */
+async function resolveUsername(
+  raw: string | undefined,
+  excludeId?: string
+): Promise<string | null> {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  const u = normalizeUsername(trimmed);
+  if (!u.ok) throw new Error(u.error);
+  const [clash] = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(
+      excludeId
+        ? and(eq(profiles.username, u.value), sql`${profiles.id} <> ${excludeId}`)
+        : eq(profiles.username, u.value)
+    );
+  if (clash) throw new Error("Username already taken");
+  return u.value;
+}
+
 const createSchema = z.object({
   name: z.string().min(1, "Name is required").max(80),
   email: z.string().email("Invalid email").max(120),
@@ -287,6 +318,7 @@ export async function createCustomer(input: z.infer<typeof createSchema>) {
     .where(eq(users.email, email));
   if (existing) throw new Error("Email is already registered");
 
+  const username = await resolveUsername(data.username);
   const passwordHash = await hashPassword(data.password);
 
   await db.transaction(async (tx) => {
@@ -302,6 +334,7 @@ export async function createCustomer(input: z.infer<typeof createSchema>) {
     await tx.insert(profiles).values({
       id: u.id,
       displayName: data.name,
+      username,
       ...profileValues(data),
     });
   });
@@ -343,6 +376,9 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
     .where(and(eq(users.email, email), sql`${users.id} <> ${data.id}`));
   if (clash) throw new Error("Email is already used by another user");
 
+  // Username: validasi + cek unik (kecuali milik sendiri). Kosong = tak diubah.
+  const username = await resolveUsername(data.username, data.id);
+
   // Reset password kalau diisi.
   const passwordHash = data.password
     ? await hashPassword(data.password)
@@ -362,6 +398,7 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
       .set({
         displayName: data.name,
         isActive: data.isActive,
+        ...(username !== null ? { username } : {}),
         ...profileValues(data),
       })
       .where(eq(profiles.id, data.id));

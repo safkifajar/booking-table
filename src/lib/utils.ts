@@ -87,6 +87,29 @@ export function isDbConstraintError(err: unknown, constraintName: string): boole
 }
 
 /**
+ * Aturan format username (handle): 3-20 karakter, lowercase, hanya a-z 0-9 _.
+ * Dipakai di registrasi, edit profil, dan admin.
+ */
+export const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
+
+/**
+ * Normalisasi + validasi username. Return { ok, value?, error? }.
+ * Lowercase-kan dulu (biar "Budi" == "budi"). Kosong → error.
+ */
+export function normalizeUsername(
+  raw: string
+): { ok: true; value: string } | { ok: false; error: string } {
+  const v = raw.trim().toLowerCase();
+  if (v.length === 0) return { ok: false, error: "Username is required" };
+  if (v.length < 3) return { ok: false, error: "Username must be at least 3 characters" };
+  if (v.length > 20) return { ok: false, error: "Username must be at most 20 characters" };
+  if (!USERNAME_REGEX.test(v)) {
+    return { ok: false, error: "Username may only contain lowercase letters, numbers, and _" };
+  }
+  return { ok: true, value: v };
+}
+
+/**
  * Use inside `catch` of client-side Server Action calls. Re-throws Next's
  * internal redirect signal so it can complete navigation, otherwise returns
  * the user-facing message for `toast.error()`.

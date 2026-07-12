@@ -41,6 +41,7 @@ type InterestedIn = "" | "male" | "female" | "both";
 interface Props {
   email: string;
   initialDisplayName: string;
+  initialUsername: string;
   initialPhone: string;
   initialBirthDate: string;
   initialBio: string;
@@ -67,6 +68,7 @@ interface Props {
 export function ProfileForm({
   email,
   initialDisplayName,
+  initialUsername,
   initialPhone,
   initialBirthDate,
   initialBio,
@@ -89,6 +91,7 @@ export function ProfileForm({
 }: Props) {
   const router = useRouter();
   const [displayName, setDisplayName] = React.useState(initialDisplayName);
+  const [username, setUsername] = React.useState(initialUsername);
   const [phone, setPhone] = React.useState(initialPhone);
   const [birthDate, setBirthDate] = React.useState(initialBirthDate);
   const [bio, setBio] = React.useState(initialBio);
@@ -126,6 +129,7 @@ export function ProfileForm({
     try {
       await updateProfile({
         displayName: name,
+        username: username.trim().toLowerCase(),
         phone: phone.trim(),
         birthDate: birthDate,
         bio: bio.trim(),
@@ -252,6 +256,32 @@ export function ProfileForm({
               maxLength={40}
               className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
             />
+          </div>
+
+          {/* Username */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Username
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) =>
+                  setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                }
+                placeholder="username"
+                minLength={3}
+                maxLength={20}
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="w-full h-11 pl-8 pr-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Lowercase letters, numbers, and _ only (3-20 chars). Must be unique.
+            </p>
           </div>
 
           {/* Phone */}

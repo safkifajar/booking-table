@@ -1112,6 +1112,7 @@ export async function getPublicProfile(
     .select({
       id: profiles.id,
       display_name: profiles.displayName,
+      username: profiles.username,
       avatar_url: profiles.avatarUrl,
       photos: profiles.photos,
       bio: profiles.bio,
@@ -1178,6 +1179,7 @@ export async function getPublicProfile(
   return {
     id: p.id,
     display_name: p.display_name,
+    username: p.username,
     avatar_url: p.avatar_url,
     // Data yg dikunci saat akun privat → null (detail render stub terkunci).
     bio: locked ? null : p.bio,

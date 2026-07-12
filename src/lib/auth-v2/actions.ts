@@ -36,6 +36,7 @@ export async function signUpAction(formData: {
   email: string;
   password: string;
   displayName: string;
+  username: string;
   phone?: string;
   next?: string;
 }): Promise<ActionResult> {
@@ -44,6 +45,7 @@ export async function signUpAction(formData: {
       email: formData.email,
       password: formData.password,
       displayName: formData.displayName,
+      username: formData.username,
       phone: formData.phone,
     });
 

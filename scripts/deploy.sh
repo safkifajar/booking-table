@@ -77,6 +77,14 @@ if [ "$BACKUP_BEFORE_MIGRATE" = "true" ]; then
   find "$BACKUP_DIR" -name 'soho-prod-*.sql.gz' -mtime +14 -delete 2>/dev/null || true
 fi
 
+# 4a. Pre-migrate DDL — file drizzle/*.sql bertanda "-- pre-migrate" yang HARUS
+#     jalan SEBELUM db:push (mis. tambah UNIQUE constraint di tabel berisi data).
+#     Tanpa ini, db:push --force minta prompt interaktif "truncate <table>?" yg
+#     menggantung CI. Idempotent: aman tiap deploy. Nambah kolom+constraint baru
+#     yg berisiko → taruh SQL bertanda "-- pre-migrate" di drizzle/ → otomatis.
+echo "==> pre-migrate (DDL sebelum push)"
+bash "$(dirname "$0")/pre-migrate.sh"
+
 # 4. Migrasi DB — db:push --force (staging & production).
 echo "==> db:push --force"
 npm run db:push -- --force

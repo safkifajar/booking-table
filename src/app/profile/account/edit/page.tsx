@@ -31,6 +31,7 @@ export default async function ProfileAccountEditPage() {
         <ProfileForm
           email={user?.email ?? ""}
           initialDisplayName={profile.displayName}
+          initialUsername={profile.username ?? ""}
           initialPhone={profile.phone ?? ""}
           initialBirthDate={profile.birthDate ?? ""}
           initialBio={profile.bio ?? ""}
