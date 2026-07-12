@@ -28,11 +28,12 @@ import {
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
-import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { orders, orderItems, payments, paymentItems } from "@/lib/db/schema/orders";
 import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
+import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
 import { generateInviteCode, isDbConstraintError } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
@@ -50,13 +51,15 @@ import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
-import type { PaymentStatus } from "@/types/db";
+import type { PaymentStatus, PaymentMethod, SplitMode } from "@/types/db";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
+  computeBillTotals,
   type OperatingHours,
   type ReservationConfig,
 } from "@/lib/settings-constants";
+import { getChargeConfig } from "@/lib/settings-actions";
 import {
   calculateDP,
   validateReservationRange,
@@ -1518,7 +1521,12 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
     memberId = targetMember.id;
     inputByStaffId = profile.id;
   } else {
-    // Customer flow: current user harus member meja
+    // Customer flow: HANYA host meja yang boleh menambah pesanan (bukan
+    // sekadar member). Sumber kebenaran host = table_sessions.host_id.
+    if (!(await isSessionHost(data.sessionId, profile.id))) {
+      throw new Error("Only the table host can add orders");
+    }
+    // Host tetap butuh member row-nya untuk atribusi item (addedByMemberId).
     const [member] = await db
       .select({ id: sessionMembers.id })
       .from(sessionMembers)
@@ -1531,6 +1539,21 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
       );
     if (!member) throw new Error("You're not a member of this table");
     memberId = member.id;
+
+    // Pay-before-order (jalur customer/host saja — staff dikecualikan, gate ini
+    // ada di dalam cabang customer). Kalau masih ada sisa tagihan yang BELUM
+    // lunas, host harus melunasinya dulu sebelum menambah pesanan. Hanya
+    // pembayaran status 'paid' yang mengurangi outstanding (pending tak
+    // membuka gate). (PRD Order Control FR4/FR5.)
+    const outstanding =
+      (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
+    if (outstanding > 0) {
+      throw new Error(
+        `Please settle the outstanding Rp ${outstanding.toLocaleString(
+          "id-ID"
+        )} before adding more orders`
+      );
+    }
   }
 
   // 2. Find open order
@@ -1687,6 +1710,13 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       )
     );
 
+  // Host-only payment: kalau pemanggil adalah member TAPI bukan host meja →
+  // tolak. Hanya host (atau staff, cabang di bawah) yang boleh membuat
+  // pembayaran/QRIS. (PRD Host-Only Payment FR1/FR2.)
+  if (member && !(await isSessionHost(data.sessionId, profile.id))) {
+    throw new Error("Only the table host can create payments");
+  }
+
   // Payer bukan member → boleh kalau STAFF aktif di bar sesi (waiter terima
   // pembayaran atas nama meja). Pembayaran diatribusikan ke HOST member.
   if (!member) {
@@ -1763,6 +1793,29 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     })
     .returning({ id: payments.id });
 
+  // 3b. Treat (custom, bayar penuh): tautkan SEMUA item order ke payment ini
+  // supaya halaman detail transaksi bisa menampilkan seluruh item meja (Q3).
+  // itemized ditangani createSplitBatch; equal/DP tidak menulis payment_items.
+  if (data.splitMode === "custom") {
+    const orderItemsForTreat = await db
+      .select({
+        id: orderItems.id,
+        qty: orderItems.quantity,
+        unitPrice: orderItems.unitPrice,
+      })
+      .from(orderItems)
+      .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
+    if (orderItemsForTreat.length > 0) {
+      await db.insert(paymentItems).values(
+        orderItemsForTreat.map((it) => ({
+          paymentId: newPayment.id,
+          orderItemId: it.id,
+          amount: it.qty * it.unitPrice,
+        }))
+      );
+    }
+  }
+
   // 4. Call gateway abstraction. Mock → auto-paid. Real gateway → pending + qrString.
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
@@ -1809,6 +1862,436 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     qrString: chargeResult.qrString ?? null,
     redirectUrl: chargeResult.redirectUrl ?? null,
     expiresAt: chargeResult.expiresAt ?? null,
+  };
+}
+
+// ============================================================
+// SPLIT BATCH — host generate 1 QRIS per anggota (equal / itemized)
+// ============================================================
+
+const splitBatchSchema = z.object({
+  sessionId: z.string().uuid(),
+  mode: z.enum(["equal", "itemized"]),
+  method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
+});
+
+export interface SplitBatchMemberResult {
+  memberId: string;
+  displayName: string;
+  paymentId: string | null;
+  amount: number;
+  status: PaymentStatus | "skipped" | "error";
+  qrString: string | null;
+  expiresAt: string | null;
+  /** Alasan skip/error (mis. sudah punya pending, atau gateway gagal). */
+  note?: string;
+}
+
+/**
+ * Host memicu SATU aksi split → sistem membuat 1 pembayaran + 1 QRIS untuk tiap
+ * anggota (mode 'equal') atau tiap anggota yang punya item (mode 'itemized').
+ * Tiap anggota nanti hanya melihat QRIS-nya sendiri.
+ *
+ * - Auth: HOST meja atau staff aktif di bar (jalur staff = sesi walk-in).
+ * - equal: share = ceil(total / N), tetapi total charge di-cap ke `remaining`
+ *   supaya tak over-payment; anggota terakhir menyerap selisih.
+ * - itemized: hanya anggota ber-item; amount = total item-nya; tulis payment_items.
+ * - Anti-duplikat: anggota yang sudah punya payment pending belum-expired dilewati.
+ * - Error per-anggota tak menggagalkan semua (best-effort per anggota).
+ *
+ * (PRD Host-Only Payment FR4-FR8.)
+ */
+export async function createSplitBatch(
+  input: z.infer<typeof splitBatchSchema>
+): Promise<{ batchId: string; results: SplitBatchMemberResult[] }> {
+  const profile = await requireProfile();
+  const data = splitBatchSchema.parse(input);
+
+  // 1. Auth: host atau staff aktif di bar sesi.
+  const { barId } = await assertHostOrActiveStaff(data.sessionId, profile.id);
+
+  // 2. Order terbuka.
+  const [order] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed"))
+    );
+  if (!order) throw new Error("No open order for this session");
+
+  // 3. Bill: subtotal (non-void) + charge → total; remaining = total − paid.
+  const [subRow] = await db
+    .select({
+      subtotal: sql<number>`COALESCE(SUM(${orderItems.quantity} * ${orderItems.unitPrice}), 0)::int`,
+    })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
+  const charge = await getChargeConfig(barId);
+  const bill = computeBillTotals(Number(subRow?.subtotal ?? 0), charge);
+  const remaining =
+    (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
+  if (remaining <= 0) throw new Error("The bill is already paid");
+
+  // 4. Anggota joined + profil.
+  const joined = await db
+    .select({
+      memberId: sessionMembers.id,
+      profileId: sessionMembers.profileId,
+      displayName: profiles.displayName,
+    })
+    .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(sessionMembers.sessionId, data.sessionId),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+
+  // 5. Anggota yang sudah punya payment pending belum-expired → skip (anti-dup).
+  const now = Date.now();
+  const existing = await db
+    .select({
+      memberId: payments.paidByMemberId,
+      status: payments.status,
+      splitMeta: payments.splitMeta,
+    })
+    .from(payments)
+    .where(and(eq(payments.orderId, order.id), eq(payments.status, "pending")));
+  const hasActivePending = new Set(
+    existing
+      .filter((p) => {
+        const exp = (p.splitMeta as { expiresAt?: string | null } | null)
+          ?.expiresAt;
+        return !exp || new Date(exp).getTime() > now;
+      })
+      .map((p) => p.memberId)
+  );
+
+  // 6. Tentukan share per anggota sesuai mode.
+  type Target = { memberId: string; displayName: string; amount: number; itemIds: { id: string; amount: number }[] };
+  let targets: Target[] = [];
+
+  if (data.mode === "equal") {
+    const n = joined.length;
+    if (n === 0) throw new Error("No members to split between");
+    const per = Math.ceil(bill.total / n);
+    // Cap total ke remaining: bagikan per, tapi jangan lewati remaining kumulatif.
+    let allocated = 0;
+    targets = joined.map((m, i) => {
+      const isLast = i === n - 1;
+      let amount = isLast ? remaining - allocated : Math.min(per, remaining - allocated);
+      amount = Math.max(0, amount);
+      allocated += amount;
+      return { memberId: m.memberId, displayName: m.displayName, amount, itemIds: [] };
+    });
+  } else {
+    // itemized: item non-void per anggota.
+    const items = await db
+      .select({
+        id: orderItems.id,
+        memberId: orderItems.addedByMemberId,
+        qty: orderItems.quantity,
+        unitPrice: orderItems.unitPrice,
+      })
+      .from(orderItems)
+      .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
+    const byMember = new Map<string, { id: string; amount: number }[]>();
+    for (const it of items) {
+      const amt = it.qty * it.unitPrice;
+      const arr = byMember.get(it.memberId) ?? [];
+      arr.push({ id: it.id, amount: amt });
+      byMember.set(it.memberId, arr);
+    }
+    targets = joined
+      .map((m) => {
+        const its = byMember.get(m.memberId) ?? [];
+        const itemsSubtotal = its.reduce((a, b) => a + b.amount, 0);
+        // Tax & service dibebankan PER ORDER: amount = subtotal item bagian ini
+        // + tax + service atas subtotal itu (pakai sumber kebenaran yg sama).
+        const amount = computeBillTotals(itemsSubtotal, charge).total;
+        return { memberId: m.memberId, displayName: m.displayName, amount, itemIds: its };
+      })
+      .filter((t) => t.amount > 0);
+    if (targets.length === 0) throw new Error("No itemized orders to split");
+  }
+
+  // 7. Buat payment + QRIS per anggota (best-effort per anggota).
+  const batchId = crypto.randomUUID();
+  const gateway = getPaymentGateway();
+  const results: SplitBatchMemberResult[] = [];
+
+  for (const t of targets) {
+    if (t.amount <= 0) {
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: 0, status: "skipped", qrString: null, expiresAt: null, note: "Nothing to pay" });
+      continue;
+    }
+    if (hasActivePending.has(t.memberId)) {
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "skipped", qrString: null, expiresAt: null, note: "Already has a pending payment" });
+      continue;
+    }
+    try {
+      const [pay] = await db
+        .insert(payments)
+        .values({
+          orderId: order.id,
+          paidByMemberId: t.memberId,
+          amount: t.amount,
+          method: data.method,
+          status: "pending",
+          splitMode: data.mode,
+          splitMeta: { batchId },
+          paidAt: null,
+        })
+        .returning({ id: payments.id });
+
+      // itemized → tautkan item ke payment (payment_items).
+      if (data.mode === "itemized" && t.itemIds.length > 0) {
+        await db.insert(paymentItems).values(
+          t.itemIds.map((it) => ({
+            paymentId: pay.id,
+            orderItemId: it.id,
+            amount: it.amount,
+          }))
+        );
+      }
+
+      const cr = await gateway.createCharge({
+        paymentId: pay.id,
+        amount: t.amount,
+        method: data.method,
+        payerName: t.displayName,
+        description: `Split ${data.mode} - ${data.sessionId.slice(0, 8)}`,
+      });
+
+      await db
+        .update(payments)
+        .set({
+          externalRef: cr.externalRef,
+          status: cr.status,
+          paidAt: cr.status === "paid" ? new Date() : null,
+          splitMeta: {
+            batchId,
+            qrString: cr.qrString ?? null,
+            redirectUrl: cr.redirectUrl ?? null,
+            expiresAt: cr.expiresAt ?? null,
+            merchantOrderId: cr.merchantOrderId ?? pay.id,
+          },
+        })
+        .where(eq(payments.id, pay.id));
+
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: cr.status, qrString: cr.qrString ?? null, expiresAt: cr.expiresAt ?? null });
+    } catch (err) {
+      console.error("[createSplitBatch] gagal utk member", t.memberId, err);
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "error", qrString: null, expiresAt: null, note: "Gateway error" });
+    }
+  }
+
+  // Kalau ada yang langsung paid (mock) & sesi overdue → settle.
+  if (results.some((r) => r.status === "paid")) {
+    await settleOverdueIfPaid(data.sessionId);
+  }
+
+  await notifySessionAndStaff(data.sessionId);
+  revalidatePath(`/session/${data.sessionId}`);
+  revalidatePath("/staff/cashier");
+  revalidatePath(`/staff/cashier/${data.sessionId}`);
+
+  return { batchId, results };
+}
+
+/**
+ * Batalkan seluruh split batch — set semua payment PENDING dalam batch tsb jadi
+ * 'failed' (QR mati, tak lagi bisa dibayar). Payment yang sudah 'paid' TIDAK
+ * tersentuh. Host-only (atau staff aktif di bar sesi).
+ *
+ * (PRD Host-Only Payment Q2.)
+ */
+export async function cancelSplitBatch(input: {
+  sessionId: string;
+  batchId: string;
+}): Promise<{ cancelled: number }> {
+  const profile = await requireProfile();
+  const sessionId = z.string().uuid().parse(input.sessionId);
+  const batchId = z.string().uuid().parse(input.batchId);
+
+  // Auth: host atau staff aktif di bar sesi.
+  await assertHostOrActiveStaff(sessionId, profile.id);
+
+  // Batalkan payment pending dalam batch (match split_meta->>'batchId'),
+  // dibatasi ke order sesi ini supaya batchId tak bocor lintas sesi.
+  const result = await db
+    .update(payments)
+    .set({ status: "failed" })
+    .where(
+      and(
+        eq(payments.status, "pending"),
+        sql`${payments.splitMeta}->>'batchId' = ${batchId}`,
+        sql`${payments.orderId} IN (SELECT ${orders.id} FROM ${orders} WHERE ${orders.sessionId} = ${sessionId})`
+      )
+    )
+    .returning({ id: payments.id });
+
+  await notifySessionAndStaff(sessionId);
+  revalidatePath(`/session/${sessionId}`);
+  revalidatePath("/staff/cashier");
+  revalidatePath(`/staff/cashier/${sessionId}`);
+
+  return { cancelled: result.length };
+}
+
+export interface SessionPaymentDetail {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  status: string;
+  splitMode: SplitMode;
+  isDownPayment: boolean;
+  createdAt: string;
+  paidAt: string | null;
+  paidByName: string;
+  /** Item yang dicakup (hanya itemized). Kosong utk DP/equal/treat. */
+  items: { name: string; quantity: number; amount: number }[];
+  /** Subtotal item (Σ items.amount). */
+  itemsSubtotal: number;
+  /** Tax & service atas transaksi ini = amount − itemsSubtotal (≥ 0). */
+  taxService: number;
+  /** QR string — HANYA diisi utk pemilik payment atau staff. */
+  qrString: string | null;
+  expiresAt: string | null;
+  /** Bila transaksi bagian dari split batch: ringkasan status tiap anggota
+   *  (nama + nominal + status). Kosong utk non-batch. */
+  batchMembers: { name: string; amount: number; status: string }[];
+}
+
+/**
+ * Detail satu transaksi pembayaran dalam sesi (untuk halaman detail transaksi).
+ * Menampilkan list item + tax/service + QRIS.
+ *
+ * Akses: pemilik payment (member) ATAU host meja ATAU staff aktif di bar.
+ * qr_string hanya diserahkan ke pemilik atau staff (bukan host lain / anggota lain).
+ */
+export async function getSessionPaymentDetail(
+  sessionId: string,
+  paymentId: string
+): Promise<SessionPaymentDetail | null> {
+  const profile = await requireProfile();
+
+  const [row] = await db
+    .select({
+      id: payments.id,
+      amount: payments.amount,
+      method: payments.method,
+      status: payments.status,
+      splitMode: payments.splitMode,
+      splitMeta: payments.splitMeta,
+      createdAt: payments.createdAt,
+      paidAt: payments.paidAt,
+      payerMemberId: payments.paidByMemberId,
+      payerProfileId: sessionMembers.profileId,
+      paidByName: profiles.displayName,
+      barId: floorAreas.barId,
+      hostId: tableSessions.hostId,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(and(eq(payments.id, paymentId), eq(orders.sessionId, sessionId)));
+  if (!row) return null;
+
+  // Otorisasi + apakah pemanggil boleh lihat QR.
+  const isOwner = row.payerProfileId === profile.id;
+  const isHost = row.hostId === profile.id;
+  let isStaff = false;
+  if (!isOwner && !isHost) {
+    const [staff] = await db
+      .select({ id: staffRoles.id })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, profile.id),
+          eq(staffRoles.barId, row.barId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    isStaff = !!staff;
+  }
+  // Harus salah satu: pemilik, host, atau staff (member lain boleh lihat detail
+  // transaksi meja — read-only — tapi TANPA QR).
+  const [isMember] = await db
+    .select({ id: sessionMembers.id })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.profileId, profile.id),
+        eq(sessionMembers.status, "joined")
+      )
+    );
+  if (!isOwner && !isHost && !isStaff && !isMember) {
+    throw new Error("Not authorized to view this transaction");
+  }
+
+  // Item yang dicakup (itemized).
+  const its = await db
+    .select({
+      amount: paymentItems.amount,
+      quantity: orderItems.quantity,
+      name: menuItems.name,
+    })
+    .from(paymentItems)
+    .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .where(eq(paymentItems.paymentId, paymentId));
+
+  const meta =
+    (row.splitMeta as {
+      isDownPayment?: boolean;
+      qrString?: string | null;
+      expiresAt?: string | null;
+      batchId?: string | null;
+    } | null) ?? {};
+  const itemsSubtotal = its.reduce((s, i) => s + i.amount, 0);
+  const canSeeQr = isOwner || isStaff;
+
+  // Ringkasan anggota bila transaksi ini bagian dari split batch.
+  let batchMembers: { name: string; amount: number; status: string }[] = [];
+  if (meta.batchId) {
+    batchMembers = await db
+      .select({
+        name: profiles.displayName,
+        amount: payments.amount,
+        status: payments.status,
+      })
+      .from(payments)
+      .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+      .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+      .where(sql`${payments.splitMeta}->>'batchId' = ${meta.batchId}`)
+      .orderBy(payments.createdAt);
+  }
+
+  return {
+    id: row.id,
+    amount: row.amount,
+    method: row.method,
+    status: row.status,
+    splitMode: row.splitMode,
+    isDownPayment: !!meta.isDownPayment,
+    createdAt: row.createdAt.toISOString(),
+    paidAt: row.paidAt ? row.paidAt.toISOString() : null,
+    paidByName: row.paidByName,
+    items: its.map((i) => ({ name: i.name, quantity: i.quantity, amount: i.amount })),
+    itemsSubtotal,
+    // Untuk itemized/treat: tax = amount − subtotal item. Untuk non-item (equal/DP)
+    // tak ada rincian item → taxService 0 (amount ditampilkan apa adanya).
+    taxService: itemsSubtotal > 0 ? Math.max(0, row.amount - itemsSubtotal) : 0,
+    qrString: canSeeQr ? meta.qrString ?? null : null,
+    expiresAt: meta.expiresAt ?? null,
+    batchMembers,
   };
 }
 
