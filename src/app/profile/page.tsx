@@ -46,6 +46,7 @@ export default async function ProfilePage() {
         <ProfileMenuList
           avatarUrl={profile.avatarUrl ?? profile.photos[0] ?? null}
           displayName={profile.displayName}
+          username={profile.username}
           email={user?.email ?? null}
           isPrivate={profile.isPrivate}
         />

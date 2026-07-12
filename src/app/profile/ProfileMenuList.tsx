@@ -41,11 +41,13 @@ import { saveSubscription, removeSubscription } from "@/lib/push";
 export function ProfileMenuList({
   avatarUrl,
   displayName,
+  username,
   email,
   isPrivate,
 }: {
   avatarUrl: string | null;
   displayName: string;
+  username: string | null;
   email: string | null;
   isPrivate: boolean;
 }) {
@@ -158,6 +160,11 @@ export function ProfileMenuList({
         />
         <div className="min-w-0">
           <div className="text-base font-semibold truncate">{displayName}</div>
+          {username && (
+            <div className="text-xs text-muted-foreground truncate">
+              @{username}
+            </div>
+          )}
           {email && (
             <div className="text-xs text-muted-foreground truncate">{email}</div>
           )}
