@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Users, Clock, Search } from "lucide-react";
+import { ArrowRight, Users, Search } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
 import { Select } from "@/components/ui/select";
@@ -105,10 +105,11 @@ export function TransactionsList({
       ) : (
       <Card className="overflow-hidden p-0">
         {/* Header row (desktop) */}
-        <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
+        <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_90px_130px_120px_30px] gap-3 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border bg-muted/30">
           <span>ID</span>
           <span>Table</span>
           <span>Detail</span>
+          <span>Host</span>
           <span className="text-center">Visitors</span>
           <span>Time</span>
           <span className="text-right">Subtotal</span>
@@ -123,7 +124,7 @@ export function TransactionsList({
               className="block group hover:bg-muted/30 transition"
             >
               {/* Desktop row */}
-              <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_130px_120px_30px] gap-3 px-4 py-3 items-center text-sm">
+              <div className="hidden md:grid grid-cols-[90px_100px_1fr_110px_90px_130px_120px_30px] gap-3 px-4 py-3 items-center text-sm">
                 <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                   #{txId(t.session_id)}
                 </span>
@@ -139,9 +140,6 @@ export function TransactionsList({
                       Ongoing
                     </Badge>
                   )}
-                  <span className="text-[10px] text-muted-foreground truncate">
-                    {t.area_name}
-                  </span>
                 </div>
 
                 <div className="min-w-0">
@@ -149,16 +147,16 @@ export function TransactionsList({
                     {t.session_title ?? "Open Table"}
                   </p>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    Host: {t.host_name} · {t.item_count} items
+                    {t.item_count} items · {t.area_name}
                   </p>
                 </div>
+
+                {/* Host — kolom sendiri */}
+                <div className="min-w-0 text-sm truncate">{t.host_name}</div>
 
                 <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Users className="h-3 w-3" /> {t.member_count}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> {t.duration_minutes}m
                   </span>
                 </div>
 
@@ -244,9 +242,6 @@ export function TransactionsList({
                   <div className="flex gap-3 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" /> {t.member_count}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {t.duration_minutes}m
                     </span>
                     <span>{t.item_count} items</span>
                   </div>
