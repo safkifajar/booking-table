@@ -6,6 +6,7 @@ import {
   timestamp,
   jsonb,
   uniqueIndex,
+  unique,
   index,
   check,
 } from "drizzle-orm/pg-core";
@@ -116,6 +117,38 @@ export const payments = pgTable(
 );
 
 /**
+ * Payment items = penautan satu pembayaran ke item order yang dicakupnya.
+ * HANYA diisi untuk pembayaran berbasis item (split_mode='itemized' / "my
+ * order"). DP / equal / custom TIDAK menulis baris di sini — pembayaran itu
+ * tidak 1:1 ke item tertentu; di riwayat ditampilkan label + nominal saja.
+ * Lihat PRD Order Control §7.1.
+ */
+export const paymentItems = pgTable(
+  "payment_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    // Restrict: item yang sudah tertaut pembayaran tak boleh terhapus keras.
+    // Void = ubah order_items.status='void', baris ini tetap ada (histori jujur).
+    orderItemId: uuid("order_item_id")
+      .notNull()
+      .references(() => orderItems.id, { onDelete: "restrict" }),
+    amount: integer("amount").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("ck_payment_items_amount_positive", sql`${t.amount} > 0`),
+    unique("uq_payment_items_payment_order_item").on(t.paymentId, t.orderItemId),
+    index("idx_payment_items_payment").on(t.paymentId),
+    index("idx_payment_items_order_item").on(t.orderItemId),
+  ]
+);
+
+/**
  * Relations
  */
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -127,7 +160,7 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   payments: many(payments),
 }));
 
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+export const orderItemsRelations = relations(orderItems, ({ one, many }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
   menuItem: one(menuItems, {
     fields: [orderItems.menuItemId],
@@ -137,13 +170,26 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     fields: [orderItems.addedByMemberId],
     references: [sessionMembers.id],
   }),
+  paymentItems: many(paymentItems),
 }));
 
-export const paymentsRelations = relations(payments, ({ one }) => ({
+export const paymentsRelations = relations(payments, ({ one, many }) => ({
   order: one(orders, { fields: [payments.orderId], references: [orders.id] }),
   paidBy: one(sessionMembers, {
     fields: [payments.paidByMemberId],
     references: [sessionMembers.id],
+  }),
+  items: many(paymentItems),
+}));
+
+export const paymentItemsRelations = relations(paymentItems, ({ one }) => ({
+  payment: one(payments, {
+    fields: [paymentItems.paymentId],
+    references: [payments.id],
+  }),
+  orderItem: one(orderItems, {
+    fields: [paymentItems.orderItemId],
+    references: [orderItems.id],
   }),
 }));
 
