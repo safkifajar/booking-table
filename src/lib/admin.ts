@@ -23,7 +23,7 @@ import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles } from "@/lib/db/schema/extras";
-import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { orders, orderItems, payments, paymentItems } from "@/lib/db/schema/orders";
 import { tableMoveRequests } from "@/lib/db/schema/move-requests";
 import { requireAdmin as requireAdminAuth } from "@/lib/auth-v2/current";
 import { getChargeConfig } from "@/lib/settings-actions";
@@ -589,6 +589,8 @@ export interface TransactionDetailPayment {
   paid_by_name: string;
   /** Meja saat pembayaran ini (ter-infer dari riwayat pindah). null = tak ada pindah. */
   at_table: string | null;
+  /** Rincian item yang dicakup pembayaran itemized (kosong utk DP/equal/treat). */
+  items: { name: string; quantity: number; amount: number }[];
 }
 
 export interface TransactionDetailMember {
@@ -729,6 +731,31 @@ export async function getTransactionDetail(
         .orderBy(payments.createdAt)
     : [];
 
+  // Rincian item per pembayaran itemized (untuk expand di detail transaksi).
+  const paymentItemsRaw = order
+    ? await db
+        .select({
+          payment_id: paymentItems.paymentId,
+          amount: paymentItems.amount,
+          quantity: orderItems.quantity,
+          name: menuItems.name,
+        })
+        .from(paymentItems)
+        .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
+        .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .where(eq(payments.orderId, order.id))
+    : [];
+  const itemsByPayment = new Map<
+    string,
+    { name: string; quantity: number; amount: number }[]
+  >();
+  for (const pi of paymentItemsRaw) {
+    const arr = itemsByPayment.get(pi.payment_id) ?? [];
+    arr.push({ name: pi.name, quantity: pi.quantity, amount: pi.amount });
+    itemsByPayment.set(pi.payment_id, arr);
+  }
+
   // 4. Members — daftar lengkap (host dulu, lalu member; yang joined dulu)
   const membersRaw = await db
     .select({
@@ -826,6 +853,7 @@ export async function getTransactionDetail(
       paid_at: p.paid_at ? p.paid_at.toISOString() : null,
       paid_by_name: p.paid_by_name,
       at_table: moveRows.length > 0 ? tableAt(ts) : null,
+      items: itemsByPayment.get(p.id) ?? [],
     };
   });
 

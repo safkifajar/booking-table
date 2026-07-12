@@ -361,6 +361,21 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                         </span>
                       )}
                     </div>
+                    {/* Rincian item (pembayaran itemized). */}
+                    {p.items.length > 0 && (
+                      <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground print:text-black/60">
+                        {p.items.map((it, idx) => (
+                          <div key={idx} className="flex justify-between gap-2">
+                            <span className="truncate">
+                              {it.quantity}× {it.name}
+                            </span>
+                            <span className="tabular-nums shrink-0">
+                              {formatIDR(it.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <span className="tabular-nums shrink-0">
                     {formatIDR(p.amount)}

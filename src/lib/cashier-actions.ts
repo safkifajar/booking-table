@@ -35,7 +35,7 @@ import {
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
-import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { orders, orderItems, payments, paymentItems } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -459,6 +459,8 @@ export interface CashierPayment {
   qr_string: string | null;
   expires_at: string | null;
   paid_by_name: string;
+  /** Rincian item yang dicakup pembayaran itemized (kosong utk DP/equal/treat). */
+  items: { name: string; quantity: number; amount: number }[];
 }
 
 export interface CashierMember {
@@ -609,6 +611,31 @@ export async function getSessionDetailForCashier(
         .orderBy(payments.createdAt)
     : [];
 
+  // Payment items (rincian item per pembayaran itemized) — untuk riwayat kasir.
+  const paymentItemsRaw = order
+    ? await db
+        .select({
+          payment_id: paymentItems.paymentId,
+          amount: paymentItems.amount,
+          quantity: orderItems.quantity,
+          name: menuItems.name,
+        })
+        .from(paymentItems)
+        .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
+        .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .where(eq(payments.orderId, order.id))
+    : [];
+  const itemsByPayment = new Map<
+    string,
+    { name: string; quantity: number; amount: number }[]
+  >();
+  for (const pi of paymentItemsRaw) {
+    const arr = itemsByPayment.get(pi.payment_id) ?? [];
+    arr.push({ name: pi.name, quantity: pi.quantity, amount: pi.amount });
+    itemsByPayment.set(pi.payment_id, arr);
+  }
+
   // Members
   const membersRaw = await db
     .select({
@@ -682,6 +709,7 @@ export async function getSessionDetailForCashier(
         qr_string: meta.qrString ?? null,
         expires_at: meta.expiresAt ?? null,
         paid_by_name: p.paid_by_name,
+        items: itemsByPayment.get(p.id) ?? [],
       };
     }),
     members: membersRaw.map((m) => ({

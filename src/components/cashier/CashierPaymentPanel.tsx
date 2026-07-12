@@ -235,6 +235,21 @@ export function CashierPaymentPanel({
                   <div className="text-[10px] text-muted-foreground/70 font-mono select-all mt-0.5">
                     ID: {p.id}
                   </div>
+                  {/* Rincian item (pembayaran itemized/"my order"). */}
+                  {p.items.length > 0 && (
+                    <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground">
+                      {p.items.map((it, idx) => (
+                        <div key={idx} className="flex justify-between gap-2">
+                          <span className="truncate">
+                            {it.quantity}× {it.name}
+                          </span>
+                          <span className="tabular-nums shrink-0">
+                            {formatIDR(it.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   <div
