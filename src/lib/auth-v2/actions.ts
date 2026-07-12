@@ -56,7 +56,7 @@ export async function signUpAction(formData: {
         ? `/onboarding?next=${encodeURIComponent(formData.next)}`
         : "/onboarding";
     await signIn("credentials", {
-      email: formData.email.toLowerCase().trim(),
+      identifier: formData.email.toLowerCase().trim(),
       password: formData.password,
       redirectTo: onboardingUrl,
     });
@@ -80,13 +80,13 @@ export async function signUpAction(formData: {
  * Gagal → { ok: false, error }.
  */
 export async function signInAction(formData: {
-  email: string;
+  identifier: string;
   password: string;
   next?: string;
 }): Promise<ActionResult> {
   try {
     await signIn("credentials", {
-      email: formData.email.toLowerCase().trim(),
+      identifier: formData.identifier.toLowerCase().trim(),
       password: formData.password,
       redirectTo: formData.next ?? "/",
     });
@@ -109,7 +109,7 @@ export async function signInAction(formData: {
 
     const message = err instanceof Error ? err.message : "";
     if (message.includes("CredentialsSignin") || message.includes("credentials")) {
-      return { ok: false, error: "Incorrect email or password" };
+      return { ok: false, error: "Incorrect email/username or password" };
     }
     console.error("[signInAction] unexpected:", err);
     return { ok: false, error: "Failed to sign in. Please try again." };

@@ -177,7 +177,13 @@ function PasswordForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.includes("@")) return toast.error("Invalid email");
+    // Signin: field boleh email ATAU username → cukup non-kosong.
+    // Signup: wajib email valid.
+    if (mode === "signup") {
+      if (!email.includes("@")) return toast.error("Invalid email");
+    } else if (email.trim().length === 0) {
+      return toast.error("Enter your email or username");
+    }
     if (password.length < 6) return toast.error("Password must be at least 6 characters");
     if (mode === "signup" && displayName.trim().length < 2)
       return toast.error("Name must be at least 2 characters");
@@ -208,7 +214,7 @@ function PasswordForm({
               phone: phone.trim() || undefined,
               next,
             })
-          : await signInAction({ email, password, next });
+          : await signInAction({ identifier: email, password, next });
 
       // Kalau action return ke sini (bukan throw NEXT_REDIRECT), berarti error
       if (!result.ok && result.error) {
@@ -268,13 +274,17 @@ function PasswordForm({
         />
       )}
       <input
-        type="email"
-        placeholder="nama@email.com"
+        // Signin: email ATAU username (type text, jangan paksa format email).
+        // Signup: email valid (type email).
+        type={mode === "signin" ? "text" : "email"}
+        placeholder={
+          mode === "signin" ? "Email or username" : "nama@email.com"
+        }
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         autoFocus={mode === "signin"}
         required
-        autoComplete={mode === "signin" ? "email" : "new-password"}
+        autoComplete={mode === "signin" ? "username" : "new-password"}
         className={inputCls}
       />
       <div className="relative">

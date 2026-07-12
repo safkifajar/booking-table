@@ -1,10 +1,11 @@
 /**
- * Credentials provider untuk Auth.js — email + password login.
+ * Credentials provider untuk Auth.js — login dengan email ATAU username + password.
  *
  * Flow:
- * 1. User submit form di /auth dengan email & password
+ * 1. User submit form di /auth dengan identifier (email/username) & password
  * 2. Auth.js panggil `authorize()` di sini
- * 3. Kita lookup user by email di DB
+ * 3. Lookup user: kalau identifier mengandung "@" → by email (tabel users);
+ *    kalau tidak → by username (tabel profiles) lalu ambil user-nya
  * 4. Verify password dengan bcrypt
  * 5. Return user object (id, email) kalau valid, null kalau tidak
  *
@@ -30,7 +31,9 @@ class AccountDisabledError extends CredentialsSignin {
 }
 
 const credentialsSchema = z.object({
-  email: z.string().email("Invalid email"),
+  // identifier = email ATAU username. Validasi email/username spesifik
+  // dilakukan saat lookup (bukan di schema) — cukup pastikan non-kosong.
+  identifier: z.string().min(1, "Email or username is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -41,7 +44,7 @@ export const credentialsProvider = CredentialsProvider({
 
   // Schema input — hint untuk Auth.js UI bawaan (kita pakai custom form jadi cuma metadata)
   credentials: {
-    email: { label: "Email", type: "email" },
+    identifier: { label: "Email or username", type: "text" },
     password: { label: "Password", type: "password" },
   },
 
@@ -49,7 +52,7 @@ export const credentialsProvider = CredentialsProvider({
    * Authorize callback — return user object kalau credential valid.
    * Return null kalau invalid → Auth.js throw CredentialsSignin error.
    *
-   * SECURITY: jangan kasih beda message untuk "email tidak ada" vs
+   * SECURITY: jangan kasih beda message untuk "identifier tidak ada" vs
    * "password salah" — biar tidak ada user enumeration.
    */
   async authorize(raw) {
@@ -58,12 +61,24 @@ export const credentialsProvider = CredentialsProvider({
     if (!parsed.success) {
       return null;
     }
-    const { email, password } = parsed.data;
+    const { identifier, password } = parsed.data;
+    const id = identifier.toLowerCase().trim();
 
-    // Lookup user
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email.toLowerCase().trim()),
-    });
+    // Deteksi email SEJATI = pola `x@y.z` (ada domain). Selain itu → username.
+    // Username tak perlu "@"; tapi kalau user tetap ketik "@bdui", buang "@"-nya
+    // supaya "@bdui" dan "bdui" sama-sama cocok ke username DB (disimpan tanpa @).
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id);
+    const user = isEmail
+      ? await db.query.users.findFirst({ where: eq(users.email, id) })
+      : await (async () => {
+          const uname = id.replace(/^@/, "");
+          const profile = await db.query.profiles.findFirst({
+            where: eq(profiles.username, uname),
+            columns: { id: true },
+          });
+          if (!profile) return undefined;
+          return db.query.users.findFirst({ where: eq(users.id, profile.id) });
+        })();
 
     if (!user) {
       // Constant-time dummy verify untuk hindari timing attack

@@ -99,7 +99,7 @@ export async function adminSignInAction(formData: {
     // manual, signIn pasti sukses — tapi tetap pakai credentials provider supaya
     // session structure standar Auth.js (JWT claims, dst).
     await signIn("credentials", {
-      email,
+      identifier: email,
       password,
       redirect: false,
     });
