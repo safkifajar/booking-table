@@ -8,7 +8,7 @@ import {
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
-import { orders, orderItems, payments } from "@/lib/db/schema/orders";
+import { orders, orderItems, payments, paymentItems } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import {
@@ -211,6 +211,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           split_meta: payments.splitMeta,
           created_at: payments.createdAt,
           paid_at: payments.paidAt,
+          // Prasyarat visibilitas QR per-anggota (PRD Host-Only Payment FR9a):
+          // klien perlu tahu payment ini milik member mana.
+          paid_by_member_id: payments.paidByMemberId,
           paid_by_display_name: profiles.displayName,
           paid_by_avatar_url: profiles.avatarUrl,
         })
@@ -222,6 +225,33 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
         .where(eq(payments.orderId, order.id))
     : [];
+
+  // 5b. Payment items (rincian item per pembayaran itemized) — untuk riwayat
+  // order-payment yang bisa di-expand. (PRD Order Control FR8/FR9.)
+  const paymentItemsRaw = order
+    ? await db
+        .select({
+          payment_id: paymentItems.paymentId,
+          amount: paymentItems.amount,
+          quantity: orderItems.quantity,
+          name: menuItems.name,
+        })
+        .from(paymentItems)
+        .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
+        .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .where(eq(payments.orderId, order.id))
+    : [];
+  // Group per payment.
+  const itemsByPayment = new Map<
+    string,
+    { name: string; quantity: number; amount: number }[]
+  >();
+  for (const pi of paymentItemsRaw) {
+    const arr = itemsByPayment.get(pi.payment_id) ?? [];
+    arr.push({ name: pi.name, quantity: pi.quantity, amount: pi.amount });
+    itemsByPayment.set(pi.payment_id, arr);
+  }
 
   // 6. Menu — bentuk flat (sub-kategori + parent_name) utk picker order.
   const menu = flattenMenuTree(await getMenuByBar(sessionRow.bar_id));
@@ -341,7 +371,12 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
             isDownPayment?: boolean;
             qrString?: string | null;
             expiresAt?: string | null;
+            batchId?: string | null;
           } | null) ?? {};
+        // Visibilitas QR per-anggota (PRD Host-Only Payment FR9/FR11): qr_string
+        // HANYA diserahkan ke pemiliknya. Anggota lain — termasuk host — tak
+        // menerima QR anggota lain. Status & nominal tetap dikirim ke semua.
+        const isMine = p.paid_by_member_id === (myMember?.id ?? null);
         return {
           id: p.id,
           amount: p.amount,
@@ -349,12 +384,15 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           status: p.status,
           split_mode: p.split_mode,
           is_down_payment: !!meta.isDownPayment,
-          qr_string: meta.qrString ?? null,
+          batch_id: meta.batchId ?? null,
+          qr_string: isMine ? meta.qrString ?? null : null,
           expires_at: meta.expiresAt ?? null,
           created_at: p.created_at.toISOString(),
           paid_at: p.paid_at ? p.paid_at.toISOString() : null,
+          paid_by_member_id: p.paid_by_member_id,
           paid_by: p.paid_by_display_name,
           paid_by_avatar: p.paid_by_avatar_url,
+          items: itemsByPayment.get(p.id) ?? [],
         };
       })}
       menu={menu}

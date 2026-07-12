@@ -10,7 +10,6 @@ import {
   Users,
   Utensils,
   Receipt,
-  Wallet,
   Check,
   Lock,
   Globe,
@@ -25,6 +24,7 @@ import {
   MapPin,
   Quote,
   Pencil,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +39,8 @@ import {
   closeSession,
   leaveSession,
   payShare,
+  createSplitBatch,
+  cancelSplitBatch,
   approveJoinRequest,
   rejectJoinRequest,
   inviteUsersToSession,
@@ -49,13 +51,12 @@ import { staffAddGuestToTable } from "@/lib/waiter-actions";
 import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { type MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
-import { SplitPayment } from "@/components/session/SplitPayment";
+import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 import { CashierPaymentPanel } from "@/components/cashier/CashierPaymentPanel";
 import type { CashierSessionDetail } from "@/lib/cashier-actions";
-import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import {
   computeBillTotals,
   type ChargeConfig,
@@ -74,7 +75,7 @@ import type {
   SplitMode,
 } from "@/types/db";
 
-type Tab = "vibe" | "menu" | "bill" | "pay";
+type Tab = "vibe" | "menu" | "bill";
 
 /** Jam "HH:MM" dari ISO string (waktu lokal). */
 function formatTime(iso: string): string {
@@ -147,12 +148,15 @@ interface SessionViewProps {
     status: PaymentStatus;
     split_mode: SplitMode;
     is_down_payment: boolean;
+    batch_id: string | null;
     qr_string: string | null;
     expires_at: string | null;
     created_at: string;
     paid_at: string | null;
+    paid_by_member_id: string;
     paid_by: string;
     paid_by_avatar: string | null;
+    items: { name: string; quantity: number; amount: number }[];
   }>;
   menu: MenuPickerCategory[];
   myProfileId: string;
@@ -198,7 +202,8 @@ export function SessionView(props: SessionViewProps) {
   // Arah animasi geser tab: 1 = konten baru masuk dari kanan (pindah ke tab
   // berikutnya), -1 = dari kiri (tab sebelumnya).
   const [slideDir, setSlideDir] = React.useState<1 | -1>(1);
-  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill", "pay"];
+  // Tab Pay dihapus — pembayaran kini ada di tab Bill. (PRD Bill-Centric Payment.)
+  const TAB_ORDER: Tab[] = ["vibe", "menu", "bill"];
   // Ganti tab + set arah animasi berdasar posisi tab.
   function changeTab(next: Tab) {
     if (next === tab) return;
@@ -206,20 +211,18 @@ export function SessionView(props: SessionViewProps) {
     setTab(next);
   }
 
-  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill ↔ Pay). Menu & Pay
-  // punya syarat sendiri (lihat showMenuTab/showPayTab) — swipe ikut itu.
+  // Swipe kiri/kanan utk pindah tab (Table ↔ Menu ↔ Bill). Menu punya syarat
+  // sendiri (lihat showMenuTab) — swipe ikut itu.
   const showMenuRef = React.useRef(false);
-  const showPayRef = React.useRef(false);
   const touchStart = React.useRef<{ x: number; y: number } | null>(null);
   function goTab(dir: 1 | -1) {
     let idx = TAB_ORDER.indexOf(tab);
-    // Cari tab berikutnya yg boleh diakses (skip Menu/Pay kalau disembunyikan).
+    // Cari tab berikutnya yg boleh diakses (skip Menu kalau disembunyikan).
     while (true) {
       idx += dir;
       const next = TAB_ORDER[idx];
       if (!next) return;
       if (next === "menu" && !showMenuRef.current) continue;
-      if (next === "pay" && !showPayRef.current) continue;
       changeTab(next);
       return;
     }
@@ -245,29 +248,27 @@ export function SessionView(props: SessionViewProps) {
   // tujuan (default = host) dengan input_by_staff_id audit trail.
   const isStaff = !!props.staffRole;
   const canInteract = props.isMember || isStaff;
+  // Tambah order = HANYA host (atau staff atas nama meja). Anggota non-host tak
+  // bisa memesan — mereka minta host menambahkan. (PRD Order Control FR1/FR3.)
+  const canOrder = props.isHost || isStaff;
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
   const isEnded =
     props.session.status === "closed" || props.session.status === "overdue";
   // Booking dibatalkan → tak ada order/pembayaran; sembunyikan tab Menu & Pay.
   const isCancelled = props.session.status === "cancelled";
-  // Tab MENU: hanya kalau bisa interact, tak cancelled, & meja belum selesai
-  // (closed/overdue tak bisa order lagi → Menu disembunyikan).
-  const showMenuTab = canInteract && !isCancelled && !isEnded;
-  // Tab PAY: kalau bisa interact & tak cancelled. Tetap tampil saat closed/
-  // overdue (masih perlu lihat/lunasi pembayaran).
-  const showPayTab = canInteract && !isCancelled;
+  // Tab MENU: hanya untuk yang bisa order (host/staff), tak cancelled, & meja
+  // belum selesai (closed/overdue tak bisa order lagi → Menu disembunyikan).
+  const showMenuTab = canOrder && !isCancelled && !isEnded;
+  // Bill selalu tampil (kecuali cancelled) — pembayaran + riwayat ada di sini.
+  const showBillTab = canInteract && !isCancelled;
   // Sinkronkan ref utk gating swipe (goTab dipanggil dari touch handler).
   React.useEffect(() => {
     showMenuRef.current = showMenuTab;
-    showPayRef.current = showPayTab;
-  }, [showMenuTab, showPayTab]);
+  }, [showMenuTab]);
   // Tab efektif: kalau tab aktif jadi tersembunyi (mis. meja ditutup live saat
   // di Menu), fallback ke Bill supaya konten tak kosong — dihitung saat render.
-  const effTab: Tab =
-    (tab === "menu" && !showMenuTab) || (tab === "pay" && !showPayTab)
-      ? "bill"
-      : tab;
+  const effTab: Tab = tab === "menu" && !showMenuTab ? "bill" : tab;
   // Default target member untuk staff input order = host meja
   const joinedMembers = React.useMemo(
     () => props.members.filter((m) => m.status === "joined"),
@@ -348,21 +349,15 @@ export function SessionView(props: SessionViewProps) {
                 onClick={() => changeTab("menu")}
               />
             )}
-            <TabButton
-              icon={<Receipt className="h-4 w-4" />}
-              label="Bill"
-              active={effTab === "bill"}
-              onClick={() => changeTab("bill")}
-              badge={props.orderItems.length || undefined}
-            />
-            {/* Bayar: member/staff & tak cancelled. Tetap tampil saat closed/
-                overdue (masih perlu lihat/lunasi pembayaran). */}
-            {showPayTab && (
+            {/* Bill: item order + status + riwayat pembayaran + tombol Pay.
+                Pembayaran kini terpusat di sini (tab Pay dihapus). */}
+            {showBillTab && (
               <TabButton
-                icon={<Wallet className="h-4 w-4" />}
-                label="Pay"
-                active={effTab === "pay"}
-                onClick={() => changeTab("pay")}
+                icon={<Receipt className="h-4 w-4" />}
+                label="Bill"
+                active={effTab === "bill"}
+                onClick={() => changeTab("bill")}
+                badge={props.orderItems.length || undefined}
               />
             )}
           </div>
@@ -409,13 +404,15 @@ export function SessionView(props: SessionViewProps) {
         {effTab === "vibe" && (
           <VibeTab {...props} isStaff={isStaff} isEnded={isEnded} />
         )}
-        {effTab === "menu" && canInteract && (
+        {effTab === "menu" && canOrder && (
           <MenuTab
             menu={props.menu}
             sessionId={props.session.id}
-            canInteract={canInteract}
+            canInteract={canOrder}
             isStaff={isStaff}
             hostMemberId={hostMember?.id ?? null}
+            outstanding={remaining}
+            onSaved={() => changeTab("bill")}
             cart={menuCart}
             onCartChange={setMenuCart}
           />
@@ -423,39 +420,22 @@ export function SessionView(props: SessionViewProps) {
         {effTab === "bill" && (
           <BillTab
             items={props.orderItems}
+            payments={props.payments}
+            members={props.members.filter((m) => m.status === "joined")}
             myProfileId={props.myProfileId}
+            myMemberId={props.myMemberId}
             isStaff={isStaff}
+            isHost={props.isHost}
             sessionId={props.session.id}
             subtotal={subtotal}
             charge={bill.charge}
             chargePercent={bill.chargePercent}
             total={bill.total}
+            remaining={remaining}
+            cashierDetail={props.cashierDetail}
+            barSlug={props.bar.slug}
           />
         )}
-        {effTab === "pay" &&
-          canInteract &&
-          // Cashier: panel pembayaran kaya (kalkulator kembalian, QRIS,
-          // pilih payer, mark-paid/cancel, close→receipt). Selain itu: SplitTab.
-          (props.cashierDetail ? (
-            <CashierPaymentPanel
-              detail={props.cashierDetail}
-              barId={props.bar.slug}
-            />
-          ) : (
-            <SplitTab
-              sessionId={props.session.id}
-              items={props.orderItems}
-              payments={props.payments}
-              members={props.members.filter((m) => m.status === "joined")}
-              myMemberId={props.myMemberId}
-              subtotal={subtotal}
-              charge={bill.charge}
-              chargePercent={bill.chargePercent}
-              total={bill.total}
-              remaining={remaining}
-              payFullOnly={isStaff}
-            />
-          ))}
       </div>
       </div>
       </div>
@@ -1244,8 +1224,10 @@ function MenuTab({
   canInteract,
   isStaff,
   hostMemberId,
+  outstanding,
   cart,
   onCartChange,
+  onSaved,
 }: {
   menu: MenuPickerCategory[];
   sessionId: string;
@@ -1253,6 +1235,11 @@ function MenuTab({
   isStaff: boolean;
   /** Member tujuan atribusi order waiter (default host meja). */
   hostMemberId: string | null;
+  /** Sisa tagihan belum lunas. > 0 → host tak boleh tambah order dulu (staff
+   *  dikecualikan). (PRD Order Control FR4/FR6.) */
+  outstanding: number;
+  /** Dipanggil setelah order tersimpan (staff → diarahkan ke tab Pay). */
+  onSaved?: () => void;
   /** Cart diangkat ke SessionView biar tak hilang saat pindah tab. */
   cart: Record<string, number>;
   onCartChange: (next: Record<string, number>) => void;
@@ -1264,8 +1251,21 @@ function MenuTab({
       </Card>
     );
   }
+  // Pay-before-order: hanya untuk host/customer (staff boleh terus input).
+  const blockedByOutstanding = !isStaff && outstanding > 0;
   return (
     <div className="h-full flex flex-col min-h-0">
+      {blockedByOutstanding && (
+        <Card className="p-4 mb-3 bg-amber-500/10 border-amber-500/30">
+          <div className="text-sm font-semibold text-amber-500">
+            Settle the bill first
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {formatIDR(outstanding)} still outstanding. Complete payment in the
+            Pay tab before adding new orders.
+          </div>
+        </Card>
+      )}
       {/* Customer & staff sama-sama pakai keranjang: pilih +/- lalu Simpan
           sekali → semua masuk bill. Beda: staff atribusi ke host meja;
           customer atribusi ke diri sendiri (onBehalfOfMemberId undefined). */}
@@ -1273,7 +1273,14 @@ function MenuTab({
         menu={menu}
         cart={cart}
         onCartChange={onCartChange}
+        saveLabel={isStaff ? "Pay" : "Save order"}
         onSave={async (cartLines) => {
+          if (blockedByOutstanding) {
+            toast.error(
+              `Please settle the outstanding ${formatIDR(outstanding)} before adding more orders`
+            );
+            return;
+          }
           if (isStaff && !hostMemberId) {
             toast.error("Table has no host yet — can't save the order");
             return;
@@ -1286,34 +1293,122 @@ function MenuTab({
               onBehalfOfMemberId: isStaff ? hostMemberId! : undefined,
             });
           }
-          toast.success("Order saved to table");
+          if (isStaff) {
+            // Staff: setelah order tersimpan, arahkan ke tab Pay untuk proses
+            // pembayaran (pilih metode → QRIS). (#3)
+            toast.success("Order saved — proceed to payment");
+            onSaved?.();
+          } else {
+            toast.success("Order saved to table");
+          }
         }}
       />
     </div>
   );
 }
 
-// BILL TAB
+// BILL TAB — satu kartu order + status + riwayat pembayaran + tombol Pay.
+// Pembayaran terpusat di sini (tab Pay dihapus). (PRD Bill-Centric Payment.)
 function BillTab({
   items,
+  payments,
+  members,
   myProfileId,
+  myMemberId,
   isStaff,
+  isHost,
   sessionId,
   subtotal,
   charge,
   chargePercent,
   total,
+  remaining,
+  cashierDetail,
+  barSlug,
 }: {
   items: SessionViewProps["orderItems"];
+  payments: SessionViewProps["payments"];
+  members: SessionViewProps["members"];
   myProfileId: string;
+  myMemberId: string | null;
   isStaff: boolean;
+  isHost: boolean;
   sessionId: string;
   subtotal: number;
   charge: number;
   chargePercent: number;
   total: number;
+  remaining: number;
+  cashierDetail: SessionViewProps["cashierDetail"];
+  barSlug: string;
 }) {
+  const router = useRouter();
   const [removingId, setRemovingId] = React.useState<string | null>(null);
+  const [paySheet, setPaySheet] = React.useState(false);
+
+  // Status order: lunas kalau tak ada sisa & ada tagihan.
+  const isFullyPaid = remaining <= 0 && subtotal > 0;
+  // Siapa yang boleh membuat pembayaran: host atau staff. (Host-only payment.)
+  const canPay = isHost || isStaff;
+
+  // Batch split aktif (pending belum-expired) → host bisa batalkan.
+  const activeBatchId = React.useMemo(() => {
+    const p = payments.find(
+      (x) =>
+        x.status === "pending" &&
+        x.batch_id != null &&
+        (!x.expires_at || new Date(x.expires_at).getTime() > Date.now())
+    );
+    return p?.batch_id ?? null;
+  }, [payments]);
+
+  // Single payment (treat/staff pay-full) → buat payment lalu redirect ke detail.
+  async function handleSingle(amount: number, method: PaymentMethod) {
+    try {
+      const result = await payShare({ sessionId, amount, method, splitMode: "custom" });
+      setPaySheet(false);
+      router.push(`/session/${sessionId}/tx/${result.paymentId}`);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Payment failed"));
+    }
+  }
+  // Batch (split/my-order) → generate N QRIS, redirect ke transaksi milik host.
+  async function handleBatch(mode: "equal" | "itemized", method: PaymentMethod) {
+    try {
+      const { results } = await createSplitBatch({ sessionId, mode, method });
+      setPaySheet(false);
+      const created = results.filter((r) => r.status === "pending" || r.status === "paid");
+      const skipped = results.filter((r) => r.status === "skipped").length;
+      // Transaksi milik pemanggil (host) untuk di-redirect; fallback ke first.
+      const mine = created.find((r) => r.memberId === myMemberId) ?? created[0];
+      if (created.length > 0) {
+        toast.success(
+          `QRIS created for ${created.length} member${created.length > 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`
+        );
+        if (mine?.paymentId) {
+          router.push(`/session/${sessionId}/tx/${mine.paymentId}`);
+          return;
+        }
+      } else if (skipped > 0) {
+        toast.info("All members already have an active QRIS");
+      } else {
+        toast.error("No QRIS was created");
+      }
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to create split"));
+    }
+  }
+  async function handleCancelBatch() {
+    if (!activeBatchId) return;
+    try {
+      const { cancelled } = await cancelSplitBatch({ sessionId, batchId: activeBatchId });
+      toast.success(`${cancelled} pending QRIS cancelled`);
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to cancel split"));
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -1326,256 +1421,222 @@ function BillTab({
     );
   }
 
-  // Group by member
-  const byMember = new Map<
-    string,
-    { name: string; avatar: string | null; items: typeof items; total: number }
-  >();
-  for (const item of items) {
-    const k = item.added_by.profile_id;
-    if (!byMember.has(k)) {
-      byMember.set(k, {
-        name: item.added_by.display_name,
-        avatar: item.added_by.avatar_url,
-        items: [],
-        total: 0,
-      });
-    }
-    const g = byMember.get(k)!;
-    g.items.push(item);
-    g.total += item.quantity * item.unit_price;
-  }
-
   return (
     <div className="space-y-4">
-      {Array.from(byMember.entries()).map(([profileId, g]) => (
-        <Card key={profileId} className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-7 w-7">
-                {g.avatar && <AvatarImage src={g.avatar} />}
-                <AvatarFallback className="text-[10px]">{initials(g.name)}</AvatarFallback>
-              </Avatar>
-              <span className="text-sm font-medium">
-                {g.name}
-                {profileId === myProfileId && (
-                  <span className="text-muted-foreground"> · you</span>
-                )}
-              </span>
-            </div>
-            <span className="text-sm font-semibold text-primary">{formatIDR(g.total)}</span>
-          </div>
-          <div className="space-y-2">
-            {g.items.map((i) => (
-              <div key={i.id} className="flex items-start gap-2 text-sm slide-in-top">
-                {/* Foto menu (thumbnail) */}
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted/40 flex items-center justify-center">
-                  {i.menu_item.image_url ? (
-                    <Image
-                      src={i.menu_item.image_url}
-                      alt={i.menu_item.name}
-                      width={40}
-                      height={40}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Utensils className="h-4 w-4 text-muted-foreground/40" />
-                  )}
-                </div>
-                <span className="text-muted-foreground w-6 shrink-0 pt-1">{i.quantity}×</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate">{i.menu_item.name}</p>
-                    {i.queue_number !== null && (
-                      <span className="text-[10px] font-mono text-primary/70 shrink-0">
-                        #{String(i.queue_number).padStart(3, "0")}
-                      </span>
-                    )}
-                  </div>
-                  {i.notes && (
-                    <p className="text-xs text-muted-foreground truncate">{i.notes}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {i.status === "sent" && "Ordered"}
-                    {i.status === "preparing" && "Preparing"}
-                    {i.status === "served" && "Served"}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs">{formatIDR(i.quantity * i.unit_price)}</span>
-                  {/* Batalkan pesanan HANYA staff (kasir/waiter). Customer/host
-                      tak boleh batal sendiri — minta ke kasir/waiter. */}
-                  {isStaff && i.status !== "served" && (
-                    <button
-                      disabled={removingId === i.id}
-                      onClick={async () => {
-                        setRemovingId(i.id);
-                        try {
-                          await removeOrderItem(i.id, sessionId);
-                          toast.success("Item removed");
-                        } catch (err) {
-                          toast.error(getActionErrorMessage(err, "Failed"));
-                        } finally {
-                          setRemovingId(null);
-                        }
-                      }}
-                      className="text-muted-foreground hover:text-red-400 disabled:opacity-50"
-                      aria-label="Remove"
-                    >
-                      {removingId === i.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <X className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ))}
-
-      {/* Subtotal + tax & service (1 baris) + total */}
-      <Card className="p-4 bg-muted/40 space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal</span>
-          <span className="tabular-nums">{formatIDR(subtotal)}</span>
+      {/* Kartu order — SATU daftar item, tiap item ditandai pemesannya. */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Order</h3>
+          <Badge variant={isFullyPaid ? "success" : "warning"} className="text-[10px]">
+            {isFullyPaid ? "Paid" : "Unpaid"}
+          </Badge>
         </div>
-        {chargePercent > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">
-              Tax &amp; Service ({chargePercent}%)
-            </span>
-            <span className="tabular-nums">{formatIDR(charge)}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-sm pt-1.5 border-t border-border">
-          <span className="font-medium">Total</span>
-          <span className="font-semibold text-primary text-base tabular-nums">
-            {formatIDR(total)}
-          </span>
+        <div className="space-y-2">
+          {items.map((i) => (
+            <div key={i.id} className="flex items-start gap-2 text-sm">
+              <span className="text-muted-foreground w-6 shrink-0 pt-0.5">{i.quantity}×</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate">{i.menu_item.name}</p>
+                  {i.queue_number !== null && (
+                    <span className="text-[10px] font-mono text-primary/70 shrink-0">
+                      #{String(i.queue_number).padStart(3, "0")}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  by {i.added_by.display_name}
+                  {i.added_by.profile_id === myProfileId && " (you)"}
+                  {i.notes ? ` · ${i.notes}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs tabular-nums">{formatIDR(i.quantity * i.unit_price)}</span>
+                {isStaff && i.status !== "served" && (
+                  <button
+                    disabled={removingId === i.id}
+                    onClick={async () => {
+                      setRemovingId(i.id);
+                      try {
+                        await removeOrderItem(i.id, sessionId);
+                        toast.success("Item removed");
+                      } catch (err) {
+                        toast.error(getActionErrorMessage(err, "Failed"));
+                      } finally {
+                        setRemovingId(null);
+                      }
+                    }}
+                    className="text-muted-foreground hover:text-red-400 disabled:opacity-50"
+                    aria-label="Remove"
+                  >
+                    {removingId === i.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
+
+      {/* Ringkasan tagihan + status. Utk kasir: skip (CashierPaymentPanel punya
+          bill totals + payment history sendiri → hindari duplikasi). */}
+      {!cashierDetail && (
+        <Card className="p-4 bg-muted/40 space-y-1.5">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="tabular-nums">{formatIDR(subtotal)}</span>
+          </div>
+          {chargePercent > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Tax &amp; Service ({chargePercent}%)</span>
+              <span className="tabular-nums">{formatIDR(charge)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm pt-1.5 border-t border-border">
+            <span className="font-medium">Total</span>
+            <span className="font-semibold text-primary text-base tabular-nums">{formatIDR(total)}</span>
+          </div>
+          {remaining > 0 && remaining < total && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Remaining</span>
+              <span className="tabular-nums text-primary">{formatIDR(remaining)}</span>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Cashier: panel kasir kaya (accept payment/cash/mark-paid/close). */}
+      {cashierDetail ? (
+        <CashierPaymentPanel detail={cashierDetail} barId={barSlug} />
+      ) : (
+        <>
+          {/* Tombol Pay — host/staff, bila belum lunas. */}
+          {canPay && !isFullyPaid && (
+            <div className="space-y-2">
+              <Button variant="gold" size="lg" className="w-full" onClick={() => setPaySheet(true)}>
+                Pay bill
+              </Button>
+              {activeBatchId && (
+                <Button variant="outline" size="sm" className="w-full" onClick={handleCancelBatch}>
+                  Cancel split (batalkan semua QRIS pending)
+                </Button>
+              )}
+            </div>
+          )}
+          {isFullyPaid && (
+            <Card className="p-4 bg-emerald-500/10 border-emerald-500/30 text-sm text-emerald-400 font-medium text-center">
+              Bill fully paid
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* Riwayat pembayaran — satu-satunya list, link ke halaman detail.
+          Utk kasir: skip (CashierPaymentPanel punya payment history sendiri). */}
+      {!cashierDetail && payments.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-2 mt-2">Transactions</h3>
+          <div className="space-y-2">
+            {payments.map((p) => (
+              <Link
+                key={p.id}
+                href={`/session/${sessionId}/tx/${p.id}`}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 transition hover:border-primary/40"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">
+                      {p.is_down_payment ? "Down payment" : txTypeLabel(p.split_mode)}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">· {p.paid_by}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    {p.method.toUpperCase()} · {fmtTxTime(p.paid_at ?? p.created_at)}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-semibold text-primary tabular-nums">{formatIDR(p.amount)}</div>
+                  <TxStatusBadge payment={p} />
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {paySheet && (
+        <PaymentSheet
+          items={items}
+          membersCount={members.length}
+          myMemberId={myMemberId}
+          total={total}
+          remaining={remaining}
+          payFullOnly={isStaff}
+          onClose={() => setPaySheet(false)}
+          onSingle={handleSingle}
+          onBatch={handleBatch}
+        />
+      )}
     </div>
   );
 }
 
-// SPLIT TAB
-function SplitTab({
-  sessionId,
-  items,
-  payments,
-  members,
-  myMemberId,
-  subtotal,
-  charge,
-  chargePercent,
-  total,
-  remaining,
-  payFullOnly,
+
+/** Label tipe transaksi utk list Bill. */
+function txTypeLabel(mode: string): string {
+  if (mode === "equal") return "Split equally";
+  if (mode === "itemized") return "Own order";
+  if (mode === "custom") return "Treat";
+  return "Payment";
+}
+
+function fmtTxTime(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  }).format(new Date(iso));
+}
+
+/** Badge status transaksi (paid / pending / cancelled by expiry). */
+function TxStatusBadge({
+  payment,
 }: {
-  sessionId: string;
-  items: SessionViewProps["orderItems"];
-  payments: SessionViewProps["payments"];
-  members: SessionViewProps["members"];
-  myMemberId: string | null;
-  subtotal: number;
-  charge: number;
-  chargePercent: number;
-  total: number;
-  remaining: number;
-  payFullOnly?: boolean;
+  payment: SessionViewProps["payments"][number];
 }) {
-  const router = useRouter();
-  // Dialog QRIS aktif (kalau gateway return qrString + pending).
-  const [qris, setQris] = React.useState<{
-    paymentId: string;
-    qrString: string;
-    amount: number;
-    expirySeconds?: number;
-  } | null>(null);
-
+  const expired =
+    payment.status === "pending" &&
+    payment.expires_at != null &&
+    new Date(payment.expires_at).getTime() <= Date.now();
+  const label =
+    payment.status === "paid"
+      ? "Paid"
+      : expired
+        ? "Cancelled"
+        : payment.status === "pending"
+          ? "Pending"
+          : payment.status === "failed"
+            ? "Cancelled"
+            : payment.status;
   return (
-    <>
-    <SplitPayment
-      sessionId={sessionId}
-      items={items}
-      payments={payments}
-      members={members}
-      myMemberId={myMemberId}
-      subtotal={subtotal}
-      charge={charge}
-      chargePercent={chargePercent}
-      total={total}
-      remaining={remaining}
-      payFullOnly={payFullOnly}
-      onPay={async (input) => {
-        try {
-          const result = await payShare({ sessionId, ...input });
-
-          // QRIS: render QR di dialog app SENDIRI (jangan redirect ke halaman
-          // Duitku). Utamakan qrString di atas redirectUrl.
-          if (result.qrString && result.status === "pending") {
-            // Countdown dari expiresAt (masa berlaku QR dari Duitku) kalau ada.
-            const expirySeconds = result.expiresAt
-              ? Math.max(
-                  1,
-                  Math.round(
-                    (new Date(result.expiresAt).getTime() - Date.now()) / 1000
-                  )
-                )
-              : undefined;
-            setQris({
-              paymentId: result.paymentId,
-              qrString: result.qrString,
-              amount: input.amount,
-              expirySeconds,
-            });
-            return;
-          }
-
-          // Fallback: gateway hanya kasih redirect URL (tanpa qrString).
-          if (result.redirectUrl) {
-            window.location.href = result.redirectUrl;
-            return;
-          }
-
-          // Mock atau cash → status langsung paid
-          if (result.status === "paid") {
-            toast.success("Payment successful");
-          } else {
-            toast.info("Payment is being processed");
-          }
-        } catch (err) {
-          toast.error(getActionErrorMessage(err, "Payment failed"));
-        }
-      }}
-    />
-    {qris && (
-      <QrisPaymentDialog
-        paymentId={qris.paymentId}
-        qrString={qris.qrString}
-        amount={qris.amount}
-        expirySeconds={qris.expirySeconds}
-        onPaid={() => {
-          setQris(null);
-          router.refresh();
-        }}
-        onExpired={() => {
-          setQris(null);
-          router.refresh();
-        }}
-        onCancelled={() => {
-          setQris(null);
-          router.refresh();
-        }}
-        onClose={() => setQris(null)}
-      />
-    )}
-    </>
+    <Badge
+      variant={
+        payment.status === "paid"
+          ? "success"
+          : payment.status === "pending" && !expired
+            ? "warning"
+            : "secondary"
+      }
+      className="text-[10px]"
+    >
+      {label}
+    </Badge>
   );
 }
+
 
 // ============================================================
 // FOOTER

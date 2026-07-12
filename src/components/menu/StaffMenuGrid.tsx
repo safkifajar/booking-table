@@ -36,6 +36,7 @@ export function StaffMenuGrid({
   onSave,
   cart: controlledCart,
   onCartChange,
+  saveLabel = "Save order",
 }: {
   menu: MenuPickerCategory[];
   onSave: (cart: CartLine[]) => Promise<void>;
@@ -43,6 +44,8 @@ export function StaffMenuGrid({
    *  kalau tak diberi, pakai state internal. */
   cart?: Record<string, number>;
   onCartChange?: (next: Record<string, number>) => void;
+  /** Label tombol simpan. Default "Save order"; staff pakai "Pay". */
+  saveLabel?: string;
 }) {
   const [query, setQuery] = React.useState("");
   const [internalCart, setInternalCart] = React.useState<
@@ -492,7 +495,7 @@ export function StaffMenuGrid({
                 ) : (
                   <ShoppingCart className="h-4 w-4" />
                 )}
-                Save order
+                {saveLabel}
               </button>
             </div>
           </div>
