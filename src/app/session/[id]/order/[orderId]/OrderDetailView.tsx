@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, QrCode, RefreshCw } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, QrCode, RefreshCw, UtensilsCrossed } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -232,10 +233,25 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         {/* Items */}
         <Card className="p-4">
           <h2 className="text-sm font-semibold mb-2">Items</h2>
-          <div className="space-y-1.5 text-sm">
+          <div className="space-y-2.5 text-sm">
             {detail.items.map((i) => (
-              <div key={i.id} className="flex justify-between gap-2">
-                <span className="text-muted-foreground truncate">
+              <div key={i.id} className="flex items-center gap-2.5">
+                {/* Foto menu. Ikon garpu-sendok = placeholder saat tak ada
+                    gambar / masih loading (konsisten dgn komponen menu lain). */}
+                <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted/40 flex items-center justify-center">
+                  <UtensilsCrossed className="h-4 w-4 text-muted-foreground/40" />
+                  {i.image_url && (
+                    <Image
+                      src={i.image_url}
+                      alt={i.name}
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
+                </div>
+                <span className="flex-1 min-w-0 text-muted-foreground truncate">
                   {i.quantity}× {i.name}
                   {i.added_by ? <span className="text-[10px]"> · {i.added_by}</span> : null}
                 </span>

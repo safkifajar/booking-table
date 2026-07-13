@@ -1807,7 +1807,14 @@ function SessionFooter({
               variant="outline"
               size="sm"
               onClick={handleLeave}
-              disabled={acting}
+              // Tak boleh keluar selama meja masih punya sisa tagihan — cegah
+              // orang kabur dari tanggungan bersama. (Server juga menolaknya.)
+              disabled={acting || remaining > 0}
+              title={
+                remaining > 0
+                  ? "Settle the table bill before leaving"
+                  : undefined
+              }
               className="text-red-400"
             >
               {acting ? (
@@ -1815,7 +1822,7 @@ function SessionFooter({
               ) : (
                 <LogOut className="h-4 w-4" />
               )}
-              Leave
+              {remaining > 0 ? "Leave (bill unpaid)" : "Leave"}
             </Button>
           ))}
       </div>

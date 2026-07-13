@@ -1368,8 +1368,30 @@ export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
   redirect(`/session/${invite.session_id}`);
 }
 
+/**
+ * Anggota keluar dari meja.
+ *
+ * GUARD: tak boleh keluar selama MEJA masih punya sisa tagihan (siapa pun yang
+ * belum bayar) — cegah orang kabur dari tanggungan bersama. Order 'unpaid'
+ * (belum dibayar sama sekali) juga menahan, sama seperti guard di closeSession.
+ */
 export async function leaveSession(sessionId: string) {
   const profile = await requireProfile();
+
+  // Sisa tagihan meja (subtotal+charge semua order − pembayaran lunas).
+  const outstanding =
+    (await getOutstandingMap([sessionId])).get(sessionId) ?? 0;
+  // Order yang belum dibayar sama sekali (item sudah masuk tapi belum ditagih).
+  const [unpaidOrder] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, sessionId), eq(orders.status, "unpaid")));
+
+  if (outstanding > 0 || unpaidOrder) {
+    throw new Error(
+      "You can't leave while the table still has an unpaid bill. Please settle it first."
+    );
+  }
 
   await db
     .update(sessionMembers)
@@ -1868,6 +1890,8 @@ export interface OrderDetail {
   items: {
     id: string;
     name: string;
+    /** Foto menu (null kalau item tak punya gambar). */
+    image_url: string | null;
     quantity: number;
     unit_price: number;
     added_by: string | null;
@@ -1957,6 +1981,7 @@ export async function getOrderDetail(
     .select({
       id: orderItems.id,
       name: menuItems.name,
+      image_url: menuItems.imageUrl,
       quantity: orderItems.quantity,
       unit_price: orderItems.unitPrice,
       added_by: profiles.displayName,
@@ -2047,6 +2072,7 @@ export async function getOrderDetail(
     items: itemRows.map((i) => ({
       id: i.id,
       name: i.name,
+      image_url: i.image_url,
       quantity: i.quantity,
       // Nominal & nama pemesan di-redaksi utk view-only.
       unit_price: isViewOnly ? 0 : i.unit_price,
