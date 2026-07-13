@@ -301,11 +301,6 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
             onDone={() => router.refresh()}
           />
         )}
-        {detail.status === "paid" && detail.outstanding <= 0 && (
-          <Card className="p-4 bg-emerald-500/10 border-emerald-500/30 text-sm text-emerald-400 font-medium text-center">
-            Order fully paid
-          </Card>
-        )}
 
         {/* Payment history */}
         {detail.payments.length > 0 && (
