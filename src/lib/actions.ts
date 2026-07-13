@@ -2007,6 +2007,23 @@ export async function getOrderDetail(
   // tak perlu penanganan khusus di sini — memang tampil sbg detail biasa.
   const isViewOnly = !isHost && !isStaff && myMemberId === null;
 
+  // Sisa yang BENAR-BENAR belum tertutup = outstanding − Σ(QRIS pending yg masih
+  // hidup). Saat split sudah di-generate & sebagian anggota belum bayar, sisa itu
+  // "sudah dipesan" QRIS mereka. Kalau host masih boleh menekan "Pay this order",
+  // ia bisa membuat pembayaran yang tumpang-tindih → kalau dua-duanya dibayar,
+  // LEBIH BAYAR. Jadi tombol bayar hanya aktif kalau masih ada ruang tak tertutup.
+  const nowMs = Date.now();
+  const pendingLive = payRows.reduce((sum, p) => {
+    if (p.status !== "pending") return sum;
+    const m =
+      (p.split_meta as { expiresAt?: string | null } | null) ?? {};
+    const exp = m.expiresAt ? new Date(m.expiresAt).getTime() : null;
+    // Tanpa expiry → anggap masih hidup (konservatif).
+    const alive = exp == null || exp > nowMs;
+    return alive ? sum + p.amount : sum;
+  }, 0);
+  const uncovered = Math.max(0, outstanding - pendingLive);
+
   return {
     id: order.id,
     sessionId,
@@ -2022,7 +2039,9 @@ export async function getOrderDetail(
     isHost,
     isStaff,
     isCashier,
-    canPay: (isHost || isStaff) && outstanding > 0,
+    // Kasir TETAP boleh menerima pembayaran (mis. tamu bayar tunai di meja kasir
+    // walau QRIS-nya masih hidup) — ia punya kontrol & bisa membatalkan QRIS.
+    canPay: (isHost || isStaff) && (isCashier ? outstanding > 0 : uncovered > 0),
     viewOnly: isViewOnly,
     members: isViewOnly ? [] : memberRows.map((m) => ({ id: m.id, name: m.name })),
     items: itemRows.map((i) => ({
@@ -2263,6 +2282,41 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     }
   }
   if (!order) throw new Error("Order not found");
+
+  // 2c. ANTI LEBIH BAYAR: sisa tagihan yang masih "kosong" = outstanding −
+  //     Σ(QRIS pending yang masih hidup). Saat split sudah di-generate & anggota
+  //     lain belum bayar, sisa itu sudah dipesan QRIS mereka — membuat pembayaran
+  //     baru di atasnya berisiko dibayar dua kali. (DP dikecualikan: alur booking
+  //     memang membuat DP lalu pelunasan.)
+  const isDpPayment =
+    !!(data.splitMeta as { isDownPayment?: boolean } | undefined)?.isDownPayment;
+  if (!isDpPayment) {
+    const { outstanding: outNow } = await getOrderOutstanding(order.id);
+    const livePendings = await db
+      .select({ amount: payments.amount, splitMeta: payments.splitMeta })
+      .from(payments)
+      .where(
+        and(eq(payments.orderId, order.id), eq(payments.status, "pending"))
+      );
+    const nowMs = Date.now();
+    const pendingLive = livePendings.reduce((sum, p) => {
+      const m = (p.splitMeta as { expiresAt?: string | null } | null) ?? {};
+      const exp = m.expiresAt ? new Date(m.expiresAt).getTime() : null;
+      const alive = exp == null || exp > nowMs; // tanpa expiry → anggap hidup
+      return alive ? sum + p.amount : sum;
+    }, 0);
+    const uncovered = Math.max(0, outNow - pendingLive);
+    if (uncovered <= 0) {
+      throw new Error(
+        "The remaining bill is already covered by active QRIS payments. Wait for them to be paid or to expire."
+      );
+    }
+    if (data.amount > uncovered) {
+      throw new Error(
+        `You can pay at most ${formatIDR(uncovered)} right now — the rest is covered by active QRIS payments.`
+      );
+    }
+  }
 
   // 3. Insert payment dengan status='pending'
   const [newPayment] = await db

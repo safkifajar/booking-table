@@ -279,6 +279,20 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           </Button>
         )}
 
+        {/* Tombol bayar sengaja tak ada: sisa tagihan sudah "dipesan" QRIS
+            anggota lain yang masih aktif. Bayar lagi = risiko lebih bayar.
+            Jelaskan, jangan biarkan host bingung tombolnya hilang. */}
+        {!detail.canPay &&
+          !detail.isCashier &&
+          !detail.viewOnly &&
+          (detail.isHost || detail.isStaff) &&
+          detail.outstanding > 0 && (
+            <Card className="p-4 text-sm text-muted-foreground text-center">
+              Waiting for the other members to pay their QRIS. You can issue a
+              new QRIS below once theirs expires.
+            </Card>
+          )}
+
         {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). */}
         {detail.canPay && detail.isCashier && (
           <CashierPayBox
