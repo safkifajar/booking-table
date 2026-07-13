@@ -96,7 +96,9 @@ export function Select({
           ref={listRef}
           role="listbox"
           className={cn(
-            "absolute z-50 mt-1.5 min-w-full max-h-60 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl",
+            // overscroll-contain: scroll di dalam dropdown tak "tembus" ke
+            // konten di belakangnya (scroll chaining).
+            "absolute z-50 mt-1.5 min-w-full max-h-60 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1 shadow-2xl",
             align === "right" ? "right-0" : "left-0"
           )}
         >

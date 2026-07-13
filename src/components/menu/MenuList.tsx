@@ -120,7 +120,9 @@ export function MenuList({ menu }: { menu: MenuCategoryTree[] }) {
             {filterOpen && (
               <div
                 role="listbox"
-                className="absolute right-0 z-50 mt-1.5 min-w-44 max-h-60 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl"
+                // overscroll-contain: putus scroll-chaining — scroll di dropdown
+                // tak "tembus" menggerakkan daftar menu di belakangnya.
+                className="absolute right-0 z-50 mt-1.5 min-w-44 max-h-60 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1 shadow-2xl"
               >
                 {categoryOptions.map((o) => {
                   const isSel = o.value === category;

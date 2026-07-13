@@ -80,7 +80,7 @@ export function EmojiPicker({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-64 max-h-72 overflow-y-auto rounded-lg border border-border bg-card p-2 shadow-2xl">
+        <div className="absolute right-0 top-full z-50 mt-1 w-64 max-h-72 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-2 shadow-2xl">
           {EMOJI_GROUPS.map((g) => (
             <div key={g.label} className="mb-2 last:mb-0">
               <p className="px-1 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">

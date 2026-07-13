@@ -823,7 +823,7 @@ function MenuPickerModal({
               {filterOpen && (
                 <div
                   role="listbox"
-                  className="absolute right-0 z-30 mt-1.5 min-w-44 max-h-60 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-2xl"
+                  className="absolute right-0 z-30 mt-1.5 min-w-44 max-h-60 overflow-y-auto overscroll-contain rounded-lg border border-border bg-card p-1 shadow-2xl"
                 >
                   <ModalCatOption
                     label="All categories"
