@@ -2349,14 +2349,18 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 }
 
 // ============================================================
-// SPLIT BATCH — host generate 1 QRIS per anggota (equal / itemized)
+// SPLIT BATCH — host generate 1 QRIS per anggota (bagi rata dari SISA)
 // ============================================================
 
 const splitBatchSchema = z.object({
   sessionId: z.string().uuid(),
   /** Multi-order: order spesifik yang di-split. Fallback ke order aktif sesi. */
   orderId: z.string().uuid().optional(),
-  mode: z.enum(["equal", "itemized"]),
+  // Hanya 'equal'. Mode 'itemized' DIHAPUS: sejak hanya HOST yang boleh menambah
+  // order, semua item ter-atribusi ke host → "item saya" = semua item (host) atau
+  // kosong (anggota lain), jadi mode itu tak pernah masuk akal. Nilai "itemized"
+  // tetap ada di enum DB utk data historis, tapi tak bisa dibuat lagi.
+  mode: z.enum(["equal"]),
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
 });
 
@@ -2374,13 +2378,12 @@ export interface SplitBatchMemberResult {
 
 /**
  * Host memicu SATU aksi split → sistem membuat 1 pembayaran + 1 QRIS untuk tiap
- * anggota (mode 'equal') atau tiap anggota yang punya item (mode 'itemized').
- * Tiap anggota nanti hanya melihat QRIS-nya sendiri.
+ * anggota (mode 'equal'). Tiap anggota nanti hanya melihat QRIS-nya sendiri.
  *
  * - Auth: HOST meja atau staff aktif di bar (jalur staff = sesi walk-in).
- * - equal: share = ceil(total / N), tetapi total charge di-cap ke `remaining`
- *   supaya tak over-payment; anggota terakhir menyerap selisih.
- * - itemized: hanya anggota ber-item; amount = total item-nya; tulis payment_items.
+ * - equal: share = ceil(REMAINING / N) — dihitung dari SISA, bukan total. Ini
+ *   penting saat ada DP: sisa-lah utang bersama yang dibagi. Anggota terakhir
+ *   menyerap selisih pembulatan supaya Σ share == remaining (tak over/under).
  * - Anti-duplikat: anggota yang sudah punya payment pending belum-expired dilewati.
  * - Error per-anggota tak menggagalkan semua (best-effort per anggota).
  *
@@ -2465,53 +2468,24 @@ export async function createSplitBatch(
       .map((p) => p.memberId)
   );
 
-  // 6. Tentukan share per anggota sesuai mode.
+  // 6. Tentukan share per anggota — BAGI RATA DARI SISA (remaining).
+  //    Basisnya `remaining`, BUKAN bill.total: kalau sudah ada DP lunas, yang
+  //    dibagi adalah sisa utang bersama. (Dulu pakai bill.total → orang pertama
+  //    menanggung seluruh sisa & sisanya kebagian 0. Itu bug.)
+  //    Contoh: total 100rb, DP 50rb lunas, 2 anggota → masing-masing 25rb.
   type Target = { memberId: string; displayName: string; amount: number; itemIds: { id: string; amount: number }[] };
-  let targets: Target[] = [];
-
-  if (data.mode === "equal") {
-    const n = joined.length;
-    if (n === 0) throw new Error("No members to split between");
-    const per = Math.ceil(bill.total / n);
-    // Cap total ke remaining: bagikan per, tapi jangan lewati remaining kumulatif.
-    let allocated = 0;
-    targets = joined.map((m, i) => {
-      const isLast = i === n - 1;
-      let amount = isLast ? remaining - allocated : Math.min(per, remaining - allocated);
-      amount = Math.max(0, amount);
-      allocated += amount;
-      return { memberId: m.memberId, displayName: m.displayName, amount, itemIds: [] };
-    });
-  } else {
-    // itemized: item non-void per anggota.
-    const items = await db
-      .select({
-        id: orderItems.id,
-        memberId: orderItems.addedByMemberId,
-        qty: orderItems.quantity,
-        unitPrice: orderItems.unitPrice,
-      })
-      .from(orderItems)
-      .where(and(eq(orderItems.orderId, order.id), ne(orderItems.status, "void")));
-    const byMember = new Map<string, { id: string; amount: number }[]>();
-    for (const it of items) {
-      const amt = it.qty * it.unitPrice;
-      const arr = byMember.get(it.memberId) ?? [];
-      arr.push({ id: it.id, amount: amt });
-      byMember.set(it.memberId, arr);
-    }
-    targets = joined
-      .map((m) => {
-        const its = byMember.get(m.memberId) ?? [];
-        const itemsSubtotal = its.reduce((a, b) => a + b.amount, 0);
-        // Tax & service dibebankan PER ORDER: amount = subtotal item bagian ini
-        // + tax + service atas subtotal itu (pakai sumber kebenaran yg sama).
-        const amount = computeBillTotals(itemsSubtotal, charge).total;
-        return { memberId: m.memberId, displayName: m.displayName, amount, itemIds: its };
-      })
-      .filter((t) => t.amount > 0);
-    if (targets.length === 0) throw new Error("No itemized orders to split");
-  }
+  const n = joined.length;
+  if (n === 0) throw new Error("No members to split between");
+  const per = Math.ceil(remaining / n);
+  // Anggota terakhir menyerap selisih pembulatan → Σ share == remaining persis.
+  let allocated = 0;
+  const targets: Target[] = joined.map((m, i) => {
+    const isLast = i === n - 1;
+    let amount = isLast ? remaining - allocated : Math.min(per, remaining - allocated);
+    amount = Math.max(0, amount);
+    allocated += amount;
+    return { memberId: m.memberId, displayName: m.displayName, amount, itemIds: [] };
+  });
 
   // 7. Buat payment + QRIS per anggota (best-effort per anggota).
   const batchId = crypto.randomUUID();
@@ -2542,16 +2516,8 @@ export async function createSplitBatch(
         })
         .returning({ id: payments.id });
 
-      // itemized → tautkan item ke payment (payment_items).
-      if (data.mode === "itemized" && t.itemIds.length > 0) {
-        await db.insert(paymentItems).values(
-          t.itemIds.map((it) => ({
-            paymentId: pay.id,
-            orderItemId: it.id,
-            amount: it.amount,
-          }))
-        );
-      }
+      // Catatan: mode 'equal' tak menulis payment_items (tak ada tautan item).
+      // Dulu ada cabang 'itemized' di sini — dihapus bersama mode-nya.
 
       const cr = await gateway.createCharge({
         paymentId: pay.id,

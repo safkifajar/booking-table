@@ -120,8 +120,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       toast.error(getActionErrorMessage(err, "Payment failed"));
     }
   }
-  // Batch (split/my-order) → generate N QRIS → tampilkan QR host inline.
-  async function handleBatch(mode: "equal" | "itemized", method: PaymentMethod) {
+  // Batch (bagi rata) → generate N QRIS (1 per anggota) → tampilkan QR host inline.
+  async function handleBatch(mode: "equal", method: PaymentMethod) {
     try {
       const { results } = await createSplitBatch({
         sessionId: detail.sessionId,
@@ -309,15 +309,9 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
 
       {paySheet && (
         <PaymentSheet
-          items={detail.items.map((i) => ({
-            id: i.id,
-            quantity: i.quantity,
-            unit_price: i.unit_price,
-            added_by: { member_id: detail.myMemberId ?? "" },
-          }))}
           membersCount={detail.membersCount}
-          myMemberId={detail.myMemberId}
-          total={detail.total}
+          // Basis hitungan = SISA (outstanding), bukan total → bagi rata setelah
+          // DP jadi benar (sisa ÷ anggota).
           remaining={detail.outstanding}
           payFullOnly={detail.isStaff && !detail.isHost}
           onClose={() => setPaySheet(false)}

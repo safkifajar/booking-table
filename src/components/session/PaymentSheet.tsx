@@ -6,43 +6,32 @@ import { QrCode, Check, X, ChevronRight } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { PaymentMethod, SplitMode } from "@/types/db";
 
-interface OrderItem {
-  id: string;
-  quantity: number;
-  unit_price: number;
-  added_by: { member_id: string };
-}
-
 /**
- * Bottom-sheet pemilihan pembayaran: pilih tipe (split/my-order/treat) + metode,
- * lalu generate. Dipanggil dari BillTab (tombol "Pay"). Setelah generate, caller
- * mengarahkan ke halaman detail transaksi.
+ * Bottom-sheet pemilihan pembayaran: pilih tipe (bagi rata / traktir) + metode,
+ * lalu generate. Dipanggil dari halaman detail order. Setelah generate, caller
+ * mengarahkan ke QRIS/detail transaksi.
  *
- * Dipecah dari SplitPayment (form-only; summary & riwayat kini di BillTab).
+ * Mode "my order" (itemized) DIHAPUS: sejak hanya HOST yang boleh menambah order,
+ * semua item milik host → mode itu tak pernah masuk akal.
  */
 export function PaymentSheet({
-  items,
   membersCount,
-  myMemberId,
-  total,
   remaining,
   payFullOnly,
   onClose,
   onSingle,
   onBatch,
 }: {
-  items: OrderItem[];
   membersCount: number;
-  myMemberId: string | null;
-  total: number;
+  /** Sisa yang harus dibayar (total − sudah dibayar). Basis semua hitungan. */
   remaining: number;
   /** Staff: terkunci ke "Pay in full" (custom). */
   payFullOnly?: boolean;
   onClose: () => void;
   /** custom/treat/staff → 1 payment. Return setelah generate (caller redirect). */
   onSingle: (amount: number, method: PaymentMethod) => Promise<void>;
-  /** equal/itemized → batch. */
-  onBatch: (mode: "equal" | "itemized", method: PaymentMethod) => Promise<void>;
+  /** equal → batch (1 QRIS per anggota, bagi rata dari sisa). */
+  onBatch: (mode: "equal", method: PaymentMethod) => Promise<void>;
 }) {
   const [mode, setMode] = React.useState<SplitMode | "">(
     payFullOnly ? "custom" : ""
@@ -52,15 +41,15 @@ export function PaymentSheet({
   const [typeSheet, setTypeSheet] = React.useState(false);
   const [methodSheet, setMethodSheet] = React.useState(false);
 
-  const equalShare = membersCount > 0 ? Math.ceil(total / membersCount) : 0;
-  const myItemsTotal = items
-    .filter((i) => i.added_by.member_id === myMemberId)
-    .reduce((acc, i) => acc + i.quantity * i.unit_price, 0);
+  // Bagi rata dihitung dari SISA (remaining), bukan total — supaya saat sudah ada
+  // DP, yang dibagi adalah sisa utang bersama. Konsisten dgn server
+  // (createSplitBatch). Contoh: total 100rb, DP 50rb lunas, 2 org → 25rb/orang.
+  const equalShare = membersCount > 0 ? Math.ceil(remaining / membersCount) : 0;
   const treatAmount = remaining;
 
-  const isBatchMode = (mode === "equal" || mode === "itemized") && !payFullOnly;
+  const isBatchMode = mode === "equal" && !payFullOnly;
   const rawAmount =
-    mode === "equal" ? equalShare : mode === "itemized" ? myItemsTotal : mode === "custom" ? treatAmount : 0;
+    mode === "equal" ? equalShare : mode === "custom" ? treatAmount : 0;
   const myAmount = Math.min(rawAmount, remaining);
 
   async function handlePay() {
@@ -68,7 +57,7 @@ export function PaymentSheet({
     setLoading(true);
     try {
       if (isBatchMode) {
-        await onBatch(mode as "equal" | "itemized", method);
+        await onBatch("equal", method);
       } else {
         if (myAmount <= 0) return;
         await onSingle(myAmount, method);
@@ -116,19 +105,6 @@ export function PaymentSheet({
           )}
 
           {/* Preview */}
-          {mode === "itemized" && (
-            <div className="rounded-md border border-border p-3 text-sm">
-              <div className="font-medium mb-1">Your order</div>
-              {myItemsTotal > 0 ? (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Your total</span>
-                  <span className="text-primary font-semibold">{formatIDR(myItemsTotal)}</span>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">You haven&apos;t ordered anything yet.</p>
-              )}
-            </div>
-          )}
           {mode === "equal" && (
             <div className="rounded-md border border-border p-3 text-sm flex justify-between">
               <span className="text-muted-foreground">Per person</span>
@@ -192,7 +168,6 @@ export function PaymentSheet({
         {typeSheet && (
           <PickerOverlay title="Payment type" onClose={() => setTypeSheet(false)}>
             <PickerRow label="Split equally" desc={`${formatIDR(equalShare)}/person`} active={mode === "equal"} onClick={() => { setMode("equal"); setTypeSheet(false); }} />
-            <PickerRow label="My order" desc="Pay for what I ordered" active={mode === "itemized"} onClick={() => { setMode("itemized"); setTypeSheet(false); }} />
             <PickerRow label="My treat" desc="Pay for everything" active={mode === "custom"} onClick={() => { setMode("custom"); setTypeSheet(false); }} />
           </PickerOverlay>
         )}
