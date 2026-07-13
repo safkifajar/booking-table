@@ -182,8 +182,18 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     }
   }
 
-  const statusLabel =
-    detail.status === "paid" ? "Paid" : detail.status === "unpaid" ? "Unpaid" : detail.status === "closed" ? "Closed" : detail.status;
+  // Badge order berbasis SISA TAGIHAN, bukan status DB mentah.
+  // orders.status='paid' sebenarnya berarti "order sudah MASUK (dapur)" — itu
+  // terjadi begitu ADA pembayaran lunas (mis. DP / baru 1 orang bayar dari
+  // split). Jadi status DB 'paid' TIDAK berarti lunas. Kalau masih ada sisa,
+  // tampilkan "Unpaid". Konsisten dgn OrderStatusBadge di list order (tab Bill).
+  const isClosedOrder = detail.status === "closed";
+  const isFullyPaid = !isClosedOrder && detail.outstanding <= 0;
+  const statusLabel = isClosedOrder
+    ? "Closed"
+    : isFullyPaid
+      ? "Paid"
+      : "Unpaid";
 
   return (
     <main className="min-h-dvh bg-background">
@@ -206,7 +216,9 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           <div className="flex items-center justify-between">
             <span className="font-mono text-sm">#{detail.id.slice(0, 8).toUpperCase()}</span>
             <Badge
-              variant={detail.status === "paid" ? "success" : detail.status === "unpaid" ? "warning" : "secondary"}
+              variant={
+                isFullyPaid ? "success" : isClosedOrder ? "secondary" : "warning"
+              }
               className="text-[10px]"
             >
               {statusLabel}
@@ -290,6 +302,19 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                 const expired =
                   p.status === "pending" && p.expires_at != null && now > 0 && new Date(p.expires_at).getTime() <= now;
                 const canShowQr = p.status === "pending" && !expired && p.qr_string;
+                // Anggota ini SUDAH punya QRIS pengganti yang masih hidup?
+                // (mis. host baru saja menekan "New QRIS" → terbit baris baru).
+                // Kalau ya, jangan tawarkan generate lagi di baris yang mati —
+                // kalau tidak, host bisa menerbitkan QRIS ketiga, keempat, dst.
+                const memberHasLiveQris = detail.payments.some((q) => {
+                  if (q.paid_by_member_id !== p.paid_by_member_id) return false;
+                  if (q.status !== "pending") return false;
+                  const qExpired =
+                    q.expires_at != null &&
+                    now > 0 &&
+                    new Date(q.expires_at).getTime() <= now;
+                  return !qExpired;
+                });
                 // Pembayaran anggota ini MATI (QR kadaluarsa / gagal) & order
                 // belum lunas → host/staff boleh terbitkan QRIS baru untuk dia.
                 // DP dikecualikan: punya lifecycle booking sendiri (server juga
@@ -299,6 +324,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                   (detail.isHost || detail.isStaff) &&
                   isDead &&
                   !p.is_down_payment &&
+                  !memberHasLiveQris &&
                   detail.outstanding > 0;
                 return (
                   <Card key={p.id} className="p-3">

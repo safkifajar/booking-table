@@ -2701,7 +2701,11 @@ export async function regenerateMemberPayment(input: {
   if (outstanding <= 0) throw new Error("This order is already fully paid");
 
   const pendingRows = await db
-    .select({ amount: payments.amount, splitMeta: payments.splitMeta })
+    .select({
+      amount: payments.amount,
+      splitMeta: payments.splitMeta,
+      memberId: payments.paidByMemberId,
+    })
     .from(payments)
     .where(
       and(
@@ -2711,13 +2715,27 @@ export async function regenerateMemberPayment(input: {
       )
     );
   const nowMs = Date.now();
-  const pendingLive = pendingRows.reduce((sum, p) => {
-    const m = (p.splitMeta as { expiresAt?: string | null } | null) ?? {};
+  const isAlive = (meta: unknown) => {
+    const m = (meta as { expiresAt?: string | null } | null) ?? {};
     const exp = m.expiresAt ? new Date(m.expiresAt).getTime() : null;
     // Tanpa expiry → anggap masih hidup (konservatif).
-    const alive = exp == null || exp > nowMs;
-    return alive ? sum + p.amount : sum;
-  }, 0);
+    return exp == null || exp > nowMs;
+  };
+
+  // Anggota ini sudah punya QRIS pengganti yang MASIH HIDUP → jangan terbitkan
+  // lagi (kalau tidak, host bisa menumpuk QRIS ketiga, keempat, dst).
+  if (
+    pendingRows.some((p) => p.memberId === old.memberId && isAlive(p.splitMeta))
+  ) {
+    throw new Error(
+      "A new QRIS was already issued for this member and is still active."
+    );
+  }
+
+  const pendingLive = pendingRows.reduce(
+    (sum, p) => (isAlive(p.splitMeta) ? sum + p.amount : sum),
+    0
+  );
 
   const room = Math.max(0, outstanding - pendingLive);
   const amount = Math.min(old.amount, room);
