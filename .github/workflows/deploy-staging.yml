@@ -78,6 +78,12 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           [ -z "$TG_TOKEN" ] && { echo "TELEGRAM secret kosong — skip"; exit 0; }
+          # parse_mode=HTML -> &, <, > di commit message HARUS di-escape,
+          # kalau tidak Telegram menolak ("can't parse entities"). Ambil
+          # baris pertama (subject) saja; body commit tak perlu di notif.
+          esc() { printf '%s' "$1" | head -n1 | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+          COMMIT_MSG="$(esc "$COMMIT_MSG")"
+          ACTOR="$(esc "$ACTOR")"
           TEXT=$(printf '%s\n%s\n%s\n%s' \
             "✅ <b>Staging</b> deployed" \
             "<b>Commit:</b> $COMMIT_MSG" \
@@ -102,6 +108,12 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           [ -z "$TG_TOKEN" ] && { echo "TELEGRAM secret kosong — skip"; exit 0; }
+          # parse_mode=HTML -> &, <, > di commit message HARUS di-escape,
+          # kalau tidak Telegram menolak ("can't parse entities"). Ambil
+          # baris pertama (subject) saja; body commit tak perlu di notif.
+          esc() { printf '%s' "$1" | head -n1 | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+          COMMIT_MSG="$(esc "$COMMIT_MSG")"
+          ACTOR="$(esc "$ACTOR")"
           TEXT=$(printf '%s\n%s\n%s\n%s' \
             "❌ <b>Staging</b> deploy GAGAL" \
             "<b>Commit:</b> $COMMIT_MSG" \
