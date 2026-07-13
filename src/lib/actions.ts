@@ -3330,12 +3330,8 @@ export async function cancelUnpaidOrder(
       id: orders.id,
       status: orders.status,
       sessionId: orders.sessionId,
-      barId: floorAreas.barId,
     })
     .from(orders)
-    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
-    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
-    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(orders.id, orderId));
   if (!row) throw new Error("Order not found");
 
@@ -3347,32 +3343,10 @@ export async function cancelUnpaidOrder(
     return { status: "cancelled" }; // sudah batal → no-op
   }
 
-  // Otorisasi: member joined sesi ATAU staff aktif di bar (pola cancelPayment).
-  const [asMember] = await db
-    .select({ id: sessionMembers.id })
-    .from(sessionMembers)
-    .where(
-      and(
-        eq(sessionMembers.sessionId, row.sessionId),
-        eq(sessionMembers.profileId, profile.id),
-        eq(sessionMembers.status, "joined")
-      )
-    );
-  let allowed = !!asMember;
-  if (!allowed) {
-    const [staff] = await db
-      .select({ id: staffRoles.id })
-      .from(staffRoles)
-      .where(
-        and(
-          eq(staffRoles.profileId, profile.id),
-          eq(staffRoles.barId, row.barId),
-          eq(staffRoles.isActive, true)
-        )
-      );
-    allowed = !!staff;
-  }
-  if (!allowed) throw new Error("Not allowed");
+  // Otorisasi: HANYA host meja atau staff aktif di bar. Order milik MEJA — anggota
+  // biasa (yang cuma bayar bagiannya) tak boleh membatalkan order orang sekejap.
+  // (Dulu: "member joined ATAU staff" — terlalu longgar.)
+  await assertHostOrActiveStaff(row.sessionId, profile.id);
 
   // ANTI MONEY-LOSS: sebelum membatalkan, cek ke gateway apakah ada pembayaran
   // pending yg SEBENARNYA sudah lunas (dibayar di bank tapi belum ke-refleksi
