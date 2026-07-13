@@ -284,21 +284,17 @@ export function SessionView(props: SessionViewProps) {
     () => joinedMembers.find((m) => m.role === "host") ?? joinedMembers[0],
     [joinedMembers]
   );
-  // Subtotal HARUS sama dgn getOutstandingMap (server): item void TIDAK dihitung.
-  // Kalau beda, keputusan lunas/nunggak di sini bisa berbeda dgn RatePage →
-  // redirect pingpong /session ⇄ /rate (blink terus saat tutup meja).
-  const subtotal = props.orderItems.reduce(
-    (acc, item) =>
-      item.status === "void" ? acc : acc + item.quantity * item.unit_price,
-    0
-  );
-  const totalPaid = props.payments
-    .filter((p) => p.status === "paid")
-    .reduce((acc, p) => acc + p.amount, 0);
-  // Tax & service dari config bar → total yang harus dibayar.
-  const bill = computeBillTotals(subtotal, props.chargeConfig);
-  const remaining = Math.max(0, bill.total - totalPaid);
-  const isLunas = bill.total > 0 && remaining === 0;
+  // Total meja = agregat SEMUA order (multi-order), bukan satu order saja.
+  // Dulu ini dihitung dari props.orderItems/props.payments — sisa model
+  // single-order lama: page.tsx cuma mengirim item+payment SATU order sesi,
+  // jadi footer menampilkan "PAID Rp 0 / Rp 199.000" padahal meja punya
+  // beberapa order dgn total & pembayaran lain. props.orders (SessionOrderSummary)
+  // sudah berisi total/outstanding per order (dan mengecualikan order cancelled),
+  // sumber yang sama dgn list order di tab Bill → angkanya konsisten.
+  const billTotal = props.orders.reduce((acc, o) => acc + o.total, 0);
+  const remaining = props.orders.reduce((acc, o) => acc + o.outstanding, 0);
+  const totalPaid = Math.max(0, billTotal - remaining);
+  const isLunas = billTotal > 0 && remaining === 0;
 
   // Auto-redirect member ke halaman rate HANYA saat meja BARU DITUTUP live
   // (status berubah closed sambil halaman terbuka), bukan saat membuka riwayat
@@ -440,7 +436,8 @@ export function SessionView(props: SessionViewProps) {
           footer sendiri (Total order + Save order) yg mengalir di bawah list. */}
       {tab !== "menu" && (
       <SessionFooter
-        subtotal={subtotal}
+        total={billTotal}
+        paid={totalPaid}
         remaining={remaining}
         isHost={props.isHost}
         isMember={canInteract}
@@ -1696,7 +1693,8 @@ function RequestJoinButton({
 }
 
 function SessionFooter({
-  subtotal,
+  total,
+  paid,
   remaining,
   isHost,
   isMember,
@@ -1704,7 +1702,11 @@ function SessionFooter({
   isEnded,
   sessionId,
 }: {
-  subtotal: number;
+  /** Total tagihan SELURUH order di meja (sudah termasuk pajak & service). */
+  total: number;
+  /** Sudah dibayar (seluruh order). */
+  paid: number;
+  /** Sisa yang belum dibayar (seluruh order). */
   remaining: number;
   isHost: boolean;
   isMember: boolean;
@@ -1714,7 +1716,7 @@ function SessionFooter({
 }) {
   const confirm = useConfirm();
   const [acting, setActing] = React.useState(false);
-  const isLunas = subtotal > 0 && remaining === 0;
+  const isLunas = total > 0 && remaining === 0;
   // Host & staff bisa tutup meja; member biasa bisa keluar. Saat sudah ditutup
   // (ended), tak ada aksi tutup/keluar — meja sudah selesai.
   const canClose = (isHost || isStaff) && !isEnded;
@@ -1769,10 +1771,12 @@ function SessionFooter({
             {remaining > 0 ? "Unpaid" : "Paid"}
           </div>
           <div className="text-lg font-bold text-primary">
-            {formatIDR(remaining)}{" "}
-            {subtotal > 0 && (
+            {/* Masih ada sisa → tampilkan SISA; sudah lunas → tampilkan total
+                yang dibayar. Pembagi = total tagihan meja (sudah + pajak). */}
+            {formatIDR(remaining > 0 ? remaining : paid)}{" "}
+            {total > 0 && (
               <span className="text-xs text-muted-foreground font-normal">
-                / {formatIDR(subtotal)}
+                / {formatIDR(total)}
               </span>
             )}
           </div>
