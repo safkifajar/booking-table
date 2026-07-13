@@ -298,23 +298,17 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           <div>
             <h2 className="text-sm font-semibold mb-2">Payment history</h2>
             <div className="space-y-2">
-              {detail.payments.map((p) => {
+              {detail.payments.map((p, idx) => {
                 const expired =
                   p.status === "pending" && p.expires_at != null && now > 0 && new Date(p.expires_at).getTime() <= now;
                 const canShowQr = p.status === "pending" && !expired && p.qr_string;
-                // Anggota ini SUDAH punya QRIS pengganti yang masih hidup?
-                // (mis. host baru saja menekan "New QRIS" → terbit baris baru).
-                // Kalau ya, jangan tawarkan generate lagi di baris yang mati —
-                // kalau tidak, host bisa menerbitkan QRIS ketiga, keempat, dst.
-                const memberHasLiveQris = detail.payments.some((q) => {
-                  if (q.paid_by_member_id !== p.paid_by_member_id) return false;
-                  if (q.status !== "pending") return false;
-                  const qExpired =
-                    q.expires_at != null &&
-                    now > 0 &&
-                    new Date(q.expires_at).getTime() <= now;
-                  return !qExpired;
-                });
+                // Tombol "New QRIS" HANYA di baris TERAKHIR milik anggota ini
+                // (riwayat terurut kronologis). Tanpa ini, tiap percobaan yang
+                // mati menyisakan tombolnya sendiri → menumpuk 3-4 tombol dan
+                // host bisa menerbitkan QRIS beruntun.
+                const isLatestOfMember = !detail.payments.some(
+                  (q, j) => j > idx && q.paid_by_member_id === p.paid_by_member_id
+                );
                 // Pembayaran anggota ini MATI (QR kadaluarsa / gagal) & order
                 // belum lunas → host/staff boleh terbitkan QRIS baru untuk dia.
                 // DP dikecualikan: punya lifecycle booking sendiri (server juga
@@ -323,8 +317,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                 const canRegenerate =
                   (detail.isHost || detail.isStaff) &&
                   isDead &&
+                  isLatestOfMember &&
                   !p.is_down_payment &&
-                  !memberHasLiveQris &&
                   detail.outstanding > 0;
                 return (
                   <Card key={p.id} className="p-3">
