@@ -27,9 +27,6 @@ export default async function AdminProfileAccountPage() {
           </Link>
         </Button>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-primary/70">
-            Profile
-          </div>
           <h1 className="text-2xl font-bold">Account</h1>
         </div>
       </div>

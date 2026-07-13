@@ -38,9 +38,6 @@ export default async function ReceiptPage({ params }: PageProps) {
             </Link>
           </Button>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Payment Receipt
-            </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
               {detail.table_label} · {detail.area_name}
             </h1>

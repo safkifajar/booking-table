@@ -23,9 +23,6 @@ export default async function AdminProfilePasswordPage() {
           </Link>
         </Button>
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-primary/70">
-            Security
-          </div>
           <h1 className="text-2xl font-bold">
             {hasPassword ? "Change Password" : "Set Password"}
           </h1>

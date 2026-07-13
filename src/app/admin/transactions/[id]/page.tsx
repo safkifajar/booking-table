@@ -82,9 +82,6 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
         {/* Header */}
         <div className="flex items-start justify-between gap-6 pb-6 border-b border-border print:border-black/20">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-primary/70 print:text-black/60 mb-1">
-              Invoice
-            </div>
             <h1 className="text-2xl font-bold text-gold-gradient print:text-black">
               SOHO Social House
             </h1>

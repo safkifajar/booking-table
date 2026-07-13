@@ -64,9 +64,6 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
             <FileText className="h-4 w-4 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Shift Report
-            </div>
             <h1 className="text-base sm:text-lg font-semibold truncate">
               Transactions
             </h1>

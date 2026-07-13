@@ -4,8 +4,6 @@ import { ArrowLeft } from "lucide-react";
 
 interface Props {
   title: string;
-  /** Eyebrow text di atas title (opsional, kapital tipis) */
-  eyebrow?: string;
   /** Tujuan tombol back (default /profile). */
   backHref?: string;
 }
@@ -13,11 +11,10 @@ interface Props {
 /**
  * Shared header untuk semua sub-pages di /profile/*.
  * - Tombol back → backHref (default /profile)
- * - Title + eyebrow konsisten
+ * - Title saja (tanpa eyebrow — judul sudah cukup).
  */
 export function ProfileSubpageHeader({
   title,
-  eyebrow,
   backHref = "/profile",
 }: Props) {
   return (
@@ -29,11 +26,6 @@ export function ProfileSubpageHeader({
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          {eyebrow && (
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              {eyebrow}
-            </div>
-          )}
           <h1 className="text-base sm:text-lg font-semibold truncate">{title}</h1>
         </div>
       </div>

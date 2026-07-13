@@ -22,9 +22,6 @@ export default async function StaffProfilePasswordPage() {
             </Link>
           </Button>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-primary/70">
-              Security
-            </div>
             <h1 className="text-base sm:text-lg font-semibold">
               {hasPassword ? "Change Password" : "Set Password"}
             </h1>
