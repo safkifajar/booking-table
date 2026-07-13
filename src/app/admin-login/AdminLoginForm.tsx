@@ -32,11 +32,11 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.includes("@")) {
-      setError("Email tidak valid");
+      setError("Invalid email");
       return;
     }
     if (password.length < 6) {
-      setError("Password minimal 6 karakter");
+      setError("Password must be at least 6 characters");
       return;
     }
 
@@ -55,7 +55,7 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
       // Kalau sukses → redirect (NEXT_REDIRECT thrown internally)
     } catch (err) {
       // NEXT_REDIRECT → biarkan Next.js handle
-      const message = err instanceof Error ? err.message : "Gagal login";
+      const message = err instanceof Error ? err.message : "Failed to sign in";
       if (!message.includes("NEXT_REDIRECT")) {
         setError(message);
         toast.error(message);
@@ -121,7 +121,7 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label={showPassword ? "Sembunyikan" : "Tampilkan"}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -178,7 +178,7 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
 }
 
 function translateError(code: string): string {
-  if (code === "credentials") return "Email atau password salah";
-  if (code === "no_access") return "Kamu tidak punya akses admin";
-  return "Login gagal — coba lagi";
+  if (code === "credentials") return "Incorrect email or password";
+  if (code === "no_access") return "You don't have admin access";
+  return "Sign-in failed — please try again";
 }

@@ -32,11 +32,11 @@ export function SetupPasswordForm({ token, email }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.length < 6) {
-      setError("Password minimal 6 karakter");
+      setError("Password must be at least 6 characters");
       return;
     }
     if (password !== confirmPassword) {
-      setError("Konfirmasi password tidak cocok");
+      setError("Passwords do not match");
       return;
     }
 
@@ -50,20 +50,20 @@ export function SetupPasswordForm({ token, email }: Props) {
         confirmPassword,
       });
       if (!result.ok) {
-        setError(result.error ?? "Gagal set password");
+        setError(result.error ?? "Failed to set password");
         setLoading(false);
         return;
       }
 
       setSuccess(true);
-      toast.success("Password berhasil di-set! Mengarahkan ke login...");
+      toast.success("Password set! Redirecting to sign in…");
 
       // Auto redirect ke login dengan email pre-filled
       setTimeout(() => {
         router.push(`/login?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Gagal set password";
+      const message = err instanceof Error ? err.message : "Failed to set password";
       setError(message);
       setLoading(false);
     }
@@ -76,9 +76,9 @@ export function SetupPasswordForm({ token, email }: Props) {
           <div className="mx-auto h-14 w-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
             <CheckCircle2 className="h-7 w-7 text-emerald-400" />
           </div>
-          <CardTitle className="text-2xl">Password ter-set!</CardTitle>
+          <CardTitle className="text-2xl">Password set!</CardTitle>
           <CardDescription>
-            Mengarahkan kamu ke halaman login dalam beberapa detik...
+            Redirecting you to the sign-in page in a few seconds…
           </CardDescription>
         </CardHeader>
       </Card>
@@ -94,7 +94,7 @@ export function SetupPasswordForm({ token, email }: Props) {
         <div>
           <CardTitle className="text-2xl">Set Password</CardTitle>
           <CardDescription className="mt-1">
-            Selamat bergabung! Set password untuk akun{" "}
+            Welcome aboard! Set a password for the account{" "}
             <strong className="text-foreground">{email}</strong>
           </CardDescription>
         </div>
@@ -109,7 +109,7 @@ export function SetupPasswordForm({ token, email }: Props) {
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Password baru
+              New password
             </label>
             <div className="relative">
               <input
@@ -120,7 +120,7 @@ export function SetupPasswordForm({ token, email }: Props) {
                 minLength={6}
                 autoFocus
                 autoComplete="new-password"
-                placeholder="Min 6 karakter"
+                placeholder="At least 6 characters"
                 className={cn(
                   "w-full h-11 px-3 pr-10 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
                 )}
@@ -141,7 +141,7 @@ export function SetupPasswordForm({ token, email }: Props) {
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Konfirmasi password
+              Confirm password
             </label>
             <input
               type={showPassword ? "text" : "password"}
@@ -150,7 +150,7 @@ export function SetupPasswordForm({ token, email }: Props) {
               required
               minLength={6}
               autoComplete="new-password"
-              placeholder="Ulangi password"
+              placeholder="Repeat password"
               className={cn(
                 "w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition",
                 confirmPassword.length > 0 &&
@@ -160,7 +160,7 @@ export function SetupPasswordForm({ token, email }: Props) {
             />
             {confirmPassword.length > 0 && confirmPassword !== password && (
               <p className="text-[10px] text-red-400 mt-1">
-                Tidak cocok dengan password baru
+                Doesn't match the new password
               </p>
             )}
           </div>
@@ -175,20 +175,20 @@ export function SetupPasswordForm({ token, email }: Props) {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Menyimpan...
+                Saving…
               </>
             ) : (
               <>
                 <KeyRound className="h-4 w-4" />
-                Set Password & Lanjut
+                Set password & continue
               </>
             )}
           </Button>
         </form>
 
         <p className="text-[10px] text-muted-foreground/60 text-center mt-4">
-          Link ini valid selama 7 hari. Kalau sudah expired, minta admin kirim
-          ulang invite.
+          This link is valid for 7 days. If it has expired, ask an admin to
+          resend the invite.
         </p>
       </CardContent>
     </Card>

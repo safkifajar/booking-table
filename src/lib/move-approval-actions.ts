@@ -143,8 +143,8 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
       createNotification({
         profileId: s.profileId,
         type: "move_request",
-        title: "Request pindah meja",
-        body: `${profile.displayName} minta pindah dari meja ${session.fromLabel} ke ${target.label}.`,
+        title: "Table move request",
+        body: `${profile.displayName} wants to move from table ${session.fromLabel} to ${target.label}.`,
         link: "/staff/waiter",
       })
     )
@@ -375,8 +375,8 @@ export async function requestMoveTableWithOrder(
       createNotification({
         profileId: s.profileId,
         type: "move_request",
-        title: "Request pindah meja",
-        body: `${profile.displayName} minta pindah dari meja ${session.fromLabel} ke ${target.label}.`,
+        title: "Table move request",
+        body: `${profile.displayName} wants to move from table ${session.fromLabel} to ${target.label}.`,
         link: "/staff/waiter",
       })
     )
@@ -565,8 +565,8 @@ export async function resolveMoveRequest(input: {
       await createNotification({
         profileId: session.hostId,
         type: "move_rejected",
-        title: "Request pindah ditolak",
-        body: `Maaf, request pindah ke meja ${toLabel} ditolak.`,
+        title: "Move request declined",
+        body: `Sorry, your request to move to table ${toLabel} was declined.`,
         link: `/session/${session.id}`,
       });
       await Promise.allSettled([
@@ -606,8 +606,8 @@ export async function resolveMoveRequest(input: {
         await createNotification({
           profileId: session.hostId,
           type: "move_rejected",
-          title: "Pindah meja gagal",
-          body: `Meja ${toLabel} keburu terisi. Request dibatalkan.`,
+          title: "Table move failed",
+          body: `Table ${toLabel} was taken. The request was cancelled.`,
           link: `/session/${session.id}`,
         });
       }
@@ -631,8 +631,8 @@ export async function resolveMoveRequest(input: {
     await createNotification({
       profileId: session.hostId,
       type: "move_approved",
-      title: "Pindah meja disetujui",
-      body: `Kamu sudah dipindah ke meja ${toLabel}.`,
+      title: "Table move approved",
+      body: `You have been moved to table ${toLabel}.`,
       link: `/session/${session.id}`,
     });
     await Promise.allSettled([
@@ -736,8 +736,8 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
   await createNotification({
     profileId: session.hostId,
     type: "move_approved",
-    title: "Meja kamu dipindah",
-    body: `Staff memindahkan kamu dari meja ${session.fromLabel} ke ${target.label}.`,
+    title: "Your table was moved",
+    body: `Staff moved you from table ${session.fromLabel} to ${target.label}.`,
     link: `/session/${session.id}`,
   });
   await Promise.allSettled([

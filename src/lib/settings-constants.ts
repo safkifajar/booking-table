@@ -18,13 +18,13 @@ export const DAY_KEYS: DayKey[] = [
 ];
 
 export const DAY_LABELS: Record<DayKey, string> = {
-  mon: "Senin",
-  tue: "Selasa",
-  wed: "Rabu",
-  thu: "Kamis",
-  fri: "Jumat",
-  sat: "Sabtu",
-  sun: "Minggu",
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
 };
 
 export interface DayHours {

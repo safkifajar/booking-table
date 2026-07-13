@@ -23,7 +23,7 @@ export function PaymentMethodChart({ data }: { data: PaymentMethodSummary[] }) {
   if (data.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground py-8">
-        Belum ada pembayaran masuk.
+        No payments received yet.
       </div>
     );
   }

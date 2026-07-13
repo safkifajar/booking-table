@@ -1409,7 +1409,7 @@ function OrderStatusBadge({ status, outstanding }: { status: string; outstanding
 
 /** Tanggal+jam ringkas order/transaksi (mis. "12 Jul, 08.30" WIB). */
 function fmtTxTime(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     hour: "2-digit",

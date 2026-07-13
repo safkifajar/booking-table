@@ -72,13 +72,13 @@ export default async function AdminProfilePage() {
           href="/admin/profile/account"
           icon={<User className="h-4 w-4" />}
           label="Account"
-          description="Nama, nomor WA, tanggal lahir, bio, hobi"
+          description="Name, WhatsApp number, birth date, bio, hobbies"
         />
         <MenuItem
           href="/admin/profile/password"
           icon={<KeyRound className="h-4 w-4" />}
           label="Change Password"
-          description="Ubah password admin panel"
+          description="Change your admin panel password"
         />
       </Card>
     </div>

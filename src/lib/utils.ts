@@ -24,12 +24,12 @@ export function formatRelativeTime(date: string | Date): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const diff = Date.now() - d.getTime();
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "baru saja";
-  if (minutes < 60) return `${minutes} mnt yang lalu`;
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} jam yang lalu`;
+  if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days} hari yang lalu`;
+  return `${days}d ago`;
 }
 
 export function generateInviteCode(length = 6): string {
@@ -114,7 +114,7 @@ export function normalizeUsername(
  * internal redirect signal so it can complete navigation, otherwise returns
  * the user-facing message for `toast.error()`.
  */
-export function getActionErrorMessage(err: unknown, fallback = "Terjadi kesalahan"): string {
+export function getActionErrorMessage(err: unknown, fallback = "Something went wrong"): string {
   if (isRedirectError(err)) {
     // Re-throw so Next.js can process the redirect.
     throw err;

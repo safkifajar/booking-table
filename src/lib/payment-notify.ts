@@ -42,7 +42,7 @@ export async function notifyPaymentEvent(
       .where(eq(payments.id, paymentId));
     if (!row) return;
 
-    const label = row.tableLabel ?? "meja";
+    const label = row.tableLabel ?? "table";
     const link = `/session/${row.sessionId}`;
     const amount = formatIDR(row.amount);
 
@@ -51,16 +51,16 @@ export async function notifyPaymentEvent(
     let type: "payment_received" | "payment_cancelled";
     if (event === "dp_confirmed") {
       type = "payment_received";
-      title = "Booking dikonfirmasi";
-      body = `DP ${amount} untuk meja ${label} berhasil. Booking kamu terkonfirmasi.`;
+      title = "Booking confirmed";
+      body = `Down payment of ${amount} for table ${label} received. Your booking is confirmed.`;
     } else if (event === "paid") {
       type = "payment_received";
-      title = "Pembayaran berhasil";
-      body = `Pembayaran ${amount} untuk meja ${label} berhasil diterima.`;
+      title = "Payment received";
+      body = `Payment of ${amount} for table ${label} was received successfully.`;
     } else {
       type = "payment_cancelled";
-      title = "Pembayaran gagal";
-      body = `Pembayaran ${amount} untuk meja ${label} kadaluarsa / dibatalkan.`;
+      title = "Payment failed";
+      body = `Payment of ${amount} for table ${label} expired or was cancelled.`;
     }
 
     // Penerima: host + pembayar (dedup) + staff aktif bar.

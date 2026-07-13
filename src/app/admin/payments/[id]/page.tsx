@@ -21,7 +21,7 @@ function statusBadgeVariant(
 }
 
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -40,7 +40,7 @@ export default async function PaymentDetailPage({ params }: PageProps) {
       <div className="mb-6">
         <Button asChild variant="ghost" size="sm">
           <Link href="/admin/payments">
-            <ArrowLeft className="h-4 w-4" /> Kembali
+            <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
       </div>
@@ -50,7 +50,7 @@ export default async function PaymentDetailPage({ params }: PageProps) {
         <div className="flex items-start justify-between gap-4 pb-5 border-b border-border">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-primary/70 mb-1 flex items-center gap-1.5">
-              <CreditCard className="h-3.5 w-3.5" /> Detail Pembayaran
+              <CreditCard className="h-3.5 w-3.5" /> Payment Detail
             </div>
             <div className="font-mono text-sm text-muted-foreground">
               #{p.id.slice(0, 8).toUpperCase()}
@@ -76,15 +76,15 @@ export default async function PaymentDetailPage({ params }: PageProps) {
           />
           <Field label="Dibuat" value={fmtDateTime(p.created_at)} />
           <Field
-            label="Dibayar"
-            value={p.paid_at ? fmtDateTime(p.paid_at) : "Belum dibayar"}
+            label="Paid at"
+            value={p.paid_at ? fmtDateTime(p.paid_at) : "Not paid yet"}
           />
         </div>
 
         {/* Transaksi meja terkait — bisa diklik ke detail transaksi */}
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Transaksi Meja
+            Table transaction
           </div>
           <Link
             href={`/admin/transactions/${p.session_id}`}

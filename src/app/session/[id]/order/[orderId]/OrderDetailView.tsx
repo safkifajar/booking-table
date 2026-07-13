@@ -21,7 +21,7 @@ import type { PaymentMethod } from "@/types/db";
 import { toast } from "sonner";
 
 function fmtTime(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -55,11 +55,11 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       return;
     }
     const ok = await confirm({
-      title: "Batalkan pesanan?",
+      title: "Cancel this order?",
       description:
-        "Kalau kamu kembali sekarang, pesanan baru ini beserta pembayarannya akan dibatalkan.",
-      confirmText: "Ya, batalkan",
-      cancelText: "Lanjut bayar",
+        "If you go back now, this new order and its payment will be cancelled.",
+      confirmText: "Yes, cancel",
+      cancelText: "Keep paying",
       variant: "danger",
     });
     if (!ok) return;
@@ -68,7 +68,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       await cancelUnpaidOrder(detail.id);
       router.push(backHref);
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal membatalkan pesanan"));
+      toast.error(getActionErrorMessage(err, "Failed to cancel the order"));
       setBackBusy(false);
     }
   }

@@ -659,11 +659,11 @@ function MoveOrderModal({
         {/* Footer */}
         <div className="p-4 border-t border-border shrink-0 space-y-2">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Order sekarang</span>
+            <span>Current order</span>
             <span>{formatIDR(existingOrderTotal)}</span>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Tambahan</span>
+            <span>Additional</span>
             <span>{formatIDR(addedTotal)}</span>
           </div>
           <div className="flex justify-between text-sm font-semibold">
@@ -710,7 +710,7 @@ function MoveOrderModal({
                 <Loader2 className="h-4 w-4 animate-spin" /> Memproses…
               </>
             ) : (
-              `Bayar ${formatIDR(addedTotal)} & Pindah`
+              `Pay ${formatIDR(addedTotal)} & move`
             )}
           </Button>
         </div>

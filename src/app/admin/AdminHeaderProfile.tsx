@@ -36,10 +36,10 @@ export function AdminHeaderProfile({
 
   async function handleLogout() {
     const ok = await confirm({
-      title: "Logout admin panel?",
-      description: "Kamu akan dikeluarkan dari admin panel.",
-      confirmText: "Logout",
-      cancelText: "Batal",
+      title: "Log out of admin panel?",
+      description: "You will be signed out of the admin panel.",
+      confirmText: "Log out",
+      cancelText: "Cancel",
       variant: "danger",
     });
     if (!ok) return;
@@ -55,7 +55,7 @@ export function AdminHeaderProfile({
       }
       await adminSignOutAction();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Gagal logout"));
+      toast.error(getActionErrorMessage(err, "Failed to log out"));
       setLoading(false);
     }
   }

@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "SOHO Social House",
     short_name: "SOHO",
-    description: "Booking meja & nongkrong di SOHO Social House.",
+    description: "Book a table & hang out at SOHO Social House.",
     start_url: "/",
     display: "standalone",
     background_color: "#0a0a0a",

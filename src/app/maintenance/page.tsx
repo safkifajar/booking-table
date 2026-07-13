@@ -8,8 +8,8 @@
 export const dynamic = "force-static";
 
 export const metadata = {
-  title: "SOHO Social House — Segera Hadir",
-  description: "Kami sedang menyiapkan pengalaman terbaik untukmu.",
+  title: "SOHO Social House — Coming Soon",
+  description: "We are preparing the best experience for you.",
 };
 
 export default function MaintenancePage() {
@@ -22,11 +22,11 @@ export default function MaintenancePage() {
       </div>
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">
-          Segera Hadir ✨
+          Coming Soon ✨
         </h1>
         <p className="mx-auto max-w-md text-sm text-muted-foreground sm:text-base">
-          SOHO Social House sedang menyiapkan pengalaman nongkrong &amp; reservasi
-          meja terbaik untukmu. Nantikan pembukaannya!
+          SOHO Social House is preparing the best hangout &amp; table reservation
+          experience for you. Stay tuned for the opening!
         </p>
       </div>
       <p className="text-xs text-muted-foreground/70">

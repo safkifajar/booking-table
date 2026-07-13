@@ -17,29 +17,29 @@ export interface AvailableSlot {
   groupKey: string;
 }
 
-export const HARI_ID = [
-  "Minggu",
-  "Senin",
-  "Selasa",
-  "Rabu",
-  "Kamis",
-  "Jumat",
-  "Sabtu",
+export const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
 ];
 
-export const BULAN_ID = [
+export const MONTH_NAMES = [
   "Jan",
   "Feb",
   "Mar",
   "Apr",
-  "Mei",
+  "May",
   "Jun",
   "Jul",
-  "Agu",
+  "Aug",
   "Sep",
-  "Okt",
+  "Oct",
   "Nov",
-  "Des",
+  "Dec",
 ];
 
 export function isSameDay(a: Date, b: Date): boolean {
@@ -58,13 +58,13 @@ export function formatSlotLabel(date: Date, now: Date): string {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  if (isSameDay(date, now)) return `Hari ini · ${time}`;
-  if (isSameDay(date, tomorrow)) return `Besok · ${time}`;
+  if (isSameDay(date, now)) return `Today · ${time}`;
+  if (isSameDay(date, tomorrow)) return `Tomorrow · ${time}`;
 
-  const hari = HARI_ID[date.getDay()];
-  const tgl = date.getDate();
-  const bulan = BULAN_ID[date.getMonth()];
-  return `${hari} ${tgl} ${bulan} · ${time}`;
+  const day = DAY_NAMES[date.getDay()];
+  const dd = date.getDate();
+  const month = MONTH_NAMES[date.getMonth()];
+  return `${day} ${dd} ${month} · ${time}`;
 }
 
 export function formatGroupKey(date: Date, now: Date): string {
@@ -76,10 +76,10 @@ export function formatGroupKey(date: Date, now: Date): string {
 }
 
 export function formatGroupLabel(groupKey: string): string {
-  if (groupKey === "today") return "Hari Ini";
-  if (groupKey === "tomorrow") return "Besok";
+  if (groupKey === "today") return "Today";
+  if (groupKey === "tomorrow") return "Tomorrow";
   const [y, m, d] = groupKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  const hari = HARI_ID[date.getDay()];
-  return `${hari}, ${d} ${BULAN_ID[m - 1]}`;
+  const day = DAY_NAMES[date.getDay()];
+  return `${day}, ${d} ${MONTH_NAMES[m - 1]}`;
 }

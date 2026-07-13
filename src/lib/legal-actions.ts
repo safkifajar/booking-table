@@ -17,8 +17,8 @@ export interface LegalDoc {
 }
 
 const DEFAULTS: Record<LegalKey, string> = {
-  privacy: "Kebijakan Privasi",
-  terms: "Syarat & Ketentuan",
+  privacy: "Privacy Policy",
+  terms: "Terms & Conditions",
 };
 
 /**

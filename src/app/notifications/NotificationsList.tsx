@@ -24,7 +24,7 @@ import {
 
 /** Format tanggal+jam langsung, mis. "7 Jul 2026, 14.30" (WIB). */
 function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

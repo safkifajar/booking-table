@@ -137,10 +137,10 @@ export function isWithinOperatingHours(
   const dayHours = hours[dayKey];
 
   if (!dayHours || !dayHours.open || !dayHours.close) {
-    return { ok: false, reason: "Operating hours tidak terdefinisi" };
+    return { ok: false, reason: "Operating hours are not configured" };
   }
   if (dayHours.closed) {
-    return { ok: false, reason: "Bar tutup di hari ini" };
+    return { ok: false, reason: "We are closed on this day" };
   }
 
   const minuteOfDay = date.getHours() * 60 + date.getMinutes();
@@ -157,15 +157,15 @@ export function isWithinOperatingHours(
     }
     return {
       ok: false,
-      reason: `Bar buka mulai ${dayHours.open}`,
+      reason: `We open at ${dayHours.open}`,
     };
   }
 
   if (minuteOfDay < openMin) {
-    return { ok: false, reason: `Bar buka mulai ${dayHours.open}` };
+    return { ok: false, reason: `We open at ${dayHours.open}` };
   }
   if (minuteOfDay >= closeMin) {
-    return { ok: false, reason: `Bar tutup jam ${dayHours.close}` };
+    return { ok: false, reason: `We close at ${dayHours.close}` };
   }
   return { ok: true };
 }
@@ -196,7 +196,7 @@ export function validateReservationTime(
   hours: OperatingHours
 ): ValidateReservationResult {
   if (Number.isNaN(reservationAt.getTime())) {
-    return { ok: false, reason: "Waktu reservasi tidak valid" };
+    return { ok: false, reason: "Invalid reservation time" };
   }
 
   // 1. Tidak past. Kalau lead time 0, slot yang SEDANG berjalan masih boleh
@@ -206,7 +206,7 @@ export function validateReservationTime(
       ? roundDownToSlot(now, config.slotIntervalMinutes).getTime()
       : now.getTime();
   if (reservationAt.getTime() < earliestAllowed) {
-    return { ok: false, reason: "Waktu reservasi sudah lewat" };
+    return { ok: false, reason: "That reservation time has already passed" };
   }
 
   // 2. Min lead time (hanya kalau > 0)
@@ -215,10 +215,10 @@ export function validateReservationTime(
     if (reservationAt.getTime() < now.getTime() + minLeadMs) {
       const mins = config.minLeadTimeMinutes;
       const hint =
-        mins >= 60 ? `${Math.round(mins / 60)} jam` : `${mins} menit`;
+        mins >= 60 ? `${Math.round(mins / 60)} hour(s)` : `${mins} minutes`;
       return {
         ok: false,
-        reason: `Reservasi minimal ${hint} sebelum waktu booking`,
+        reason: `Reservations must be made at least ${hint} in advance`,
       };
     }
   }
@@ -228,7 +228,7 @@ export function validateReservationTime(
   if (reservationAt.getTime() > now.getTime() + maxMs) {
     return {
       ok: false,
-      reason: `Reservasi maksimal ${config.bookingWindowDays} hari ke depan`,
+      reason: `Reservations can only be made up to ${config.bookingWindowDays} days ahead`,
     };
   }
 
@@ -236,7 +236,7 @@ export function validateReservationTime(
   if (!isAlignedWithSlot(reservationAt, config.slotIntervalMinutes)) {
     return {
       ok: false,
-      reason: `Pilih slot waktu yang valid (per ${config.slotIntervalMinutes} menit)`,
+      reason: `Pick a valid time slot (every ${config.slotIntervalMinutes} minutes)`,
     };
   }
 
@@ -372,17 +372,17 @@ export function validateReservationRange(
 
   // 2. Selesai valid + setelah mulai
   if (Number.isNaN(endAt.getTime())) {
-    return { ok: false, reason: "Waktu selesai tidak valid" };
+    return { ok: false, reason: "Invalid end time" };
   }
   if (endAt.getTime() <= startAt.getTime()) {
-    return { ok: false, reason: "Waktu selesai harus setelah waktu mulai" };
+    return { ok: false, reason: "End time must be after the start time" };
   }
 
   // 3. Selesai align dengan slot
   if (!isAlignedWithSlot(endAt, config.slotIntervalMinutes)) {
     return {
       ok: false,
-      reason: `Waktu selesai harus per ${config.slotIntervalMinutes} menit`,
+      reason: `End time must align to ${config.slotIntervalMinutes}-minute slots`,
     };
   }
 
@@ -392,7 +392,7 @@ export function validateReservationRange(
   const justBeforeEnd = new Date(endAt.getTime() - 60 * 1000);
   const opEnd = isWithinOperatingHours(justBeforeEnd, hours);
   if (!opEnd.ok) {
-    return { ok: false, reason: "Waktu selesai di luar jam operasi" };
+    return { ok: false, reason: "End time is outside operating hours" };
   }
 
   // 5. Cek bentrok dengan reservasi existing
@@ -402,7 +402,7 @@ export function validateReservationRange(
     if (rangesOverlap(startMs, endMs, r.startMs, r.endMs)) {
       return {
         ok: false,
-        reason: "Slot waktu ini bentrok dengan reservasi lain",
+        reason: "This time slot conflicts with another reservation",
       };
     }
   }

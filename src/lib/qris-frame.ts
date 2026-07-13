@@ -87,7 +87,7 @@ export async function buildQrisFramePng(opts: {
   // Label + transaction id.
   ctx.fillStyle = "#6b7280";
   ctx.font = "500 12px system-ui, -apple-system, Segoe UI, sans-serif";
-  ctx.fillText("Total yang harus dibayar", W / 2, qrY + qrSize + 84);
+  ctx.fillText("Total amount due", W / 2, qrY + qrSize + 84);
 
   if (transactionId) {
     ctx.fillStyle = "#9ca3af";

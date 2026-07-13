@@ -52,7 +52,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             icon={<Calendar className="h-4 w-4" />}
-            label="Kunjungan"
+            label="Visits"
             value={profile.visit_count.toLocaleString("id-ID")}
           />
           <StatCard
@@ -65,8 +65,8 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             }
             sub={
               profile.rating.rating_count > 0
-                ? `${profile.rating.rating_count} ulasan`
-                : "belum ada"
+                ? `${profile.rating.rating_count} reviews`
+                : "none yet"
             }
           />
           <StatCard
@@ -76,7 +76,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
           />
           <StatCard
             icon={<History className="h-4 w-4" />}
-            label="Riwayat"
+            label="History"
             value={history.length.toLocaleString("id-ID")}
           />
         </div>
@@ -103,7 +103,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
                       : "text-[10px] bg-red-500/15 text-red-400 border-red-500/30"
                   }
                 >
-                  {profile.is_active ? "Aktif" : "Nonaktif"}
+                  {profile.is_active ? "Active" : "Inactive"}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground truncate">

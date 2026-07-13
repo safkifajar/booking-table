@@ -147,8 +147,8 @@ export async function markInviteCancelled(
   link: string,
   tableLabel: string
 ): Promise<void> {
-  const title = `Undangan ke meja ${tableLabel} dibatalkan`;
-  const body = "Host membatalkan undangan ini.";
+  const title = `Invite to table ${tableLabel} was cancelled`;
+  const body = "The host cancelled this invite.";
   const res = await db
     .update(notifications)
     .set({

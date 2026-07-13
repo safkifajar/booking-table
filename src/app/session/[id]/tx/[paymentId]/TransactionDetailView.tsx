@@ -17,7 +17,7 @@ import { checkPaymentStatus } from "@/lib/actions";
 import type { SessionPaymentDetail } from "@/lib/actions";
 
 function fmtDateTime(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

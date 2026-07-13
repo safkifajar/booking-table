@@ -33,7 +33,7 @@ export function magicLinkEmail(input: MagicLinkInput): { html: string; text: str
   const { url, email, expiresIn = "10 menit" } = input;
 
   const html = `<!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -105,10 +105,10 @@ export function magicLinkEmail(input: MagicLinkInput): { html: string; text: str
           <tr>
             <td style="padding:20px 32px 28px 32px;">
               <p style="margin:0 0 8px 0;font-size:12px;color:${COLORS.muted};">
-                Email ini dikirim ke <strong style="color:${COLORS.text};">${email}</strong>.
+                This email was sent to <strong style="color:${COLORS.text};">${email}</strong>.
               </p>
               <p style="margin:0;font-size:12px;color:${COLORS.muted};">
-                Kalau bukan kamu yang request, abaikan saja — akunmu aman.
+                If you didn't request this, you can safely ignore it — your account is secure.
               </p>
             </td>
           </tr>
@@ -131,7 +131,7 @@ Klik link di bawah untuk sign in (valid ${expiresIn}):
 
 ${url}
 
-Email ini dikirim ke ${email}. Kalau bukan kamu yang request, abaikan saja.
+This email was sent to ${email}. If you didn't request this, you can ignore it.
 
 © ${new Date().getFullYear()} booking-table`;
 
@@ -172,11 +172,11 @@ export function staffInviteEmail(
   } = input;
 
   const html = `<!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kamu di-invite jadi ${roleLabel} di ${barName}</title>
+  <title>You have been invited as ${roleLabel} at ${barName}</title>
 </head>
 <body style="margin:0;padding:0;background:${COLORS.bg};color:${COLORS.text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${COLORS.bg};padding:32px 16px;">
@@ -201,7 +201,7 @@ export function staffInviteEmail(
                 Halo ${displayName},
               </h1>
               <p style="margin:8px 0 0 0;font-size:18px;line-height:1.4;color:${COLORS.primary};">
-                Kamu di-invite jadi <strong>${roleLabel}</strong>
+                You have been invited as <strong>${roleLabel}</strong>
               </p>
             </td>
           </tr>
@@ -250,10 +250,10 @@ export function staffInviteEmail(
           <tr>
             <td style="padding:20px 32px 28px 32px;">
               <p style="margin:0 0 8px 0;font-size:12px;color:${COLORS.muted};">
-                Invitation ini dikirim ke <strong style="color:${COLORS.text};">${email}</strong>.
+                This invitation was sent to <strong style="color:${COLORS.text};">${email}</strong>.
               </p>
               <p style="margin:0;font-size:12px;color:${COLORS.muted};">
-                Kalau kamu merasa tidak diundang, abaikan email ini.
+                If you weren't expecting this invite, you can ignore this email.
               </p>
             </td>
           </tr>
@@ -272,13 +272,13 @@ export function staffInviteEmail(
 
   const text = `Halo ${displayName},
 
-Kamu di-invite jadi ${roleLabel} di ${barName}.
+You have been invited as ${roleLabel} at ${barName}.
 
 Klik link di bawah untuk set password & login (valid ${expiresIn}):
 
 ${setupUrl}
 
-Email ini dikirim ke ${email}. Kalau bukan kamu, abaikan saja.
+This email was sent to ${email}. If this wasn't you, you can ignore it.
 
 © ${new Date().getFullYear()} ${barName}`;
 
@@ -313,15 +313,15 @@ export function tableInviteEmail(
   const { email, inviterName, tableLabel, barName, link, mode } = input;
   const joined = mode === "joined";
   const heading = joined
-    ? `Kamu diajak gabung meja ${tableLabel}`
-    : `Kamu diundang ke meja ${tableLabel}`;
+    ? `You have been added to table ${tableLabel}`
+    : `You are invited to table ${tableLabel}`;
   const bodyLine = joined
-    ? `<strong style="color:${COLORS.text};">${inviterName}</strong> mengajak kamu gabung ke meja <strong style="color:${COLORS.text};">${tableLabel}</strong> di ${barName}. Kamu sudah otomatis bergabung — buka untuk lihat mejanya.`
-    : `<strong style="color:${COLORS.text};">${inviterName}</strong> mengundang kamu ke meja <strong style="color:${COLORS.text};">${tableLabel}</strong> di ${barName}. Buka untuk <strong style="color:${COLORS.text};">terima undangan</strong>.`;
-  const cta = joined ? "Lihat Meja →" : "Terima Undangan →";
+    ? `<strong style="color:${COLORS.text};">${inviterName}</strong> added you to table <strong style="color:${COLORS.text};">${tableLabel}</strong> at ${barName}. You have already been added — open to see the table.`
+    : `<strong style="color:${COLORS.text};">${inviterName}</strong> invited you to table <strong style="color:${COLORS.text};">${tableLabel}</strong> at ${barName}. Open to <strong style="color:${COLORS.text};">accept the invite</strong>.`;
+  const cta = joined ? "View table →" : "Accept invite →";
 
   const html = `<!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -379,7 +379,7 @@ export function tableInviteEmail(
           <tr>
             <td style="padding:20px 32px 28px 32px;">
               <p style="margin:0;font-size:12px;color:${COLORS.muted};">
-                Email ini dikirim ke <strong style="color:${COLORS.text};">${email}</strong>. Kalau kamu tidak mengenal pengirim, abaikan saja.
+                This email was sent to <strong style="color:${COLORS.text};">${email}</strong>. If you don't recognise the sender, you can ignore it.
               </p>
             </td>
           </tr>
@@ -395,12 +395,12 @@ export function tableInviteEmail(
 
   const text = `${heading}
 
-${inviterName} ${joined ? "mengajak" : "mengundang"} kamu ke meja ${tableLabel} di ${barName}.
-${joined ? "Kamu sudah otomatis bergabung." : "Buka untuk terima undangan."}
+${inviterName} ${joined ? "added you to" : "invited you to"} table ${tableLabel} at ${barName}.
+${joined ? "You have already been added." : "Open to accept the invite."}
 
 ${link}
 
-Email ini dikirim ke ${email}.
+This email was sent to ${email}.
 
 © ${new Date().getFullYear()} ${barName}`;
 

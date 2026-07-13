@@ -12,7 +12,7 @@ export function TopItemsList({
   if (items.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground py-8">
-        Belum ada item di menu.
+        No menu items yet.
       </div>
     );
   }

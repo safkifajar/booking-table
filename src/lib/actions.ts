@@ -293,7 +293,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       // pesan aslinya sampai ke client & bisa ditampilkan di toast.
       return {
         ok: false as const,
-        error: validation.reason ?? "Waktu reservasi tidak valid",
+        error: validation.reason ?? "Invalid reservation time",
       };
     }
   }
@@ -551,7 +551,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         amount: dpAmount,
         method: data.dpMethod!,
         payerName: profile.displayName,
-        description: `DP reservasi meja ${tableRow.id.slice(0, 8)}`,
+        description: `Table reservation deposit ${tableRow.id.slice(0, 8)}`,
       });
       await db
         .update(payments)
@@ -598,7 +598,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // 10. Notif in-app + email ke user yg diajak/diundang (best-effort).
   if (inviteMode && invitees.length > 0) {
     const link = `/session/${sessionId}`;
-    const tableLabel = tableRow.label ?? "meja";
+    const tableLabel = tableRow.label ?? "table";
     await Promise.allSettled(
       invitees.map(async (u) => {
         await createNotification({
@@ -606,12 +606,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           type: inviteMode === "joined" ? "table_joined" : "table_invite",
           title:
             inviteMode === "joined"
-              ? `${profile.displayName} mengajak kamu gabung`
-              : `${profile.displayName} mengundang kamu ke meja ${tableLabel}`,
+              ? `${profile.displayName} added you to a table`
+              : `${profile.displayName} invited you to table ${tableLabel}`,
           body:
             inviteMode === "joined"
-              ? `Kamu sudah otomatis bergabung ke meja ${tableLabel}.`
-              : `Buka untuk terima undangan ke meja ${tableLabel}.`,
+              ? `You have been added to table ${tableLabel}.`
+              : `Open to accept the invite to table ${tableLabel}.`,
           link,
         });
         const tpl = tableInviteEmail({
@@ -626,8 +626,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           to: u.email,
           subject:
             inviteMode === "joined"
-              ? `Kamu diajak gabung meja ${tableLabel}`
-              : `Undangan ke meja ${tableLabel}`,
+              ? `You have been added to table ${tableLabel}`
+              : `Invite to table ${tableLabel}`,
           html: tpl.html,
           text: tpl.text,
         });
@@ -846,8 +846,8 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
   await createNotification({
     profileId: row.host_id,
     type: "general",
-    title: `${profile.displayName} ingin gabung ke meja ${row.table_label}`,
-    body: "Buka meja untuk approve atau tolak permintaan.",
+    title: `${profile.displayName} wants to join table ${row.table_label}`,
+    body: "Open the table to approve or decline the request.",
     link: `/session/${sessionId}`,
   });
 
@@ -915,8 +915,8 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
     await createNotification({
       profileId: member.profileId,
       type: "table_joined",
-      title: `Kamu diterima gabung ke meja ${row.table_label}`,
-      body: "Host menyetujui permintaanmu. Selamat bergabung!",
+      title: `You have been accepted to table ${row.table_label}`,
+      body: "The host approved your request. Welcome aboard!",
       link: `/session/${sessionId}`,
     });
   }
@@ -968,8 +968,8 @@ export async function rejectJoinRequest(memberId: string, sessionId: string) {
     await createNotification({
       profileId: member.profileId,
       type: "general",
-      title: `Permintaan gabung ke meja ${session.table_label} ditolak`,
-      body: "Host belum bisa menerima permintaanmu kali ini.",
+      title: `Your request to join table ${session.table_label} was declined`,
+      body: "The host couldn't accept your request this time.",
       link: null,
     });
   }
@@ -1029,8 +1029,8 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
   await createNotification({
     profileId: member.invitedBy ?? row.host_id,
     type: "invite_accepted",
-    title: `${profile.displayName} menerima undanganmu`,
-    body: `${profile.displayName} bergabung ke meja.`,
+    title: `${profile.displayName} accepted your invite`,
+    body: `${profile.displayName} joined the table.`,
     link: `/session/${sessionId}`,
   });
 
@@ -1080,8 +1080,8 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
     await createNotification({
       profileId: info.invitedBy ?? info.hostId,
       type: "invite_rejected",
-      title: `${profile.displayName} menolak undanganmu`,
-      body: `${profile.displayName} tidak bergabung ke meja ${info.tableLabel}.`,
+      title: `${profile.displayName} declined your invite`,
+      body: `${profile.displayName} did not join table ${info.tableLabel}.`,
       link: `/session/${sessionId}`,
     });
   }
@@ -1232,7 +1232,7 @@ export async function inviteUsersToSession(
 
   // 5. Notif in-app + email (best-effort).
   const link = `/session/${sessionId}`;
-  const tableLabel = row.table_label ?? "meja";
+  const tableLabel = row.table_label ?? "table";
   await Promise.allSettled(
     targets.map(async (u) => {
       await createNotification({
@@ -1240,12 +1240,12 @@ export async function inviteUsersToSession(
         type: mode === "friends" ? "table_joined" : "table_invite",
         title:
           mode === "friends"
-            ? `${profile.displayName} mengajak kamu gabung`
-            : `${profile.displayName} mengundang kamu ke meja ${tableLabel}`,
+            ? `${profile.displayName} added you to a table`
+            : `${profile.displayName} invited you to table ${tableLabel}`,
         body:
           mode === "friends"
-            ? `Kamu sudah otomatis bergabung ke meja ${tableLabel}.`
-            : `Buka untuk terima undangan ke meja ${tableLabel}.`,
+            ? `You have been added to table ${tableLabel}.`
+            : `Open to accept the invite to table ${tableLabel}.`,
         link,
       });
       const tpl = tableInviteEmail({
@@ -1260,8 +1260,8 @@ export async function inviteUsersToSession(
         to: u.email,
         subject:
           mode === "friends"
-            ? `Kamu diajak gabung meja ${tableLabel}`
-            : `Undangan ke meja ${tableLabel}`,
+            ? `You have been added to table ${tableLabel}`
+            : `Invite to table ${tableLabel}`,
         html: tpl.html,
         text: tpl.text,
       });
@@ -1324,7 +1324,7 @@ export async function cancelInvite(memberId: string, sessionId: string) {
   await markInviteCancelled(
     info.memberProfileId,
     `/session/${sessionId}`,
-    info.tableLabel ?? "meja"
+    info.tableLabel ?? "table"
   );
 
   await notifySessionAndStaff(sessionId);
@@ -2304,7 +2304,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     amount: data.amount,
     method: data.method,
     payerName: member.displayName,
-    description: `Self-pay meja - ${data.sessionId.slice(0, 8)}`,
+    description: `Self-pay table - ${data.sessionId.slice(0, 8)}`,
   });
 
   // 5. Update payment dengan hasil gateway (+ metadata QRIS di split_meta).
@@ -3046,7 +3046,7 @@ export async function cancelUnpaidOrder(
         // Gagal cek gateway → jangan ambil risiko membatalkan pembayaran yg
         // mungkin sudah lunas. Tolak cancel; user bisa coba lagi / lanjut bayar.
         throw new Error(
-          "Tidak bisa memverifikasi status pembayaran. Coba lagi sebentar."
+          "Couldn't verify the payment status. Please try again in a moment."
         );
       }
       if (gwStatus === "paid") {

@@ -4,7 +4,7 @@ import { getPublicLegalDoc } from "@/lib/legal-actions";
 import { MarkdownView } from "@/components/MarkdownView";
 import { ProfileSubpageHeader } from "../profile/ProfileSubpageHeader";
 
-export const metadata = { title: "Syarat & Ketentuan" };
+export const metadata = { title: "Terms & Conditions" };
 
 export default async function TermsPage() {
   const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
@@ -21,7 +21,7 @@ export default async function TermsPage() {
         {doc.updated_at && (
           <p className="text-xs text-muted-foreground mb-5">
             Terakhir diperbarui{" "}
-            {new Date(doc.updated_at).toLocaleDateString("id-ID", {
+            {new Date(doc.updated_at).toLocaleDateString("en-GB", {
               dateStyle: "long",
             })}
           </p>

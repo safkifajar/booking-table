@@ -63,8 +63,8 @@ export default async function ItemsPage({ searchParams }: PageProps) {
             }))}
             headers={[
               "Rank",
-              "Nama Item",
-              "Kategori",
+              "Item name",
+              "Category",
               "Qty Terjual",
               "Revenue",
               "Transaksi",

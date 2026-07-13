@@ -965,22 +965,22 @@ export function resolveDateRange(
     case "today":
       from = startOfToday;
       to = new Date(startOfToday.getTime() + day);
-      label = "Hari ini";
+      label = "Today";
       break;
     case "yesterday":
       from = new Date(startOfToday.getTime() - day);
       to = startOfToday;
-      label = "Kemarin";
+      label = "Yesterday";
       break;
     case "last7":
       from = new Date(startOfToday.getTime() - 7 * day);
       to = new Date(startOfToday.getTime() + day);
-      label = "7 hari terakhir";
+      label = "Last 7 days";
       break;
     case "last30":
       from = new Date(startOfToday.getTime() - 30 * day);
       to = new Date(startOfToday.getTime() + day);
-      label = "30 hari terakhir";
+      label = "Last 30 days";
       break;
     case "this_month": {
       const firstJkt = new Date(
@@ -988,7 +988,7 @@ export function resolveDateRange(
       );
       from = new Date(firstJkt.getTime() - TZ_OFFSET_HOURS * 60 * 60 * 1000);
       to = new Date(startOfToday.getTime() + day);
-      label = "Bulan ini";
+      label = "This month";
       break;
     }
     case "last_month": {
@@ -1000,7 +1000,7 @@ export function resolveDateRange(
       );
       from = new Date(firstLastJkt.getTime() - TZ_OFFSET_HOURS * 60 * 60 * 1000);
       to = new Date(firstThisJkt.getTime() - TZ_OFFSET_HOURS * 60 * 60 * 1000);
-      label = "Bulan lalu";
+      label = "Last month";
       break;
     }
     case "custom":

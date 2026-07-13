@@ -18,7 +18,7 @@ import type {
 const PAGE_SIZE = 5;
 
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", {
+  return new Date(iso).toLocaleString("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -26,7 +26,7 @@ function fmtDateTime(iso: string): string {
 function visibilityLabel(v: SessionVisibility): string {
   if (v === "public") return "Publik";
   if (v === "friends") return "Teman";
-  return "Undangan";
+  return "Invite";
 }
 
 /** Hook pagination kecil utk list client. */
@@ -48,7 +48,7 @@ export function CustomerReviews({ reviews }: { reviews: UserReviewEntry[] }) {
     return (
       <Card className="p-6 text-center border-dashed">
         <p className="text-sm text-muted-foreground">
-          Belum ada review untuk customer ini.
+          No reviews for this customer yet.
         </p>
       </Card>
     );
@@ -105,7 +105,7 @@ export function CustomerHistory({
     return (
       <Card className="p-6 text-center border-dashed">
         <p className="text-sm text-muted-foreground">
-          Belum ada riwayat open table.
+          No open-table history yet.
         </p>
       </Card>
     );
@@ -124,7 +124,7 @@ export function CustomerHistory({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">
-              Meja {h.table_label}
+              Table {h.table_label}
               <span className="font-normal text-muted-foreground">
                 {" "}
                 · {h.area_name}
@@ -140,7 +140,7 @@ export function CustomerHistory({
               ? "Selesai"
               : h.status === "cancelled"
                 ? "Dibatalkan"
-                : "Belum lunas"}
+                : "Not paid"}
           </Badge>
           <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
         </Link>
