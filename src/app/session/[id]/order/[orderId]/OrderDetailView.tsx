@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, QrCode } from "lucide-react";
+import { ArrowLeft, QrCode, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   payShare,
   createSplitBatch,
   cancelUnpaidOrder,
+  regenerateMemberPayment,
   type OrderDetail,
 } from "@/lib/actions";
 import type { PaymentMethod } from "@/types/db";
@@ -151,6 +152,36 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     }
   }
 
+  // Host/staff: generate ULANG QRIS untuk anggota yg pembayarannya kadaluarsa/
+  // gagal (telat bayar). Payment lama di-failed-kan, dibuat QRIS baru dgn
+  // nominal sama, dan HANYA anggota itu yang dapat notifikasi.
+  const [regenId, setRegenId] = React.useState<string | null>(null);
+  async function handleRegenerate(paymentId: string, memberName: string) {
+    setRegenId(paymentId);
+    try {
+      const res = await regenerateMemberPayment({ paymentId });
+      toast.success(`New QRIS created for ${memberName}`);
+      // Kalau yg di-regenerate kebetulan milik diri sendiri (host bayar sendiri),
+      // langsung tampilkan QR-nya. Anggota lain membukanya lewat "Show QR".
+      if (res.qrString) {
+        const mineNow = detail.payments.find((p) => p.id === paymentId);
+        if (mineNow && mineNow.paid_by_member_id === detail.myMemberId) {
+          setActiveQr({
+            paymentId: res.paymentId,
+            qrString: res.qrString,
+            amount: res.amount,
+            expirySeconds: toExpirySeconds(res.expiresAt),
+          });
+        }
+      }
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to create a new QRIS"));
+    } finally {
+      setRegenId(null);
+    }
+  }
+
   const statusLabel =
     detail.status === "paid" ? "Paid" : detail.status === "unpaid" ? "Unpaid" : detail.status === "closed" ? "Closed" : detail.status;
 
@@ -259,6 +290,16 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                 const expired =
                   p.status === "pending" && p.expires_at != null && now > 0 && new Date(p.expires_at).getTime() <= now;
                 const canShowQr = p.status === "pending" && !expired && p.qr_string;
+                // Pembayaran anggota ini MATI (QR kadaluarsa / gagal) & order
+                // belum lunas → host/staff boleh terbitkan QRIS baru untuk dia.
+                // DP dikecualikan: punya lifecycle booking sendiri (server juga
+                // menolaknya), jadi jangan tampilkan tombol yang pasti gagal.
+                const isDead = p.status === "failed" || expired;
+                const canRegenerate =
+                  (detail.isHost || detail.isStaff) &&
+                  isDead &&
+                  !p.is_down_payment &&
+                  detail.outstanding > 0;
                 return (
                   <Card key={p.id} className="p-3">
                     <div className="flex items-center gap-3">
@@ -297,6 +338,19 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                         className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition"
                       >
                         <QrCode className="h-3.5 w-3.5" /> Show QR
+                      </button>
+                    )}
+                    {canRegenerate && (
+                      <button
+                        type="button"
+                        disabled={regenId === p.id}
+                        onClick={() => handleRegenerate(p.id, p.paid_by)}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${regenId === p.id ? "animate-spin" : ""}`}
+                        />
+                        {regenId === p.id ? "Creating…" : "New QRIS"}
                       </button>
                     )}
                   </Card>

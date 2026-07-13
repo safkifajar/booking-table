@@ -34,7 +34,12 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
-import { generateInviteCode, isDbConstraintError, normalizeUsername } from "@/lib/utils";
+import {
+  formatIDR,
+  generateInviteCode,
+  isDbConstraintError,
+  normalizeUsername,
+} from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import {
@@ -2563,6 +2568,248 @@ export async function createSplitBatch(
   revalidatePath(`/staff/cashier/${data.sessionId}`);
 
   return { batchId, results };
+}
+
+/**
+ * Generate ULANG QRIS untuk SATU anggota yang pembayarannya gagal/kadaluarsa
+ * (mis. telat bayar sampai QR mati). Dipicu host/staff dari tombol di baris
+ * riwayat pembayaran anggota tsb.
+ *
+ * Efek: payment lama ditandai 'failed', dibuat payment BARU dgn nominal SAMA
+ * (di-cap ke sisa tagihan) + QRIS baru, lalu notifikasi dikirim HANYA ke anggota
+ * itu. Anggota membuka QRIS barunya lewat "Show QR" di riwayat (qr_string sudah
+ * di-scope ke pemiliknya).
+ *
+ * GUARD:
+ * - Auth: HOST meja atau staff aktif di bar.
+ * - Payment lama harus milik order di sesi ini, dan statusnya 'failed' ATAU
+ *   'pending' yang SUDAH lewat expiry. Pending yang MASIH aktif ditolak (cegah
+ *   dua QRIS hidup sekaligus → risiko bayar dobel). 'paid' ditolak.
+ * - Anti money-loss: sebelum mematikan payment lama, cek gateway — kalau
+ *   ternyata sudah lunas, settle & tolak regenerate.
+ */
+export async function regenerateMemberPayment(input: {
+  paymentId: string;
+}): Promise<{
+  paymentId: string;
+  amount: number;
+  status: PaymentStatus;
+  qrString: string | null;
+  expiresAt: string | null;
+}> {
+  const profile = await requireProfile();
+
+  // 1. Payment lama + konteks (order, sesi, anggota).
+  const [old] = await db
+    .select({
+      id: payments.id,
+      status: payments.status,
+      amount: payments.amount,
+      method: payments.method,
+      splitMeta: payments.splitMeta,
+      memberId: payments.paidByMemberId,
+      orderId: payments.orderId,
+      orderStatus: orders.status,
+      sessionId: orders.sessionId,
+      sessionStatus: tableSessions.status,
+      payerProfileId: sessionMembers.profileId,
+      payerName: profiles.displayName,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(eq(payments.id, input.paymentId));
+  if (!old) throw new Error("Payment not found");
+
+  // 2. Auth: host meja atau staff aktif di bar sesi (throw kalau bukan).
+  await assertHostOrActiveStaff(old.sessionId, profile.id);
+
+  // 3. Order & SESI harus masih hidup. (Sesi cancelled/closed: mejanya bisa
+  //    sudah dilepas ke orang lain — jangan sampai terbit QRIS untuk booking
+  //    yang tak ada lagi.)
+  if (old.orderStatus === "closed" || old.orderStatus === "cancelled") {
+    throw new Error("This order is already closed");
+  }
+  if (old.sessionStatus === "closed" || old.sessionStatus === "cancelled") {
+    throw new Error("This table session is already closed");
+  }
+  if (old.status === "paid") throw new Error("This payment is already paid");
+
+  // 4. DP booking punya lifecycle sendiri (flag isDownPayment → dp_paid_at,
+  //    auto-cancel booking saat timeout). Regenerate akan menghilangkan flag itu
+  //    & merusak status booking → tolak. DP yang mati harus lewat alur booking.
+  const meta =
+    (old.splitMeta as {
+      expiresAt?: string | null;
+      isDownPayment?: boolean;
+    } | null) ?? {};
+  if (meta.isDownPayment) {
+    throw new Error(
+      "Down payments can't be re-issued here. Please handle it from the booking."
+    );
+  }
+
+  // 5. KUNCI ANTI DOUBLE-PAY: QRIS lama TETAP HIDUP di gateway meski kita tandai
+  //    'failed' di DB — dan callback Duitku tetap akan menandainya 'paid'. Jadi
+  //    kita HANYA boleh menerbitkan QRIS baru kalau GATEWAY SENDIRI memastikan
+  //    yang lama sudah mati ('failed' = expired/cancel di Duitku).
+  //    'pending' (termasuk saat kita gagal membaca respons gateway) = TOLAK:
+  //    lebih baik pengguna menunggu daripada terbit dua QRIS hidup.
+  //    Payment yang sudah 'failed' di DB tak perlu ditanya lagi ke gateway.
+  const gateway = getPaymentGateway();
+  if (old.status !== "failed") {
+    let gw: Awaited<ReturnType<typeof gateway.checkStatus>>;
+    try {
+      gw = await gateway.checkStatus(old.id);
+    } catch {
+      throw new Error(
+        "Couldn't verify the payment status. Please try again in a moment."
+      );
+    }
+    if (gw === "paid") {
+      // Ternyata sudah dibayar → settle, jangan buat QRIS baru.
+      await db
+        .update(payments)
+        .set({ status: "paid", paidAt: new Date() })
+        .where(eq(payments.id, old.id));
+      await settleOrderIfPaid(old.orderId);
+      await settleOverdueIfPaid(old.sessionId);
+      await notifySessionAndStaff(old.sessionId);
+      revalidatePath(`/session/${old.sessionId}`);
+      throw new Error("That payment was actually paid — no new QRIS needed.");
+    }
+    if (gw !== "failed") {
+      // Masih bisa dibayar di gateway → menerbitkan QRIS kedua = risiko bayar 2×.
+      throw new Error(
+        "The previous QRIS is still active at the payment provider. Please wait until it expires, then try again."
+      );
+    }
+    // Gateway bilang mati → catat di DB supaya konsisten.
+    await db
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(and(eq(payments.id, old.id), ne(payments.status, "paid")));
+  }
+
+  // 6. Nominal: SAMA dgn payment lama, tapi di-cap ke sisa yang BENAR-BENAR
+  //    belum tertutup = outstanding − Σ(payment pending yang masih hidup).
+  //    Tanpa mengurangi pending, regenerate berulang bisa menerbitkan QRIS
+  //    melebihi tagihan (mis. sebagian sudah dibayar tunai ke kasir) → overpay.
+  const { outstanding } = await getOrderOutstanding(old.orderId);
+  if (outstanding <= 0) throw new Error("This order is already fully paid");
+
+  const pendingRows = await db
+    .select({ amount: payments.amount, splitMeta: payments.splitMeta })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orderId, old.orderId),
+        eq(payments.status, "pending"),
+        ne(payments.id, old.id)
+      )
+    );
+  const nowMs = Date.now();
+  const pendingLive = pendingRows.reduce((sum, p) => {
+    const m = (p.splitMeta as { expiresAt?: string | null } | null) ?? {};
+    const exp = m.expiresAt ? new Date(m.expiresAt).getTime() : null;
+    // Tanpa expiry → anggap masih hidup (konservatif).
+    const alive = exp == null || exp > nowMs;
+    return alive ? sum + p.amount : sum;
+  }, 0);
+
+  const room = Math.max(0, outstanding - pendingLive);
+  const amount = Math.min(old.amount, room);
+  if (amount <= 0) {
+    throw new Error(
+      "The remaining bill is already covered by other active payments."
+    );
+  }
+
+  // 7. Buat payment + QRIS BARU DULU. Payment lama baru dimatikan SETELAH QRIS
+  //    baru sukses terbit — kalau gateway gagal, tak ada yang berubah (payment
+  //    lama tetap utuh, tak bikin anggota kehilangan riwayat/QRIS-nya).
+  // batchId lama DIPERTAHANKAN supaya "cancel split" host tetap bisa mematikan
+  // QRIS hasil regenerate ini (kalau dibuang, QRIS baru jadi tak punya
+  // kill-switch & bisa terbayar setelah host mengira batch sudah dibatalkan).
+  const batchId = (old.splitMeta as { batchId?: string | null } | null)?.batchId;
+  const [pay] = await db
+    .insert(payments)
+    .values({
+      orderId: old.orderId,
+      paidByMemberId: old.memberId,
+      amount,
+      method: old.method,
+      status: "pending",
+      splitMode: "equal",
+      splitMeta: { batchId: batchId ?? null, regeneratedFrom: old.id },
+      paidAt: null,
+    })
+    .returning({ id: payments.id });
+
+  let charge: Awaited<ReturnType<typeof gateway.createCharge>>;
+  try {
+    charge = await gateway.createCharge({
+      paymentId: pay.id,
+      amount,
+      method: old.method,
+      payerName: old.payerName,
+      description: `Re-issued QRIS - ${old.sessionId.slice(0, 8)}`,
+    });
+  } catch {
+    // Gateway gagal → buang payment kosong biar tak jadi sampah di riwayat.
+    // Payment lama SENGAJA tak disentuh (belum sempat di-failed-kan).
+    await db.delete(payments).where(eq(payments.id, pay.id));
+    throw new Error("Failed to create the QRIS. Please try again.");
+  }
+
+  await db
+    .update(payments)
+    .set({
+      externalRef: charge.externalRef,
+      status: charge.status,
+      paidAt: charge.status === "paid" ? new Date() : null,
+      splitMeta: {
+        batchId: batchId ?? null,
+        regeneratedFrom: old.id,
+        qrString: charge.qrString ?? null,
+        redirectUrl: charge.redirectUrl ?? null,
+        expiresAt: charge.expiresAt ?? null,
+        merchantOrderId: charge.merchantOrderId ?? pay.id,
+      },
+    })
+    .where(eq(payments.id, pay.id));
+
+  // NB: payment lama sudah ditandai 'failed' di langkah 5 (setelah gateway
+  // memastikan mati). Tak perlu diulang di sini.
+
+  if (charge.status === "paid") {
+    await settleOrderIfPaid(old.orderId);
+    await settleOverdueIfPaid(old.sessionId);
+  }
+
+  // 8. Notifikasi HANYA ke anggota yang bersangkutan (bukan host/staff lain).
+  await createNotification({
+    profileId: old.payerProfileId,
+    type: "general",
+    title: "New QRIS ready for you",
+    body: `Your previous QRIS expired. A new one for ${formatIDR(amount)} is ready — tap to pay.`,
+    link: `/session/${old.sessionId}/order/${old.orderId}`,
+  });
+
+  await notifySessionAndStaff(old.sessionId);
+  revalidatePath(`/session/${old.sessionId}`);
+  revalidatePath(`/session/${old.sessionId}/order/${old.orderId}`);
+  revalidatePath("/staff/cashier");
+
+  return {
+    paymentId: pay.id,
+    amount,
+    status: charge.status,
+    qrString: charge.qrString ?? null,
+    expiresAt: charge.expiresAt ?? null,
+  };
 }
 
 /**

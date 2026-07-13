@@ -38,6 +38,8 @@ import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { orders, orderItems, payments, paymentItems } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
+import { staffRoles } from "@/lib/db/schema/extras";
+import { createNotification } from "@/lib/notifications";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { notifyAll } from "@/lib/realtime/notify";
@@ -1052,9 +1054,25 @@ export async function markPaymentPaidBySystem(
     return { sessionId: payment.sessionId, barId: payment.barId };
   }
 
+  // Payment yang sudah kita matikan ('failed') ternyata TETAP dibayar di
+  // gateway (QRIS lama masih hidup di sisi Duitku sampai expiry-nya sendiri,
+  // mis. dibayar tepat saat host menerbitkan QRIS pengganti).
+  // Uangnya nyata → tetap catat 'paid' (menolak = uang masuk tapi tak tercatat,
+  // lebih buruk). TAPI jangan senyap: tandai sebagai pembayaran tak terduga &
+  // kabari staff supaya kelebihan bayar bisa ditangani.
+  const wasFailed = payment.status === "failed";
+  const prevMeta =
+    (payment.splitMeta as Record<string, unknown> | null) ?? {};
+
   await db
     .update(payments)
-    .set({ status: "paid", paidAt: new Date() })
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      ...(wasFailed
+        ? { splitMeta: { ...prevMeta, paidAfterCancelled: true } }
+        : {}),
+    })
     .where(eq(payments.id, paymentId));
 
   // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi).
@@ -1074,6 +1092,30 @@ export async function markPaymentPaidBySystem(
   await notifyAll(payment.sessionId, payment.barId, { type: "payment.paid" });
   // Notif in-app + push ke host/pembayar/staff.
   await notifyPaymentEvent(payment.id, meta.isDownPayment ? "dp_confirmed" : "paid");
+
+  // Pembayaran masuk untuk transaksi yang sudah dibatalkan → berpotensi LEBIH
+  // BAYAR (mis. QRIS penggantinya juga dibayar). Kabari staff aktif di bar biar
+  // bisa dicek/di-refund, jangan sampai lolos senyap.
+  if (wasFailed) {
+    const staff = await db
+      .select({ profileId: staffRoles.profileId })
+      .from(staffRoles)
+      .where(
+        and(eq(staffRoles.barId, payment.barId), eq(staffRoles.isActive, true))
+      );
+    await Promise.allSettled(
+      staff.map((s) =>
+        createNotification({
+          profileId: s.profileId,
+          type: "general",
+          title: "Payment received on a cancelled transaction",
+          body: "A cancelled QRIS was still paid. Check the bill for a possible overpayment.",
+          link: `/session/${payment.sessionId}`,
+        })
+      )
+    );
+  }
+
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/session/${payment.sessionId}`);
