@@ -117,6 +117,13 @@ export function ProfilePhotoCarousel({
               downPos.current = { x: e.clientX, y: e.clientY };
             }}
             onClick={(e) => {
+              // Klik foto = buka viewer SAJA; jangan sampai menggelembung ke
+              // elemen klik-able pembungkus (mis. kartu yg bisa di-klik).
+              // NB: di list discovery, foto memang sengaja ditaruh DI LUAR
+              // <Link> kartu (button di dalam <a> = HTML tak valid & bikin
+              // klik foto ikut navigasi).
+              e.preventDefault();
+              e.stopPropagation();
               // Buka viewer hanya kalau tap (bukan geser/swipe).
               const d = downPos.current;
               if (
@@ -124,10 +131,6 @@ export function ProfilePhotoCarousel({
                 Math.abs(e.clientX - d.x) < 8 &&
                 Math.abs(e.clientY - d.y) < 8
               ) {
-                // Cegah klik nembus ke <Link> pembungkus kartu (kalau ada) →
-                // buka viewer foto SAJA, tak ikut navigasi ke halaman detail.
-                e.preventDefault();
-                e.stopPropagation();
                 // Buka di foto yg SEDANG aktif (di tengah) — bukan index slot.
                 setViewerIndex(active);
               }

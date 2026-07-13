@@ -251,10 +251,12 @@ function MemberCard({
   const eduLabel = educationLabel(user.education);
 
   return (
-    <Link
-      href={`/network/${user.id}`}
-      className="block overflow-hidden rounded-2xl border border-border bg-card/40 transition hover:border-foreground/20"
-    >
+    // Kartu SENGAJA tidak dibungkus satu <Link> besar: carousel foto punya
+    // <button> (buka viewer), dan <button> di dalam <a> = HTML tak valid →
+    // klik foto ikut menavigasi ke halaman detail, sehingga saat viewer foto
+    // ditutup user mendarat di detail, bukan balik ke list. Solusinya: FOTO di
+    // luar Link (klik = buka viewer), blok INFO yang jadi Link (klik = detail).
+    <div className="overflow-hidden rounded-2xl border border-border bg-card/40 transition hover:border-foreground/20">
       <div className="relative">
         <ProfilePhotoCarousel
           photos={user.photos}
@@ -270,7 +272,7 @@ function MemberCard({
         )}
       </div>
 
-      <div className="p-4">
+      <Link href={`/network/${user.id}`} className="block p-4">
         <div className="flex items-center gap-2 flex-wrap">
           <h3 className="text-lg font-bold tracking-tight">
             {user.display_name}
@@ -311,7 +313,7 @@ function MemberCard({
         {user.hobbies.length > 0 && (
           <HobbyBadges hobbies={user.hobbies} max={4} className="mt-2.5" />
         )}
-      </div>
-    </Link>
+      </Link>
+    </div>
   );
 }
