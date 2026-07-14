@@ -12,6 +12,11 @@
 
 import { eq, and, inArray, asc, sql, lte, gt, ne, or, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
+import {
+  areFriends,
+  getBlockedIdSet,
+  isBlockedEitherWay,
+} from "@/lib/friends";
 import { bars, floorAreas, tables } from "@/lib/db/schema/venue";
 import {
   tableSessions,
@@ -899,7 +904,11 @@ export async function getRatableMembers(
       )
     );
 
-  return rows;
+  // Yg saling blokir tak bisa saling rating (PRD Friends K6b).
+  const blockedIds = await getBlockedIdSet(raterId);
+  return blockedIds.size > 0
+    ? rows.filter((r) => !blockedIds.has(r.profile_id))
+    : rows;
 }
 
 /**
@@ -1141,12 +1150,27 @@ export async function getPublicProfile(
 
   // Pemilik & admin lihat semua; selain itu terapkan privacy.
   const bypass = opts?.admin === true || opts?.viewerId === p.id;
+
+  // Saling blokir → profil seolah tak ada (PRD Friends K6, mutual 404).
+  // Lapisan kedua setelah guard halaman — jaga-jaga pemanggil baru lupa cek.
+  if (!bypass && opts?.viewerId) {
+    if (await isBlockedEitherWay(opts.viewerId, p.id)) return null;
+  }
+
+  // TEMAN membuka akun privat (PRD K5): is_private di-bypass untuk teman,
+  // tapi toggle granular (hide_location, hide_age, hide_social, hide_history)
+  // TETAP dihormati — itu pilihan eksplisit per-bidang si pemilik.
+  const isFriend =
+    !bypass && opts?.viewerId
+      ? await areFriends(opts.viewerId, p.id)
+      : false;
+
   // Akun privat (ala IG): untuk viewer lain, tampilkan HANYA data yg juga ada
   // di kartu list network (foto, nama, umur, area, education, rating, hobbies,
   // at_soho). Sisanya (bio, social, prompts, religion, tinggi, gender,
   // interested_in) di-null-kan → detail merender stub "terkunci" + blur.
   // Hangout history disembunyikan total.
-  const locked = !bypass && p.is_private;
+  const locked = !bypass && !isFriend && p.is_private;
   const hideAge = !bypass && p.hide_age;
   const hideSocial = locked || (!bypass && p.hide_social);
   const hideLocation = !bypass && p.hide_location;

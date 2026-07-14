@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lock, Clock, ArrowRight, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { Lock, Clock, ArrowRight, UserPlus, Users } from "lucide-react";
 import { requestJoinSession } from "@/lib/actions";
 import { getActionErrorMessage } from "@/lib/utils";
 
@@ -13,11 +13,15 @@ interface Props {
   sessionId: string;
   barSlug: string;
   hostName: string;
+  hostId: string;
   memberCount: number;
   capacity: number;
   isHost: boolean;
   myStatus: "joined" | "pending" | "left" | "kicked" | null;
   loggedIn: boolean;
+  visibility: string;
+  /** Viewer berteman dgn host? Meja "friends" hanya bisa di-join teman (PRD K3). */
+  isHostFriend: boolean;
 }
 
 export function PreviewCTA(props: Props) {
@@ -31,6 +35,10 @@ export function PreviewCTA(props: Props) {
     setLoading(true);
     try {
       const result = await requestJoinSession({ sessionId: props.sessionId });
+      if (result.status === "error") {
+        toast.error(result.error);
+        return;
+      }
       setStatus(result.status);
       if (result.status === "pending") {
         toast.success(`Request sent to ${props.hostName}`);
@@ -93,6 +101,33 @@ export function PreviewCTA(props: Props) {
           <Button asChild variant="outline" className="w-full">
             <Link href={`/bar/${props.barSlug}`}>Browse other tables</Link>
           </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Meja "friends" + viewer login yg bukan teman host → tak bisa join
+  // (PRD K3). Detail tetap terlihat; ajakan: berteman dulu dgn host.
+  if (props.visibility === "friends" && props.loggedIn && !props.isHostFriend) {
+    return (
+      <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/30">
+        <CardContent className="p-5 text-center space-y-3">
+          <Users className="h-8 w-8 mx-auto text-primary/60" />
+          <div>
+            <p className="font-medium text-sm">Friends-only table</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Only <span className="text-primary">{props.hostName}</span>&apos;s
+              friends can join this table. Add them as a friend first.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <Button asChild variant="outline" className="flex-1">
+              <Link href={`/bar/${props.barSlug}`}>Browse other tables</Link>
+            </Button>
+            <Button asChild variant="gold" className="flex-1">
+              <Link href={`/network/${props.hostId}`}>View host profile</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

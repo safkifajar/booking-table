@@ -154,9 +154,21 @@ export function OpenTableForm({
   const [vibes, setVibes] = React.useState<string[]>([]);
   // Deskripsi opsional sesi (disimpan sbg session.title, max 80).
   const [description, setDescription] = React.useState("");
-  // User yg diajak/diundang (friends/invite_only).
+  // User yg diundang (semua visibility). SEMUA undangan perlu persetujuan yg
+  // diundang — tak ada auto-join.
   const [invited, setInvited] = React.useState<InviteCandidate[]>([]);
   const [loading, setLoading] = React.useState(false);
+
+  // Ganti visibility mengubah siapa yg SAH diundang (meja "friends" hanya
+  // teman) → kosongkan pilihan supaya tak ada non-teman yg ikut terkirim lalu
+  // dibuang senyap oleh server.
+  function changeVisibility(next: SessionVisibility) {
+    setVisibility((prev) => {
+      if (prev !== next) setInvited([]);
+      return next;
+    });
+  }
+
   // Dialog QRIS untuk DP booking (kalau DP wajib & pending pembayaran).
   const [dpQris, setDpQris] = React.useState<{
     paymentId: string;
@@ -302,8 +314,7 @@ export function OpenTableForm({
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
         dpMethod: dpRequired ? "qris" : undefined,
-        // Public & friends → teman langsung join; invite_only → diundang.
-        // Semua visibility boleh bawa teman spesifik.
+        // Semua visibility boleh mengundang; yg diundang wajib menyetujui.
         invitedUserIds:
           invited.length > 0 ? invited.map((u) => u.id) : undefined,
       });
@@ -406,29 +417,29 @@ export function OpenTableForm({
                 label="Public"
                 desc="Anyone"
                 active={visibility === "public"}
-                onClick={() => setVisibility("public")}
+                onClick={() => changeVisibility("public")}
               />
               <VisibilityOption
                 icon={<UserPlus className="h-4 w-4" />}
                 label="Friends"
                 desc="Friends only"
                 active={visibility === "friends"}
-                onClick={() => setVisibility("friends")}
+                onClick={() => changeVisibility("friends")}
               />
               <VisibilityOption
                 icon={<Lock className="h-4 w-4" />}
                 label="Invite"
                 desc="Invite users"
                 active={visibility === "invite_only"}
-                onClick={() => setVisibility("invite_only")}
+                onClick={() => changeVisibility("invite_only")}
               />
             </div>
           </div>
 
-          {/* Pilih teman untuk diajak. public/friends → langsung join;
-              invite_only → diundang (harus terima). Tampil di semua tipe. */}
+          {/* Undang orang — semua visibility, SEMUA perlu persetujuan yg
+              diundang. Meja "friends" hanya boleh mengundang teman. */}
           <UserInvitePicker
-            mode={visibility === "invite_only" ? "invite" : "join"}
+            visibility={visibility}
             selected={invited}
             onChange={setInvited}
           />

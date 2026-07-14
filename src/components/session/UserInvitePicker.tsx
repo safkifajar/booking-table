@@ -10,17 +10,21 @@ import {
 } from "@/lib/customer-actions";
 
 /**
- * Picker user (search + multi-select chip) untuk mengajak/mengundang ke meja.
- * Dipakai di OpenTableForm (saat buka meja) & SessionView (ajak dari meja
- * berjalan). mode "join" = friends (langsung gabung), "invite" = perlu diterima.
+ * Picker user (search + multi-select chip) untuk mengundang ke meja. Dipakai di
+ * OpenTableForm (saat buka meja) & SessionView (undang dari meja berjalan).
+ *
+ * SEMUA undangan perlu persetujuan yg diundang — tak ada auto-join. Kandidat
+ * mengikuti VISIBILITY meja (PRD Friends K2/K3): meja "friends" hanya boleh
+ * mengundang teman; public & invite_only boleh siapa saja. Hasil muncul setelah
+ * mengetik (tak pernah dump daftar).
  */
 export function UserInvitePicker({
-  mode,
+  visibility,
   selected,
   onChange,
   excludeSessionId,
 }: {
-  mode: "join" | "invite";
+  visibility: "public" | "friends" | "invite_only";
   selected: InviteCandidate[];
   onChange: (next: InviteCandidate[]) => void;
   /** Saat dari session: sembunyikan user yg sudah jadi member meja itu. */
@@ -30,6 +34,22 @@ export function UserInvitePicker({
   const [results, setResults] = React.useState<InviteCandidate[]>([]);
   const [searching, setSearching] = React.useState(false);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const friendsOnly = visibility === "friends";
+
+  const fetchCandidates = React.useCallback(
+    async (q: string) => {
+      setSearching(true);
+      try {
+        const rows = await searchInviteCandidates(q, excludeSessionId, {
+          friendsOnly,
+        });
+        setResults(rows);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [excludeSessionId, friendsOnly]
+  );
 
   function handleQueryChange(q: string) {
     setQuery(q);
@@ -39,22 +59,18 @@ export function UserInvitePicker({
       return;
     }
     setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const rows = await searchInviteCandidates(q, excludeSessionId);
-        // Sembunyikan yg sudah terpilih.
-        const selIds = new Set(selected.map((s) => s.id));
-        setResults(rows.filter((r) => !selIds.has(r.id)));
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
+    debounceRef.current = setTimeout(() => void fetchCandidates(q), 300);
   }
+
+  // Sembunyikan yg sudah terpilih (filter saat render, bukan saat fetch —
+  // supaya batal-pilih memunculkan lagi tanpa refetch).
+  const selIds = new Set(selected.map((s) => s.id));
+  const visibleResults = results.filter((r) => !selIds.has(r.id));
 
   function add(u: InviteCandidate) {
     onChange([...selected, u]);
-    setResults((prev) => prev.filter((r) => r.id !== u.id));
     setQuery("");
+    setResults([]);
   }
 
   function remove(id: string) {
@@ -64,9 +80,9 @@ export function UserInvitePicker({
   return (
     <div>
       <label className="block text-sm font-medium mb-2">
-        {mode === "join" ? "Invite friends" : "Invite user"}{" "}
+        {friendsOnly ? "Invite friends" : "Invite people"}{" "}
         <span className="text-muted-foreground font-normal">
-          {mode === "join" ? "(join instantly)" : "(they need to accept)"}
+          (they need to accept)
         </span>
       </label>
 
@@ -104,24 +120,26 @@ export function UserInvitePicker({
           type="text"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search name or email…"
+          placeholder={friendsOnly ? "Search friends…" : "Search name or email…"}
           className="w-full h-11 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </div>
 
-      {/* Hasil search */}
+      {/* Hasil search — muncul hanya setelah mengetik (kedua mode) */}
       {query.trim().length > 0 && (
         <div className="mt-1.5 rounded-md border border-border divide-y divide-border max-h-48 overflow-y-auto">
           {searching ? (
             <div className="p-3 text-center">
               <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
             </div>
-          ) : results.length === 0 ? (
+          ) : visibleResults.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">
-              No matching users.
+              {friendsOnly
+                ? "No matching friends. A friends-only table can only invite friends."
+                : "No matching users."}
             </p>
           ) : (
-            results.map((u) => (
+            visibleResults.map((u) => (
               <button
                 key={u.id}
                 type="button"

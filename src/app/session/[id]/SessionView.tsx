@@ -161,7 +161,6 @@ interface SessionViewProps {
   myMemberId: string | null;
   isHost: boolean;
   isMember: boolean;
-  inviteCode: string | null;
   /**
    * URL untuk back button. Default `/bar/${slug}` (customer landing).
    * Untuk staff: arah ke dashboard role-nya (`/staff/waiter`, `/staff/cashier`, dst).
@@ -912,10 +911,10 @@ function VibeTab(
                 </div>
                 <div>
                   <p className="text-sm font-medium text-primary">
-                    Invite friends
+                    Invite people
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Pick a user to join directly or via invite
+                    They join once they accept
                   </p>
                 </div>
               </button>
@@ -1001,6 +1000,7 @@ function VibeTab(
       {inviteModal && (
         <InviteToSessionModal
           sessionId={props.session.id}
+          visibility={props.session.visibility}
           onClose={() => setInviteModal(false)}
         />
       )}
@@ -1132,16 +1132,21 @@ function AddGuestModal({
   );
 }
 
-// Modal: host ajak/undang user ke meja berjalan (2 mode: friends / invite)
+/**
+ * Modal: host mengundang user ke meja berjalan. SEMUA undangan perlu
+ * persetujuan yg diundang (tak ada auto-join), dan kandidat mengikuti
+ * visibility meja — "friends" hanya boleh mengundang teman.
+ */
 function InviteToSessionModal({
   sessionId,
+  visibility,
   onClose,
 }: {
   sessionId: string;
+  visibility: SessionVisibility;
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [mode, setMode] = React.useState<"friends" | "invite">("friends");
   const [selected, setSelected] = React.useState<InviteCandidate[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -1152,13 +1157,8 @@ function InviteToSessionModal({
       const res = await inviteUsersToSession({
         sessionId,
         userIds: selected.map((s) => s.id),
-        mode,
       });
-      toast.success(
-        mode === "friends"
-          ? `${res.invited} friends joined`
-          : `Invite sent to ${res.invited} users`
-      );
+      toast.success(`Invite sent to ${res.invited} people`);
       onClose();
       router.refresh();
     } catch (err) {
@@ -1194,50 +1194,14 @@ function InviteToSessionModal({
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Pilih mode */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("friends")}
-              className={cn(
-                "rounded-lg border p-3 text-left transition",
-                mode === "friends"
-                  ? "border-primary/40 bg-primary/15"
-                  : "border-border hover:border-foreground/30"
-              )}
-            >
-              <UserPlus
-                className={cn(
-                  "h-4 w-4 mb-1",
-                  mode === "friends" ? "text-primary" : "text-muted-foreground"
-                )}
-              />
-              <p className="text-sm font-medium">Friends</p>
-              <p className="text-[11px] text-muted-foreground">Join directly</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("invite")}
-              className={cn(
-                "rounded-lg border p-3 text-left transition",
-                mode === "invite"
-                  ? "border-primary/40 bg-primary/15"
-                  : "border-border hover:border-foreground/30"
-              )}
-            >
-              <Lock
-                className={cn(
-                  "h-4 w-4 mb-1",
-                  mode === "invite" ? "text-primary" : "text-muted-foreground"
-                )}
-              />
-              <p className="text-sm font-medium">Invite</p>
-              <p className="text-[11px] text-muted-foreground">Needs acceptance</p>
-            </button>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            {visibility === "friends"
+              ? "Friends-only table — you can invite your friends. They join once they accept."
+              : "They join once they accept the invite."}
+          </p>
 
           <UserInvitePicker
-            mode={mode === "friends" ? "join" : "invite"}
+            visibility={visibility}
             selected={selected}
             onChange={setSelected}
             excludeSessionId={sessionId}
@@ -1259,9 +1223,7 @@ function InviteToSessionModal({
             ) : (
               <>
                 <UserPlus className="h-4 w-4" />
-                {mode === "friends"
-                  ? `Invite ${selected.length || ""} friends`
-                  : `Invite ${selected.length || ""} users`}
+                Invite {selected.length || ""} people
               </>
             )}
           </Button>

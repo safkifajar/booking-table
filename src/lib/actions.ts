@@ -24,7 +24,6 @@ import { db } from "@/lib/db/client";
 import {
   tableSessions,
   sessionMembers,
-  sessionInvites,
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
@@ -36,7 +35,6 @@ import { requireProfile } from "@/lib/auth-v2/current";
 import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
 import {
   formatIDR,
-  generateInviteCode,
   isDbConstraintError,
   normalizeUsername,
 } from "@/lib/utils";
@@ -55,6 +53,12 @@ import {
   DP_TIMEOUT_SECONDS,
 } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
+import {
+  areFriends,
+  isBlockedEitherWay,
+  getBlockedIdSet,
+  getFriendIdSet,
+} from "@/lib/friends";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -139,10 +143,6 @@ const addOrderItemSchema = z.object({
 
 const joinSchema = z.object({
   sessionId: z.string().uuid(),
-});
-
-const joinByCodeSchema = z.object({
-  code: z.string().min(4).max(12),
 });
 
 // ============================================================
@@ -380,17 +380,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     }
   }
 
-  // 7b. Resolusi user yg diajak/diundang.
-  // - public / friends → teman yg dipilih LANGSUNG join (status joined).
-  // - invite_only     → diundang (pending + invited_by = host).
-  // Public tetap "anyone can join", tapi host boleh sekalian bawa teman spesifik
-  // yg langsung masuk (tak perlu nunggu mereka cari mejanya).
+  // 7b. Resolusi user yg diundang. Kandidat mengikuti VISIBILITY meja:
+  // - public / invite_only → siapa saja boleh diundang;
+  // - friends              → hanya teman host (sejalan K3).
   // Validasi: bukan host, non-staff, non-guest, dedup. Cek kapasitas.
   type Invitee = { id: string; name: string; email: string };
   let invitees: Invitee[] = [];
-  const inviteMode: "joined" | "invited" | null =
-    data.visibility === "invite_only" ? "invited" : "joined";
-  if (inviteMode && data.invitedUserIds && data.invitedUserIds.length > 0) {
+  // SEMUA undangan perlu persetujuan yg diundang (keputusan produk 2026-07-14):
+  // tak ada lagi auto-join. Siapa pun yg dipilih host masuk sbg pending +
+  // invited_by, lalu dia sendiri yg Terima/Tolak (acceptInvite/declineInvite).
+  if (data.invitedUserIds && data.invitedUserIds.length > 0) {
     const uniqueIds = Array.from(new Set(data.invitedUserIds)).filter(
       (id) => id !== profile.id
     );
@@ -412,13 +411,24 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           )
         );
       invitees = rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
-      // friends auto-join makan slot → cek kapasitas (host + invitees).
+      // Guard relasi (PRD Friends K2 + K6b), saring SENYAP — picker di UI
+      // sudah tak menawarkan mereka; sisa hanya percobaan devtools/data basi:
+      // - blokir (arah mana pun) → buang (disguised, PRD 7.3);
+      // - meja "friends" → yg bisa diundang HANYA teman (sejalan dgn K3:
+      //   hanya teman yg boleh masuk meja itu).
+      const hiddenIds = await getBlockedIdSet(profile.id);
+      invitees = invitees.filter((u) => !hiddenIds.has(u.id));
+      if (data.visibility === "friends" && invitees.length > 0) {
+        const friendIds = await getFriendIdSet(profile.id);
+        invitees = invitees.filter((u) => friendIds.has(u.id));
+      }
+      // Undangan pending sudah "memesan" kursi → cek kapasitas (host + undangan).
       // Dilewati kalau meja izinkan over-capacity (setting admin).
-      if (inviteMode === "joined" && !tableRow.allow_over_capacity) {
+      if (!tableRow.allow_over_capacity) {
         const cap = data.maxGuests ?? tableRow.capacity;
         if (1 + invitees.length > cap) {
           throw new Error(
-            `Exceeds table capacity (${cap}). Invite fewer friends.`
+            `Exceeds table capacity (${cap}). Invite fewer people.`
           );
         }
       }
@@ -493,21 +503,15 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         );
       }
 
-      await tx.insert(sessionInvites).values({
-        sessionId: newSession.id,
-        code: generateInviteCode(),
-        createdBy: profile.id,
-      });
-
-      // Ajak/undang user: friends → joined, invite_only → pending+invited_by.
-      if (inviteMode && invitees.length > 0) {
+      // Undangan: SELALU pending + invited_by — yg diundang yg menyetujui.
+      if (invitees.length > 0) {
         await tx.insert(sessionMembers).values(
           invitees.map((u) => ({
             sessionId: newSession.id,
             profileId: u.id,
             role: "member" as const,
-            status: inviteMode === "joined" ? ("joined" as const) : ("pending" as const),
-            invitedBy: inviteMode === "invited" ? profile.id : null,
+            status: "pending" as const,
+            invitedBy: profile.id,
           }))
         );
       }
@@ -605,23 +609,17 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   await notifySessionAndStaff(sessionId);
   revalidatePath("/bar/[slug]", "page");
 
-  // 10. Notif in-app + email ke user yg diajak/diundang (best-effort).
-  if (inviteMode && invitees.length > 0) {
+  // 10. Notif in-app + email ke user yg diundang (best-effort).
+  if (invitees.length > 0) {
     const link = `/session/${sessionId}`;
     const tableLabel = tableRow.label ?? "table";
     await Promise.allSettled(
       invitees.map(async (u) => {
         await createNotification({
           profileId: u.id,
-          type: inviteMode === "joined" ? "table_joined" : "table_invite",
-          title:
-            inviteMode === "joined"
-              ? `${profile.displayName} added you to a table`
-              : `${profile.displayName} invited you to table ${tableLabel}`,
-          body:
-            inviteMode === "joined"
-              ? `You have been added to table ${tableLabel}.`
-              : `Open to accept the invite to table ${tableLabel}.`,
+          type: "table_invite",
+          title: `${profile.displayName} invited you to table ${tableLabel}`,
+          body: `Open to accept the invite to table ${tableLabel}.`,
           link,
         });
         const tpl = tableInviteEmail({
@@ -630,14 +628,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           tableLabel,
           barName: tableRow.bar_name ?? "SOHO",
           link,
-          mode: inviteMode,
+          mode: "invited",
         });
         await sendEmail({
           to: u.email,
-          subject:
-            inviteMode === "joined"
-              ? `You have been added to table ${tableLabel}`
-              : `Invite to table ${tableLabel}`,
+          subject: `Invite to table ${tableLabel}`,
           html: tpl.html,
           text: tpl.text,
         });
@@ -795,6 +790,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
       id: tableSessions.id,
       status: tableSessions.status,
       host_id: tableSessions.hostId,
+      visibility: tableSessions.visibility,
       capacity: tables.capacity,
       allow_over_capacity: tables.allowOverCapacity,
       table_label: tables.label,
@@ -806,6 +802,26 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
   if (row.status !== "open") throw new Error("Session is no longer open");
   if (row.host_id === profile.id) {
     throw new Error("You're the host — no need to request");
+  }
+
+  // Guard relasi (PRD Friends K3 + K6b). Penolakan yg DIHARAPKAN dikembalikan
+  // (bukan throw) — production menyensor pesan thrown Server Action.
+  // Blokir: pesan generik yg sama dgn friends-only supaya tak membocorkan
+  // status blokir (PRD 7.3 disguised).
+  if (await isBlockedEitherWay(profile.id, row.host_id)) {
+    return {
+      status: "error" as const,
+      error: "This table isn't accepting join requests right now.",
+    };
+  }
+  if (
+    row.visibility === "friends" &&
+    !(await areFriends(profile.id, row.host_id))
+  ) {
+    return {
+      status: "error" as const,
+      error: "Only the host's friends can join this table.",
+    };
   }
 
   // 2. Capacity check (joined only) — dilewati kalau meja izinkan over-capacity.
@@ -1019,6 +1035,13 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
   if (!row) throw new Error("Session not found");
+
+  // Undangan basi dari SEBELUM blokir (PRD K6b): tolak dgn pesan generik yg
+  // sama dgn undangan hilang — tak membocorkan status blokir.
+  const inviterId = member.invitedBy ?? row.host_id;
+  if (await isBlockedEitherWay(profile.id, inviterId)) {
+    throw new Error("Invite not found or no longer valid");
+  }
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(sessionMembers)
@@ -1107,26 +1130,26 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
 const inviteToSessionSchema = z.object({
   sessionId: z.string().uuid(),
   userIds: z.array(z.string().uuid()).min(1).max(20),
-  mode: z.enum(["friends", "invite"]),
 });
 
 /**
- * Host mengajak/mengundang user ke session yang SUDAH berjalan (dari tab Meja).
- * mode "friends" → langsung joined (makan slot, cek kapasitas). mode "invite" →
- * pending + invited_by (user approve via acceptInvite, kapasitas dicek saat
- * accept). Reuse pola openTable. Host-only.
+ * Host mengundang user ke session yang SUDAH berjalan (dari tab Meja).
+ * SELALU pending + invited_by — yg diundang yg menyetujui (acceptInvite);
+ * tak ada auto-join (keputusan produk 2026-07-14). Meja "friends" hanya boleh
+ * mengundang teman (sejalan K3). Host-only.
  */
 export async function inviteUsersToSession(
   input: z.infer<typeof inviteToSessionSchema>
 ) {
   const profile = await requireProfile();
-  const { sessionId, userIds, mode } = inviteToSessionSchema.parse(input);
+  const { sessionId, userIds } = inviteToSessionSchema.parse(input);
 
   // 1. Session + guard host + status open.
   const [row] = await db
     .select({
       status: tableSessions.status,
       host_id: tableSessions.hostId,
+      visibility: tableSessions.visibility,
       capacity: tables.capacity,
       allow_over_capacity: tables.allowOverCapacity,
       max_guests: tableSessions.maxGuests,
@@ -1199,10 +1222,19 @@ export async function inviteUsersToSession(
       )
       .map((m) => m.profileId)
   );
-  const targets = candidates.filter((c) => !occupied.has(c.id));
+  let targets = candidates.filter((c) => !occupied.has(c.id));
   if (targets.length === 0) {
     throw new Error("All users are already at the table / invited");
   }
+  // Guard relasi (PRD Friends K2 + K6b) — sama dgn openTable: blokir dibuang
+  // senyap; meja "friends" hanya boleh mengundang teman.
+  const hiddenIds = await getBlockedIdSet(profile.id);
+  targets = targets.filter((u) => !hiddenIds.has(u.id));
+  if (row.visibility === "friends" && targets.length > 0) {
+    const friendIds = await getFriendIdSet(profile.id);
+    targets = targets.filter((u) => friendIds.has(u.id));
+  }
+  if (targets.length === 0) throw new Error("No eligible users to invite");
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
   // Dilewati kalau meja izinkan over-capacity (setting admin).
   const cap = row.max_guests ?? row.capacity;
@@ -1216,7 +1248,7 @@ export async function inviteUsersToSession(
   }
 
   // 4. Upsert member (handle yg pernah left/kicked/pending via conflict).
-  const newStatus = mode === "friends" ? "joined" : "pending";
+  //    SELALU pending + invited_by — yg diundang yg menyetujui.
   for (const u of targets) {
     await db
       .insert(sessionMembers)
@@ -1224,18 +1256,15 @@ export async function inviteUsersToSession(
         sessionId,
         profileId: u.id,
         role: "member",
-        status: newStatus,
-        invitedBy: mode === "invite" ? profile.id : null,
-        joinedAt: mode === "friends" ? new Date() : undefined,
+        status: "pending",
+        invitedBy: profile.id,
       })
       .onConflictDoUpdate({
         target: [sessionMembers.sessionId, sessionMembers.profileId],
         set: {
-          status: newStatus,
-          invitedBy: mode === "invite" ? profile.id : null,
+          status: "pending",
+          invitedBy: profile.id,
           leftAt: null,
-          // Refresh joinedAt saat friends (user yg pernah left ikut lagi).
-          ...(mode === "friends" ? { joinedAt: new Date() } : {}),
         },
       });
   }
@@ -1247,15 +1276,9 @@ export async function inviteUsersToSession(
     targets.map(async (u) => {
       await createNotification({
         profileId: u.id,
-        type: mode === "friends" ? "table_joined" : "table_invite",
-        title:
-          mode === "friends"
-            ? `${profile.displayName} added you to a table`
-            : `${profile.displayName} invited you to table ${tableLabel}`,
-        body:
-          mode === "friends"
-            ? `You have been added to table ${tableLabel}.`
-            : `Open to accept the invite to table ${tableLabel}.`,
+        type: "table_invite",
+        title: `${profile.displayName} invited you to table ${tableLabel}`,
+        body: `Open to accept the invite to table ${tableLabel}.`,
         link,
       });
       const tpl = tableInviteEmail({
@@ -1264,14 +1287,11 @@ export async function inviteUsersToSession(
         tableLabel,
         barName: row.bar_name ?? "SOHO",
         link,
-        mode: mode === "friends" ? "joined" : "invited",
+        mode: "invited",
       });
       await sendEmail({
         to: u.email,
-        subject:
-          mode === "friends"
-            ? `You have been added to table ${tableLabel}`
-            : `Invite to table ${tableLabel}`,
+        subject: `Invite to table ${tableLabel}`,
         html: tpl.html,
         text: tpl.text,
       });
@@ -1339,38 +1359,6 @@ export async function cancelInvite(memberId: string, sessionId: string) {
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
-}
-
-export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
-  await requireProfile();
-  const { code } = joinByCodeSchema.parse(input);
-
-  const [invite] = await db
-    .select({
-      session_id: sessionInvites.sessionId,
-      expires_at: sessionInvites.expiresAt,
-      max_uses: sessionInvites.maxUses,
-      use_count: sessionInvites.useCount,
-    })
-    .from(sessionInvites)
-    .where(eq(sessionInvites.code, code));
-  if (!invite) throw new Error("Invalid invite code");
-  if (invite.expires_at < new Date()) {
-    throw new Error("Invite code has expired");
-  }
-  if (invite.max_uses !== null && invite.use_count >= invite.max_uses) {
-    throw new Error("Invite code has reached its usage limit");
-  }
-
-  await joinSession({ sessionId: invite.session_id });
-
-  // Increment use count (best-effort)
-  await db
-    .update(sessionInvites)
-    .set({ useCount: invite.use_count + 1 })
-    .where(eq(sessionInvites.code, code));
-
-  redirect(`/session/${invite.session_id}`);
 }
 
 /**
@@ -2209,26 +2197,6 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
   revalidatePath(`/session/${sessionId}`);
 }
 
-// ============================================================
-// INVITES
-// ============================================================
-
-export async function createInvite(sessionId: string) {
-  const profile = await requireProfile();
-
-  const code = generateInviteCode();
-  const [newInvite] = await db
-    .insert(sessionInvites)
-    .values({
-      sessionId,
-      code,
-      createdBy: profile.id,
-    })
-    .returning();
-
-  revalidatePath(`/session/${sessionId}`);
-  return newInvite;
-}
 
 // ============================================================
 // PAYMENTS (mock for demo)
@@ -3524,6 +3492,13 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
 
   if (data.rateeId === profile.id) {
     throw new Error("You can't rate yourself");
+  }
+
+  // Blokir (arah mana pun) → no-op SENYAP (PRD K6b tutup semua jalur +
+  // 7.3 disguised). UI (getRatableMembers) sudah tak menampilkan orangnya.
+  if (await isBlockedEitherWay(profile.id, data.rateeId)) {
+    revalidatePath(`/session/${data.sessionId}/rate`);
+    return;
   }
 
   await db

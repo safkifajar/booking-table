@@ -21,9 +21,11 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
+import { friendships } from "@/lib/db/schema/friends";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
+import { getBlockedIdSet, getFriendIdSet, getRelationshipMap } from "@/lib/friends";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -72,6 +74,8 @@ export interface AdminCustomerRow {
   /** Rata-rata rating diterima (0 = belum ada). */
   rating_avg: number;
   rating_count: number;
+  /** Jumlah teman (PRD Friends req. i). */
+  friend_count: number;
 }
 
 export interface ListCustomersResult {
@@ -156,6 +160,14 @@ export async function listCustomers(
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
         rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
         rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
+        // Jumlah teman: friendships menyimpan SATU baris per pasangan (kanonik
+        // user_a < user_b), jadi user bisa berada di kolom mana pun — hitung
+        // kedua kolom. Ekspresi skalar berkorelasi (bukan join): tak ada alias
+        // yang bisa bentrok dgn subquery visits/ratings yg sama-sama pakai "c".
+        friend_count: sql<number>`(
+          SELECT COUNT(*)::int FROM ${friendships} f
+          WHERE f.user_a_id = ${users.id} OR f.user_b_id = ${users.id}
+        )`,
       })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.id))
@@ -194,6 +206,7 @@ export async function listCustomers(
       visit_count: Number(r.visit_count),
       rating_avg: Number(r.rating_avg),
       rating_count: Number(r.rating_count),
+      friend_count: Number(r.friend_count),
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };
@@ -491,16 +504,23 @@ export interface InviteCandidate {
 
 /**
  * Cari user yg bisa diajak/diundang ke meja. PUBLIK (auth = user login,
- * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri.
- * Wajib ada query (min 1 char) supaya tidak dump semua user.
+ * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri,
+ * bukan yg saling blokir (PRD Friends K6b).
+ *
+ * friendsOnly (PRD K2, mode auto-join "friends"): kandidat dibatasi TEMAN saja.
+ * Query tetap WAJIB min 1 char di kedua mode — daftar tak pernah di-dump
+ * (juga bukan daftar teman: itu membocorkan lingkar pertemanan ke pemanggil
+ * devtools tanpa perlu).
  */
 export async function searchInviteCandidates(
   queryRaw: string,
-  excludeSessionId?: string
+  excludeSessionId?: string,
+  opts?: { friendsOnly?: boolean }
 ): Promise<InviteCandidate[]> {
   const me = await getCurrentProfile();
   if (!me) return [];
   const q = (queryRaw ?? "").trim();
+  const friendsOnly = opts?.friendsOnly === true;
   if (q.length < 1) return [];
 
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
@@ -509,8 +529,24 @@ export async function searchInviteCandidates(
     sql`${users.id} <> ${me.id}`,
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
-    or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`)),
+    or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!,
   ];
+  if (friendsOnly) {
+    const friendIds = await getFriendIdSet(me.id);
+    if (friendIds.size === 0) return [];
+    conditions.push(inArray(users.id, [...friendIds]));
+  } else {
+    // Teman tak mungkin saling blokir (blockUser auto-unfriend), jadi saringan
+    // blokir hanya perlu di jalur non-friendsOnly.
+    const hiddenIds = await getBlockedIdSet(me.id);
+    if (hiddenIds.size > 0) {
+      const elems = sql.join(
+        [...hiddenIds].map((id) => sql`${id}::uuid`),
+        sql`, `
+      );
+      conditions.push(sql`${users.id} NOT IN (${elems})`);
+    }
+  }
 
   // Saat dipanggil dari session (ajak/undang): sembunyikan user yg SUDAH jadi
   // member meja itu (joined/pending). Yg pernah left/kicked tetap muncul supaya
@@ -585,6 +621,15 @@ export async function listAllMembers(opts?: {
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
   ];
+  // Blokir (arah mana pun) -> saling hilang dari daftar (PRD Friends 7.2 C1).
+  const hiddenIds = await getBlockedIdSet(me.id);
+  if (hiddenIds.size > 0) {
+    const elems = sql.join(
+      Array.from(hiddenIds).map((id) => sql`${id}::uuid`),
+      sql`, `
+    );
+    conditions.push(sql`${users.id} NOT IN (${elems})`);
+  }
   if (q.length >= 1) {
     conditions.push(
       or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
@@ -645,6 +690,12 @@ export async function listAllMembers(opts?: {
     : new Set<string>();
 
   const ratings = await getUserRatingsBatch(pageRows.map((r) => r.id));
+  // Status relasi pertemanan per kartu — SATU batch query, bukan per baris
+  // (PRD Friends 10.4).
+  const relationships = await getRelationshipMap(
+    me.id,
+    pageRows.map((r) => r.id)
+  );
   const last = pageRows[pageRows.length - 1];
   return {
     users: pageRows.map((r) => ({
@@ -661,6 +712,7 @@ export async function listAllMembers(opts?: {
       at_soho: activeIds.has(r.id),
       hobbies: r.hobbies,
       rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
+      friend_status: relationships.get(r.id) ?? "none",
     })),
     next_cursor:
       hasMore && last

@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Star, Calendar, MessageSquare, History } from "lucide-react";
+import {
+  ArrowLeft,
+  Star,
+  Calendar,
+  MessageSquare,
+  History,
+  Users,
+} from "lucide-react";
 import { requireAdmin } from "@/lib/admin";
 import {
   getPublicProfile,
   getUserTableHistory,
   getReviewsForUser,
 } from "@/lib/queries";
+import { getFriendsListOf } from "@/lib/friends";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -25,10 +33,12 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
   await requireAdmin();
   const { id } = await params;
 
-  const [profile, history, reviews, userRow] = await Promise.all([
+  const [profile, history, reviews, friends, userRow] = await Promise.all([
     getPublicProfile(id, { admin: true }),
     getUserTableHistory(id, 50),
     getReviewsForUser(id, 50),
+    // Admin lihat daftar teman apa adanya (tanpa saringan blokir viewer).
+    getFriendsListOf(id),
     db
       .select({ email: users.email })
       .from(users)
@@ -49,7 +59,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
         </Button>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
             icon={<Calendar className="h-4 w-4" />}
             label="Visits"
@@ -78,6 +88,11 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
             icon={<History className="h-4 w-4" />}
             label="History"
             value={history.length.toLocaleString("id-ID")}
+          />
+          <StatCard
+            icon={<Users className="h-4 w-4" />}
+            label="Friends"
+            value={friends.length.toLocaleString("id-ID")}
           />
         </div>
 
@@ -137,6 +152,7 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
           }}
           reviews={reviews}
           history={history}
+          friends={friends}
         />
       </div>
     </main>

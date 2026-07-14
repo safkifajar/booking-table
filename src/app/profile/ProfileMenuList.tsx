@@ -17,6 +17,8 @@ import {
   FileText,
   MessageCircle,
   UserCog,
+  Users,
+  Ban,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
@@ -189,6 +191,18 @@ export function ProfileMenuList({
                 ? "On — only network info is visible to others"
                 : "Off — your profile is public"
             }
+          />
+          <MenuItem
+            href="/profile/friends"
+            icon={<Users className="h-5 w-5" />}
+            label="Friends"
+            description="Your friends & pending requests"
+          />
+          <MenuItem
+            href="/profile/blocked"
+            icon={<Ban className="h-5 w-5" />}
+            label="Blocked Users"
+            description="People you've blocked"
           />
           <MenuItem
             href="/profile/sessions"

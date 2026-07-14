@@ -124,37 +124,12 @@ export const sessionMembers = pgTable(
 );
 
 /**
- * Invite = link code untuk share session ke calon member.
- */
-export const sessionInvites = pgTable(
-  "session_invites",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => tableSessions.id, { onDelete: "cascade" }),
-    code: text("code").notNull().unique(),
-    createdBy: uuid("created_by")
-      .notNull()
-      .references(() => profiles.id, { onDelete: "restrict" }),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
-      .notNull()
-      .default(sql`now() + interval '2 hours'`),
-    maxUses: integer("max_uses"),
-    useCount: integer("use_count").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-  },
-  (t) => [index("idx_invites_session").on(t.sessionId)]
-);
-
-/**
  * Relations
  */
 export const tableSessionsRelations = relations(tableSessions, ({ one, many }) => ({
   table: one(tables, { fields: [tableSessions.tableId], references: [tables.id] }),
   host: one(profiles, { fields: [tableSessions.hostId], references: [profiles.id] }),
   members: many(sessionMembers),
-  invites: many(sessionInvites),
 }));
 
 export const sessionMembersRelations = relations(sessionMembers, ({ one }) => ({
@@ -164,17 +139,6 @@ export const sessionMembersRelations = relations(sessionMembers, ({ one }) => ({
   }),
   profile: one(profiles, {
     fields: [sessionMembers.profileId],
-    references: [profiles.id],
-  }),
-}));
-
-export const sessionInvitesRelations = relations(sessionInvites, ({ one }) => ({
-  session: one(tableSessions, {
-    fields: [sessionInvites.sessionId],
-    references: [tableSessions.id],
-  }),
-  creator: one(profiles, {
-    fields: [sessionInvites.createdBy],
     references: [profiles.id],
   }),
 }));

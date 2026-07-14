@@ -27,6 +27,7 @@ import {
   Download,
   Loader2,
   Star,
+  Users,
 } from "lucide-react";
 import { Pagination } from "@/components/admin/Pagination";
 import { initials, getActionErrorMessage, cn } from "@/lib/utils";
@@ -104,7 +105,15 @@ export function CustomerManager({
   }
 
   function exportCsv() {
-    const header = ["Name", "Username", "Email", "WhatsApp number", "Visits", "Registered"];
+    const header = [
+      "Name",
+      "Username",
+      "Email",
+      "WhatsApp number",
+      "Visits",
+      "Friends",
+      "Registered",
+    ];
     const lines = initialRows.map((r) =>
       [
         r.name,
@@ -112,6 +121,7 @@ export function CustomerManager({
         r.email,
         r.phone ?? "",
         r.visit_count,
+        r.friend_count,
         new Date(r.created_at).toLocaleDateString("en-US"),
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -195,6 +205,12 @@ export function CustomerManager({
                     {r.visit_count > 0 && (
                       <Badge variant="secondary" className="text-[10px]">
                         {r.visit_count}× visits
+                      </Badge>
+                    )}
+                    {r.friend_count > 0 && (
+                      <Badge variant="secondary" className="text-[10px] gap-1">
+                        <Users className="h-3 w-3" />
+                        {r.friend_count}
                       </Badge>
                     )}
                   </div>

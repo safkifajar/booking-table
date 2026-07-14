@@ -53,6 +53,17 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "move_rejected", // host: request pindah ditolak
   "payment_received", // pembayaran QRIS lunas / DP booking dikonfirmasi (0054)
   "payment_cancelled", // pembayaran gagal / kadaluarsa (0054)
+  "friend_request", // ada friend request masuk (0058)
+  "friend_accepted", // friend request kamu diterima (0058)
+]);
+
+// Lifecycle friend request (PRD Friends): pending -> accepted/rejected/cancelled.
+// Baris DIPAKAI ULANG saat kirim-ulang (unique per arah) — lihat PRD 6.3.
+export const friendRequestStatusEnum = pgEnum("friend_request_status", [
+  "pending",
+  "accepted",
+  "rejected",
+  "cancelled",
 ]);
 
 // Multi-order lifecycle (PRD Multi-Order Prepaid): unpaid → paid → closed.

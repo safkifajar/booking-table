@@ -10,12 +10,18 @@ import {
   MapPin,
   GraduationCap,
   Cake,
+  UserPlus,
+  UserCheck,
+  Check,
 } from "lucide-react";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { RatingStars } from "@/components/network/RatingStars";
 import { HobbyFilterSheet } from "@/components/network/HobbyFilterSheet";
 import { ProfilePhotoCarousel } from "@/app/profile/ProfilePhotoCarousel";
 import { listAllMembers } from "@/lib/customer-actions";
+import { sendFriendRequest } from "@/lib/friend-actions";
+import { toast } from "sonner";
+import { getActionErrorMessage } from "@/lib/utils";
 import { educationLabel } from "@/lib/education";
 import { cn } from "@/lib/utils";
 import type { NetworkSearchUser } from "@/types/db";
@@ -272,18 +278,28 @@ function MemberCard({
         )}
       </div>
 
-      <Link href={`/network/${user.id}`} className="block p-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-lg font-bold tracking-tight">
-            {user.display_name}
-          </h3>
-          {isMe && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-              you
-            </span>
-          )}
+      <div className="p-4">
+        {/* Baris nama + tombol Add friend SEJAJAR. Tombol di LUAR <Link>
+            (button dalam <a> = HTML tak valid), jadi baris ini dipecah:
+            nama = link, tombol = sibling. */}
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={`/network/${user.id}`}
+            className="flex items-center gap-2 flex-wrap flex-1 min-w-0"
+          >
+            <h3 className="text-lg font-bold tracking-tight truncate">
+              {user.display_name}
+            </h3>
+            {isMe && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+                you
+              </span>
+            )}
+          </Link>
+          {!isMe && <CardFriendButton user={user} />}
         </div>
 
+      <Link href={`/network/${user.id}`} className="block">
         {user.username && (
           <div className="text-sm text-muted-foreground">@{user.username}</div>
         )}
@@ -314,6 +330,91 @@ function MemberCard({
           <HobbyBadges hobbies={user.hobbies} max={4} className="mt-2.5" />
         )}
       </Link>
+      </div>
     </div>
+  );
+}
+
+/**
+ * Tombol pertemanan kecil di kartu — sebaris dengan nama (PRD Friends k).
+ * none -> Add (kirim request, optimistic) · pending_out -> Requested ·
+ * pending_in -> Respond (ke profil) · friends -> Friends · blocked -> kosong.
+ */
+function CardFriendButton({ user }: { user: NetworkSearchUser }) {
+  // Optimistic: setelah kirim sukses, langsung tampil "Requested" tanpa
+  // menunggu refresh list.
+  const [localStatus, setLocalStatus] = React.useState<
+    NetworkSearchUser["friend_status"] | null
+  >(null);
+  const [busy, setBusy] = React.useState(false);
+  const status = localStatus ?? user.friend_status;
+
+  const chip =
+    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow backdrop-blur-sm";
+
+  if (status === "blocked") return null;
+
+  if (status === "friends") {
+    return (
+      <span className={cn(chip, "bg-black/55 text-white")}>
+        <UserCheck className="h-3.5 w-3.5" /> Friends
+      </span>
+    );
+  }
+
+  if (status === "pending_out") {
+    return (
+      <span className={cn(chip, "bg-black/55 text-white/90")}>
+        <Check className="h-3.5 w-3.5" /> Requested
+      </span>
+    );
+  }
+
+  if (status === "pending_in") {
+    // Respon (accept/decline) dilakukan di profil — butuh konfirmasi jelas.
+    return (
+      <Link
+        href={`/network/${user.id}`}
+        className={cn(chip, "bg-primary text-primary-foreground")}
+      >
+        <UserPlus className="h-3.5 w-3.5" /> Respond
+      </Link>
+    );
+  }
+
+  // none
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const res = await sendFriendRequest({ targetId: user.id });
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          setLocalStatus(res.status);
+          toast.success(
+            res.status === "friends"
+              ? `You are now friends with ${user.display_name}`
+              : "Friend request sent"
+          );
+        } catch (err) {
+          toast.error(getActionErrorMessage(err, "Failed to send request"));
+        } finally {
+          setBusy(false);
+        }
+      }}
+      className={cn(chip, "bg-primary text-primary-foreground disabled:opacity-60")}
+    >
+      {busy ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <UserPlus className="h-3.5 w-3.5" />
+      )}
+      Add
+    </button>
   );
 }

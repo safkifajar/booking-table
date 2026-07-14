@@ -28,7 +28,6 @@ const TEST_EMAIL = "actions-smoke@booking-table.local";
 async function cleanup() {
   // FK chain: payments → order_items → orders → table_sessions → users
   //                   ↘ session_members → profiles
-  // Plus: session_invites.created_by → profiles (restrict)
   //       member_ratings.rater_id / ratee_id → profiles (cascade)
   // Bottom-up delete by test user's sessions.
   await client`
@@ -51,14 +50,6 @@ async function cleanup() {
   `;
   await client`
     delete from orders
-    where session_id in (
-      select ts.id from table_sessions ts
-      join users u on u.id = ts.host_id
-      where u.email = ${TEST_EMAIL}
-    )
-  `;
-  await client`
-    delete from session_invites
     where session_id in (
       select ts.id from table_sessions ts
       join users u on u.id = ts.host_id
@@ -137,11 +128,6 @@ async function main() {
     await tx.insert(schema.orders).values({
       sessionId: s.id,
       status: "open",
-    });
-    await tx.insert(schema.sessionInvites).values({
-      sessionId: s.id,
-      code: "TESTCODE",
-      createdBy: userId,
     });
     return s.id;
   });

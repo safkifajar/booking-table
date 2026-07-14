@@ -27,6 +27,8 @@ type NotifType =
   | "move_rejected"
   | "payment_received"
   | "payment_cancelled"
+  | "friend_request"
+  | "friend_accepted"
   | "general";
 
 export interface AdminNotificationRow {
@@ -38,6 +40,8 @@ export interface AdminNotificationRow {
   read: boolean;
   /** Notif undangan sudah direspon (terima/tolak) → tombol aksi disembunyikan. */
   responded: boolean;
+  /** ID entitas sumber (mis. friend_requests.id) — utk tombol aksi by ID. */
+  ref_id: string | null;
   created_at: string;
 }
 
@@ -52,6 +56,10 @@ export async function createNotification(input: {
   title: string;
   body?: string | null;
   link?: string | null;
+  /** ID entitas sumber (mis. friend_requests.id) — utk update notif by ID. */
+  refId?: string | null;
+  /** true = simpan + bell saja, TANPA web push (mis. anti-spam request ulang). */
+  skipPush?: boolean;
 }): Promise<void> {
   await db.insert(notifications).values({
     profileId: input.profileId,
@@ -59,15 +67,54 @@ export async function createNotification(input: {
     title: input.title,
     body: input.body ?? null,
     link: input.link ?? null,
+    refId: input.refId ?? null,
   });
   // Realtime in-app (SSE) — refresh bell.
   await notify(channels.user(input.profileId), { kind: "notification" });
   // Web push (popup OS, walau web ditutup) — best-effort, jangan gagalkan flow.
-  void sendPushToProfile(input.profileId, {
-    title: input.title,
-    body: input.body ?? undefined,
-    url: input.link ?? undefined,
-  }).catch(() => {});
+  if (!input.skipPush) {
+    void sendPushToProfile(input.profileId, {
+      title: input.title,
+      body: input.body ?? undefined,
+      url: input.link ?? undefined,
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Tandai notif ber-ref_id sudah direspon (tombol aksi hilang dari bell).
+ * Match by ID entitas — BUKAN teks link (rapuh, PRD Friends 10.5).
+ */
+export async function markNotificationRespondedByRef(
+  profileId: string,
+  refId: string
+): Promise<void> {
+  await db
+    .update(notifications)
+    .set({ respondedAt: new Date() })
+    .where(
+      and(eq(notifications.profileId, profileId), eq(notifications.refId, refId))
+    );
+  await notify(channels.user(profileId), { kind: "notification" });
+}
+
+/**
+ * Hapus notif ber-ref_id (mis. friend request dibatalkan/di-blokir -> entri
+ * bell penerima dicabut). TANPA push apa pun — penghapusan harus senyap
+ * (PRD Friends 7.3: jangan bocorkan blokir).
+ */
+export async function deleteNotificationsByRef(refId: string): Promise<void> {
+  const rows = await db
+    .delete(notifications)
+    .where(eq(notifications.refId, refId))
+    .returning({ profileId: notifications.profileId });
+  // Refresh bell pemilik notif yang terhapus (best-effort, tanpa push).
+  const owners = new Set(rows.map((r) => r.profileId));
+  await Promise.allSettled(
+    Array.from(owners).map((pid) =>
+      notify(channels.user(pid), { kind: "notification" })
+    )
+  );
 }
 
 /** List notif user yg sedang login (terbaru dulu, limit). */
@@ -85,6 +132,7 @@ export async function getNotifications(
       link: notifications.link,
       readAt: notifications.readAt,
       respondedAt: notifications.respondedAt,
+      refId: notifications.refId,
       createdAt: notifications.createdAt,
     })
     .from(notifications)
@@ -99,6 +147,7 @@ export async function getNotifications(
     link: r.link,
     read: r.readAt != null,
     responded: r.respondedAt != null,
+    ref_id: r.refId,
     created_at: r.createdAt.toISOString(),
   }));
 }

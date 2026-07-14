@@ -14,6 +14,7 @@ import type {
   UserTableHistoryEntry,
   SessionVisibility,
 } from "@/types/db";
+import type { FriendPerson } from "@/lib/friends";
 
 const PAGE_SIZE = 5;
 
@@ -148,6 +149,55 @@ export function CustomerHistory({
                 ? "Cancelled"
                 : "Not paid"}
           </Badge>
+          <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
+        </Link>
+      ))}
+      {totalPages > 1 && (
+        <div className="flex justify-end pt-1">
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Daftar teman (PRD Friends req. i) ---------- */
+export function CustomerFriends({ friends }: { friends: FriendPerson[] }) {
+  const [page, setPage] = React.useState(1);
+  const totalPages = Math.max(1, Math.ceil(friends.length / PAGE_SIZE));
+  const slice = friends.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  if (friends.length === 0) {
+    return (
+      <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
+        No friends yet.
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {slice.map((f) => (
+        <Link
+          key={f.id}
+          href={`/admin/users/${f.id}`}
+          className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 hover:border-primary/40 transition group"
+        >
+          <Avatar className="h-9 w-9 shrink-0">
+            {f.avatar_url && <AvatarImage src={f.avatar_url} />}
+            <AvatarFallback className="text-xs">
+              {initials(f.display_name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate group-hover:text-primary transition">
+              {f.display_name}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {f.username ? `@${f.username} · ` : ""}
+              Friends since {fmtDateTime(f.since)}
+            </p>
+          </div>
           <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />
         </Link>
       ))}

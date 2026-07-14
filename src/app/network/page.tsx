@@ -2,6 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { NotificationBell } from "@/components/NotificationBell";
+import { UserPlus } from "lucide-react";
+import { getIncomingRequestCount } from "@/lib/friend-actions";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getBarBySlug } from "@/lib/queries";
@@ -38,6 +40,8 @@ export default async function NetworkPage() {
   const interestCatalog = await getHobbyGroups();
   const isAnon = !profile;
 
+  const requestCount = !isAnon && profile ? await getIncomingRequestCount() : 0;
+
   return (
     <main className="relative flex-1 pb-24">
       <SohoGlow />
@@ -57,6 +61,19 @@ export default async function NetworkPage() {
             <span className="text-sm font-semibold">Network</span>
           </Link>
           <div className="flex-1" />
+          {/* Friend requests masuk — badge jumlah (PRD Friends j). */}
+          {!isAnon && profile && requestCount > 0 && (
+            <Link
+              href="/profile/friends?tab=requests"
+              aria-label={`${requestCount} friend requests`}
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"
+            >
+              <UserPlus className="h-5 w-5" />
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold flex items-center justify-center">
+                {requestCount > 9 ? "9+" : requestCount}
+              </span>
+            </Link>
+          )}
           {!isAnon && profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
