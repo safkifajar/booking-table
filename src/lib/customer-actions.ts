@@ -137,24 +137,6 @@ export async function listCustomers(
     .groupBy(memberRatings.rateeId)
     .as("ratings");
 
-  // Jumlah teman: friendships menyimpan SATU baris per pasangan (kanonik
-  // user_a < user_b), jadi tiap user bisa muncul di kolom mana pun — UNION ALL
-  // kedua kolom dulu, baru dihitung. Satu subquery, bukan per-baris.
-  const friendSq = db
-    .select({
-      uid: sql<string>`uid`.as("uid"),
-      c: sql<number>`COUNT(*)::int`.as("c"),
-    })
-    .from(
-      sql`(
-        SELECT ${friendships.userAId} AS uid FROM ${friendships}
-        UNION ALL
-        SELECT ${friendships.userBId} AS uid FROM ${friendships}
-      ) AS f`
-    )
-    .groupBy(sql`uid`)
-    .as("friends");
-
   const [rows, totalRow] = await Promise.all([
     db
       .select({
@@ -178,13 +160,19 @@ export async function listCustomers(
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
         rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
         rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
-        friend_count: sql<number>`COALESCE(${friendSq.c}, 0)::int`,
+        // Jumlah teman: friendships menyimpan SATU baris per pasangan (kanonik
+        // user_a < user_b), jadi user bisa berada di kolom mana pun — hitung
+        // kedua kolom. Ekspresi skalar berkorelasi (bukan join): tak ada alias
+        // yang bisa bentrok dgn subquery visits/ratings yg sama-sama pakai "c".
+        friend_count: sql<number>`(
+          SELECT COUNT(*)::int FROM ${friendships} f
+          WHERE f.user_a_id = ${users.id} OR f.user_b_id = ${users.id}
+        )`,
       })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.id))
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
       .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
-      .leftJoin(friendSq, eq(friendSq.uid, users.id))
       .where(whereClause)
       .orderBy(desc(profiles.createdAt))
       .limit(size)
