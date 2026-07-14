@@ -114,6 +114,8 @@ interface SessionViewProps {
     role: MemberRole;
     status: MemberStatus;
     joined_at: string;
+    /** Kapan keluar/dikeluarkan (null kalau masih di meja). */
+    left_at: string | null;
     /** Terisi = diundang host (user yg approve). NULL + pending = request-join. */
     invited_by: string | null;
     profile: { id: string; display_name: string; avatar_url: string | null; hobbies?: string[] };
@@ -578,6 +580,12 @@ function VibeTab(
   const invitedPending = props.members.filter(
     (m) => m.status === "pending" && m.invited_by != null
   );
+  // Jejak anggota yang sudah TIDAK di meja (keluar sendiri / dikeluarkan staff).
+  // Ala grup WA: tetap tampil sebagai riwayat, bukan hilang begitu saja — biar
+  // jelas siapa saja yang pernah ikut di meja ini.
+  const departed = props.members.filter(
+    (m) => m.status === "left" || m.status === "kicked"
+  );
   // Kalau meja izinkan over-capacity (setting admin), anggap selalu ADA slot
   // (host/staff boleh terus menambah orang walau lewat kapasitas). Angka
   // ditampilkan tetap kapasitas asli, tapi tombol ajak/tambah tak terkunci.
@@ -933,6 +941,57 @@ function VibeTab(
               full={slotsAvailable <= 0}
               alreadyPending={myStatus === "pending"}
             />
+          )}
+
+          {/* Jejak anggota yang sudah keluar — ala grup WA: tetap terlihat
+              pernah ikut, tapi dibedakan (redup + tanpa hobi/rating). */}
+          {departed.length > 0 && (
+            <div className="pt-3 mt-1 border-t border-border space-y-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Left the table ({departed.length})
+              </p>
+              {departed.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 opacity-60">
+                  <Link
+                    href={`/network/${m.profile.id}`}
+                    className="shrink-0 rounded-full transition hover:ring-2 hover:ring-primary/40"
+                    aria-label={`View ${m.profile.display_name}'s profile`}
+                  >
+                    <Avatar className="grayscale">
+                      {m.profile.avatar_url && (
+                        <AvatarImage src={m.profile.avatar_url} />
+                      )}
+                      <AvatarFallback>
+                        {initials(m.profile.display_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Link>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-sm truncate">
+                        {m.profile.display_name}
+                      </p>
+                      {m.role === "host" && (
+                        <Crown className="h-3 w-3 text-primary" aria-label="Host" />
+                      )}
+                      {m.profile.id === props.myProfileId && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          you
+                        </Badge>
+                      )}
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                        {m.status === "kicked" ? "Removed" : "Left"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {m.left_at
+                        ? `Left ${formatDateShort(m.left_at)}, ${formatTime(m.left_at)}`
+                        : `Joined ${formatDateShort(m.joined_at)}, ${formatTime(m.joined_at)}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </Card>

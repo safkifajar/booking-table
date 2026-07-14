@@ -146,6 +146,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       role: sessionMembers.role,
       status: sessionMembers.status,
       joined_at: sessionMembers.joinedAt,
+      left_at: sessionMembers.leftAt,
       invited_by: sessionMembers.invitedBy,
       profile_id: profiles.id,
       profile_display_name: profiles.displayName,
@@ -355,6 +356,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         role: m.role,
         status: m.status,
         joined_at: m.joined_at.toISOString(),
+        left_at: m.left_at ? m.left_at.toISOString() : null,
         invited_by: m.invited_by,
         profile: {
           id: m.profile_id,
