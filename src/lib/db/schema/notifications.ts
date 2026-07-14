@@ -32,6 +32,9 @@ export const notifications = pgTable(
     // Saat notif undangan (table_invite) direspon (terima/tolak). NULL = belum
     // → tombol Terima/Tolak masih muncul di bell.
     respondedAt: timestamp("responded_at", { mode: "date" }),
+    // ID entitas sumber notif (mis. friend_requests.id) — untuk mencocokkan &
+    // meng-update notif secara PASTI by ID, bukan by teks link (rapuh).
+    refId: uuid("ref_id"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [
