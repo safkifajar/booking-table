@@ -40,6 +40,7 @@ import {
   lockPair,
   assertFriendableTarget,
   getRelationship,
+  getFriendsListOf,
   countOutgoingLast24h,
   DAILY_OUTGOING_QUOTA,
   type RelationshipStatus,
@@ -487,45 +488,7 @@ export interface FriendListEntry {
 
 export async function getMyFriendsList(): Promise<FriendListEntry[]> {
   const me = await requireProfile();
-  const rows = await db
-    .select({
-      a: friendships.userAId,
-      b: friendships.userBId,
-      createdAt: friendships.createdAt,
-    })
-    .from(friendships)
-    .where(
-      or(eq(friendships.userAId, me.id), eq(friendships.userBId, me.id))
-    )
-    .orderBy(desc(friendships.createdAt));
-  const otherIds = rows.map((r) => (r.a === me.id ? r.b : r.a));
-  if (otherIds.length === 0) return [];
-
-  const people = await db
-    .select({
-      id: profiles.id,
-      display_name: profiles.displayName,
-      username: profiles.username,
-      avatar_url: profiles.avatarUrl,
-    })
-    .from(profiles)
-    .where(or(...otherIds.map((id) => eq(profiles.id, id))));
-  const byId = new Map(people.map((p) => [p.id, p]));
-
-  return rows.flatMap((r) => {
-    const otherId = r.a === me.id ? r.b : r.a;
-    const p = byId.get(otherId);
-    if (!p) return [];
-    return [
-      {
-        id: p.id,
-        display_name: p.display_name,
-        username: p.username,
-        avatar_url: p.avatar_url,
-        since: r.createdAt.toISOString(),
-      },
-    ];
-  });
+  return getFriendsListOf(me.id);
 }
 
 export interface FriendRequestEntry extends FriendListEntry {

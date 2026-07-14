@@ -9,11 +9,16 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { EDUCATION_OPTIONS, educationLabel } from "@/lib/education";
 import { RELIGION_OPTIONS, religionLabel } from "@/lib/religion";
-import { CustomerReviews, CustomerHistory } from "./CustomerDetailSections";
+import {
+  CustomerReviews,
+  CustomerHistory,
+  CustomerFriends,
+} from "./CustomerDetailSections";
 import { updateCustomer, setCustomerPassword } from "@/lib/customer-actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import type { UserReviewEntry, UserTableHistoryEntry } from "@/types/db";
+import type { FriendPerson } from "@/lib/friends";
 
 type Gender = "" | "male" | "female";
 type InterestedIn = "" | "male" | "female" | "both";
@@ -41,6 +46,7 @@ const TABS = [
   { key: "detail", label: "Detail" },
   { key: "review", label: "Review" },
   { key: "history", label: "History" },
+  { key: "friends", label: "Friends" },
   { key: "password", label: "Change Password" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -84,10 +90,12 @@ export function CustomerDetailTabs({
   customer,
   reviews,
   history,
+  friends,
 }: {
   customer: CustomerData;
   reviews: UserReviewEntry[];
   history: UserTableHistoryEntry[];
+  friends: FriendPerson[];
 }) {
   const [tab, setTab] = React.useState<TabKey>("detail");
 
@@ -137,6 +145,17 @@ export function CustomerDetailTabs({
             Tap a history entry to see details: who was at the table & what was
             ordered.
           </p>
+        </div>
+      )}
+      {tab === "friends" && (
+        <div>
+          <h2 className="text-sm font-semibold mb-2">
+            Friends{" "}
+            <span className="text-muted-foreground font-normal">
+              ({friends.length})
+            </span>
+          </h2>
+          <CustomerFriends friends={friends} />
         </div>
       )}
       {tab === "password" && <PasswordTab customerId={customer.id} />}

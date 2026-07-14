@@ -210,7 +210,13 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               ? `${profile.visit_count}× hung out at SOHO`
               : "Never hung out yet"}
             {" · "}
-            {friendCount} friend{friendCount === 1 ? "" : "s"}
+            {/* Jumlah teman → daftar temannya (PRD Friends req. f, g). */}
+            <Link
+              href={`/network/${profile.id}/friends`}
+              className="hover:text-primary transition underline-offset-2 hover:underline"
+            >
+              {friendCount} friend{friendCount === 1 ? "" : "s"}
+            </Link>
           </p>
 
           <div className="mt-3 space-y-2 text-sm">

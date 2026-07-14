@@ -21,6 +21,7 @@ import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
+import { friendships } from "@/lib/db/schema/friends";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
@@ -73,6 +74,8 @@ export interface AdminCustomerRow {
   /** Rata-rata rating diterima (0 = belum ada). */
   rating_avg: number;
   rating_count: number;
+  /** Jumlah teman (PRD Friends req. i). */
+  friend_count: number;
 }
 
 export interface ListCustomersResult {
@@ -134,6 +137,24 @@ export async function listCustomers(
     .groupBy(memberRatings.rateeId)
     .as("ratings");
 
+  // Jumlah teman: friendships menyimpan SATU baris per pasangan (kanonik
+  // user_a < user_b), jadi tiap user bisa muncul di kolom mana pun — UNION ALL
+  // kedua kolom dulu, baru dihitung. Satu subquery, bukan per-baris.
+  const friendSq = db
+    .select({
+      uid: sql<string>`uid`.as("uid"),
+      c: sql<number>`COUNT(*)::int`.as("c"),
+    })
+    .from(
+      sql`(
+        SELECT ${friendships.userAId} AS uid FROM ${friendships}
+        UNION ALL
+        SELECT ${friendships.userBId} AS uid FROM ${friendships}
+      ) AS f`
+    )
+    .groupBy(sql`uid`)
+    .as("friends");
+
   const [rows, totalRow] = await Promise.all([
     db
       .select({
@@ -157,11 +178,13 @@ export async function listCustomers(
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
         rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
         rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
+        friend_count: sql<number>`COALESCE(${friendSq.c}, 0)::int`,
       })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.id))
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
       .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
+      .leftJoin(friendSq, eq(friendSq.uid, users.id))
       .where(whereClause)
       .orderBy(desc(profiles.createdAt))
       .limit(size)
@@ -195,6 +218,7 @@ export async function listCustomers(
       visit_count: Number(r.visit_count),
       rating_avg: Number(r.rating_avg),
       rating_count: Number(r.rating_count),
+      friend_count: Number(r.friend_count),
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };

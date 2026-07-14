@@ -12,7 +12,7 @@ import "server-only";
  *    satu arah = blokir bocor (PRD 4.3).
  */
 
-import { and, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { friendRequests, friendships, userBlocks } from "@/lib/db/schema/friends";
 import { profiles } from "@/lib/db/schema/profiles";
@@ -322,4 +322,68 @@ export async function countOutgoingLast24h(userId: string): Promise<number> {
       )
     );
   return Number(row?.n ?? 0);
+}
+
+// ============================================================
+// DAFTAR TEMAN (dipakai UI: /profile/friends, /network/[id]/friends, admin)
+// ============================================================
+
+export interface FriendPerson {
+  id: string;
+  display_name: string;
+  username: string | null;
+  avatar_url: string | null;
+  /** Kapan berteman (ISO). */
+  since: string;
+}
+
+/**
+ * Daftar teman SIAPA PUN (bukan cuma diri sendiri) — dipakai halaman "teman
+ * user lain" (PRD req. f) & detail customer admin (req. i). Tanpa cek relasi
+ * viewer: pemanggil yang menentukan boleh/tidaknya melihat (mis. profil yg
+ * saling blokir sudah 404 sebelum sampai sini).
+ *
+ * excludeIds: sembunyikan orang tertentu dari hasil — untuk viewer non-admin,
+ * isi dgn getBlockedIdSet(viewer) supaya yg saling blokir dgn VIEWER tak bocor
+ * lewat daftar teman orang lain (PRD 7.2).
+ */
+export async function getFriendsListOf(
+  userId: string,
+  opts?: { excludeIds?: Set<string> }
+): Promise<FriendPerson[]> {
+  const uid = userId.toLowerCase();
+  const rows = await db
+    .select({
+      a: friendships.userAId,
+      b: friendships.userBId,
+      createdAt: friendships.createdAt,
+    })
+    .from(friendships)
+    .where(or(eq(friendships.userAId, uid), eq(friendships.userBId, uid)))
+    .orderBy(desc(friendships.createdAt));
+
+  const exclude = opts?.excludeIds;
+  const pairs = rows
+    .map((r) => ({
+      otherId: r.a === uid ? r.b : r.a,
+      since: r.createdAt.toISOString(),
+    }))
+    .filter((r) => !exclude?.has(r.otherId));
+  if (pairs.length === 0) return [];
+
+  const people = await db
+    .select({
+      id: profiles.id,
+      display_name: profiles.displayName,
+      username: profiles.username,
+      avatar_url: profiles.avatarUrl,
+    })
+    .from(profiles)
+    .where(inArray(profiles.id, pairs.map((p) => p.otherId)));
+  const byId = new Map(people.map((p) => [p.id, p]));
+
+  return pairs.flatMap((r) => {
+    const p = byId.get(r.otherId);
+    return p ? [{ ...p, since: r.since }] : [];
+  });
 }
