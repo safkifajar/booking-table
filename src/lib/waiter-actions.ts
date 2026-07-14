@@ -28,7 +28,6 @@ import { db } from "@/lib/db/client";
 import {
   tableSessions,
   sessionMembers,
-  sessionInvites,
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
@@ -38,7 +37,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
-import { generateInviteCode, isDbConstraintError } from "@/lib/utils";
+import { isDbConstraintError } from "@/lib/utils";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
@@ -879,12 +878,6 @@ export async function staffOpenTableForCustomer(
         sessionId: newSession.id,
         status: "paid",
         paidAt: new Date(),
-      });
-
-      await tx.insert(sessionInvites).values({
-        sessionId: newSession.id,
-        code: generateInviteCode(),
-        createdBy: ctx.profileId, // Waiter generate invite
       });
 
       return newSession.id;

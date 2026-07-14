@@ -138,11 +138,6 @@ async function main() {
       sessionId: s.id,
       status: "open",
     });
-    await tx.insert(schema.sessionInvites).values({
-      sessionId: s.id,
-      code: "TESTCODE",
-      createdBy: userId,
-    });
     return s.id;
   });
   console.log(`   ✅ Session ${sessionId.slice(0, 8)}... created\n`);

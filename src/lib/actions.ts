@@ -24,7 +24,6 @@ import { db } from "@/lib/db/client";
 import {
   tableSessions,
   sessionMembers,
-  sessionInvites,
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
@@ -36,7 +35,6 @@ import { requireProfile } from "@/lib/auth-v2/current";
 import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
 import {
   formatIDR,
-  generateInviteCode,
   isDbConstraintError,
   normalizeUsername,
 } from "@/lib/utils";
@@ -139,10 +137,6 @@ const addOrderItemSchema = z.object({
 
 const joinSchema = z.object({
   sessionId: z.string().uuid(),
-});
-
-const joinByCodeSchema = z.object({
-  code: z.string().min(4).max(12),
 });
 
 // ============================================================
@@ -492,12 +486,6 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           }))
         );
       }
-
-      await tx.insert(sessionInvites).values({
-        sessionId: newSession.id,
-        code: generateInviteCode(),
-        createdBy: profile.id,
-      });
 
       // Ajak/undang user: friends → joined, invite_only → pending+invited_by.
       if (inviteMode && invitees.length > 0) {
@@ -1341,38 +1329,6 @@ export async function cancelInvite(memberId: string, sessionId: string) {
   revalidatePath(`/session/${sessionId}`);
 }
 
-export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
-  await requireProfile();
-  const { code } = joinByCodeSchema.parse(input);
-
-  const [invite] = await db
-    .select({
-      session_id: sessionInvites.sessionId,
-      expires_at: sessionInvites.expiresAt,
-      max_uses: sessionInvites.maxUses,
-      use_count: sessionInvites.useCount,
-    })
-    .from(sessionInvites)
-    .where(eq(sessionInvites.code, code));
-  if (!invite) throw new Error("Invalid invite code");
-  if (invite.expires_at < new Date()) {
-    throw new Error("Invite code has expired");
-  }
-  if (invite.max_uses !== null && invite.use_count >= invite.max_uses) {
-    throw new Error("Invite code has reached its usage limit");
-  }
-
-  await joinSession({ sessionId: invite.session_id });
-
-  // Increment use count (best-effort)
-  await db
-    .update(sessionInvites)
-    .set({ useCount: invite.use_count + 1 })
-    .where(eq(sessionInvites.code, code));
-
-  redirect(`/session/${invite.session_id}`);
-}
-
 /**
  * Anggota keluar dari meja.
  *
@@ -2209,26 +2165,6 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
   revalidatePath(`/session/${sessionId}`);
 }
 
-// ============================================================
-// INVITES
-// ============================================================
-
-export async function createInvite(sessionId: string) {
-  const profile = await requireProfile();
-
-  const code = generateInviteCode();
-  const [newInvite] = await db
-    .insert(sessionInvites)
-    .values({
-      sessionId,
-      code,
-      createdBy: profile.id,
-    })
-    .returning();
-
-  revalidatePath(`/session/${sessionId}`);
-  return newInvite;
-}
 
 // ============================================================
 // PAYMENTS (mock for demo)

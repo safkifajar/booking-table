@@ -4,7 +4,6 @@ import { db } from "@/lib/db/client";
 import {
   tableSessions,
   sessionMembers,
-  sessionInvites,
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
@@ -258,14 +257,6 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // 6. Menu — bentuk flat (sub-kategori + parent_name) utk picker order.
   const menu = flattenMenuTree(await getMenuByBar(sessionRow.bar_id));
 
-  // 7. Latest invite
-  const [invite] = await db
-    .select({ code: sessionInvites.code, expires_at: sessionInvites.expiresAt })
-    .from(sessionInvites)
-    .where(eq(sessionInvites.sessionId, id))
-    .orderBy(desc(sessionInvites.createdAt))
-    .limit(1);
-
   const isHost = sessionRow.host_id === profile.id;
   const myMember = membersRaw.find((m) => m.profile_id === profile.id);
   const isMember = !!myMember && myMember.status === "joined";
@@ -429,7 +420,6 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       myMemberId={myMember?.id ?? null}
       isHost={isHost}
       isMember={isMember}
-      inviteCode={invite?.code ?? null}
       backHref={backHref}
       staffRole={!isMember ? staffRole : null}
       openedByStaff={openedByStaff}

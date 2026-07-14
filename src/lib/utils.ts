@@ -32,15 +32,6 @@ export function formatRelativeTime(date: string | Date): string {
   return `${days}d ago`;
 }
 
-export function generateInviteCode(length = 6): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < length; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
-}
-
 export function initials(name: string): string {
   return name
     .split(" ")

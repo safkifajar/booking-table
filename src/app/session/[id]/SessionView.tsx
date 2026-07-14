@@ -161,7 +161,6 @@ interface SessionViewProps {
   myMemberId: string | null;
   isHost: boolean;
   isMember: boolean;
-  inviteCode: string | null;
   /**
    * URL untuk back button. Default `/bar/${slug}` (customer landing).
    * Untuk staff: arah ke dashboard role-nya (`/staff/waiter`, `/staff/cashier`, dst).
