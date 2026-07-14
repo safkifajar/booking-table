@@ -35,7 +35,7 @@ App ini sudah punya **discovery** (Network: cari orang, lihat profil, rating, ho
 | # | Keputusan |
 |---|-----------|
 | **K1** | **Pertemanan dua arah + approval.** A kirim request → B terima → berteman. |
-| **K2** | **Undang meja tipe "friends" hanya menampilkan teman.** |
+| **K2** | **REVISI 2026-07-14 — auto-join dihapus.** SEMUA undangan (semua visibility) masuk sbg **pending + undangan**; yang diundang sendiri yang Terima/Tolak — tak ada lagi orang yang diseret masuk tanpa persetujuannya. Kandidat undangan mengikuti **visibility meja**, bukan mode: meja **friends** hanya boleh mengundang **teman**; **public** & **invite_only** boleh siapa saja. Daftar tak pernah di-dump — hasil muncul setelah mengetik. |
 | **K3** | **Meja "friends":** semua orang tetap bisa **MELIHAT**; hanya teman host yang bisa **GABUNG**. |
 | **K4** | **Story: teman diprioritaskan di URUTAN saja.** Semua story tetap terlihat semua orang. |
 | **K5** | **Akun privat terbuka untuk teman.** Orang asing tetap tertutup. |
@@ -265,8 +265,8 @@ Ada **banyak jalur masuk** ke meja. Guard "harus teman host" **wajib** dipasang 
 | `acceptInvite` | Guard sama |
 | **`joinByCode`** | ❌ **DIHAPUS** (K7) |
 | `approveJoinRequest` | **Boleh siapa pun** — host memutuskan sendiri (kendali penuh atas mejanya) |
-| `inviteUsersToSession` | Guard **K2** (hanya teman) |
-| `openTable` (pilih undangan) | Guard **K2** (hanya teman) |
+| `inviteUsersToSession` | Guard **K2**: selalu pending; meja "friends" → hanya teman |
+| `openTable` (pilih undangan) | Guard **K2**: selalu pending; meja "friends" → hanya teman |
 | `staffAddGuestToTable` | **Dikecualikan** (tamu walk-in) |
 
 **Untuk bukan-teman:** meja tetap terlihat, detail bisa dibuka, tapi tombol gabung **nonaktif** dengan keterangan (*"Only the host's friends can join this table"*) — bukan error saat ditekan. Server tetap menolak kalau dipaksa.
