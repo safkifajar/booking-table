@@ -495,9 +495,10 @@ export interface InviteCandidate {
  * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri,
  * bukan yg saling blokir (PRD Friends K6b).
  *
- * friendsOnly (PRD K2, mode auto-join "friends"): hanya TEMAN — dan query
- * boleh kosong (teman didaftar tanpa perlu mengetik; jumlahnya terbatas,
- * bukan dump semua user). Tanpa friendsOnly, query wajib min 1 char.
+ * friendsOnly (PRD K2, mode auto-join "friends"): kandidat dibatasi TEMAN saja.
+ * Query tetap WAJIB min 1 char di kedua mode — daftar tak pernah di-dump
+ * (juga bukan daftar teman: itu membocorkan lingkar pertemanan ke pemanggil
+ * devtools tanpa perlu).
  */
 export async function searchInviteCandidates(
   queryRaw: string,
@@ -508,7 +509,7 @@ export async function searchInviteCandidates(
   if (!me) return [];
   const q = (queryRaw ?? "").trim();
   const friendsOnly = opts?.friendsOnly === true;
-  if (!friendsOnly && q.length < 1) return [];
+  if (q.length < 1) return [];
 
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
 
@@ -516,12 +517,8 @@ export async function searchInviteCandidates(
     sql`${users.id} <> ${me.id}`,
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
+    or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!,
   ];
-  if (q.length >= 1) {
-    conditions.push(
-      or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
-    );
-  }
   if (friendsOnly) {
     const friendIds = await getFriendIdSet(me.id);
     if (friendIds.size === 0) return [];

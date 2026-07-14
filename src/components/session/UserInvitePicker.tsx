@@ -10,17 +10,21 @@ import {
 } from "@/lib/customer-actions";
 
 /**
- * Picker user (search + multi-select chip) untuk mengajak/mengundang ke meja.
- * Dipakai di OpenTableForm (saat buka meja) & SessionView (ajak dari meja
- * berjalan). mode "join" = friends (langsung gabung), "invite" = perlu diterima.
+ * Picker user (search + multi-select chip) untuk mengundang ke meja. Dipakai di
+ * OpenTableForm (saat buka meja) & SessionView (undang dari meja berjalan).
+ *
+ * SEMUA undangan perlu persetujuan yg diundang — tak ada auto-join. Kandidat
+ * mengikuti VISIBILITY meja (PRD Friends K2/K3): meja "friends" hanya boleh
+ * mengundang teman; public & invite_only boleh siapa saja. Hasil muncul setelah
+ * mengetik (tak pernah dump daftar).
  */
 export function UserInvitePicker({
-  mode,
+  visibility,
   selected,
   onChange,
   excludeSessionId,
 }: {
-  mode: "join" | "invite";
+  visibility: "public" | "friends" | "invite_only";
   selected: InviteCandidate[];
   onChange: (next: InviteCandidate[]) => void;
   /** Saat dari session: sembunyikan user yg sudah jadi member meja itu. */
@@ -30,9 +34,7 @@ export function UserInvitePicker({
   const [results, setResults] = React.useState<InviteCandidate[]>([]);
   const [searching, setSearching] = React.useState(false);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mode "join" = auto-join → kandidat HANYA teman (PRD Friends K2), dan
-  // daftar teman langsung tampil tanpa perlu mengetik.
-  const friendsOnly = mode === "join";
+  const friendsOnly = visibility === "friends";
 
   const fetchCandidates = React.useCallback(
     async (q: string) => {
@@ -49,15 +51,10 @@ export function UserInvitePicker({
     [excludeSessionId, friendsOnly]
   );
 
-  // friendsOnly: muat daftar teman saat picker dibuka (query kosong).
-  React.useEffect(() => {
-    if (friendsOnly) void fetchCandidates("");
-  }, [friendsOnly, fetchCandidates]);
-
   function handleQueryChange(q: string) {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!friendsOnly && q.trim().length < 1) {
+    if (q.trim().length < 1) {
       setResults([]);
       return;
     }
@@ -73,9 +70,7 @@ export function UserInvitePicker({
   function add(u: InviteCandidate) {
     onChange([...selected, u]);
     setQuery("");
-    // friendsOnly: kembali ke daftar teman penuh; mode invite: kosongkan hasil.
-    if (friendsOnly) void fetchCandidates("");
-    else setResults([]);
+    setResults([]);
   }
 
   function remove(id: string) {
@@ -85,9 +80,9 @@ export function UserInvitePicker({
   return (
     <div>
       <label className="block text-sm font-medium mb-2">
-        {mode === "join" ? "Invite friends" : "Invite user"}{" "}
+        {friendsOnly ? "Invite friends" : "Invite people"}{" "}
         <span className="text-muted-foreground font-normal">
-          {mode === "join" ? "(join instantly)" : "(they need to accept)"}
+          (they need to accept)
         </span>
       </label>
 
@@ -130,8 +125,8 @@ export function UserInvitePicker({
         />
       </div>
 
-      {/* Hasil search — friendsOnly: daftar teman tampil sejak awal */}
-      {(friendsOnly || query.trim().length > 0) && (
+      {/* Hasil search — muncul hanya setelah mengetik (kedua mode) */}
+      {query.trim().length > 0 && (
         <div className="mt-1.5 rounded-md border border-border divide-y divide-border max-h-48 overflow-y-auto">
           {searching ? (
             <div className="p-3 text-center">
@@ -140,9 +135,7 @@ export function UserInvitePicker({
           ) : visibleResults.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">
               {friendsOnly
-                ? query.trim().length > 0
-                  ? "No matching friends."
-                  : "No friends to invite yet. Add friends from the Network page first."
+                ? "No matching friends. A friends-only table can only invite friends."
                 : "No matching users."}
             </p>
           ) : (
