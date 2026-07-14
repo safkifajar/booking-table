@@ -30,31 +30,52 @@ export function UserInvitePicker({
   const [results, setResults] = React.useState<InviteCandidate[]>([]);
   const [searching, setSearching] = React.useState(false);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mode "join" = auto-join → kandidat HANYA teman (PRD Friends K2), dan
+  // daftar teman langsung tampil tanpa perlu mengetik.
+  const friendsOnly = mode === "join";
+
+  const fetchCandidates = React.useCallback(
+    async (q: string) => {
+      setSearching(true);
+      try {
+        const rows = await searchInviteCandidates(q, excludeSessionId, {
+          friendsOnly,
+        });
+        setResults(rows);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [excludeSessionId, friendsOnly]
+  );
+
+  // friendsOnly: muat daftar teman saat picker dibuka (query kosong).
+  React.useEffect(() => {
+    if (friendsOnly) void fetchCandidates("");
+  }, [friendsOnly, fetchCandidates]);
 
   function handleQueryChange(q: string) {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (q.trim().length < 1) {
+    if (!friendsOnly && q.trim().length < 1) {
       setResults([]);
       return;
     }
     setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const rows = await searchInviteCandidates(q, excludeSessionId);
-        // Sembunyikan yg sudah terpilih.
-        const selIds = new Set(selected.map((s) => s.id));
-        setResults(rows.filter((r) => !selIds.has(r.id)));
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
+    debounceRef.current = setTimeout(() => void fetchCandidates(q), 300);
   }
+
+  // Sembunyikan yg sudah terpilih (filter saat render, bukan saat fetch —
+  // supaya batal-pilih memunculkan lagi tanpa refetch).
+  const selIds = new Set(selected.map((s) => s.id));
+  const visibleResults = results.filter((r) => !selIds.has(r.id));
 
   function add(u: InviteCandidate) {
     onChange([...selected, u]);
-    setResults((prev) => prev.filter((r) => r.id !== u.id));
     setQuery("");
+    // friendsOnly: kembali ke daftar teman penuh; mode invite: kosongkan hasil.
+    if (friendsOnly) void fetchCandidates("");
+    else setResults([]);
   }
 
   function remove(id: string) {
@@ -104,24 +125,28 @@ export function UserInvitePicker({
           type="text"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
-          placeholder="Search name or email…"
+          placeholder={friendsOnly ? "Search friends…" : "Search name or email…"}
           className="w-full h-11 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
         />
       </div>
 
-      {/* Hasil search */}
-      {query.trim().length > 0 && (
+      {/* Hasil search — friendsOnly: daftar teman tampil sejak awal */}
+      {(friendsOnly || query.trim().length > 0) && (
         <div className="mt-1.5 rounded-md border border-border divide-y divide-border max-h-48 overflow-y-auto">
           {searching ? (
             <div className="p-3 text-center">
               <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
             </div>
-          ) : results.length === 0 ? (
+          ) : visibleResults.length === 0 ? (
             <p className="p-3 text-center text-xs text-muted-foreground">
-              No matching users.
+              {friendsOnly
+                ? query.trim().length > 0
+                  ? "No matching friends."
+                  : "No friends to invite yet. Add friends from the Network page first."
+                : "No matching users."}
             </p>
           ) : (
-            results.map((u) => (
+            visibleResults.map((u) => (
               <button
                 key={u.id}
                 type="button"

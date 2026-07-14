@@ -12,6 +12,7 @@ import { orders, orderItems } from "@/lib/db/schema/orders";
 import { menuItems, menuCategories } from "@/lib/db/schema/menu";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getUserRatingsBatch, promoteSessionIfDue } from "@/lib/queries";
+import { areFriends, isBlockedEitherWay } from "@/lib/friends";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +118,15 @@ export default async function SessionPreviewPage({ params }: PageProps) {
     myMemberStatus = member?.status ?? null;
   }
   const isHost = profile?.id === sessionRow.host_id;
+
+  // Saling blokir dgn host → meja ini seolah tak ada (PRD Friends K6).
+  if (profile && !isHost) {
+    if (await isBlockedEitherWay(profile.id, sessionRow.host_id)) notFound();
+  }
+  // Meja "friends": semua boleh LIHAT preview, hanya teman host yg bisa
+  // join (PRD K3) — CTA menyesuaikan.
+  const isHostFriend =
+    profile && !isHost ? await areFriends(profile.id, sessionRow.host_id) : false;
 
   // 3. Joined members + profile info
   const membersRaw = await db
@@ -383,11 +393,14 @@ export default async function SessionPreviewPage({ params }: PageProps) {
           sessionId={id}
           barSlug={bar.slug}
           hostName={host.display_name}
+          hostId={sessionRow.host_id}
           memberCount={memberList.length}
           capacity={table.capacity}
           isHost={isHost}
           myStatus={myMemberStatus}
           loggedIn={!!profile}
+          visibility={session.visibility}
+          isHostFriend={isHostFriend}
         />
       </div>
     </main>

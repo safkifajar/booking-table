@@ -24,7 +24,7 @@ import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
-import { getBlockedIdSet, getRelationshipMap } from "@/lib/friends";
+import { getBlockedIdSet, getFriendIdSet, getRelationshipMap } from "@/lib/friends";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -492,17 +492,23 @@ export interface InviteCandidate {
 
 /**
  * Cari user yg bisa diajak/diundang ke meja. PUBLIK (auth = user login,
- * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri.
- * Wajib ada query (min 1 char) supaya tidak dump semua user.
+ * bukan admin). Kandidat: customer non-staff, non-guest, BUKAN diri sendiri,
+ * bukan yg saling blokir (PRD Friends K6b).
+ *
+ * friendsOnly (PRD K2, mode auto-join "friends"): hanya TEMAN — dan query
+ * boleh kosong (teman didaftar tanpa perlu mengetik; jumlahnya terbatas,
+ * bukan dump semua user). Tanpa friendsOnly, query wajib min 1 char.
  */
 export async function searchInviteCandidates(
   queryRaw: string,
-  excludeSessionId?: string
+  excludeSessionId?: string,
+  opts?: { friendsOnly?: boolean }
 ): Promise<InviteCandidate[]> {
   const me = await getCurrentProfile();
   if (!me) return [];
   const q = (queryRaw ?? "").trim();
-  if (q.length < 1) return [];
+  const friendsOnly = opts?.friendsOnly === true;
+  if (!friendsOnly && q.length < 1) return [];
 
   const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
 
@@ -510,8 +516,28 @@ export async function searchInviteCandidates(
     sql`${users.id} <> ${me.id}`,
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
-    or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`)),
   ];
+  if (q.length >= 1) {
+    conditions.push(
+      or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!
+    );
+  }
+  if (friendsOnly) {
+    const friendIds = await getFriendIdSet(me.id);
+    if (friendIds.size === 0) return [];
+    conditions.push(inArray(users.id, [...friendIds]));
+  } else {
+    // Teman tak mungkin saling blokir (blockUser auto-unfriend), jadi saringan
+    // blokir hanya perlu di jalur non-friendsOnly.
+    const hiddenIds = await getBlockedIdSet(me.id);
+    if (hiddenIds.size > 0) {
+      const elems = sql.join(
+        [...hiddenIds].map((id) => sql`${id}::uuid`),
+        sql`, `
+      );
+      conditions.push(sql`${users.id} NOT IN (${elems})`);
+    }
+  }
 
   // Saat dipanggil dari session (ajak/undang): sembunyikan user yg SUDAH jadi
   // member meja itu (joined/pending). Yg pernah left/kicked tetap muncul supaya

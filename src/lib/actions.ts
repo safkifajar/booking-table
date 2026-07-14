@@ -53,6 +53,12 @@ import {
   DP_TIMEOUT_SECONDS,
 } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
+import {
+  areFriends,
+  isBlockedEitherWay,
+  getBlockedIdSet,
+  getFriendIdSet,
+} from "@/lib/friends";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -406,6 +412,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           )
         );
       invitees = rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+      // Guard relasi (PRD Friends K2 + K6b), saring SENYAP — picker di UI
+      // sudah tak menawarkan mereka; sisa hanya percobaan devtools/data basi:
+      // - blokir (arah mana pun) → buang (disguised, PRD 7.3);
+      // - mode "joined" (auto-join TANPA konsen target) → wajib teman.
+      const hiddenIds = await getBlockedIdSet(profile.id);
+      invitees = invitees.filter((u) => !hiddenIds.has(u.id));
+      if (inviteMode === "joined" && invitees.length > 0) {
+        const friendIds = await getFriendIdSet(profile.id);
+        invitees = invitees.filter((u) => friendIds.has(u.id));
+      }
       // friends auto-join makan slot → cek kapasitas (host + invitees).
       // Dilewati kalau meja izinkan over-capacity (setting admin).
       if (inviteMode === "joined" && !tableRow.allow_over_capacity) {
@@ -783,6 +799,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
       id: tableSessions.id,
       status: tableSessions.status,
       host_id: tableSessions.hostId,
+      visibility: tableSessions.visibility,
       capacity: tables.capacity,
       allow_over_capacity: tables.allowOverCapacity,
       table_label: tables.label,
@@ -794,6 +811,26 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
   if (row.status !== "open") throw new Error("Session is no longer open");
   if (row.host_id === profile.id) {
     throw new Error("You're the host — no need to request");
+  }
+
+  // Guard relasi (PRD Friends K3 + K6b). Penolakan yg DIHARAPKAN dikembalikan
+  // (bukan throw) — production menyensor pesan thrown Server Action.
+  // Blokir: pesan generik yg sama dgn friends-only supaya tak membocorkan
+  // status blokir (PRD 7.3 disguised).
+  if (await isBlockedEitherWay(profile.id, row.host_id)) {
+    return {
+      status: "error" as const,
+      error: "This table isn't accepting join requests right now.",
+    };
+  }
+  if (
+    row.visibility === "friends" &&
+    !(await areFriends(profile.id, row.host_id))
+  ) {
+    return {
+      status: "error" as const,
+      error: "Only the host's friends can join this table.",
+    };
   }
 
   // 2. Capacity check (joined only) — dilewati kalau meja izinkan over-capacity.
@@ -1007,6 +1044,13 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .where(eq(tableSessions.id, sessionId));
   if (!row) throw new Error("Session not found");
+
+  // Undangan basi dari SEBELUM blokir (PRD K6b): tolak dgn pesan generik yg
+  // sama dgn undangan hilang — tak membocorkan status blokir.
+  const inviterId = member.invitedBy ?? row.host_id;
+  if (await isBlockedEitherWay(profile.id, inviterId)) {
+    throw new Error("Invite not found or no longer valid");
+  }
   const [{ count }] = await db
     .select({ count: sql<number>`COUNT(*)::int` })
     .from(sessionMembers)
@@ -1187,10 +1231,19 @@ export async function inviteUsersToSession(
       )
       .map((m) => m.profileId)
   );
-  const targets = candidates.filter((c) => !occupied.has(c.id));
+  let targets = candidates.filter((c) => !occupied.has(c.id));
   if (targets.length === 0) {
     throw new Error("All users are already at the table / invited");
   }
+  // Guard relasi (PRD Friends K2 + K6b) — sama dgn openTable: blokir dibuang
+  // senyap; mode "friends" (auto-join tanpa konsen target) wajib teman.
+  const hiddenIds = await getBlockedIdSet(profile.id);
+  targets = targets.filter((u) => !hiddenIds.has(u.id));
+  if (mode === "friends" && targets.length > 0) {
+    const friendIds = await getFriendIdSet(profile.id);
+    targets = targets.filter((u) => friendIds.has(u.id));
+  }
+  if (targets.length === 0) throw new Error("No eligible users to invite");
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
   // Dilewati kalau meja izinkan over-capacity (setting admin).
   const cap = row.max_guests ?? row.capacity;
@@ -3460,6 +3513,13 @@ export async function submitRating(input: z.infer<typeof submitRatingSchema>) {
 
   if (data.rateeId === profile.id) {
     throw new Error("You can't rate yourself");
+  }
+
+  // Blokir (arah mana pun) → no-op SENYAP (PRD K6b tutup semua jalur +
+  // 7.3 disguised). UI (getRatableMembers) sudah tak menampilkan orangnya.
+  if (await isBlockedEitherWay(profile.id, data.rateeId)) {
+    revalidatePath(`/session/${data.sessionId}/rate`);
+    return;
   }
 
   await db

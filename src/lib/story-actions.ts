@@ -15,6 +15,11 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { requireProfile } from "@/lib/auth-v2/current";
+import {
+  getBlockedIdSet,
+  getFriendIdSet,
+  isBlockedEitherWay,
+} from "@/lib/friends";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 
@@ -316,9 +321,22 @@ export async function getActiveStoriesByBar(
     }
   }
 
-  // Sort users by latest story (desc), build final shape
+  // Saring yg saling blokir (PRD K6b) + urutan: milik sendiri → TEMAN →
+  // lainnya (PRD K4 — teman diprioritaskan di URUTAN saja, semua tetap
+  // tampil), lalu story terbaru di depan dalam tiap kelompok.
+  const [blockedIds, friendIds] = await Promise.all([
+    getBlockedIdSet(viewerId),
+    getFriendIdSet(viewerId),
+  ]);
+  const rank = (userId: string) =>
+    userId === viewerId ? 0 : friendIds.has(userId) ? 1 : 2;
   const items = Array.from(byUser.values())
-    .sort((a, b) => b.latestCreatedAt.getTime() - a.latestCreatedAt.getTime())
+    .filter((u) => !blockedIds.has(u.userId))
+    .sort(
+      (a, b) =>
+        rank(a.userId) - rank(b.userId) ||
+        b.latestCreatedAt.getTime() - a.latestCreatedAt.getTime()
+    )
     .map<StoryBarItem>((u) => ({
       userId: u.userId,
       displayName: u.displayName,
@@ -353,6 +371,10 @@ export async function getStoriesForUser(
   barId: string,
   viewerId: string
 ): Promise<StoryDetail[]> {
+  // Saling blokir → seolah tak ada story (PRD K6b, disguised).
+  if (viewerId !== userId && (await isBlockedEitherWay(viewerId, userId))) {
+    return [];
+  }
   const now = new Date();
 
   const rows = await db
@@ -490,5 +512,9 @@ export async function getStoryViewers(storyId: string): Promise<StoryViewer[]> {
     .where(eq(storyViews.storyId, storyId))
     .orderBy(desc(storyViews.viewedAt));
 
-  return rows;
+  // View lama dari orang yg kini saling blokir disembunyikan (PRD K6b).
+  const blockedIds = await getBlockedIdSet(profile.id);
+  return blockedIds.size > 0
+    ? rows.filter((r) => !blockedIds.has(r.profileId))
+    : rows;
 }
