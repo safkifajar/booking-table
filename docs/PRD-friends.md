@@ -164,7 +164,7 @@ Bell + web push otomatis. Notif request punya tombol **Accept / Decline** langsu
 
 | Aturan | Nilai |
 |---|---|
-| **Cooldown kirim-ulang** | **1 hari** — berlaku setelah **ditolak** MAUPUN setelah **membatalkan sendiri**. Tanpa yang kedua, loop add→cancel→add bisa diulang tanpa batas dan tiap siklus membuat notif bell baru di penerima. |
+| **Cooldown kirim-ulang** | **TIDAK ADA** (revisi 2026-07-14 — permudah berteman). Kirim ulang setelah ditolak/dibatalkan langsung boleh. Rem spam yang tersisa: kuota harian + tanpa push utk kiriman ulang <24 jam. |
 | **Kuota harian** | Maks **20** request keluar / 24 jam |
 | **Push berulang** | Request kedua ke orang yang sama dalam 24 jam → **tak ada push** |
 

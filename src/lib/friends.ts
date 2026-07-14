@@ -307,7 +307,6 @@ export async function assertFriendableTarget(targetId: string): Promise<void> {
 // ANTI-SPAM (PRD 6.4 / K8)
 // ============================================================
 
-export const RESEND_COOLDOWN_HOURS = 24; // 1 hari setelah ditolak
 export const DAILY_OUTGOING_QUOTA = 20; // request keluar / 24 jam
 
 /** Jumlah request KELUAR dalam 24 jam terakhir (kuota harian). */

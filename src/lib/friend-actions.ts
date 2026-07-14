@@ -11,8 +11,9 @@
  * - Blokir = SENYAP (PRD 7.3): yang diblokir mendapat sukses palsu, tak pernah
  *   error/push yang membocorkan. Notifikasi TIDAK dikirim dari dalam
  *   transaksi (PRD 10.2) — dikirim setelah commit.
- * - Anti-spam (PRD 6.4): cooldown 1 hari setelah ditolak + kuota 20/24 jam +
- *   tanpa push untuk kiriman ulang <24 jam ke orang yang sama.
+ * - Anti-spam (PRD 6.4): kuota 20 request keluar/24 jam + tanpa push untuk
+ *   kiriman ulang <24 jam ke orang yang sama. TANPA cooldown per-target
+ *   (keputusan produk: permudah berteman).
  *
  * Satu-satunya file selain src/lib/friends.ts yang boleh menyentuh tabel
  * friendships / friend_requests / user_blocks.
@@ -40,7 +41,6 @@ import {
   assertFriendableTarget,
   getRelationship,
   countOutgoingLast24h,
-  RESEND_COOLDOWN_HOURS,
   DAILY_OUTGOING_QUOTA,
   type RelationshipStatus,
 } from "@/lib/friends";
@@ -184,27 +184,9 @@ export async function sendFriendRequest(input: {
     if (mine) {
       if (mine.status === "pending") return { ok: true, status: "pending_out" }; // idempoten
 
-      // Cooldown 1 hari untuk SEMUA kirim-ulang: setelah DITOLAK maupun
-      // setelah MEMBATALKAN SENDIRI. Tanpa yang kedua, loop add->cancel->add
-      // bisa diulang tanpa batas dan tiap siklus membuat notif bell baru
-      // (unread lagi) di penerima — spam. Pesan sengaja generik: jangan
-      // membocorkan bahwa dia menolak (PRD 6.2).
-      if (
-        (mine.status === "rejected" || mine.status === "cancelled") &&
-        mine.respondedAt
-      ) {
-        const readyAt =
-          mine.respondedAt.getTime() + RESEND_COOLDOWN_HOURS * 60 * 60 * 1000;
-        if (Date.now() < readyAt) {
-          return {
-            ok: false,
-            error:
-              "You've sent a request to this user recently. Please try again later.",
-          };
-        }
-      }
-
-      // Kiriman ulang <24 jam ke orang yang sama → tanpa push (PRD 6.4).
+      // Kirim ulang setelah ditolak/dibatalkan: TANPA cooldown (keputusan
+      // produk 2026-07-14 — permudah berteman). Rem spam yg tersisa: kuota
+      // harian di atas + kiriman ulang <24 jam ke orang yg sama tanpa push.
       const skipPush =
         Date.now() - mine.createdAt.getTime() < 24 * 60 * 60 * 1000;
       await tx
