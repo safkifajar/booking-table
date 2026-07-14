@@ -24,7 +24,7 @@ import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
-import { getRelationshipMap } from "@/lib/friends";
+import { getBlockedIdSet, getRelationshipMap } from "@/lib/friends";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -586,6 +586,15 @@ export async function listAllMembers(opts?: {
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
   ];
+  // Blokir (arah mana pun) -> saling hilang dari daftar (PRD Friends 7.2 C1).
+  const hiddenIds = await getBlockedIdSet(me.id);
+  if (hiddenIds.size > 0) {
+    const elems = sql.join(
+      Array.from(hiddenIds).map((id) => sql`${id}::uuid`),
+      sql`, `
+    );
+    conditions.push(sql`${users.id} NOT IN (${elems})`);
+  }
   if (q.length >= 1) {
     conditions.push(
       or(ilike(profiles.displayName, `%${q}%`), ilike(users.email, `%${q}%`))!

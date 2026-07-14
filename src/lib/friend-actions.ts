@@ -58,10 +58,19 @@ function revalidateFriendSurfaces(otherId?: string) {
 // SEND REQUEST
 // ============================================================
 
-export interface SendFriendRequestResult {
-  /** Status relasi SETELAH aksi (yang boleh dirender UI). */
-  status: Extract<RelationshipStatus, "pending_out" | "friends">;
-}
+/**
+ * Penolakan yang DIHARAPKAN (cooldown/kuota) DIKEMBALIKAN, bukan dilempar:
+ * di build production Next.js MENYENSOR pesan Error yang dilempar server
+ * action (jadi teks digest yang tak jelas) — pesan utk user harus lewat
+ * return value.
+ */
+export type SendFriendRequestResult =
+  | {
+      ok: true;
+      /** Status relasi SETELAH aksi (yang boleh dirender UI). */
+      status: Extract<RelationshipStatus, "pending_out" | "friends">;
+    }
+  | { ok: false; error: string };
 
 export async function sendFriendRequest(input: {
   targetId: string;
@@ -93,7 +102,7 @@ export async function sendFriendRequest(input: {
         )
       )
       .limit(1);
-    if (blocked) return { status: "pending_out" };
+    if (blocked) return { ok: true, status: "pending_out" };
 
     // 2. Sudah berteman → no-op.
     const [lo, hi] = orderPair(me.id, targetId);
@@ -102,7 +111,7 @@ export async function sendFriendRequest(input: {
       .from(friendships)
       .where(and(eq(friendships.userAId, lo), eq(friendships.userBId, hi)))
       .limit(1);
-    if (existingFriendship) return { status: "friends" };
+    if (existingFriendship) return { ok: true, status: "friends" };
 
     // 3. Dia sudah kirim request ke aku → LANGSUNG jadi teman (PRD 6.1).
     const [incoming] = await tx
@@ -141,15 +150,17 @@ export async function sendFriendRequest(input: {
           )
         );
       notifyAccepted = { theirRequestId: incoming.id };
-      return { status: "friends" };
+      return { ok: true, status: "friends" };
     }
 
     // 4. Kuota harian (PRD 6.4).
     const sent = await countOutgoingLast24h(me.id);
     if (sent >= DAILY_OUTGOING_QUOTA) {
-      throw new Error(
-        "You've reached the daily friend request limit. Try again tomorrow."
-      );
+      return {
+        ok: false,
+        error:
+          "You've reached the daily friend request limit. Try again tomorrow.",
+      };
     }
 
     // 5. Baris keluar yang sudah ada → DIPAKAI ULANG (PRD 6.3; unique per arah
@@ -171,17 +182,25 @@ export async function sendFriendRequest(input: {
       .limit(1);
 
     if (mine) {
-      if (mine.status === "pending") return { status: "pending_out" }; // idempoten
+      if (mine.status === "pending") return { ok: true, status: "pending_out" }; // idempoten
 
-      // Cooldown 1 hari setelah DITOLAK. Pesan sengaja generik — jangan
-      // membocorkan bahwa dia menolak (PRD 6.2: penolakan tak diberi tahu).
-      if (mine.status === "rejected" && mine.respondedAt) {
+      // Cooldown 1 hari untuk SEMUA kirim-ulang: setelah DITOLAK maupun
+      // setelah MEMBATALKAN SENDIRI. Tanpa yang kedua, loop add->cancel->add
+      // bisa diulang tanpa batas dan tiap siklus membuat notif bell baru
+      // (unread lagi) di penerima — spam. Pesan sengaja generik: jangan
+      // membocorkan bahwa dia menolak (PRD 6.2).
+      if (
+        (mine.status === "rejected" || mine.status === "cancelled") &&
+        mine.respondedAt
+      ) {
         const readyAt =
           mine.respondedAt.getTime() + RESEND_COOLDOWN_HOURS * 60 * 60 * 1000;
         if (Date.now() < readyAt) {
-          throw new Error(
-            "You've sent a request to this user recently. Please try again later."
-          );
+          return {
+            ok: false,
+            error:
+              "You've sent a request to this user recently. Please try again later.",
+          };
         }
       }
 
@@ -193,7 +212,7 @@ export async function sendFriendRequest(input: {
         .set({ status: "pending", createdAt: new Date(), respondedAt: null })
         .where(eq(friendRequests.id, mine.id));
       notifyNewRequest = { requestId: mine.id, skipPush };
-      return { status: "pending_out" };
+      return { ok: true, status: "pending_out" };
     }
 
     // 6. Request baru.
@@ -202,7 +221,7 @@ export async function sendFriendRequest(input: {
       .values({ requesterId: me.id, addresseeId: targetId })
       .returning({ id: friendRequests.id });
     notifyNewRequest = { requestId: created.id, skipPush: false };
-    return { status: "pending_out" };
+    return { ok: true, status: "pending_out" };
   });
 
   // Notifikasi PASCA-commit.

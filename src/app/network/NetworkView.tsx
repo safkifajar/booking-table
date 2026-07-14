@@ -276,26 +276,30 @@ function MemberCard({
             At SOHO now
           </span>
         )}
-        {/* Add friend — pojok kanan atas foto, DI LUAR <Link> (PRD Friends k). */}
-        {!isMe && (
-          <div className="absolute right-3 top-3 z-10">
-            <CardFriendButton user={user} />
-          </div>
-        )}
       </div>
 
-      <Link href={`/network/${user.id}`} className="block p-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-lg font-bold tracking-tight">
-            {user.display_name}
-          </h3>
-          {isMe && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-              you
-            </span>
-          )}
+      <div className="p-4">
+        {/* Baris nama + tombol Add friend SEJAJAR. Tombol di LUAR <Link>
+            (button dalam <a> = HTML tak valid), jadi baris ini dipecah:
+            nama = link, tombol = sibling. */}
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={`/network/${user.id}`}
+            className="flex items-center gap-2 flex-wrap flex-1 min-w-0"
+          >
+            <h3 className="text-lg font-bold tracking-tight truncate">
+              {user.display_name}
+            </h3>
+            {isMe && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+                you
+              </span>
+            )}
+          </Link>
+          {!isMe && <CardFriendButton user={user} />}
         </div>
 
+      <Link href={`/network/${user.id}`} className="block">
         {user.username && (
           <div className="text-sm text-muted-foreground">@{user.username}</div>
         )}
@@ -326,12 +330,13 @@ function MemberCard({
           <HobbyBadges hobbies={user.hobbies} max={4} className="mt-2.5" />
         )}
       </Link>
+      </div>
     </div>
   );
 }
 
 /**
- * Tombol pertemanan kecil di pojok foto kartu (PRD Friends k).
+ * Tombol pertemanan kecil di kartu — sebaris dengan nama (PRD Friends k).
  * none -> Add (kirim request, optimistic) · pending_out -> Requested ·
  * pending_in -> Respond (ke profil) · friends -> Friends · blocked -> kosong.
  */
@@ -386,6 +391,10 @@ function CardFriendButton({ user }: { user: NetworkSearchUser }) {
         setBusy(true);
         try {
           const res = await sendFriendRequest({ targetId: user.id });
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
           setLocalStatus(res.status);
           toast.success(
             res.status === "friends"

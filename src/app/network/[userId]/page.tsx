@@ -169,19 +169,30 @@ export default async function NetworkProfilePage({ params }: PageProps) {
 
         {/* Kartu identitas */}
         <section className="rounded-2xl border border-border bg-card/70 backdrop-blur-sm p-5">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold tracking-tight">
-              {profile.display_name}
-            </h2>
-            {age !== null && (
-              <span className="text-2xl font-light text-muted-foreground">
-                {age} yrs
-              </span>
-            )}
-            {isMe && (
-              <span className="text-xs font-normal text-muted-foreground">
-                (you)
-              </span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-baseline gap-2 flex-wrap flex-1 min-w-0">
+              <h2 className="text-2xl font-bold tracking-tight">
+                {profile.display_name}
+              </h2>
+              {age !== null && (
+                <span className="text-2xl font-light text-muted-foreground">
+                  {age} yrs
+                </span>
+              )}
+              {isMe && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  (you)
+                </span>
+              )}
+            </div>
+            {/* Tombol pertemanan — sebaris dengan nama (PRD Friends k). */}
+            {me && !isMe && (
+              <FriendActions
+                userId={profile.id}
+                displayName={profile.display_name}
+                status={rel.status}
+                pendingRequestId={rel.pendingRequestId}
+              />
             )}
           </div>
 
@@ -233,17 +244,6 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             </p>
           )}
         </section>
-
-        {/* Tombol pertemanan — Add friend / Requested / Accept / Friends.
-            (PRD Friends k) */}
-        {me && !isMe && (
-          <FriendActions
-            userId={profile.id}
-            displayName={profile.display_name}
-            status={rel.status}
-            pendingRequestId={rel.pendingRequestId}
-          />
-        )}
 
         {/* Akun privat — banner + kartu terkunci (blur + ikon kunci) ala IG.
             Data privat sudah di-null-kan di getPublicProfile, jadi section lain

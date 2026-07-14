@@ -65,8 +65,7 @@ export function FriendActions({
     return (
       <Button
         variant="outline"
-        size="lg"
-        className="w-full"
+        size="sm"
         disabled={busy}
         onClick={async () => {
           const ok = await confirm({
@@ -93,8 +92,7 @@ export function FriendActions({
     return (
       <Button
         variant="outline"
-        size="lg"
-        className="w-full"
+        size="sm"
         disabled={busy}
         onClick={async () => {
           const ok = await confirm({
@@ -125,8 +123,7 @@ export function FriendActions({
     return (
       <Button
         variant="outline"
-        size="lg"
-        className="w-full"
+        size="sm"
         disabled={busy || !pendingRequestId}
         onClick={async () => {
           if (!pendingRequestId) return;
@@ -152,11 +149,10 @@ export function FriendActions({
 
   if (status === "pending_in") {
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 shrink-0">
         <Button
           variant="gold"
-          size="lg"
-          className="flex-1"
+          size="sm"
           disabled={busy || !pendingRequestId}
           onClick={() =>
             pendingRequestId &&
@@ -168,11 +164,11 @@ export function FriendActions({
           }
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          Accept request
+          Accept
         </Button>
         <Button
           variant="outline"
-          size="lg"
+          size="sm"
           disabled={busy || !pendingRequestId}
           onClick={() =>
             pendingRequestId &&
@@ -193,16 +189,28 @@ export function FriendActions({
   return (
     <Button
       variant="gold"
-      size="lg"
-      className="w-full"
+      size="sm"
       disabled={busy}
-      onClick={() =>
-        run(
-          () => sendFriendRequest({ targetId: userId }),
-          "Friend request sent",
-          "Failed to send request"
-        )
-      }
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const res = await sendFriendRequest({ targetId: userId });
+          if (!res.ok) {
+            toast.error(res.error);
+            return;
+          }
+          toast.success(
+            res.status === "friends"
+              ? `You are now friends with ${displayName}`
+              : "Friend request sent"
+          );
+          router.refresh();
+        } catch (err) {
+          toast.error(getActionErrorMessage(err, "Failed to send request"));
+        } finally {
+          setBusy(false);
+        }
+      }}
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
       Add friend
