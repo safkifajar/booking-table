@@ -62,13 +62,13 @@ import type { PaymentStatus, PaymentMethod, SplitMode } from "@/types/db";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
+  calculateDP,
   computeBillTotals,
   type OperatingHours,
   type ReservationConfig,
 } from "@/lib/settings-constants";
 import { getChargeConfig } from "@/lib/settings-actions";
 import {
-  calculateDP,
   validateReservationRange,
   type BookedRange,
 } from "@/lib/reservation-helpers";
@@ -359,11 +359,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     );
   }
 
-  // 7. DP requirement: reservation + minDownPaymentPercent > 0
+  // 7. DP requirement: reservation + minDownPaymentPercent > 0.
+  //    BASIS DP = GRAND TOTAL (subtotal + tax & service), bukan subtotal mentah.
+  //    Dulu dari subtotal → DP 100% TIDAK melunasi tagihan (sisa sebesar tax &
+  //    service menggantung). Tax & service kini ikut dibayar di awal.
+  const chargeCfg = await getChargeConfig(tableRow.bar_id);
+  const billAtOpen = computeBillTotals(totalOrder, chargeCfg);
   const dpRequired =
     !isWalkIn && resConfig.minDownPaymentPercent > 0 && totalOrder > 0;
   const dpAmount = dpRequired
-    ? calculateDP(totalOrder, resConfig.minDownPaymentPercent)
+    ? calculateDP(billAtOpen.total, resConfig.minDownPaymentPercent)
     : 0;
 
   if (dpRequired) {
@@ -1378,6 +1383,26 @@ export async function joinByCode(input: z.infer<typeof joinByCodeSchema>) {
 export async function leaveSession(sessionId: string) {
   const profile = await requireProfile();
 
+  // Meja sudah selesai (closed/overdue/cancelled) → tak ada lagi "keluar meja";
+  // riwayat keanggotaan dibekukan apa adanya.
+  const [sess] = await db
+    .select({
+      status: tableSessions.status,
+      hostId: tableSessions.hostId,
+      tableLabel: tables.label,
+    })
+    .from(tableSessions)
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!sess) throw new Error("Table not found");
+  if (
+    sess.status === "closed" ||
+    sess.status === "overdue" ||
+    sess.status === "cancelled"
+  ) {
+    throw new Error("This table has already ended — you can't leave it now.");
+  }
+
   // Sisa tagihan meja (subtotal+charge semua order − pembayaran lunas).
   const outstanding =
     (await getOutstandingMap([sessionId])).get(sessionId) ?? 0;
@@ -1402,6 +1427,32 @@ export async function leaveSession(sessionId: string) {
         eq(sessionMembers.profileId, profile.id)
       )
     );
+
+  // Kabari host + anggota lain yang masih di meja (bukan yang keluar).
+  const others = await db
+    .select({ profileId: sessionMembers.profileId })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "joined"),
+        ne(sessionMembers.profileId, profile.id)
+      )
+    );
+  const recipients = new Set(others.map((o) => o.profileId));
+  recipients.add(sess.hostId); // host tetap dikabari walau (mis.) sudah keluar
+  recipients.delete(profile.id); // jangan kabari diri sendiri
+  await Promise.allSettled(
+    Array.from(recipients).map((profileId) =>
+      createNotification({
+        profileId,
+        type: "general",
+        title: `${profile.displayName} left table ${sess.tableLabel}`,
+        body: "They are no longer at the table.",
+        link: `/session/${sessionId}`,
+      })
+    )
+  );
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);

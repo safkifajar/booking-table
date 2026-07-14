@@ -40,7 +40,12 @@ import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { AvatarViewer } from "@/components/network/AvatarViewer";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
 import type { TableShape, SessionVisibility } from "@/types/db";
-import type { ReservationConfig } from "@/lib/settings-constants";
+import {
+  calculateDP,
+  computeBillTotals,
+  type ChargeConfig,
+  type ReservationConfig,
+} from "@/lib/settings-constants";
 import type { AvailableSlot } from "@/lib/reservation-format";
 
 interface MenuItemLite {
@@ -71,6 +76,8 @@ interface Props {
   barName: string;
   barSlug: string;
   reservationConfig: ReservationConfig;
+  /** Tax & service — ikut dibayar di awal (basis DP). */
+  chargeConfig: ChargeConfig;
   slots: AvailableSlot[];
   /** ISO slot yang sudah ke-booking reservasi lain (di-disable di picker). */
   bookedSlotIsos?: string[];
@@ -96,6 +103,7 @@ export function OpenTableForm({
   areaName,
   barSlug,
   reservationConfig,
+  chargeConfig,
   slots,
   bookedSlotIsos = [],
   initialStart,
@@ -212,16 +220,21 @@ export function OpenTableForm({
     return n;
   }, [cart]);
 
-  // DP calc — hanya untuk reservasi
+  // Tagihan: subtotal item + tax & service. DP dihitung dari GRAND TOTAL ini
+  // (bukan subtotal mentah) — supaya DP 100% benar-benar melunasi tagihan.
+  // Pakai calculateDP & computeBillTotals yang SAMA dengan server (dulu rumus
+  // DP diduplikasi di sini dan basisnya beda → angka tombol ≠ angka QRIS).
+  const bill = React.useMemo(
+    () => computeBillTotals(cartTotal, chargeConfig),
+    [cartTotal, chargeConfig]
+  );
+  const dpPercent = reservationConfig.minDownPaymentPercent;
   const dpRequired =
-    waktuMode === "reservation" &&
-    reservationConfig.minDownPaymentPercent > 0 &&
-    cartTotal > 0;
-  const dpAmount = dpRequired
-    ? Math.ceil(
-        (cartTotal * reservationConfig.minDownPaymentPercent) / 100 / 100
-      ) * 100
-    : 0;
+    waktuMode === "reservation" && dpPercent > 0 && cartTotal > 0;
+  const dpAmount = dpRequired ? calculateDP(bill.total, dpPercent) : 0;
+  // DP 100% = bayar lunas di muka → tak perlu pamer baris "DP (100%)", dan
+  // tombolnya bukan "Pay deposit" melainkan "Pay to reserve".
+  const dpIsFull = dpRequired && dpPercent >= 100;
 
   // Validasi: min spend
   const minSpendShortfall = hasMinSpend
@@ -545,18 +558,38 @@ export function OpenTableForm({
             </div>
           )}
 
-          {/* Summary total + DP */}
+          {/* Ringkasan tagihan. Tax & service ikut dibayar di awal, jadi
+              ditampilkan di sini (dulu tak muncul & DP dihitung dari subtotal).
+              DP 100% = bayar lunas → baris "DP" redundan, sembunyikan. */}
           {cartItemCount > 0 && (
             <div className="rounded-md bg-muted/40 border border-border p-3 space-y-1.5 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Order total</span>
                 <span className="font-semibold tabular-nums">
-                  {formatIDR(cartTotal)}
+                  {formatIDR(bill.subtotal)}
                 </span>
               </div>
-              {dpRequired && (
-                <div className="flex items-center justify-between text-primary">
-                  <span>DP ({reservationConfig.minDownPaymentPercent}%)</span>
+              {bill.charge > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    Tax &amp; Service ({bill.chargePercent}%)
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {formatIDR(bill.charge)}
+                  </span>
+                </div>
+              )}
+              {bill.charge > 0 && (
+                <div className="flex items-center justify-between border-t border-border pt-1.5">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatIDR(bill.total)}
+                  </span>
+                </div>
+              )}
+              {dpRequired && !dpIsFull && (
+                <div className="flex items-center justify-between text-primary border-t border-border pt-1.5">
+                  <span>Deposit ({dpPercent}%)</span>
                   <span className="font-semibold tabular-nums">
                     {formatIDR(dpAmount)}
                   </span>
@@ -578,6 +611,8 @@ export function OpenTableForm({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Processing...
               </>
+            ) : dpIsFull ? (
+              `Pay ${formatIDR(dpAmount)} to reserve`
             ) : dpRequired ? (
               `Pay deposit ${formatIDR(dpAmount)} & Reserve`
             ) : (

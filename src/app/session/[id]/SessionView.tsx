@@ -444,7 +444,9 @@ export function SessionView(props: SessionViewProps) {
         isHost={props.isHost}
         isMember={canInteract}
         isStaff={isStaff}
-        isEnded={isEnded}
+        // Sesi cancelled juga "selesai" utk aksi tutup/keluar — tak ada lagi
+        // yang bisa ditutup/ditinggalkan. (Server juga menolaknya.)
+        isEnded={isEnded || isCancelled}
         sessionId={props.session.id}
       />
       )}

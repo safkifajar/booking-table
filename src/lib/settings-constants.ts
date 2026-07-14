@@ -141,3 +141,33 @@ export function computeBillTotals(
     total: sub + tax + service,
   };
 }
+
+// ============================================================
+// DP (DOWN PAYMENT)
+// ============================================================
+
+/**
+ * Hitung DP (Rupiah) dari TOTAL TAGIHAN (sudah termasuk tax & service) dan
+ * persentase config.
+ *
+ * PENTING: `grandTotal` HARUS grand total (computeBillTotals(...).total), bukan
+ * subtotal item mentah. Dulu DP dihitung dari subtotal → DP 100% TIDAK melunasi
+ * tagihan (sisa sebesar tax & service masih menggantung).
+ *
+ * - 100% → kembalikan grand total APA ADANYA (tanpa round-up), supaya benar-benar
+ *   lunas & tak lebih bayar hingga Rp99.
+ * - selain itu → round-up ke Rp100 (nominal cantik), tapi di-cap ke grand total.
+ *
+ * Ditaruh di sini (client-safe) supaya SERVER & FORM memakai rumus yang SAMA —
+ * dulu rumusnya diduplikasi di OpenTableForm dan gampang melenceng.
+ */
+export function calculateDP(
+  grandTotal: number,
+  minDownPaymentPercent: number
+): number {
+  if (minDownPaymentPercent <= 0) return 0;
+  if (minDownPaymentPercent >= 100) return Math.max(0, Math.round(grandTotal));
+  const raw = (grandTotal * minDownPaymentPercent) / 100;
+  const rounded = Math.ceil(raw / 100) * 100;
+  return Math.min(rounded, Math.max(0, Math.round(grandTotal)));
+}

@@ -482,8 +482,8 @@ function ReservationSection({
         </div>
 
         <ConfigField
-          label="Minimum DP"
-          hint="Percentage of the initial order total. 0 = no deposit, 50 = pay half, 100 = full prepayment."
+          label="Minimum deposit"
+          hint="Percentage of the initial bill, tax & service included. 0 = no deposit, 50 = pay half, 100 = pay in full to reserve."
           value={config.minDownPaymentPercent}
           unit="%"
           min={0}

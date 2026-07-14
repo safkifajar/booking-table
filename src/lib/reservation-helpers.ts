@@ -433,25 +433,3 @@ export function getBookedSlotIsos(
   }
   return booked;
 }
-
-// ============================================================
-// DP CALCULATION
-// ============================================================
-
-/**
- * Hitung DP (Rupiah) dari total order dan persentase config.
- * Round up ke 100 rupiah supaya nominal cantik.
- */
-export function calculateDP(
-  totalOrder: number,
-  minDownPaymentPercent: number
-): number {
-  if (minDownPaymentPercent <= 0) return 0;
-  const raw = (totalOrder * minDownPaymentPercent) / 100;
-  return Math.ceil(raw / 100) * 100;
-}
-
-// Suppress unused import warnings — both di-import untuk type-narrowing context
-void DAY_KEYS;
-void (null as unknown as DayHours);
-

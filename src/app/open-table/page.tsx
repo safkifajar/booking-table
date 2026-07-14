@@ -7,8 +7,10 @@ import { tableSessions } from "@/lib/db/schema/sessions";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { getMenuByBar, flattenMenuTree } from "@/lib/queries";
 import {
+  DEFAULT_CHARGE_CONFIG,
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
+  type ChargeConfig,
   type OperatingHours,
   type ReservationConfig,
 } from "@/lib/settings-constants";
@@ -52,6 +54,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
       bar_slug: bars.slug,
       opening_hours: bars.openingHours,
       reservation_config: bars.reservationConfig,
+      charge_config: bars.chargeConfig,
     })
     .from(tables)
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -68,6 +71,11 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
   const resConfig: ReservationConfig = {
     ...DEFAULT_RESERVATION_CONFIG,
     ...((row.reservation_config as Partial<ReservationConfig>) ?? {}),
+  };
+  // Tax & service — dipakai form utk hitung grand total (basis DP).
+  const chargeCfg: ChargeConfig = {
+    ...DEFAULT_CHARGE_CONFIG,
+    ...((row.charge_config as Partial<ChargeConfig>) ?? {}),
   };
 
   // Generate available slots untuk reservasi (kalau enabled)
@@ -127,6 +135,7 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
           barName={row.bar_name}
           barSlug={row.bar_slug}
           reservationConfig={resConfig}
+          chargeConfig={chargeCfg}
           slots={slots}
           bookedSlotIsos={bookedSlotIsos}
           initialStart={start}
