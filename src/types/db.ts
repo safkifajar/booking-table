@@ -259,6 +259,8 @@ export interface NetworkSearchUser {
   at_soho: boolean;
   hobbies: string[];
   rating: UserRatingSummary;
+  /** Status relasi viewer -> user ini (tombol Add friend di kartu). */
+  friend_status: "none" | "pending_out" | "pending_in" | "friends" | "blocked";
 }
 
 /** Satu halaman hasil "Semua member" (infinite scroll). */

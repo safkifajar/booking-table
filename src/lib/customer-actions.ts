@@ -24,6 +24,7 @@ import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
+import { getRelationshipMap } from "@/lib/friends";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -645,6 +646,12 @@ export async function listAllMembers(opts?: {
     : new Set<string>();
 
   const ratings = await getUserRatingsBatch(pageRows.map((r) => r.id));
+  // Status relasi pertemanan per kartu — SATU batch query, bukan per baris
+  // (PRD Friends 10.4).
+  const relationships = await getRelationshipMap(
+    me.id,
+    pageRows.map((r) => r.id)
+  );
   const last = pageRows[pageRows.length - 1];
   return {
     users: pageRows.map((r) => ({
@@ -661,6 +668,7 @@ export async function listAllMembers(opts?: {
       at_soho: activeIds.has(r.id),
       hobbies: r.hobbies,
       rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
+      friend_status: relationships.get(r.id) ?? "none",
     })),
     next_cursor:
       hasMore && last

@@ -22,6 +22,13 @@ import { ProfilePhotoCarousel } from "@/app/profile/ProfilePhotoCarousel";
 import { InstagramIcon } from "@/components/ui/brand-icons";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import {
+  isBlockedEitherWay,
+  getFriendCount,
+  getRelationshipDetail,
+  type RelationshipStatus,
+} from "@/lib/friends";
+import { FriendActions, ProfileMoreMenu } from "./FriendActions";
 import { getHobbyGroups } from "@/lib/hobby-actions";
 import {
   getPublicProfile,
@@ -72,6 +79,20 @@ export default async function NetworkProfilePage({ params }: PageProps) {
   if (!profile) notFound();
 
   const isMe = me?.id === profile.id;
+
+  // Blokir (arah mana pun) -> profil saling tak bisa dibuka (PRD Friends 7.1).
+  // Tersamar: sama seperti user yang memang tidak ada.
+  if (me && !isMe && (await isBlockedEitherWay(me.id, profile.id))) {
+    notFound();
+  }
+
+  // Relasi pertemanan (tombol + jumlah teman). (PRD Friends g, k)
+  const friendCount = await getFriendCount(profile.id);
+  const rel: { status: RelationshipStatus; pendingRequestId: string | null } =
+    me && !isMe
+      ? await getRelationshipDetail(me.id, profile.id)
+      : { status: "none", pendingRequestId: null };
+
   const active = profile.active_session;
   // Akun privat & bukan kita → tampilkan banner + kartu terkunci (blur).
   const locked = profile.is_private && !isMe;
@@ -128,6 +149,13 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               {profile.display_name}
             </h1>
           </div>
+          {me && !isMe && (
+            <ProfileMoreMenu
+              userId={profile.id}
+              displayName={profile.display_name}
+              isBlockedByMe={rel.status === "blocked"}
+            />
+          )}
         </div>
       </header>
 
@@ -170,6 +198,8 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             {profile.visit_count > 0
               ? `${profile.visit_count}× hung out at SOHO`
               : "Never hung out yet"}
+            {" · "}
+            {friendCount} friend{friendCount === 1 ? "" : "s"}
           </p>
 
           <div className="mt-3 space-y-2 text-sm">
@@ -203,6 +233,17 @@ export default async function NetworkProfilePage({ params }: PageProps) {
             </p>
           )}
         </section>
+
+        {/* Tombol pertemanan — Add friend / Requested / Accept / Friends.
+            (PRD Friends k) */}
+        {me && !isMe && (
+          <FriendActions
+            userId={profile.id}
+            displayName={profile.display_name}
+            status={rel.status}
+            pendingRequestId={rel.pendingRequestId}
+          />
+        )}
 
         {/* Akun privat — banner + kartu terkunci (blur + ikon kunci) ala IG.
             Data privat sudah di-null-kan di getPublicProfile, jadi section lain

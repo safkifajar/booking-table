@@ -11,6 +11,10 @@ import {
   type AdminNotificationRow,
 } from "@/lib/notifications";
 import { acceptInvite, declineInvite } from "@/lib/actions";
+import {
+  acceptFriendRequest,
+  declineFriendRequest,
+} from "@/lib/friend-actions";
 import { toast } from "sonner";
 import { getActionErrorMessage } from "@/lib/utils";
 import {
@@ -126,6 +130,34 @@ export function NotificationsList({
     }
   }
 
+  async function handleAcceptFriend(n: AdminNotificationRow) {
+    if (!n.ref_id) return;
+    setBusyId(n.id);
+    try {
+      await acceptFriendRequest({ requestId: n.ref_id });
+      toast.success("Friend request accepted");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to accept request"));
+    } finally {
+      setBusyId(null);
+      void refresh();
+    }
+  }
+
+  async function handleDeclineFriend(n: AdminNotificationRow) {
+    if (!n.ref_id) return;
+    setBusyId(n.id);
+    try {
+      await declineFriendRequest({ requestId: n.ref_id });
+      toast.success("Friend request declined");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to decline request"));
+    } finally {
+      setBusyId(null);
+      void refresh();
+    }
+  }
+
   async function handleConfirmDelete() {
     if (!confirmDel) return;
     const id = confirmDel.id;
@@ -181,6 +213,8 @@ export function NotificationsList({
               onClickItem={handleClickItem}
               onAccept={handleAccept}
               onDecline={handleDecline}
+              onAcceptFriend={handleAcceptFriend}
+              onDeclineFriend={handleDeclineFriend}
               onAskDelete={(row) => setConfirmDel(row)}
             />
           ))}
@@ -244,6 +278,8 @@ function NotificationItem({
   onClickItem,
   onAccept,
   onDecline,
+  onAcceptFriend,
+  onDeclineFriend,
   onAskDelete,
 }: {
   n: AdminNotificationRow;
@@ -253,6 +289,8 @@ function NotificationItem({
   onClickItem: (n: AdminNotificationRow) => void;
   onAccept: (n: AdminNotificationRow) => void;
   onDecline: (n: AdminNotificationRow) => void;
+  onAcceptFriend: (n: AdminNotificationRow) => void;
+  onDeclineFriend: (n: AdminNotificationRow) => void;
   onAskDelete: (n: AdminNotificationRow) => void;
 }) {
   // Offset geser LIVE selama jari menyeret (null = tidak sedang menyeret →
@@ -267,6 +305,8 @@ function NotificationItem({
   const dx = drag ?? (revealed ? -REVEAL : 0);
 
   const isPendingInvite = n.type === "table_invite" && !n.responded;
+  const isPendingFriendReq =
+    n.type === "friend_request" && !n.responded && n.ref_id != null;
   const respondedOutcome =
     n.responded && n.type === "invite_accepted"
       ? "accepted"
@@ -403,6 +443,37 @@ function NotificationItem({
               Decline
             </button>
           </div>
+        )}
+        {isPendingFriendReq && (
+          <div className="flex gap-2 mt-2 pl-4">
+            <button
+              type="button"
+              disabled={busyId === n.id}
+              onClick={() => onAcceptFriend(n)}
+              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-xs font-medium flex items-center justify-center gap-1 disabled:opacity-50"
+            >
+              {busyId === n.id ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Check className="h-3 w-3" />
+              )}
+              Accept
+            </button>
+            <button
+              type="button"
+              disabled={busyId === n.id}
+              onClick={() => onDeclineFriend(n)}
+              className="flex-1 h-9 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Decline
+            </button>
+          </div>
+        )}
+        {n.type === "friend_request" && n.responded && (
+          <p className="mt-2 pl-4 text-xs text-muted-foreground flex items-center gap-1">
+            <Check className="h-3 w-3" />
+            You responded to this request
+          </p>
         )}
         {respondedOutcome === "accepted" && (
           <p className="mt-2 pl-4 text-xs text-emerald-500 flex items-center gap-1">
