@@ -135,11 +135,17 @@ export function CustomerHistory({
               {h.is_host && " · host"}
             </p>
           </div>
+          {/* Keluar sebelum meja ditutup → tandai di riwayat. */}
+          {(h.member_status === "left" || h.member_status === "kicked") && (
+            <Badge variant="secondary" className="text-[10px] shrink-0">
+              {h.member_status === "kicked" ? "Removed" : "Left"}
+            </Badge>
+          )}
           <Badge variant="outline" className="text-[10px] shrink-0">
             {h.status === "closed"
-              ? "Selesai"
+              ? "Done"
               : h.status === "cancelled"
-                ? "Dibatalkan"
+                ? "Cancelled"
                 : "Not paid"}
           </Badge>
           <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition shrink-0" />

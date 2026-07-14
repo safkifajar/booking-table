@@ -1230,6 +1230,10 @@ export async function getUserTableHistory(
       status: tableSessions.status,
       started_at: tableSessions.startedAt,
       is_host: sql<boolean>`${tableSessions.hostId} = ${profileId}`,
+      // Status keanggotaan user ini di meja tsb (joined/left/kicked). Dipakai
+      // utk menandai "sudah keluar" di riwayat. NULL kalau dia host tanpa baris
+      // member (jarang, tapi leftJoin bisa null).
+      member_status: sessionMembers.status,
     })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
@@ -1264,6 +1268,8 @@ export async function getUserTableHistory(
     status: r.status as UserTableHistoryEntry["status"],
     started_at: r.started_at.toISOString(),
     is_host: r.is_host,
+    member_status:
+      (r.member_status as UserTableHistoryEntry["member_status"]) ?? null,
   }));
 }
 

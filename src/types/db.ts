@@ -287,6 +287,11 @@ export interface UserTableHistoryEntry {
   status: "closed" | "cancelled" | "overdue";
   started_at: string;
   is_host: boolean;
+  /**
+   * Status keanggotaan user di meja itu. "left"/"kicked" = dia sudah keluar
+   * sebelum meja ditutup → ditandai di riwayat. Null utk host tanpa baris member.
+   */
+  member_status: MemberStatus | null;
 }
 
 /** Detail profil publik user lain (/network/[userId]). */

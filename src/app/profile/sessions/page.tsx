@@ -195,6 +195,15 @@ function StatusBadge({
   memberStatus: SessionRow["member_status"];
   isHost: boolean;
 }) {
+  // Sudah keluar / dikeluarkan dari meja → itu info paling relevan untuk DIA,
+  // apa pun status mejanya (dulu hanya dicek saat sesi 'closed', jadi meja yang
+  // masih berjalan tetap tampil "In progress" walau dia sudah keluar).
+  if (!isHost && memberStatus === "kicked") {
+    return <span className="text-red-400/80">Removed</span>;
+  }
+  if (!isHost && memberStatus === "left") {
+    return <span className="text-muted-foreground">Left</span>;
+  }
   if (status === "reserved") {
     return (
       <span className="inline-flex items-center gap-1 text-sky-400">
@@ -226,13 +235,7 @@ function StatusBadge({
   if (status === "cancelled") {
     return <span className="text-muted-foreground">Cancelled</span>;
   }
-  // closed
-  if (!isHost && memberStatus === "kicked") {
-    return <span className="text-red-400/80">Removed</span>;
-  }
-  if (!isHost && memberStatus === "left") {
-    return <span className="text-muted-foreground">Left early</span>;
-  }
+  // closed — "keluar" sudah ditangani di atas (berlaku utk semua status).
   return <span className="text-muted-foreground">Done</span>;
 }
 

@@ -60,9 +60,17 @@ export function TableHistoryList({
               {e.is_host && " · host"}
             </p>
           </div>
-          <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
-            {STATUS_LABEL[e.status]}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Keluar sebelum meja ditutup → tandai di riwayat. */}
+            {(e.member_status === "left" || e.member_status === "kicked") && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border bg-muted/60 text-muted-foreground">
+                {e.member_status === "kicked" ? "Removed" : "Left"}
+              </span>
+            )}
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground">
+              {STATUS_LABEL[e.status]}
+            </span>
+          </div>
         </div>
       ))}
     </div>
