@@ -23,7 +23,7 @@ import {
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
 import { signOutAction } from "@/lib/auth-v2/actions";
-import { getActionErrorMessage } from "@/lib/utils";
+import { cn, getActionErrorMessage } from "@/lib/utils";
 import {
   pushSupported,
   getExistingSubscription,
@@ -46,12 +46,15 @@ export function ProfileMenuList({
   username,
   email,
   isPrivate,
+  membership,
 }: {
   avatarUrl: string | null;
   displayName: string;
   username: string | null;
   email: string | null;
   isPrivate: boolean;
+  /** Level membership EFEKTIF (PRD Membership M12). */
+  membership: { key: "basic" | "premium" | "vip"; name: string; expiresAt: string | null };
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -161,7 +164,10 @@ export function ProfileMenuList({
           size="lg"
         />
         <div className="min-w-0">
-          <div className="text-base font-semibold truncate">{displayName}</div>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="text-base font-semibold truncate">{displayName}</div>
+            <MembershipBadge membership={membership} />
+          </div>
           {username && (
             <div className="text-xs text-muted-foreground truncate">
               @{username}
@@ -424,5 +430,31 @@ function MenuItem({
       </span>
       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
     </Link>
+  );
+}
+
+/**
+ * Badge level membership (PRD Membership M12). Warna per KEY (bukan nama —
+ * nama bisa diganti admin): basic netral, premium gold, vip ungu.
+ */
+function MembershipBadge({
+  membership,
+}: {
+  membership: { key: "basic" | "premium" | "vip"; name: string; expiresAt: string | null };
+}) {
+  const styles = {
+    basic: "bg-muted text-muted-foreground border-border",
+    premium: "bg-primary/15 text-primary border-primary/30",
+    vip: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+  } as const;
+  return (
+    <span
+      className={cn(
+        "shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+        styles[membership.key]
+      )}
+    >
+      {membership.name}
+    </span>
   );
 }

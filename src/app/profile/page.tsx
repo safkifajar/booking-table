@@ -4,6 +4,7 @@ import { getCurrentProfile, getCurrentUser } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ProfileMenuList } from "./ProfileMenuList";
+import { getMembershipStatus } from "@/lib/membership";
 import { SohoGlow } from "@/components/ui/soho-glow";
 
 /**
@@ -24,6 +25,9 @@ export default async function ProfilePage() {
   }
   // Belum selesai onboarding → paksa ke wizard (mulai layar gender).
   if (!profile.onboarded) redirect("/onboarding");
+
+  // Badge level membership EFEKTIF (PRD Membership M12).
+  const membership = await getMembershipStatus(profile.id);
 
   return (
     <main className="relative flex-1 pb-12">
@@ -49,6 +53,11 @@ export default async function ProfilePage() {
           username={profile.username}
           email={user?.email ?? null}
           isPrivate={profile.isPrivate}
+          membership={{
+            key: membership.key,
+            name: membership.name,
+            expiresAt: membership.expires_at?.toISOString() ?? null,
+          }}
         />
       </div>
     </main>

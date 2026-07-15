@@ -119,3 +119,22 @@ export const staffRoleEnum = pgEnum("staff_role", [
   "admin",
 ]);
 
+
+// --- Membership (PRD Membership) ---
+
+export const membershipBillingPeriodEnum = pgEnum("membership_billing_period", [
+  "one_time", // sekali bayar = seumur hidup (period_end NULL)
+  "monthly",
+  "yearly",
+]);
+
+export const membershipTxKindEnum = pgEnum("membership_tx_kind", [
+  "purchase",
+  "renewal",
+  "admin_grant",
+]);
+
+export const voucherDiscountTypeEnum = pgEnum("voucher_discount_type", [
+  "percent",
+  "fixed",
+]);
