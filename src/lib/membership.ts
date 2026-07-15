@@ -16,7 +16,7 @@ import "server-only";
  * dikelola admin.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { membershipLevels } from "@/lib/db/schema/membership";
 import { profiles } from "@/lib/db/schema/profiles";
@@ -66,6 +66,21 @@ export function effectiveRank(
  */
 export function canSeeRank(viewerRank: number, targetRank: number): boolean {
   return viewerRank >= targetRank;
+}
+
+/**
+ * Ekspresi SQL rank EFEKTIF (versi SQL dari effectiveRank) — untuk ORDER BY /
+ * WHERE di query daftar (mis. urutan Network VIP → Premium → Basic) tanpa
+ * round-trip tambahan. HARUS setara dgn effectiveLevelKey: kedaluwarsa = 1.
+ */
+export function sqlEffectiveRank() {
+  return sql<number>`CASE
+    WHEN ${profiles.membershipExpiresAt} IS NOT NULL
+      AND ${profiles.membershipExpiresAt} < now() THEN 1
+    WHEN ${profiles.membershipLevel} = 'vip' THEN 3
+    WHEN ${profiles.membershipLevel} = 'premium' THEN 2
+    ELSE 1
+  END`;
 }
 
 // ============================================================

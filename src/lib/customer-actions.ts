@@ -38,7 +38,7 @@ import {
   getFriendIdSet,
   getRelationshipMap,
 } from "@/lib/friends";
-import { getEffectiveRankMap } from "@/lib/membership";
+import { getEffectiveRankMap, sqlEffectiveRank } from "@/lib/membership";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -663,6 +663,9 @@ export async function listAllMembers(opts?: {
   const priorityExpr = wantGender
     ? sql<number>`CASE WHEN ${profiles.gender} = ${wantGender} THEN 0 ELSE 1 END`
     : sql<number>`0`;
+  // Urutan level: VIP → Premium → Basic (rank efektif DESC). Dinegasikan
+  // supaya tuple-compare keyset tetap ASC seragam.
+  const tierExpr = sql<number>`-(${sqlEffectiveRank()})`;
 
   const conditions = [
     sql`${users.id} <> ${me.id}`,
@@ -690,16 +693,19 @@ export async function listAllMembers(opts?: {
     );
     conditions.push(sql`${profiles.hobbies} && ARRAY[${elems}]::text[]`);
   }
-  // Keyset dgn priority: baris SETELAH (priority, displayName, id) terakhir.
-  // Cursor = "<priority>\n<displayName>\n<id>". Tuple compare jaga urutan
-  // konsisten lintas grup priority saat infinite scroll.
+  // Keyset: baris SETELAH (tier, priority, displayName, id) terakhir.
+  // Cursor = "<tier>\n<priority>\n<displayName>\n<id>". Tuple compare jaga
+  // urutan konsisten lintas grup saat infinite scroll. (Rank yg berubah di
+  // tengah scroll — mis. kedaluwarsa — bisa menggeser baris; diterima, sama
+  // seperti prioritas gender.)
   if (opts?.cursor) {
     const parts = opts.cursor.split("\n");
-    if (parts.length === 3) {
-      const [cPrioStr, cName, cId] = parts;
+    if (parts.length === 4) {
+      const [cTierStr, cPrioStr, cName, cId] = parts;
+      const cTier = Number(cTierStr);
       const cPrio = Number(cPrioStr);
       conditions.push(
-        sql`(${priorityExpr}, ${profiles.displayName}, ${users.id}) > (${cPrio}, ${cName}, ${cId})`
+        sql`(${tierExpr}, ${priorityExpr}, ${profiles.displayName}, ${users.id}) > (${cTier}, ${cPrio}, ${cName}, ${cId})`
       );
     }
   }
@@ -721,11 +727,12 @@ export async function listAllMembers(opts?: {
       membership_level: profiles.membershipLevel,
       membership_expires_at: profiles.membershipExpiresAt,
       priority: priorityExpr,
+      tier: tierExpr,
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
     .where(and(...conditions))
-    .orderBy(priorityExpr, profiles.displayName, users.id)
+    .orderBy(tierExpr, priorityExpr, profiles.displayName, users.id)
     .limit(MEMBERS_PAGE_SIZE + 1);
 
   const hasMore = rows.length > MEMBERS_PAGE_SIZE;
@@ -788,7 +795,7 @@ export async function listAllMembers(opts?: {
     }),
     next_cursor:
       hasMore && last
-        ? `${last.priority}\n${last.display_name}\n${last.id}`
+        ? `${last.tier}\n${last.priority}\n${last.display_name}\n${last.id}`
         : null,
   };
 }
