@@ -53,7 +53,7 @@ export async function MembershipBanner({ profileId }: { profileId: string }) {
         </p>
         <p className="text-xs text-primary-foreground/75 truncate">{body}</p>
       </div>
-      <span className="relative z-10 shrink-0 inline-flex items-center gap-1 rounded-full bg-background px-3.5 py-1.5 text-xs font-semibold text-primary shadow group-hover:scale-105 transition">
+      <span className="relative z-10 shrink-0 inline-flex items-center gap-1 rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-primary shadow group-hover:scale-105 transition">
         {cta}
         <ChevronRight className="h-3.5 w-3.5" />
       </span>
