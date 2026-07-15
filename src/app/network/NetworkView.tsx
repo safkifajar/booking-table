@@ -277,13 +277,13 @@ function MemberCard({
             <img
               src={photo}
               alt="Locked member"
-              className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 select-none pointer-events-none"
+              className="absolute inset-0 h-full w-full object-cover blur-lg scale-110 select-none pointer-events-none"
               draggable={false}
             />
           ) : (
             <div className="absolute inset-0 bg-muted" />
           )}
-          <div className="absolute inset-0 bg-black/45" />
+          <div className="absolute inset-0 bg-black/40" />
 
           {/* Badge At SOHO tetap terlihat (M5) */}
           {user.at_soho && (
@@ -357,6 +357,20 @@ function MemberCard({
             <h3 className="text-lg font-bold tracking-tight truncate">
               {user.display_name}
             </h3>
+            {/* Badge level membership (M12) — warna per KEY, nama dari admin. */}
+            <span
+              className={cn(
+                "shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                user.membership_key === "vip"
+                  ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                  : user.membership_key === "premium"
+                    ? "bg-primary/15 text-primary border-primary/30"
+                    : "bg-muted text-muted-foreground border-border"
+              )}
+            >
+              <Crown className="h-3 w-3" />
+              {user.membership_name}
+            </span>
             {isMe && (
               <span className="text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
                 you
