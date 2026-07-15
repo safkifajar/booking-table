@@ -22,6 +22,8 @@ import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { friendships } from "@/lib/db/schema/friends";
+import { membershipLevels } from "@/lib/db/schema/membership";
+import { effectiveLevelKey, type MembershipKey } from "@/lib/membership";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
@@ -76,6 +78,9 @@ export interface AdminCustomerRow {
   rating_count: number;
   /** Jumlah teman (PRD Friends req. i). */
   friend_count: number;
+  /** Level membership EFEKTIF (PRD Membership M12). */
+  membership_key: MembershipKey;
+  membership_name: string;
 }
 
 export interface ListCustomersResult {
@@ -157,6 +162,8 @@ export async function listCustomers(
         is_guest: profiles.isGuest,
         is_active: profiles.isActive,
         created_at: profiles.createdAt,
+        membership_level: profiles.membershipLevel,
+        membership_expires_at: profiles.membershipExpiresAt,
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
         rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
         rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
@@ -184,6 +191,12 @@ export async function listCustomers(
       .where(whereClause),
   ]);
 
+  // Nama tampilan level (editable admin) — 3 baris, sekali ambil.
+  const levelRows = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNames = new Map(levelRows.map((l) => [l.key, l.name]));
+
   return {
     rows: rows.map((r) => ({
       id: r.id,
@@ -207,6 +220,11 @@ export async function listCustomers(
       rating_avg: Number(r.rating_avg),
       rating_count: Number(r.rating_count),
       friend_count: Number(r.friend_count),
+      membership_key: effectiveLevelKey(r.membership_level, r.membership_expires_at),
+      membership_name:
+        levelNames.get(
+          effectiveLevelKey(r.membership_level, r.membership_expires_at)
+        ) ?? "Basic",
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };
