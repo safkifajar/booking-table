@@ -772,7 +772,9 @@ export async function listAllMembers(opts?: {
       const locked = !isFriend && MEMBERSHIP_RANK[targetKey] > viewerRank;
       return {
         id: r.id,
-        display_name: r.display_name,
+        // Terkunci → identitas TIDAK dikirim (kartu blur anonim); cursor
+        // keyset tetap aman — dibangun dari baris mentah, bukan hasil map.
+        display_name: locked ? "SOHO member" : r.display_name,
         username: locked ? null : r.username,
         avatar_url: r.avatar_url,
         photos: r.photos ?? [],

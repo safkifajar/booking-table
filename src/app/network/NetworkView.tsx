@@ -258,58 +258,68 @@ function MemberCard({
 }) {
   const eduLabel = educationLabel(user.education);
 
-  // Kartu TERKUNCI level (PRD Membership M5): nama/foto/at_soho tetap
-  // terlihat, detail tak dikirim server; tanpa link detail & tombol Add —
-  // CTA-nya upgrade. Teman tak pernah terkunci (G2).
+  // Kartu TERKUNCI level (PRD Membership M5, revisi UX): BENAR-BENAR
+  // terkunci — foto di-blur penuh + identitas tak ditampilkan; overlay kunci
+  // dgn badge level DI ATAS blur; badge At SOHO tetap terlihat. Detail data
+  // sudah di-null-kan server; seluruh kartu jadi link ke /membership.
+  // Teman tak pernah terkunci (G2).
   if (user.locked) {
+    const photo = user.photos[0] ?? user.avatar_url;
     return (
-      <div className="overflow-hidden rounded-2xl border border-border bg-card/40">
-        <div className="relative">
-          <ProfilePhotoCarousel
-            photos={user.photos}
-            displayName={user.display_name}
-            fullWidth
-          />
+      <Link
+        href="/membership"
+        className="block overflow-hidden rounded-2xl border border-border bg-card/40 transition hover:border-primary/40 group"
+      >
+        <div className="relative aspect-[4/5] overflow-hidden">
+          {/* Foto blur penuh (scale utk sembunyikan tepi blur) */}
+          {photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={photo}
+              alt="Locked member"
+              className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 select-none pointer-events-none"
+              draggable={false}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-muted" />
+          )}
+          <div className="absolute inset-0 bg-black/45" />
+
+          {/* Badge At SOHO tetap terlihat (M5) */}
           {user.at_soho && (
             <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow">
               <span className="h-1.5 w-1.5 rounded-full bg-white" />
               At SOHO now
             </span>
           )}
-        </div>
-        <div className="p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-bold tracking-tight truncate">
-              {user.display_name}
-            </h3>
+
+          {/* Overlay kunci: badge level DI ATAS komponen kunci */}
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <span
               className={cn(
-                "shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold uppercase tracking-widest shadow-lg backdrop-blur-sm",
                 user.membership_key === "vip"
-                  ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                  : "bg-primary/15 text-primary border-primary/30"
+                  ? "bg-purple-500/25 text-purple-200 border-purple-400/40"
+                  : "bg-primary/25 text-primary border-primary/40"
               )}
             >
-              <Crown className="h-3 w-3" />
+              <Crown className="h-3.5 w-3.5" />
               {user.membership_name}
             </span>
-          </div>
-          <Link
-            href="/membership"
-            className="mt-3 flex items-center gap-2.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3 hover:border-primary/70 transition group"
-          >
-            <Lock className="h-4 w-4 text-primary shrink-0" />
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-primary">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-black/40 border border-white/20 backdrop-blur-sm">
+              <Lock className="h-5 w-5 text-white/90" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-white/95">
                 {user.membership_name} members only
               </p>
-              <p className="text-[11px] text-muted-foreground">
-                Upgrade your membership to view & connect
+              <p className="text-xs text-white/60 mt-0.5 group-hover:text-primary transition">
+                Upgrade your membership to view &amp; connect
               </p>
             </div>
-          </Link>
+          </div>
         </div>
-      </div>
+      </Link>
     );
   }
 
