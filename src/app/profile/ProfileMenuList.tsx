@@ -19,6 +19,7 @@ import {
   UserCog,
   Users,
   Ban,
+  Crown,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
@@ -187,6 +188,12 @@ export function ProfileMenuList({
             icon={<UserCog className="h-5 w-5" />}
             label="Edit Account"
             description="Name, WhatsApp number, date of birth, bio, hobbies"
+          />
+          <MenuItem
+            href="/membership"
+            icon={<Crown className="h-5 w-5" />}
+            label="Membership"
+            description={`${membership.name} plan — upgrade, renew & history`}
           />
           <MenuItem
             href="/profile/privacy"
