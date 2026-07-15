@@ -59,6 +59,11 @@ import {
   getBlockedIdSet,
   getFriendIdSet,
 } from "@/lib/friends";
+import {
+  getEffectiveRankMap,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -421,6 +426,21 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       if (data.visibility === "friends" && invitees.length > 0) {
         const friendIds = await getFriendIdSet(profile.id);
         invitees = invitees.filter((u) => friendIds.has(u.id));
+      }
+      // Kunci LEVEL (PRD Membership M6): target undangan harus level <=
+      // level host, KECUALI teman. Dibuang senyap — picker sudah tak
+      // menawarkan mereka.
+      if (invitees.length > 0) {
+        const [hostRank, rankMap, friendIds2] = await Promise.all([
+          getEffectiveRankOf(profile.id),
+          getEffectiveRankMap(invitees.map((u) => u.id)),
+          getFriendIdSet(profile.id),
+        ]);
+        invitees = invitees.filter(
+          (u) =>
+            friendIds2.has(u.id) ||
+            (rankMap.get(u.id) ?? MEMBERSHIP_RANK.basic) <= hostRank
+        );
       }
       // Undangan pending sudah "memesan" kursi → cek kapasitas (host + undangan).
       // Dilewati kalau meja izinkan over-capacity (setting admin).
@@ -1233,6 +1253,20 @@ export async function inviteUsersToSession(
   if (row.visibility === "friends" && targets.length > 0) {
     const friendIds = await getFriendIdSet(profile.id);
     targets = targets.filter((u) => friendIds.has(u.id));
+  }
+  // Kunci LEVEL (PRD Membership M6) — sama dgn openTable: level <= host
+  // atau teman; sisanya dibuang senyap.
+  if (targets.length > 0) {
+    const [hostRank, rankMap, friendIds2] = await Promise.all([
+      getEffectiveRankOf(profile.id),
+      getEffectiveRankMap(targets.map((u) => u.id)),
+      getFriendIdSet(profile.id),
+    ]);
+    targets = targets.filter(
+      (u) =>
+        friendIds2.has(u.id) ||
+        (rankMap.get(u.id) ?? MEMBERSHIP_RANK.basic) <= hostRank
+    );
   }
   if (targets.length === 0) throw new Error("No eligible users to invite");
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.

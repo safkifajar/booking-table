@@ -23,11 +23,22 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { friendships } from "@/lib/db/schema/friends";
 import { membershipLevels } from "@/lib/db/schema/membership";
-import { effectiveLevelKey, type MembershipKey } from "@/lib/membership";
+import {
+  effectiveLevelKey,
+  effectiveRank,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+  type MembershipKey,
+} from "@/lib/membership";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
-import { getBlockedIdSet, getFriendIdSet, getRelationshipMap } from "@/lib/friends";
+import {
+  getBlockedIdSet,
+  getFriendIdSet,
+  getRelationshipMap,
+} from "@/lib/friends";
+import { getEffectiveRankMap } from "@/lib/membership";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -582,6 +593,9 @@ export async function searchInviteCandidates(
     conditions.push(sql`${users.id} NOT IN (${memberIds})`);
   }
 
+  // Over-fetch lalu saring KUNCI LEVEL di JS (PRD Membership M6): kandidat =
+  // level <= level pengundang, KECUALI teman (selalu boleh). friendsOnly
+  // sudah pasti teman → lolos tanpa cek rank.
   const rows = await db
     .select({
       id: users.id,
@@ -592,9 +606,25 @@ export async function searchInviteCandidates(
     .innerJoin(profiles, eq(profiles.id, users.id))
     .where(and(...conditions))
     .orderBy(profiles.displayName)
-    .limit(10);
+    .limit(30);
 
-  return rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+  let allowed = rows;
+  if (!friendsOnly && rows.length > 0) {
+    const [viewerRank, rankMap, friendIds] = await Promise.all([
+      getEffectiveRankOf(me.id),
+      getEffectiveRankMap(rows.map((r) => r.id)),
+      getFriendIdSet(me.id),
+    ]);
+    allowed = rows.filter(
+      (r) =>
+        friendIds.has(r.id) ||
+        (rankMap.get(r.id) ?? MEMBERSHIP_RANK.basic) <= viewerRank
+    );
+  }
+
+  return allowed
+    .slice(0, 10)
+    .map((r) => ({ id: r.id, name: r.name, email: r.email }));
 }
 
 // ============================================================
@@ -688,6 +718,8 @@ export async function listAllMembers(opts?: {
       hide_age: profiles.hideAge,
       hide_location: profiles.hideLocation,
       hobbies: profiles.hobbies,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
       priority: priorityExpr,
     })
     .from(users)
@@ -714,24 +746,46 @@ export async function listAllMembers(opts?: {
     me.id,
     pageRows.map((r) => r.id)
   );
+  // Kunci level (PRD Membership M4/M5): viewer melihat level-nya & di bawah;
+  // TEMAN selalu terbuka (G2). Rank target dihitung dari kolom yg sudah
+  // di-select (tanpa query tambahan); rank viewer satu query.
+  const viewerRank = await getEffectiveRankOf(me.id);
+  const levelRowsAll = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNamesAll = new Map(levelRowsAll.map((l) => [l.key, l.name]));
   const last = pageRows[pageRows.length - 1];
   return {
-    users: pageRows.map((r) => ({
-      id: r.id,
-      display_name: r.display_name,
-      username: r.username,
-      avatar_url: r.avatar_url,
-      photos: r.photos ?? [],
-      // Privasi: hormati hide_age / hide_location.
-      age: r.hide_age ? null : ageFromISO(r.birth_date),
-      area: r.hide_location ? null : r.area,
-      education: r.education,
-      gender: r.gender,
-      at_soho: activeIds.has(r.id),
-      hobbies: r.hobbies,
-      rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
-      friend_status: relationships.get(r.id) ?? "none",
-    })),
+    users: pageRows.map((r) => {
+      const targetKey = effectiveLevelKey(
+        r.membership_level,
+        r.membership_expires_at
+      );
+      const isFriend = relationships.get(r.id) === "friends";
+      const locked = !isFriend && MEMBERSHIP_RANK[targetKey] > viewerRank;
+      return {
+        id: r.id,
+        display_name: r.display_name,
+        username: locked ? null : r.username,
+        avatar_url: r.avatar_url,
+        photos: r.photos ?? [],
+        // Privasi: hormati hide_age / hide_location. Terkunci level →
+        // detail TIDAK dikirim ke client sama sekali (bukan blur CSS).
+        age: locked || r.hide_age ? null : ageFromISO(r.birth_date),
+        area: locked || r.hide_location ? null : r.area,
+        education: locked ? null : r.education,
+        gender: locked ? null : r.gender,
+        at_soho: activeIds.has(r.id), // badge At SOHO TETAP terlihat (M5)
+        hobbies: locked ? [] : r.hobbies,
+        rating: locked
+          ? { avg_stars: 0, rating_count: 0, top_tags: null }
+          : (ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null }),
+        friend_status: relationships.get(r.id) ?? "none",
+        membership_key: targetKey,
+        membership_name: levelNamesAll.get(targetKey) ?? targetKey,
+        locked,
+      };
+    }),
     next_cursor:
       hasMore && last
         ? `${last.priority}\n${last.display_name}\n${last.id}`

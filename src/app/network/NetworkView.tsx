@@ -13,6 +13,8 @@ import {
   UserPlus,
   UserCheck,
   Check,
+  Crown,
+  Lock,
 } from "lucide-react";
 import { HobbyBadges } from "@/components/network/HobbyBadges";
 import { RatingStars } from "@/components/network/RatingStars";
@@ -255,6 +257,61 @@ function MemberCard({
   isMe: boolean;
 }) {
   const eduLabel = educationLabel(user.education);
+
+  // Kartu TERKUNCI level (PRD Membership M5): nama/foto/at_soho tetap
+  // terlihat, detail tak dikirim server; tanpa link detail & tombol Add —
+  // CTA-nya upgrade. Teman tak pernah terkunci (G2).
+  if (user.locked) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-border bg-card/40">
+        <div className="relative">
+          <ProfilePhotoCarousel
+            photos={user.photos}
+            displayName={user.display_name}
+            fullWidth
+          />
+          {user.at_soho && (
+            <span className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground shadow">
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              At SOHO now
+            </span>
+          )}
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-bold tracking-tight truncate">
+              {user.display_name}
+            </h3>
+            <span
+              className={cn(
+                "shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                user.membership_key === "vip"
+                  ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                  : "bg-primary/15 text-primary border-primary/30"
+              )}
+            >
+              <Crown className="h-3 w-3" />
+              {user.membership_name}
+            </span>
+          </div>
+          <Link
+            href="/membership"
+            className="mt-3 flex items-center gap-2.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3 hover:border-primary/70 transition group"
+          >
+            <Lock className="h-4 w-4 text-primary shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-primary">
+                {user.membership_name} members only
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Upgrade your membership to view & connect
+              </p>
+            </div>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // Kartu SENGAJA tidak dibungkus satu <Link> besar: carousel foto punya

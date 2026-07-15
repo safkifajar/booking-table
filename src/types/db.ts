@@ -261,6 +261,15 @@ export interface NetworkSearchUser {
   rating: UserRatingSummary;
   /** Status relasi viewer -> user ini (tombol Add friend di kartu). */
   friend_status: "none" | "pending_out" | "pending_in" | "friends" | "blocked";
+  /** Level membership EFEKTIF user ini (badge; warna menempel ke key). */
+  membership_key: "basic" | "premium" | "vip";
+  membership_name: string;
+  /**
+   * TERKUNCI level (PRD Membership M4/M5): level user > level viewer & bukan
+   * teman. Kartu tetap tampil (nama/foto/at_soho) tapi detail di-NULL-kan
+   * server & UI merender stub kunci + CTA upgrade.
+   */
+  locked: boolean;
 }
 
 /** Satu halaman hasil "Semua member" (infinite scroll). */
@@ -337,6 +346,14 @@ export interface PublicProfile {
     table_label: string;
     visibility: SessionVisibility;
   } | null;
+  /**
+   * TERKUNCI karena level membership viewer < level user ini (PRD Membership
+   * M4) — data detail di-null-kan seperti is_private, tapi UI merender CTA
+   * upgrade (bukan banner akun privat). Teman tak pernah terkunci (G2).
+   */
+  locked_by_level: boolean;
+  /** Nama level user ini (utk copy "X members only" saat terkunci). */
+  membership_name: string;
 }
 
 export interface RatableMember {

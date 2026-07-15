@@ -20,6 +20,14 @@ import {
   getFriendIdSet,
   isBlockedEitherWay,
 } from "@/lib/friends";
+import {
+  areFriends,
+} from "@/lib/friends";
+import {
+  getEffectiveRankMap,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 
@@ -321,17 +329,26 @@ export async function getActiveStoriesByBar(
     }
   }
 
-  // Saring yg saling blokir (PRD K6b) + urutan: milik sendiri → TEMAN →
-  // lainnya (PRD K4 — teman diprioritaskan di URUTAN saja, semua tetap
-  // tampil), lalu story terbaru di depan dalam tiap kelompok.
-  const [blockedIds, friendIds] = await Promise.all([
+  // Saring yg saling blokir (PRD K6b) + KUNCI LEVEL (PRD Membership G3:
+  // story dari user dgn rank <= rank viewer; self & TEMAN selalu tampil) +
+  // urutan: milik sendiri → TEMAN → lainnya (PRD K4), story terbaru di
+  // depan dalam tiap kelompok. Story terkunci TIDAK dikirim ke client.
+  const [blockedIds, friendIds, viewerRank, rankMap] = await Promise.all([
     getBlockedIdSet(viewerId),
     getFriendIdSet(viewerId),
+    getEffectiveRankOf(viewerId),
+    getEffectiveRankMap(Array.from(byUser.keys())),
   ]);
   const rank = (userId: string) =>
     userId === viewerId ? 0 : friendIds.has(userId) ? 1 : 2;
   const items = Array.from(byUser.values())
     .filter((u) => !blockedIds.has(u.userId))
+    .filter(
+      (u) =>
+        u.userId === viewerId ||
+        friendIds.has(u.userId) ||
+        (rankMap.get(u.userId) ?? MEMBERSHIP_RANK.basic) <= viewerRank
+    )
     .sort(
       (a, b) =>
         rank(a.userId) - rank(b.userId) ||
@@ -374,6 +391,17 @@ export async function getStoriesForUser(
   // Saling blokir → seolah tak ada story (PRD K6b, disguised).
   if (viewerId !== userId && (await isBlockedEitherWay(viewerId, userId))) {
     return [];
+  }
+  // Kunci level (PRD Membership G3): pemilik rank lebih tinggi & bukan
+  // teman → kosong (guard lapis server; story bar sudah menyaring).
+  if (viewerId !== userId) {
+    const [viewerRank, ownerRankMap, friend] = await Promise.all([
+      getEffectiveRankOf(viewerId),
+      getEffectiveRankMap([userId]),
+      areFriends(viewerId, userId),
+    ]);
+    const ownerRank = ownerRankMap.get(userId) ?? MEMBERSHIP_RANK.basic;
+    if (!friend && ownerRank > viewerRank) return [];
   }
   const now = new Date();
 

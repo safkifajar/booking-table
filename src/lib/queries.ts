@@ -17,6 +17,12 @@ import {
   getBlockedIdSet,
   isBlockedEitherWay,
 } from "@/lib/friends";
+import {
+  effectiveLevelKey,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
+import { membershipLevels } from "@/lib/db/schema/membership";
 import { bars, floorAreas, tables } from "@/lib/db/schema/venue";
 import {
   tableSessions,
@@ -1143,6 +1149,8 @@ export async function getPublicProfile(
       hobbies: profiles.hobbies,
       prompts: profiles.prompts,
       is_guest: profiles.isGuest,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
     })
     .from(profiles)
     .where(eq(profiles.id, userId));
@@ -1165,12 +1173,27 @@ export async function getPublicProfile(
       ? await areFriends(opts.viewerId, p.id)
       : false;
 
+  // Kunci LEVEL membership (PRD Membership M4): level user ini > level
+  // efektif viewer & bukan teman → profil terkunci ala private, UI
+  // merender CTA upgrade. Viewer anonim diperlakukan sbg basic.
+  const targetLevelKey = effectiveLevelKey(
+    p.membership_level,
+    p.membership_expires_at
+  );
+  let lockedByLevel = false;
+  if (!bypass && !isFriend) {
+    const viewerRank = opts?.viewerId
+      ? await getEffectiveRankOf(opts.viewerId)
+      : MEMBERSHIP_RANK.basic;
+    lockedByLevel = MEMBERSHIP_RANK[targetLevelKey] > viewerRank;
+  }
+
   // Akun privat (ala IG): untuk viewer lain, tampilkan HANYA data yg juga ada
   // di kartu list network (foto, nama, umur, area, education, rating, hobbies,
   // at_soho). Sisanya (bio, social, prompts, religion, tinggi, gender,
   // interested_in) di-null-kan → detail merender stub "terkunci" + blur.
-  // Hangout history disembunyikan total.
-  const locked = !bypass && !isFriend && p.is_private;
+  // Hangout history disembunyikan total. Kunci level ikut jalur yang sama.
+  const locked = lockedByLevel || (!bypass && !isFriend && p.is_private);
   const hideAge = !bypass && p.hide_age;
   const hideSocial = locked || (!bypass && p.hide_social);
   const hideLocation = !bypass && p.hide_location;
@@ -1233,6 +1256,15 @@ export async function getPublicProfile(
             table_label: active[0].table_label,
             visibility: active[0].visibility as ActiveNetworkUser["visibility"],
           },
+    locked_by_level: lockedByLevel,
+    membership_name: await (async () => {
+      const [lvl] = await db
+        .select({ name: membershipLevels.name })
+        .from(membershipLevels)
+        .where(eq(membershipLevels.key, targetLevelKey))
+        .limit(1);
+      return lvl?.name ?? targetLevelKey;
+    })(),
   };
 }
 
