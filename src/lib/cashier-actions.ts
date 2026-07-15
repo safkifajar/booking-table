@@ -42,6 +42,12 @@ import { staffRoles } from "@/lib/db/schema/extras";
 import { createNotification } from "@/lib/notifications";
 import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
+import {
+  resolveVoucherForBillPayment,
+  reserveVoucherForPayment,
+  settleVoucherForPayment,
+  releaseVoucherForPayment,
+} from "@/lib/member-voucher";
 import { notifyAll } from "@/lib/realtime/notify";
 import { settleOverdueIfPaid, settleOrderIfPaid } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
@@ -778,6 +784,8 @@ const createPaymentSchema = z.object({
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
   /** Untuk cash: nominal yang diterima dari customer (untuk hitung kembalian) */
   cashReceived: z.number().int().positive().optional(),
+  /** Kode voucher benefit membership (PRD Membership rev-2) — opsional. */
+  voucherCode: z.string().trim().max(20).optional(),
 });
 
 export interface CreatePaymentResult {
@@ -889,26 +897,108 @@ export async function cashierCreatePayment(
     change = data.cashReceived - data.amount;
   }
 
-  // 5. Insert payment row (status pending — gateway yang update)
+  // 4b. Voucher benefit membership (kasir menginput kode milik customer di
+  //     meja — pemiliknya harus member JOINED sesi ini). Divalidasi server.
+  let voucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  if (data.voucherCode?.trim()) {
+    const res = await resolveVoucherForBillPayment({
+      code: data.voucherCode,
+      sessionId: data.sessionId,
+      amount: data.amount,
+    });
+    if (!res.ok) throw new Error(res.error);
+    voucher = {
+      voucherId: res.voucher.voucherId,
+      code: res.voucher.code,
+      discount: res.voucher.discount,
+    };
+  }
+  const chargeAmount = data.amount - (voucher?.discount ?? 0);
+
+  // Diskon menutup seluruh nominal → hanya baris voucher (paid), tanpa gateway.
+  if (voucher && chargeAmount <= 0) {
+    const [voucherPayment] = await db
+      .insert(payments)
+      .values({
+        orderId: order.id,
+        paidByMemberId: data.payerMemberId,
+        amount: voucher.discount,
+        method: "voucher",
+        status: "paid",
+        splitMode: "equal" as SplitMode,
+        splitMeta: { voucherCode: voucher.code, voucherId: voucher.voucherId },
+        paidAt: new Date(),
+      })
+      .returning({ id: payments.id });
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      voucherPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db.delete(payments).where(eq(payments.id, voucherPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+    await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
+    await settleOrderIfPaid(order.id);
+    await settleOverdueIfPaid(data.sessionId);
+    await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
+    revalidatePath(`/staff/cashier/${data.sessionId}`);
+    revalidatePath("/staff/cashier");
+    return {
+      paymentId: voucherPayment.id,
+      status: "paid" as const,
+      externalRef: "",
+      qrString: null,
+      expiresAt: null,
+      change: null,
+    };
+  }
+
+  // 5. Insert payment row (status pending — gateway yang update). Nominal =
+  //    SETELAH potongan voucher (baris diskon menyusul saat paid).
   const [newPayment] = await db
     .insert(payments)
     .values({
       orderId: order.id,
       paidByMemberId: data.payerMemberId,
-      amount: data.amount,
+      amount: chargeAmount,
       method: data.method,
       status: "pending",
       splitMode: "equal" as SplitMode,
-      splitMeta: { cashReceived: data.cashReceived, change },
+      splitMeta: {
+        cashReceived: data.cashReceived,
+        change,
+        ...(voucher
+          ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+          : {}),
+      },
       paidAt: null,
     })
     .returning({ id: payments.id });
+
+  // Reservasi voucher (race-safe); kalah race → payment batal.
+  if (voucher) {
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      newPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db
+        .update(payments)
+        .set({ status: "failed" })
+        .where(eq(payments.id, newPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+  }
 
   // 6. Call gateway untuk create charge
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
     paymentId: newPayment.id,
-    amount: data.amount,
+    amount: chargeAmount,
     method: data.method,
     payerName: member.displayName,
     description: `Table payment - ${data.sessionId.slice(0, 8)}`,
@@ -933,6 +1023,13 @@ export async function cashierCreatePayment(
       },
     })
     .where(eq(payments.id, newPayment.id));
+
+  // Gateway langsung paid (mock/cash) → settle voucher + order sekarang.
+  if (chargeResult.status === "paid") {
+    await settleVoucherForPayment(newPayment.id);
+    await settleOrderIfPaid(order.id);
+    await settleOverdueIfPaid(data.sessionId);
+  }
 
   // 8. Notify realtime (session + staff + bar)
   await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
@@ -981,6 +1078,9 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     .set({ status: "paid", paidAt: new Date() })
     .where(eq(payments.id, paymentId));
 
+  // Voucher membership yang menempel → tandai used + baris diskon (idempotent).
+  await settleVoucherForPayment(paymentId);
+
   // Sesi 'overdue' yang kini lunas → tutup otomatis.
   await settleOverdueIfPaid(payment.sessionId);
 
@@ -1017,6 +1117,7 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
     .update(payments)
     .set({ status: "failed", paidAt: null })
     .where(eq(payments.id, paymentId));
+  await releaseVoucherForPayment(paymentId);
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.cancelled" });
   await notifyPaymentEvent(paymentId, "cancelled");
@@ -1084,6 +1185,9 @@ export async function markPaymentPaidBySystem(
       .set({ dpPaidAt: new Date() })
       .where(eq(tableSessions.id, payment.sessionId));
   }
+
+  // Voucher membership yang menempel → tandai used + baris diskon (idempotent).
+  await settleVoucherForPayment(payment.id);
 
   // Prepaid hook: kalau order 'unpaid' & kini ada pembayaran lunas → order MASUK
   // (status 'paid' + item draft→sent). (PRD Multi-Order Prepaid.)

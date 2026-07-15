@@ -529,6 +529,11 @@ export interface InviteCandidate {
   id: string;
   name: string;
   email: string;
+  /** Username unik (handle) — tampil di picker undangan. */
+  username: string | null;
+  /** Level membership EFEKTIF — badge di picker (permintaan user rev-2). */
+  membership_key: MembershipKey;
+  membership_name: string;
 }
 
 /**
@@ -601,6 +606,9 @@ export async function searchInviteCandidates(
       id: users.id,
       name: profiles.displayName,
       email: users.email,
+      username: profiles.username,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
@@ -622,9 +630,23 @@ export async function searchInviteCandidates(
     );
   }
 
-  return allowed
-    .slice(0, 10)
-    .map((r) => ({ id: r.id, name: r.name, email: r.email }));
+  // Nama level (editable admin) utk badge picker.
+  const levelRowsPick = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNamesPick = new Map(levelRowsPick.map((l) => [l.key, l.name]));
+
+  return allowed.slice(0, 10).map((r) => {
+    const key = effectiveLevelKey(r.membership_level, r.membership_expires_at);
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      username: r.username,
+      membership_key: key,
+      membership_name: levelNamesPick.get(key) ?? key,
+    };
+  });
 }
 
 // ============================================================

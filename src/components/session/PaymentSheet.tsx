@@ -4,7 +4,10 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { QrCode, Check, X, ChevronRight } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
-import type { PaymentMethod, SplitMode } from "@/types/db";
+import type { PayableMethod, SplitMode } from "@/types/db";
+import { toast } from "sonner";
+import { Loader2, Ticket } from "lucide-react";
+import { previewBillVoucher } from "@/lib/membership-actions";
 
 /**
  * Bottom-sheet pemilihan pembayaran: pilih tipe (bagi rata / traktir) + metode,
@@ -18,6 +21,7 @@ export function PaymentSheet({
   membersCount,
   remaining,
   payFullOnly,
+  sessionId,
   onClose,
   onSingle,
   onBatch,
@@ -27,19 +31,34 @@ export function PaymentSheet({
   remaining: number;
   /** Staff: terkunci ke "Pay in full" (custom). */
   payFullOnly?: boolean;
+  /** Utk validasi voucher benefit membership (PRD Membership rev-2). */
+  sessionId: string;
   onClose: () => void;
   /** custom/treat/staff → 1 payment. Return setelah generate (caller redirect). */
-  onSingle: (amount: number, method: PaymentMethod) => Promise<void>;
+  onSingle: (
+    amount: number,
+    method: PayableMethod,
+    voucherCode?: string
+  ) => Promise<void>;
   /** equal → batch (1 QRIS per anggota, bagi rata dari sisa). */
-  onBatch: (mode: "equal", method: PaymentMethod) => Promise<void>;
+  onBatch: (mode: "equal", method: PayableMethod) => Promise<void>;
 }) {
   const [mode, setMode] = React.useState<SplitMode | "">(
     payFullOnly ? "custom" : ""
   );
-  const [method, setMethod] = React.useState<PaymentMethod | "">("");
+  const [method, setMethod] = React.useState<PayableMethod | "">("");
   const [loading, setLoading] = React.useState(false);
   const [typeSheet, setTypeSheet] = React.useState(false);
   const [methodSheet, setMethodSheet] = React.useState(false);
+  // Voucher benefit membership — hanya utk pembayaran TUNGGAL (custom/treat);
+  // batch bagi-rata tidak mendukung voucher.
+  const [voucherInput, setVoucherInput] = React.useState("");
+  const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucher, setVoucher] = React.useState<{
+    code: string;
+    name: string;
+    discount: number;
+  } | null>(null);
 
   // Bagi rata dihitung dari SISA (remaining), bukan total — supaya saat sudah ada
   // DP, yang dibagi adalah sisa utang bersama. Konsisten dgn server
@@ -60,10 +79,34 @@ export function PaymentSheet({
         await onBatch("equal", method);
       } else {
         if (myAmount <= 0) return;
-        await onSingle(myAmount, method);
+        await onSingle(myAmount, method, voucher?.code);
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code || myAmount <= 0) return;
+    setVoucherChecking(true);
+    try {
+      const res = await previewBillVoucher({
+        code,
+        sessionId,
+        amount: myAmount,
+      });
+      if (!res.ok) {
+        setVoucher(null);
+        toast.error(res.error);
+        return;
+      }
+      setVoucher({ code: res.code, name: res.name, discount: res.discount });
+      toast.success(`${res.name} applied`);
+    } catch {
+      toast.error("Failed to check voucher");
+    } finally {
+      setVoucherChecking(false);
     }
   }
 
@@ -115,6 +158,75 @@ export function PaymentSheet({
             <div className="rounded-md border border-border p-3 text-sm flex justify-between">
               <span className="text-muted-foreground">{payFullOnly ? "Pay in full" : "Your treat (full bill)"}</span>
               <span className="text-primary font-semibold">{formatIDR(treatAmount)}</span>
+            </div>
+          )}
+
+          {/* Voucher membership — pembayaran tunggal saja (PRD Membership rev-2) */}
+          {mode === "custom" && myAmount > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Ticket className="h-4 w-4 text-primary" /> Membership voucher
+              </h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Have a voucher from your membership? Apply it here.
+              </p>
+              {voucher ? (
+                <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm space-y-1">
+                  <div className="flex justify-between gap-2">
+                    <span className="font-medium text-primary truncate">
+                      {voucher.name} ({voucher.code})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoucher(null);
+                        setVoucherInput("");
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Discount</span>
+                    <span className="text-emerald-400">
+                      - {formatIDR(voucher.discount)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1">
+                    <span className="text-muted-foreground">You&apos;ll pay</span>
+                    <span className="font-semibold text-primary">
+                      {formatIDR(Math.max(0, myAmount - voucher.discount))}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={voucherInput}
+                    onChange={(e) =>
+                      setVoucherInput(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")
+                      )
+                    }
+                    placeholder="e.g. SOHO-AB12-CD34"
+                    className="flex-1 h-10 px-3 rounded-md bg-input border border-border text-sm font-mono focus:outline-none focus:border-primary/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyVoucher}
+                    disabled={voucherChecking || !voucherInput.trim()}
+                    className="h-10 px-3.5 rounded-md border border-border text-sm hover:border-primary/40 transition disabled:opacity-50"
+                  >
+                    {voucherChecking ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Apply"
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

@@ -29,6 +29,17 @@ import { requireAdmin } from "@/lib/admin";
 import { getCurrentProfile, requireProfile } from "@/lib/auth-v2/current";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { createNotification } from "@/lib/notifications";
+import { getChargeConfig } from "@/lib/settings-actions";
+import { getBarBySlug } from "@/lib/queries";
+import { computeBillTotals } from "@/lib/settings-constants";
+import {
+  generateMemberVouchers,
+  getGeneratedCounts,
+  getVouchersOf,
+  templateHasInstances,
+  resolveVoucherForBillPayment,
+  type MyVoucherRow,
+} from "@/lib/member-voucher";
 import {
   effectiveLevelKey,
   type MembershipKey,
@@ -74,106 +85,84 @@ export async function updateMembershipLevel(
 }
 
 // ============================================================
-// VOUCHER — CRUD (M7)
+// VOUCHER TEMPLATE — benefit member, BUKAN kode promo (M7 rev-2)
 // ============================================================
+// Admin membuat TEMPLATE (nama + aturan potongan bill + level); kode unik
+// per member digenerate otomatis saat aktivasi (lib/member-voucher.ts).
 
-const voucherFieldsSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9_-]{3,32}$/, "Code: 3-32 chars, A-Z 0-9 _ -"),
+const voucherTemplateSchema = z.object({
+  name: z.string().trim().min(3).max(60),
   discountType: z.enum(["percent", "fixed"]),
   discountValue: z.number().int().min(1),
-  /** null = berlaku semua level purchasable. */
+  /** Batas maksimal potongan (percent). null = tanpa batas. */
+  maxDiscount: z.number().int().min(1).nullable(),
+  /** Minimal nominal pembayaran. null = tanpa syarat. */
+  minSpend: z.number().int().min(1).nullable(),
+  /** null = semua level purchasable. */
   levelKey: z.enum(["premium", "vip"]).nullable(),
-  maxUses: z.number().int().min(1).nullable(),
-  perUserLimit: z.number().int().min(1).max(100),
-  validFrom: z.string().datetime().nullable(),
-  validUntil: z.string().datetime().nullable(),
+  /** Masa berlaku instance: X hari sejak diterima member. */
+  validDays: z.number().int().min(1).max(3650),
   isActive: z.boolean(),
 });
 
-function validateVoucherFields(
-  data: z.infer<typeof voucherFieldsSchema>
+function validateTemplateFields(
+  data: z.infer<typeof voucherTemplateSchema>
 ): string | null {
   if (data.discountType === "percent" && data.discountValue > 100) {
     return "Percent discount can't exceed 100";
-  }
-  if (
-    data.validFrom &&
-    data.validUntil &&
-    new Date(data.validFrom) >= new Date(data.validUntil)
-  ) {
-    return "Valid-from must be before valid-until";
   }
   return null;
 }
 
 export async function createMembershipVoucher(
-  input: z.infer<typeof voucherFieldsSchema>
+  input: z.infer<typeof voucherTemplateSchema>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
-  const data = voucherFieldsSchema.parse(input);
-  const err = validateVoucherFields(data);
+  const data = voucherTemplateSchema.parse(input);
+  const err = validateTemplateFields(data);
   if (err) return { ok: false, error: err };
 
-  const inserted = await db
-    .insert(membershipVouchers)
-    .values({
-      code: data.code,
-      discountType: data.discountType,
-      discountValue: data.discountValue,
-      levelKey: data.levelKey,
-      maxUses: data.maxUses,
-      perUserLimit: data.perUserLimit,
-      validFrom: data.validFrom ? new Date(data.validFrom) : null,
-      validUntil: data.validUntil ? new Date(data.validUntil) : null,
-      isActive: data.isActive,
-    })
-    .onConflictDoNothing({ target: membershipVouchers.code })
-    .returning({ id: membershipVouchers.id });
-  if (inserted.length === 0) {
-    return { ok: false, error: `Voucher code ${data.code} already exists` };
-  }
+  await db.insert(membershipVouchers).values({
+    name: data.name,
+    discountType: data.discountType,
+    discountValue: data.discountValue,
+    maxDiscount: data.maxDiscount,
+    minSpend: data.minSpend,
+    levelKey: data.levelKey,
+    validDays: data.validDays,
+    isActive: data.isActive,
+  });
 
   revalidatePath("/admin/membership/vouchers");
   return { ok: true };
 }
 
-const updateVoucherSchema = voucherFieldsSchema.extend({
+const updateTemplateSchema = voucherTemplateSchema.extend({
   id: z.string().uuid(),
 });
 
+/**
+ * Ubah template — HANYA berlaku utk voucher yang digenerate SETELAHNYA;
+ * instance yang sudah beredar memegang snapshot aturan lama.
+ */
 export async function updateMembershipVoucher(
-  input: z.infer<typeof updateVoucherSchema>
+  input: z.infer<typeof updateTemplateSchema>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
-  const data = updateVoucherSchema.parse(input);
-  const err = validateVoucherFields(data);
+  const data = updateTemplateSchema.parse(input);
+  const err = validateTemplateFields(data);
   if (err) return { ok: false, error: err };
-
-  // Code unik: cek bentrok dgn voucher LAIN.
-  const [clash] = await db
-    .select({ id: membershipVouchers.id })
-    .from(membershipVouchers)
-    .where(eq(membershipVouchers.code, data.code))
-    .limit(1);
-  if (clash && clash.id !== data.id) {
-    return { ok: false, error: `Voucher code ${data.code} already exists` };
-  }
 
   await db
     .update(membershipVouchers)
     .set({
-      code: data.code,
+      name: data.name,
       discountType: data.discountType,
       discountValue: data.discountValue,
+      maxDiscount: data.maxDiscount,
+      minSpend: data.minSpend,
       levelKey: data.levelKey,
-      maxUses: data.maxUses,
-      perUserLimit: data.perUserLimit,
-      validFrom: data.validFrom ? new Date(data.validFrom) : null,
-      validUntil: data.validUntil ? new Date(data.validUntil) : null,
+      validDays: data.validDays,
       isActive: data.isActive,
     })
     .where(eq(membershipVouchers.id, data.id));
@@ -182,28 +171,23 @@ export async function updateMembershipVoucher(
   return { ok: true };
 }
 
-/** Hapus PERMANEN — hanya selama belum pernah dipakai (riwayat aman). */
+/** Hapus PERMANEN — hanya kalau belum pernah generate instance. */
 export async function deleteMembershipVoucher(
   id: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
-  const voucherId = z.string().uuid().parse(id);
+  const templateId = z.string().uuid().parse(id);
 
-  const deleted = await db
-    .delete(membershipVouchers)
-    .where(
-      and(
-        eq(membershipVouchers.id, voucherId),
-        eq(membershipVouchers.usedCount, 0)
-      )
-    )
-    .returning({ id: membershipVouchers.id });
-  if (deleted.length === 0) {
+  if (await templateHasInstances(templateId)) {
     return {
       ok: false,
-      error: "Voucher has been used — deactivate it instead of deleting",
+      error:
+        "Members already received vouchers from this template — deactivate it instead of deleting",
     };
   }
+  await db
+    .delete(membershipVouchers)
+    .where(eq(membershipVouchers.id, templateId));
 
   revalidatePath("/admin/membership/vouchers");
   return { ok: true };
@@ -211,16 +195,16 @@ export async function deleteMembershipVoucher(
 
 export interface AdminVoucherRow {
   id: string;
-  code: string;
+  name: string;
   discount_type: "percent" | "fixed";
   discount_value: number;
+  max_discount: number | null;
+  min_spend: number | null;
   level_key: string | null;
-  max_uses: number | null;
-  used_count: number;
-  per_user_limit: number;
-  valid_from: string | null;
-  valid_until: string | null;
+  valid_days: number;
   is_active: boolean;
+  /** Jumlah instance yang pernah digenerate ke member. */
+  generated_count: number;
   created_at: string;
 }
 
@@ -230,18 +214,18 @@ export async function listMembershipVouchers(): Promise<AdminVoucherRow[]> {
     .select()
     .from(membershipVouchers)
     .orderBy(desc(membershipVouchers.createdAt));
+  const counts = await getGeneratedCounts(rows.map((r) => r.id));
   return rows.map((r) => ({
     id: r.id,
-    code: r.code,
+    name: r.name,
     discount_type: r.discountType,
     discount_value: r.discountValue,
+    max_discount: r.maxDiscount,
+    min_spend: r.minSpend,
     level_key: r.levelKey,
-    max_uses: r.maxUses,
-    used_count: r.usedCount,
-    per_user_limit: r.perUserLimit,
-    valid_from: r.validFrom?.toISOString() ?? null,
-    valid_until: r.validUntil?.toISOString() ?? null,
+    valid_days: r.validDays,
     is_active: r.isActive,
+    generated_count: counts.get(r.id) ?? 0,
     created_at: r.createdAt.toISOString(),
   }));
 }
@@ -259,8 +243,9 @@ export interface AdminMembershipTxRow {
   level_name: string;
   kind: "purchase" | "renewal" | "admin_grant";
   base_amount: number;
+  tax_amount: number;
+  service_amount: number;
   amount: number;
-  voucher_code: string | null;
   period_start: string;
   period_end: string | null;
   status: "pending" | "paid" | "failed" | "refunded";
@@ -291,8 +276,9 @@ export async function listMembershipTransactions(opts?: {
         level_name: membershipLevels.name,
         kind: membershipTransactions.kind,
         base_amount: membershipTransactions.baseAmount,
+        tax_amount: membershipTransactions.taxAmount,
+        service_amount: membershipTransactions.serviceAmount,
         amount: membershipTransactions.amount,
-        voucher_code: membershipVouchers.code,
         period_start: membershipTransactions.periodStart,
         period_end: membershipTransactions.periodEnd,
         status: membershipTransactions.status,
@@ -305,10 +291,6 @@ export async function listMembershipTransactions(opts?: {
       .innerJoin(
         membershipLevels,
         eq(membershipLevels.key, membershipTransactions.levelKey)
-      )
-      .leftJoin(
-        membershipVouchers,
-        eq(membershipVouchers.id, membershipTransactions.voucherId)
       )
       .where(where)
       .orderBy(desc(membershipTransactions.createdAt))
@@ -403,6 +385,16 @@ export async function adminSetMembership(
     });
   });
 
+  // Grant ke level berbayar = aktivasi → member menerima voucher benefit
+  // (rev-2), sama seperti pembelian.
+  if (!isBasic) {
+    await generateMemberVouchers({
+      profileId: data.customerId,
+      levelKey: data.levelKey,
+      membershipTxId: null,
+    });
+  }
+
   revalidatePath(`/admin/users/${data.customerId}`);
   revalidatePath("/admin/users");
   revalidatePath("/admin/membership/transactions");
@@ -440,85 +432,19 @@ async function requirePurchaser() {
   return me;
 }
 
-interface ResolvedVoucher {
-  id: string;
-  code: string;
-  discountType: "percent" | "fixed";
-  discountValue: number;
-}
-
-/**
- * Validasi voucher untuk checkout. Return error message (bukan throw) —
- * ini penolakan yang DIHARAPKAN; production menyensor pesan thrown.
- */
-async function resolveVoucher(
-  codeRaw: string,
-  levelKey: MembershipKey,
-  profileId: string
-): Promise<{ voucher: ResolvedVoucher | null; error: string | null }> {
-  const code = codeRaw.trim().toUpperCase();
-  if (!code) return { voucher: null, error: null };
-
-  const [v] = await db
-    .select()
-    .from(membershipVouchers)
-    .where(eq(membershipVouchers.code, code))
-    .limit(1);
-  // Pesan sengaja SAMA untuk tidak-ada/nonaktif/di-luar-jendela — jangan
-  // membocorkan kode mana yang eksis.
-  const generic = "This voucher code isn't valid";
-  const now = Date.now();
-  if (!v || !v.isActive) return { voucher: null, error: generic };
-  if (v.validFrom && v.validFrom.getTime() > now)
-    return { voucher: null, error: generic };
-  if (v.validUntil && v.validUntil.getTime() < now)
-    return { voucher: null, error: generic };
-  if (v.levelKey && v.levelKey !== levelKey)
-    return { voucher: null, error: "This voucher doesn't apply to this plan" };
-  if (v.maxUses != null && v.usedCount >= v.maxUses)
-    return { voucher: null, error: "This voucher has been fully redeemed" };
-
-  // Limit per user — hitung pemakaian TERBAYAR + yang masih pending.
-  const [{ used }] = await db
-    .select({ used: count() })
-    .from(membershipTransactions)
-    .where(
-      and(
-        eq(membershipTransactions.profileId, profileId),
-        eq(membershipTransactions.voucherId, v.id),
-        inArray(membershipTransactions.status, ["pending", "paid"])
-      )
-    );
-  if (Number(used) >= v.perUserLimit)
-    return { voucher: null, error: "You've already used this voucher" };
-
-  return {
-    voucher: {
-      id: v.id,
-      code: v.code,
-      discountType: v.discountType,
-      discountValue: v.discountValue,
-    },
-    error: null,
-  };
-}
-
-function computeDiscount(base: number, v: ResolvedVoucher): number {
-  const raw =
-    v.discountType === "percent"
-      ? Math.floor((base * v.discountValue) / 100)
-      : v.discountValue;
-  return Math.min(base, Math.max(0, raw)); // clamp — final tak pernah < 0 (PRD 8)
-}
-
 export interface PurchasePreview {
   ok: boolean;
   error?: string;
   level_name?: string;
+  /** Harga level (sebelum tax & service). */
   base_amount?: number;
-  discount?: number;
+  /** Snapshot tax & service dari ChargeConfig bar (config yg sama dgn bill F&B). */
+  tax_amount?: number;
+  service_amount?: number;
+  /** Persen gabungan utk label "(15%)"; 0 = tanpa charge. */
+  charge_percent?: number;
+  /** Total ditagih = base + tax + service. */
   final_amount?: number;
-  voucher_code?: string | null;
   /** renewal = level sama & masih aktif → masa ditambahkan dari expiry lama. */
   kind?: "purchase" | "renewal";
   /** ISO; null = lifetime. */
@@ -530,10 +456,11 @@ export interface PurchasePreview {
 /**
  * Hitung ringkasan harga + periode SEBELUM bayar (dipakai form beli, juga
  * dipanggil ulang oleh purchaseMembership — satu sumber perhitungan).
+ * rev-2: tax & service dari ChargeConfig bar (computeBillTotals — sumber
+ * kebenaran yang sama dgn bill F&B); voucher TIDAK ada di checkout.
  */
 export async function previewMembershipPurchase(input: {
   levelKey: string;
-  voucherCode?: string;
 }): Promise<PurchasePreview> {
   const me = await requirePurchaser();
   const levelKey = z.enum(["premium", "vip"]).safeParse(input.levelKey);
@@ -562,21 +489,12 @@ export async function previewMembershipPurchase(input: {
     return { ok: false, error: "You already have this plan for life" };
   }
 
-  // Voucher (opsional).
-  let voucher: ResolvedVoucher | null = null;
-  if (input.voucherCode?.trim()) {
-    const res = await resolveVoucher(
-      input.voucherCode,
-      level.key as MembershipKey,
-      me.id
-    );
-    if (res.error) return { ok: false, error: res.error };
-    voucher = res.voucher;
-  }
-
-  const base = level.price;
-  const discount = voucher ? computeDiscount(base, voucher) : 0;
-  const final = base - discount;
+  // Tax & service — ChargeConfig bar yang sama dgn bill F&B.
+  const bar = await getBarBySlug(
+    process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto"
+  );
+  const charge = bar ? await getChargeConfig(bar.id) : null;
+  const bill = computeBillTotals(level.price, charge);
 
   // Periode (SNAPSHOT — aktivasi tinggal menerapkan, PRD 8):
   // - one_time → lifetime (end NULL);
@@ -597,10 +515,11 @@ export async function previewMembershipPurchase(input: {
   return {
     ok: true,
     level_name: level.name,
-    base_amount: base,
-    discount,
-    final_amount: final,
-    voucher_code: voucher?.code ?? null,
+    base_amount: bill.subtotal,
+    tax_amount: bill.tax,
+    service_amount: bill.service,
+    charge_percent: bill.chargePercent,
+    final_amount: bill.total,
     kind,
     new_expires_at: end?.toISOString() ?? null,
     replaces_active: effKey !== "basic" && effKey !== level.key,
@@ -611,7 +530,7 @@ export type PurchaseResult =
   | { ok: false; error: string }
   | {
       ok: true;
-      /** true = langsung aktif (gratis via voucher / mock gateway). */
+      /** true = langsung aktif (mock gateway / total 0). */
       activated: boolean;
       txId: string;
       qrString: string | null;
@@ -622,11 +541,11 @@ export type PurchaseResult =
 
 /**
  * Buat transaksi + charge QRIS. Satu pending per user — pending lama
- * ditandai failed dulu. Semua parameter di-SNAPSHOT ke baris transaksi.
+ * ditandai failed dulu. Semua parameter di-SNAPSHOT ke baris transaksi
+ * (base + tax + service + periode).
  */
 export async function purchaseMembership(input: {
   levelKey: string;
-  voucherCode?: string;
 }): Promise<PurchaseResult> {
   const me = await requirePurchaser();
 
@@ -635,16 +554,6 @@ export async function purchaseMembership(input: {
     return { ok: false, error: preview.error ?? "Can't purchase" };
 
   const levelKey = input.levelKey as MembershipKey;
-  // Ambil ulang id voucher (preview hanya bawa code).
-  let voucherId: string | null = null;
-  if (preview.voucher_code) {
-    const [v] = await db
-      .select({ id: membershipVouchers.id })
-      .from(membershipVouchers)
-      .where(eq(membershipVouchers.code, preview.voucher_code))
-      .limit(1);
-    voucherId = v?.id ?? null;
-  }
 
   // Satu pending per user: matikan yang lama (tak pernah dua QR hidup).
   await db
@@ -665,8 +574,9 @@ export async function purchaseMembership(input: {
       levelKey,
       kind: preview.kind ?? "purchase",
       baseAmount: preview.base_amount ?? 0,
+      taxAmount: preview.tax_amount ?? 0,
+      serviceAmount: preview.service_amount ?? 0,
       amount: preview.final_amount ?? 0,
-      voucherId,
       periodStart: now,
       periodEnd: preview.new_expires_at
         ? new Date(preview.new_expires_at)
@@ -676,7 +586,7 @@ export async function purchaseMembership(input: {
     })
     .returning({ id: membershipTransactions.id });
 
-  // Gratis total (voucher 100%) → aktivasi instan tanpa gateway (PRD 8).
+  // Total 0 (level gratis + tanpa charge — edge) → aktivasi instan.
   if ((preview.final_amount ?? 0) <= 0) {
     await activateMembershipTx(tx.id);
     return {
@@ -746,15 +656,14 @@ export async function purchaseMembership(input: {
 /**
  * Aktivasi transaksi — IDEMPOTENT via conditional update WHERE
  * status='pending' (polling & callback bisa datang bersamaan, PRD 8).
- * Terapkan SNAPSHOT (level + period_end) ke profil; voucher used_count
- * naik di sini (bukan saat QR dibuat).
+ * Terapkan SNAPSHOT (level + period_end) ke profil; lalu GENERATE voucher
+ * benefit pribadi dari template aktif level tsb (rev-2) + notif pasca-commit.
  */
 async function activateMembershipTx(txId: string): Promise<boolean> {
   let activated: {
     profileId: string;
     levelKey: string;
     periodEnd: Date | null;
-    voucherId: string | null;
   } | null = null;
 
   await db.transaction(async (tx) => {
@@ -771,7 +680,6 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
         profileId: membershipTransactions.profileId,
         levelKey: membershipTransactions.levelKey,
         periodEnd: membershipTransactions.periodEnd,
-        voucherId: membershipTransactions.voucherId,
       });
     if (updated.length === 0) return; // sudah diproses request lain
     const row = updated[0];
@@ -783,16 +691,6 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
         membershipExpiresAt: row.periodEnd,
       })
       .where(eq(profiles.id, row.profileId));
-
-    if (row.voucherId) {
-      // Increment TANPA syarat kuota: uang sudah pindah — overshoot kuota
-      // saat race adalah trade-off yang diterima (validasi kuota terjadi
-      // saat QR dibuat; PRD 8).
-      await tx
-        .update(membershipVouchers)
-        .set({ usedCount: sql`${membershipVouchers.usedCount} + 1` })
-        .where(eq(membershipVouchers.id, row.voucherId));
-    }
     activated = row;
   });
 
@@ -803,7 +701,14 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
     periodEnd: Date | null;
   };
 
-  // Post-commit: notif + revalidasi (jangan di dalam transaksi).
+  // Post-commit: generate voucher benefit (idempotensi dijamin oleh guard
+  // conditional di atas — hanya SATU pemanggil yang sampai sini per tx).
+  const voucherCount = await generateMemberVouchers({
+    profileId: row.profileId,
+    levelKey: row.levelKey,
+    membershipTxId: txId,
+  });
+
   const [level] = await db
     .select({ name: membershipLevels.name })
     .from(membershipLevels)
@@ -813,9 +718,13 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
     profileId: row.profileId,
     type: "general",
     title: `${level?.name ?? "Membership"} activated`,
-    body: row.periodEnd
-      ? `Your membership is active until ${row.periodEnd.toLocaleDateString("en-US", { dateStyle: "long" })}.`
-      : "Your membership is active for life.",
+    body:
+      (row.periodEnd
+        ? `Your membership is active until ${row.periodEnd.toLocaleDateString("en-US", { dateStyle: "long" })}.`
+        : "Your membership is active for life.") +
+      (voucherCount > 0
+        ? ` You received ${voucherCount} voucher${voucherCount === 1 ? "" : "s"} — check the Vouchers tab.`
+        : ""),
     link: "/membership",
   });
   revalidatePath("/membership");
@@ -900,8 +809,9 @@ export interface MyMembershipTxRow {
   level_name: string;
   kind: "purchase" | "renewal" | "admin_grant";
   base_amount: number;
+  tax_amount: number;
+  service_amount: number;
   amount: number;
-  voucher_code: string | null;
   period_end: string | null;
   status: "pending" | "paid" | "failed" | "refunded";
   created_at: string;
@@ -917,8 +827,9 @@ export async function getMyMembershipTransactions(): Promise<
       level_name: membershipLevels.name,
       kind: membershipTransactions.kind,
       base_amount: membershipTransactions.baseAmount,
+      tax_amount: membershipTransactions.taxAmount,
+      service_amount: membershipTransactions.serviceAmount,
       amount: membershipTransactions.amount,
-      voucher_code: membershipVouchers.code,
       period_end: membershipTransactions.periodEnd,
       status: membershipTransactions.status,
       created_at: membershipTransactions.createdAt,
@@ -927,10 +838,6 @@ export async function getMyMembershipTransactions(): Promise<
     .innerJoin(
       membershipLevels,
       eq(membershipLevels.key, membershipTransactions.levelKey)
-    )
-    .leftJoin(
-      membershipVouchers,
-      eq(membershipVouchers.id, membershipTransactions.voucherId)
     )
     .where(eq(membershipTransactions.profileId, me.id))
     .orderBy(desc(membershipTransactions.createdAt))
@@ -997,5 +904,41 @@ export async function getMyPendingMembershipTx(): Promise<PendingMembershipTx | 
     qr_expiry_seconds: row.qr_expires_at
       ? Math.max(1, Math.floor((row.qr_expires_at.getTime() - Date.now()) / 1000))
       : null,
+  };
+}
+
+/** Voucher benefit milik user sendiri (tab Vouchers di /membership). */
+export async function getMyVouchers(): Promise<MyVoucherRow[]> {
+  const me = await requireProfile();
+  return getVouchersOf(me.id);
+}
+
+/**
+ * Preview potongan voucher utk pembayaran BILL (dipanggil UI sebelum bayar;
+ * payShare/cashierCreatePayment memvalidasi ULANG server-side saat eksekusi).
+ */
+export async function previewBillVoucher(input: {
+  code: string;
+  sessionId: string;
+  amount: number;
+}): Promise<
+  | { ok: true; code: string; name: string; discount: number }
+  | { ok: false; error: string }
+> {
+  await requireProfile();
+  const parsed = z
+    .object({
+      code: z.string().trim().min(3).max(20),
+      sessionId: z.string().uuid(),
+      amount: z.number().int().positive(),
+    })
+    .parse(input);
+  const res = await resolveVoucherForBillPayment(parsed);
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    code: res.voucher.code,
+    name: res.voucher.name,
+    discount: res.voucher.discount,
   };
 }

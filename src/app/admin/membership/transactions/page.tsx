@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Ticket } from "lucide-react";
 import { requireAdmin } from "@/lib/admin";
 import { listMembershipTransactions } from "@/lib/membership-actions";
 import { Card } from "@/components/ui/card";
@@ -103,12 +102,6 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
                     >
                       {r.status}
                     </Badge>
-                    {r.voucher_code && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-                        <Ticket className="h-3 w-3" />
-                        {r.voucher_code}
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
                     {r.customer_email} · {fmt(r.created_at)}
@@ -122,9 +115,10 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
                   <div className="text-sm font-semibold">
                     {formatIDR(r.amount)}
                   </div>
-                  {r.amount !== r.base_amount && (
-                    <div className="text-[11px] text-muted-foreground line-through">
-                      {formatIDR(r.base_amount)}
+                  {r.tax_amount + r.service_amount > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      incl. tax & service{" "}
+                      {formatIDR(r.tax_amount + r.service_amount)}
                     </div>
                   )}
                 </div>

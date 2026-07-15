@@ -55,29 +55,33 @@ export const membershipLevels = pgTable(
 );
 
 /**
- * Voucher diskon pembelian/perpanjangan membership (PRD M7, G9).
- * Kuota dijaga race-safe saat AKTIVASI: conditional update
- * `used_count = used_count + 1 WHERE used_count < max_uses` (PRD 8).
+ * TEMPLATE voucher benefit membership (PRD Membership rev-2, 2026-07-15).
+ *
+ * Voucher = BENEFIT member, BUKAN kode promo beli membership. Admin membuat
+ * template (nama + aturan potongan transaksi bill) yang terhubung ke level;
+ * saat membership AKTIF (beli/perpanjang/admin grant), tiap member menerima
+ * INSTANCE pribadi (member_vouchers) dgn kode unik yang di-generate —
+ * kode tiap orang berbeda. Redeem: potongan transaksi pembayaran bill meja.
  */
 export const membershipVouchers = pgTable(
   "membership_vouchers",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Disimpan UPPERCASE; input user di-uppercase-kan sebelum lookup. */
-    code: text("code").notNull().unique("uq_membership_vouchers_code"),
+    /** Nama voucher (mis. "Premium Dining Discount") — tampil ke member. */
+    name: text("name").notNull(),
     discountType: voucherDiscountTypeEnum("discount_type").notNull(),
-    /** percent: 1–100 · fixed: rupiah. Final di-clamp minimum 0 (PRD 8). */
+    /** percent: 1–100 · fixed: rupiah. */
     discountValue: integer("discount_value").notNull(),
-    /** NULL = berlaku semua level purchasable. */
+    /** Batas maksimal potongan (utk percent). NULL = tanpa batas. */
+    maxDiscount: integer("max_discount"),
+    /** Minimal nominal pembayaran agar voucher bisa dipakai. NULL = tanpa. */
+    minSpend: integer("min_spend"),
+    /** NULL = semua level purchasable; selain itu khusus level tsb. */
     levelKey: text("level_key").references(() => membershipLevels.key, {
       onDelete: "restrict",
     }),
-    /** NULL = kuota tak terbatas. */
-    maxUses: integer("max_uses"),
-    usedCount: integer("used_count").notNull().default(0),
-    perUserLimit: integer("per_user_limit").notNull().default(1),
-    validFrom: timestamp("valid_from", { withTimezone: true, mode: "date" }),
-    validUntil: timestamp("valid_until", { withTimezone: true, mode: "date" }),
+    /** Masa berlaku instance: X hari sejak digenerate (keputusan user). */
+    validDays: integer("valid_days").notNull().default(30),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -89,5 +93,6 @@ export const membershipVouchers = pgTable(
       "ck_membership_vouchers_percent_max",
       sql`${t.discountType} <> 'percent' OR ${t.discountValue} <= 100`
     ),
+    check("ck_membership_vouchers_valid_days", sql`${t.validDays} >= 1`),
   ]
 );

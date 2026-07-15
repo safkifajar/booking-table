@@ -8,6 +8,7 @@ import { getMembershipLevels, getMembershipStatus } from "@/lib/membership";
 import {
   getMyMembershipTransactions,
   getMyPendingMembershipTx,
+  getMyVouchers,
 } from "@/lib/membership-actions";
 import { MembershipView } from "./MembershipView";
 
@@ -22,12 +23,14 @@ export default async function MembershipPage() {
   const profile = await getCurrentProfile();
   if (!profile) redirect("/auth?next=/membership");
 
-  const [status, levels, transactions, pendingTx] = await Promise.all([
-    getMembershipStatus(profile.id),
-    getMembershipLevels(),
-    getMyMembershipTransactions(),
-    getMyPendingMembershipTx(),
-  ]);
+  const [status, levels, transactions, pendingTx, vouchers] =
+    await Promise.all([
+      getMembershipStatus(profile.id),
+      getMembershipLevels(),
+      getMyMembershipTransactions(),
+      getMyPendingMembershipTx(),
+      getMyVouchers(),
+    ]);
 
   return (
     <main className="relative flex-1 pb-12">
@@ -56,6 +59,7 @@ export default async function MembershipPage() {
           levels={levels}
           transactions={transactions}
           pendingTx={pendingTx}
+          vouchers={vouchers}
         />
       </div>
     </main>

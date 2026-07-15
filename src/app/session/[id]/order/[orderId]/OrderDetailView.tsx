@@ -19,7 +19,7 @@ import {
   regenerateMemberPayment,
   type OrderDetail,
 } from "@/lib/actions";
-import type { PaymentMethod } from "@/types/db";
+import type { PayableMethod } from "@/types/db";
 import { toast } from "sonner";
 
 function fmtTime(iso: string): string {
@@ -102,7 +102,11 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   }, []);
 
   // Single payment (treat/staff) → buat 1 payment → tampilkan QR inline.
-  async function handleSingle(amount: number, method: PaymentMethod) {
+  async function handleSingle(
+    amount: number,
+    method: PayableMethod,
+    voucherCode?: string
+  ) {
     try {
       const result = await payShare({
         sessionId: detail.sessionId,
@@ -110,6 +114,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         amount,
         method,
         splitMode: "custom",
+        voucherCode,
       });
       setPaySheet(false);
       if (result.qrString && result.status === "pending") {
@@ -128,7 +133,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     }
   }
   // Batch (bagi rata) → generate N QRIS (1 per anggota) → tampilkan QR host inline.
-  async function handleBatch(mode: "equal", method: PaymentMethod) {
+  async function handleBatch(mode: "equal", method: PayableMethod) {
     try {
       const { results } = await createSplitBatch({
         sessionId: detail.sessionId,
@@ -413,6 +418,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
 
       {paySheet && (
         <PaymentSheet
+          sessionId={detail.sessionId}
           membersCount={detail.membersCount}
           // Basis hitungan = SISA (outstanding), bukan total → bagi rata setelah
           // DP jadi benar (sisa ÷ anggota).

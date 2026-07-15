@@ -31,7 +31,8 @@ import {
   type CashierSessionDetail,
 } from "@/lib/cashier-actions";
 import { formatIDR, cn, getActionErrorMessage } from "@/lib/utils";
-import type { PaymentMethod } from "@/types/db";
+import { previewBillVoucher } from "@/lib/membership-actions";
+import type { PayableMethod } from "@/types/db";
 
 function fmtTime(iso: string): string {
   const d = new Date(iso);
@@ -61,7 +62,7 @@ function isPaymentExpired(p: {
 
 // Hanya QRIS yang diaktifkan (Duitku). Cash/card/gopay/ovo disembunyikan.
 const PAYMENT_METHODS: {
-  value: PaymentMethod;
+  value: PayableMethod;
   label: string;
   icon: React.ReactNode;
   description: string;
@@ -504,8 +505,17 @@ function PaymentModal({
     // Default: host
     return detail.members.find((m) => m.is_host) ?? detail.members[0];
   });
-  const [method, setMethod] = React.useState<PaymentMethod>("qris");
+  const [method, setMethod] = React.useState<PayableMethod>("qris");
   const [amount, setAmount] = React.useState(detail.outstanding);
+  // Voucher benefit membership customer (PRD Membership rev-2) — kasir
+  // menginput kode yang ditunjukkan customer; pemiliknya harus member meja.
+  const [voucherInput, setVoucherInput] = React.useState("");
+  const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucher, setVoucher] = React.useState<{
+    code: string;
+    name: string;
+    discount: number;
+  } | null>(null);
   const [cashReceived, setCashReceived] = React.useState(detail.outstanding);
   const [loading, setLoading] = React.useState(false);
   const [qrPaymentId, setQrPaymentId] = React.useState<string | null>(null);
@@ -608,7 +618,7 @@ function PaymentModal({
     );
   }
 
-  function selectMethod(m: PaymentMethod) {
+  function selectMethod(m: PayableMethod) {
     setMethod(m);
     if (m === "cash") {
       setStep("amount");
@@ -637,6 +647,7 @@ function PaymentModal({
         amount,
         method,
         cashReceived: method === "cash" ? cashReceived : undefined,
+        voucherCode: voucher?.code,
       });
 
       // Kalau QRIS dan dapat qrString → tampilkan QR
@@ -662,6 +673,30 @@ function PaymentModal({
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to process payment"));
       setLoading(false);
+    }
+  }
+
+  async function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code || amount <= 0) return;
+    setVoucherChecking(true);
+    try {
+      const res = await previewBillVoucher({
+        code,
+        sessionId: detail.session_id,
+        amount,
+      });
+      if (!res.ok) {
+        setVoucher(null);
+        toast.error(res.error);
+        return;
+      }
+      setVoucher({ code: res.code, name: res.name, discount: res.discount });
+      toast.success(`${res.name} applied`);
+    } catch {
+      toast.error("Failed to check voucher");
+    } finally {
+      setVoucherChecking(false);
     }
   }
 
@@ -823,6 +858,66 @@ function PaymentModal({
                     50%
                   </button>
                 </div>
+              </div>
+
+              {/* Voucher membership customer */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Membership Voucher (optional)
+                </label>
+                {voucher ? (
+                  <div className="rounded-md border border-primary/40 bg-primary/5 p-3 text-sm space-y-1">
+                    <div className="flex justify-between gap-2">
+                      <span className="font-medium text-primary truncate">
+                        {voucher.name} ({voucher.code})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoucher(null);
+                          setVoucherInput("");
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Discount</span>
+                      <span className="text-emerald-400">
+                        - {formatIDR(voucher.discount)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1">
+                      <span className="text-muted-foreground">To charge</span>
+                      <span className="font-semibold text-primary">
+                        {formatIDR(Math.max(0, amount - voucher.discount))}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={voucherInput}
+                      onChange={(e) =>
+                        setVoucherInput(
+                          e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")
+                        )
+                      }
+                      placeholder="SOHO-XXXX-XXXX"
+                      className="flex-1 h-10 px-3 rounded-md bg-input border border-border text-sm font-mono focus:outline-none focus:border-primary/60"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyVoucher}
+                      disabled={voucherChecking || !voucherInput.trim()}
+                      className="h-10 px-3.5 rounded-md border border-border text-sm hover:border-primary/40 transition disabled:opacity-50"
+                    >
+                      {voucherChecking ? "..." : "Apply"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Cash specific: nominal terima + kembalian */}

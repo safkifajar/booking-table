@@ -15,7 +15,18 @@ export type MemberStatus = "pending" | "joined" | "left" | "kicked";
 export type TableShape = "round" | "square" | "rect" | "booth";
 export type OrderStatus = "open" | "submitted" | "preparing" | "served" | "closed";
 export type OrderItemStatus = "draft" | "sent" | "preparing" | "served" | "void";
-export type PaymentMethod = "qris" | "cash" | "card" | "gopay" | "ovo" | "mock";
+export type PaymentMethod =
+  | "qris"
+  | "cash"
+  | "card"
+  | "gopay"
+  | "ovo"
+  | "mock"
+  /** Baris sintetis potongan voucher membership — bukan pilihan user. */
+  | "voucher";
+
+/** Metode yang bisa DIPILIH user saat membayar (tanpa 'voucher'). */
+export type PayableMethod = Exclude<PaymentMethod, "voucher">;
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 export type SplitMode = "equal" | "itemized" | "custom";
 export type StaffRole = "waiter" | "manager" | "admin";

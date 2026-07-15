@@ -1,6 +1,6 @@
 # PRD — Membership Berjenjang (Basic / Premium / VIP)
 
-**Status:** FINAL revisi 2 — semua GAP diputuskan (2026-07-15, via diskusi)
+**Status:** FINAL revisi 3 — konsep voucher DIROMBAK (2026-07-15 sore, arahan user) + tax & service + picker
 **Tanggal:** 2026-07-15
 **Bergantung pada:** Fitur Friends & Block (sudah rilis), infrastruktur pembayaran QRIS (gateway generik + pola polling `payShare`)
 
@@ -26,13 +26,15 @@ Sistem membership berbayar tiga tingkat. Semua user baru otomatis **basic** (gra
 | **M4** | **Visibilitas Network berbasis rank: kamu melihat level-mu dan di bawahnya.** Basic → hanya basic. Premium → basic + premium. VIP → semua. |
 | **M5** | Kartu Network user yang level-nya lebih tinggi **tetap muncul tapi TERKUNCI** (pola komponen private yang sudah ada) — bukan hilang dari daftar. Badge **"At SOHO" tetap terlihat** di kartu terkunci. |
 | **M6** | Undangan meja: kandidat = **(level ≤ level pengundang) ∪ teman**. Meja tipe *friends* tetap **hanya teman** (aturan Friends tak berubah). Berlaku untuk SEMUA level, bukan hanya basic — basic mengundang sesama basic + teman; premium mengundang basic/premium + teman; VIP siapa saja. |
-| **M7** | **Voucher diskon** untuk pembelian membership, dikelola admin di menu sendiri. |
+| **M7** | **REVISI rev-3:** Voucher = **BENEFIT member**, BUKAN kode promo beli membership. Admin membuat **TEMPLATE** (nama + aturan potongan **transaksi bill** + level + masa berlaku hari); saat membership AKTIF (beli/perpanjang/admin grant) tiap member menerima **instance pribadi berkode UNIK** (kode tiap orang beda, `SOHO-XXXX-XXXX`). Redeem: potongan pembayaran bill meja — sekali pakai — di alur bayar customer (QRIS) & kasir. Aturan instance = SNAPSHOT template. Pemilik voucher harus member JOINED meja tsb. Diskon dicatat sbg baris `payments` method `voucher` supaya outstanding tertutup benar; reserve saat QR pending (race-safe), release saat gagal/batal, settle idempotent saat paid. Tak ada lagi input voucher di checkout membership. |
 | **M8** | Admin bisa **mengubah level customer manual** dari detail customer (grant/revoke, tercatat di riwayat transaksi). |
 | **M9** | Admin punya **daftar pembayaran membership** (menu sendiri, terpisah dari payments order F&B). |
 | **M10** | Customer punya halaman **beli / perpanjang / riwayat transaksi** membership. |
 | **M11** | **Banner membership** di halaman utama customer → klik menampilkan pilihan paket. |
 | **M12** | **Status membership terlihat** di tiap customer: badge level di admin (list + detail) dan di app (profil sendiri). |
 | **M13** | Pembayaran **QRIS** memakai gateway existing (`getPaymentGateway()` — mock sekarang, Xendit/Duitku nanti tanpa mengubah fitur ini). |
+| **M14** | **(rev-3)** Pembayaran membership dikenakan **tax & service** dari `ChargeConfig` bar — konfigurasi yang SAMA dgn bill F&B (`computeBillTotals`, satu sumber kebenaran). Snapshot `tax_amount`/`service_amount` di transaksi; total = base + tax + service. |
+| **M15** | **(rev-3)** Picker undangan meja menampilkan **@username + badge level membership** tiap kandidat (badge warna per key; nama level dari admin). |
 
 ---
 

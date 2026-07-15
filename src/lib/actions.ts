@@ -64,6 +64,12 @@ import {
   getEffectiveRankOf,
   MEMBERSHIP_RANK,
 } from "@/lib/membership";
+import {
+  resolveVoucherForBillPayment,
+  reserveVoucherForPayment,
+  settleVoucherForPayment,
+  releaseVoucherForPayment,
+} from "@/lib/member-voucher";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -2245,6 +2251,8 @@ const paySchema = z.object({
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
   splitMode: z.enum(["equal", "itemized", "custom"]),
   splitMeta: z.record(z.string(), z.unknown()).optional(),
+  /** Kode voucher benefit membership (PRD Membership rev-2) — opsional. */
+  voucherCode: z.string().trim().max(20).optional(),
 });
 
 /**
@@ -2397,20 +2405,110 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     }
   }
 
-  // 3. Insert payment dengan status='pending'
+  // 2d. Voucher benefit membership (PRD Membership rev-2). Divalidasi ULANG
+  //     di sini (UI sudah preview via previewBillVoucher) — devtools tak bisa
+  //     memaksakan kode orang lain/terpakai. Diskon dicatat sbg baris payments
+  //     method='voucher' TERPISAH saat payment utama PAID, jadi outstanding
+  //     bill tertutup benar.
+  let voucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  if (data.voucherCode?.trim()) {
+    const res = await resolveVoucherForBillPayment({
+      code: data.voucherCode,
+      sessionId: data.sessionId,
+      amount: data.amount,
+    });
+    if (!res.ok) throw new Error(res.error);
+    voucher = {
+      voucherId: res.voucher.voucherId,
+      code: res.voucher.code,
+      discount: res.voucher.discount,
+    };
+  }
+  const chargeAmount = data.amount - (voucher?.discount ?? 0);
+
+  // Diskon menutup SELURUH nominal → tak ada yang perlu ditagih: cukup baris
+  // voucher (paid) — tanpa gateway, tanpa QR. CHECK amount > 0 di payments
+  // melarang baris 0, jadi payment utama tidak dibuat sama sekali.
+  if (voucher && chargeAmount <= 0) {
+    const [voucherPayment] = await db
+      .insert(payments)
+      .values({
+        orderId: order.id,
+        paidByMemberId: member.id,
+        amount: voucher.discount,
+        method: "voucher",
+        status: "paid",
+        splitMode: data.splitMode,
+        splitMeta: { voucherCode: voucher.code, voucherId: voucher.voucherId },
+        paidAt: new Date(),
+      })
+      .returning({ id: payments.id });
+    // Tandai voucher USED menempel ke baris ini (reserve+settle sekali jalan;
+    // kalah race → voucher keburu dipakai → batalkan baris tadi).
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      voucherPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db.delete(payments).where(eq(payments.id, voucherPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+    // Tandai used_at TANPA mencetak baris diskon lagi — baris voucherPayment
+    // di atas SUDAH menjadi pembayarannya (skipSyntheticRow).
+    await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
+    await settleOrderIfPaid(order.id);
+    await settleOverdueIfPaid(data.sessionId);
+    await notifySessionAndStaff(data.sessionId);
+    revalidatePath(`/session/${data.sessionId}`);
+    revalidatePath("/staff/cashier");
+    return {
+      paymentId: voucherPayment.id,
+      status: "paid" as PaymentStatus,
+      externalRef: "",
+      qrString: null,
+      redirectUrl: null,
+      expiresAt: null,
+    };
+  }
+
+  // 3. Insert payment dengan status='pending'. Nominal = SETELAH potongan
+  //    voucher (baris diskon menyusul saat paid).
   const [newPayment] = await db
     .insert(payments)
     .values({
       orderId: order.id,
       paidByMemberId: member.id,
-      amount: data.amount,
+      amount: chargeAmount,
       method: data.method,
       status: "pending",
       splitMode: data.splitMode,
-      splitMeta: data.splitMeta ?? {},
+      splitMeta: {
+        ...(data.splitMeta ?? {}),
+        ...(voucher
+          ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+          : {}),
+      },
       paidAt: null,
     })
     .returning({ id: payments.id });
+
+  // Reservasi voucher ke payment ini (race-safe). Kalah race → payment batal.
+  if (voucher) {
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      newPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db
+        .update(payments)
+        .set({ status: "failed" })
+        .where(eq(payments.id, newPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+  }
 
   // 3b. Treat (custom, bayar penuh): tautkan SEMUA item order ke payment ini
   // supaya halaman detail transaksi bisa menampilkan seluruh item meja (Q3).
@@ -2439,7 +2537,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
     paymentId: newPayment.id,
-    amount: data.amount,
+    amount: chargeAmount,
     method: data.method,
     payerName: member.displayName,
     description: `Self-pay table - ${data.sessionId.slice(0, 8)}`,
@@ -2464,6 +2562,8 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 
   // Kalau sesi 'overdue' (lewat waktu tapi nunggak) dan kini lunas → tutup.
   if (chargeResult.status === "paid") {
+    // Voucher → cetak baris diskon DULU supaya settle melihat total penuh.
+    await settleVoucherForPayment(newPayment.id);
     // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK (paid + item sent).
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
@@ -2824,6 +2924,7 @@ export async function regenerateMemberPayment(input: {
       .update(payments)
       .set({ status: "failed", paidAt: null })
       .where(and(eq(payments.id, old.id), ne(payments.status, "paid")));
+    await releaseVoucherForPayment(old.id);
   }
 
   // 6. Nominal: SAMA dgn payment lama, tapi di-cap ke sisa yang BENAR-BENAR
@@ -2994,6 +3095,12 @@ export async function cancelSplitBatch(input: {
       )
     )
     .returning({ id: payments.id });
+
+  // Lepas reservasi voucher yang menempel (kalau ada) — aman utk payment
+  // tanpa voucher (no-op).
+  for (const pRow of result) {
+    await releaseVoucherForPayment(pRow.id);
+  }
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
@@ -3222,6 +3329,8 @@ export async function checkPaymentStatus(
       .update(payments)
       .set({ status: "paid", paidAt: new Date() })
       .where(eq(payments.id, row.id));
+    // Voucher yang menempel → tandai used + cetak baris diskon (idempotent).
+    await settleVoucherForPayment(row.id);
     // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi, tak jadi
     // dibatalkan oleh timeout).
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
@@ -3247,6 +3356,8 @@ export async function checkPaymentStatus(
       .update(payments)
       .set({ status: "failed", paidAt: null })
       .where(eq(payments.id, row.id));
+    // Lepas reservasi voucher (bisa dipakai lagi).
+    await releaseVoucherForPayment(row.id);
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
     if (
       meta.isDownPayment &&
@@ -3335,6 +3446,7 @@ export async function cancelPayment(
     .update(payments)
     .set({ status: "failed", paidAt: null })
     .where(eq(payments.id, row.id));
+  await releaseVoucherForPayment(row.id);
 
   // DP booking belum lunas → batalkan booking (meja bebas lagi). Batalkan
   // selama DP belum benar-benar terkonfirmasi (dp_paid_at NULL), baik session
@@ -3435,12 +3547,14 @@ export async function cancelUnpaidOrder(
     }
   }
 
+  let cancelledPaymentIds: { id: string }[] = [];
   await db.transaction(async (tx) => {
     // Batalkan pembayaran pending/failed (belum paid) yang menempel di order.
-    await tx
+    cancelledPaymentIds = await tx
       .update(payments)
       .set({ status: "failed", paidAt: null })
-      .where(and(eq(payments.orderId, orderId), ne(payments.status, "paid")));
+      .where(and(eq(payments.orderId, orderId), ne(payments.status, "paid")))
+      .returning({ id: payments.id });
     // Void semua item (biar tak terhitung di agregat manapun).
     await tx
       .update(orderItems)
@@ -3452,6 +3566,11 @@ export async function cancelUnpaidOrder(
       .set({ status: "cancelled" })
       .where(eq(orders.id, orderId));
   });
+
+  // Lepas reservasi voucher pada payment yang ikut dibatalkan (pasca-commit).
+  for (const pRow of cancelledPaymentIds) {
+    await releaseVoucherForPayment(pRow.id);
+  }
 
   await notifySessionAndStaff(row.sessionId);
   revalidatePath(`/session/${row.sessionId}`);

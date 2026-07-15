@@ -32,6 +32,7 @@ import {
   type PendingMembershipTx,
   type PurchasePreview,
 } from "@/lib/membership-actions";
+import type { MyVoucherRow } from "@/lib/member-voucher";
 import type { MembershipLevelRow } from "@/lib/membership";
 
 interface StatusInfo {
@@ -62,14 +63,18 @@ export function MembershipView({
   levels,
   transactions,
   pendingTx,
+  vouchers,
 }: {
   status: StatusInfo;
   levels: MembershipLevelRow[];
   transactions: MyMembershipTxRow[];
   pendingTx: PendingMembershipTx | null;
+  vouchers: MyVoucherRow[];
 }) {
   const router = useRouter();
-  const [tab, setTab] = React.useState<"plans" | "history">("plans");
+  const [tab, setTab] = React.useState<"plans" | "vouchers" | "history">(
+    "plans"
+  );
   const [buyTarget, setBuyTarget] = React.useState<MembershipLevelRow | null>(
     null
   );
@@ -152,6 +157,10 @@ export function MembershipView({
         {(
           [
             { key: "plans", label: "Plans" },
+            {
+              key: "vouchers",
+              label: `Vouchers (${vouchers.filter((v) => v.status === "active").length})`,
+            },
             { key: "history", label: `History (${transactions.length})` },
           ] as const
         ).map((t) => (
@@ -215,6 +224,27 @@ export function MembershipView({
         </div>
       )}
 
+      {tab === "vouchers" &&
+        (vouchers.length === 0 ? (
+          <Card className="p-8 text-center border-dashed">
+            <Ticket className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">
+              No vouchers yet. You&apos;ll receive discount vouchers when your
+              membership activates — use them when paying your table bill.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {vouchers.map((v) => (
+              <VoucherCard key={v.id} voucher={v} />
+            ))}
+            <p className="text-[11px] text-muted-foreground">
+              Show or enter the code when paying your table bill. Each voucher
+              can be used once.
+            </p>
+          </div>
+        ))}
+
       {tab === "history" &&
         (transactions.length === 0 ? (
           <Card className="p-8 text-center border-dashed">
@@ -250,12 +280,6 @@ export function MembershipView({
                     >
                       {t.status}
                     </Badge>
-                    {t.voucher_code && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-primary">
-                        <Ticket className="h-3 w-3" />
-                        {t.voucher_code}
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {fmtDate(t.created_at)}
@@ -269,9 +293,9 @@ export function MembershipView({
                   <div className="text-sm font-semibold">
                     {formatIDR(t.amount)}
                   </div>
-                  {t.amount !== t.base_amount && (
-                    <div className="text-[11px] text-muted-foreground line-through">
-                      {formatIDR(t.base_amount)}
+                  {t.tax_amount + t.service_amount > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      incl. tax &amp; service
                     </div>
                   )}
                 </div>
@@ -392,7 +416,80 @@ function PlanCard({
   );
 }
 
-/* ---------- Dialog beli: voucher + ringkasan + bayar ---------- */
+/* ---------- Kartu voucher benefit milik member ---------- */
+
+function VoucherCard({ voucher }: { voucher: MyVoucherRow }) {
+  const active = voucher.status === "active";
+  const label =
+    voucher.discount_type === "percent"
+      ? `${voucher.discount_value}% off${voucher.max_discount ? ` (max ${formatIDR(voucher.max_discount)})` : ""}`
+      : `${formatIDR(voucher.discount_value)} off`;
+  return (
+    <Card
+      className={cn(
+        "p-4",
+        active ? "border-primary/30" : "opacity-60"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
+          <Ticket className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold truncate">
+              {voucher.name}
+            </span>
+            <Badge variant="secondary" className="text-[10px]">
+              {label}
+            </Badge>
+            {voucher.status !== "active" && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-[10px]",
+                  voucher.status === "used"
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : voucher.status === "reserved"
+                      ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                )}
+              >
+                {voucher.status}
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {voucher.min_spend != null &&
+              `Min. payment ${formatIDR(voucher.min_spend)} · `}
+            valid until {fmtDate(voucher.expires_at)}
+          </p>
+        </div>
+      </div>
+      {/* Kode voucher — mudah disalin/ditunjukkan ke kasir */}
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(voucher.code).then(
+            () => toast.success("Code copied"),
+            () => {}
+          );
+        }}
+        disabled={!active}
+        className={cn(
+          "mt-3 w-full rounded-md border border-dashed px-3 py-2 font-mono text-sm tracking-widest text-center transition",
+          active
+            ? "border-primary/40 bg-primary/5 text-primary hover:border-primary/70"
+            : "border-border text-muted-foreground line-through"
+        )}
+      >
+        {voucher.code}
+      </button>
+    </Card>
+  );
+}
+
+/* ---------- Dialog beli: ringkasan (tax & service) + bayar ---------- */
 
 function BuyDialog({
   level,
@@ -412,12 +509,11 @@ function BuyDialog({
   }) => void;
   onActivated: () => void;
 }) {
-  const [voucher, setVoucher] = React.useState("");
   const [preview, setPreview] = React.useState<PurchasePreview | null>(null);
   const [previewing, setPreviewing] = React.useState(false);
   const [paying, setPaying] = React.useState(false);
 
-  // Preview awal (tanpa voucher) saat dialog dibuka.
+  // Ringkasan harga (base + tax & service) saat dialog dibuka.
   React.useEffect(() => {
     let cancelled = false;
     setPreviewing(true);
@@ -437,31 +533,11 @@ function BuyDialog({
     };
   }, [level.key]);
 
-  async function applyVoucher() {
-    setPreviewing(true);
-    try {
-      const p = await previewMembershipPurchase({
-        levelKey: level.key,
-        voucherCode: voucher,
-      });
-      setPreview(p);
-      if (!p.ok) toast.error(p.error ?? "Voucher not valid");
-      else if (voucher.trim()) toast.success("Voucher applied");
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to apply voucher"));
-    } finally {
-      setPreviewing(false);
-    }
-  }
-
   async function handlePay() {
     if (!preview?.ok) return;
     setPaying(true);
     try {
-      const res = await purchaseMembership({
-        levelKey: level.key,
-        voucherCode: preview.voucher_code ?? undefined,
-      });
+      const res = await purchaseMembership({ levelKey: level.key });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -500,47 +576,26 @@ function BuyDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Voucher */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Voucher code (optional)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={voucher}
-                onChange={(e) =>
-                  setVoucher(
-                    e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")
-                  )
-                }
-                placeholder="e.g. LAUNCH50"
-                className="flex-1 h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={previewing}
-                onClick={applyVoucher}
-              >
-                {previewing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Apply"
-                )}
-              </Button>
+          {previewing && (
+            <div className="p-4 text-center">
+              <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
             </div>
-          </div>
+          )}
 
-          {/* Ringkasan */}
+          {/* Ringkasan: base + tax & service (config yang sama dgn bill F&B) */}
           {preview?.ok && (
             <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1.5 text-sm">
-              <Row label={level.name} value={formatIDR(preview.base_amount ?? 0)} />
-              {(preview.discount ?? 0) > 0 && (
+              <Row
+                label={level.name}
+                value={formatIDR(preview.base_amount ?? 0)}
+              />
+              {(preview.tax_amount ?? 0) + (preview.service_amount ?? 0) >
+                0 && (
                 <Row
-                  label={`Voucher ${preview.voucher_code}`}
-                  value={`- ${formatIDR(preview.discount ?? 0)}`}
-                  valueClass="text-emerald-400"
+                  label={`Tax & service${preview.charge_percent ? ` (${preview.charge_percent}%)` : ""}`}
+                  value={formatIDR(
+                    (preview.tax_amount ?? 0) + (preview.service_amount ?? 0)
+                  )}
                 />
               )}
               <div className="border-t border-border pt-1.5">
@@ -554,7 +609,8 @@ function BuyDialog({
                 {preview.new_expires_at
                   ? `Active until ${fmtDate(preview.new_expires_at)}`
                   : "Active for life"}
-                {preview.kind === "renewal" && " (extended from your current expiry)"}
+                {preview.kind === "renewal" &&
+                  " (extended from your current expiry)"}
               </p>
             </div>
           )}

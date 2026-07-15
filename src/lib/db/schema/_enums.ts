@@ -97,6 +97,10 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "gopay",
   "ovo",
   "mock",
+  // Baris pembayaran sintetis utk potongan voucher membership (PRD Membership
+  // rev-2): diskon dicatat sbg "pembayaran" agar outstanding bill tertutup
+  // benar & laporan melihat potongannya.
+  "voucher",
 ]);
 
 export const paymentStatusEnum = pgEnum("payment_status", [

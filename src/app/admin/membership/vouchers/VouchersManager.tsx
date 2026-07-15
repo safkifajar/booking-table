@@ -24,9 +24,14 @@ import {
   type AdminVoucherRow,
 } from "@/lib/membership-actions";
 
+/**
+ * Kelola TEMPLATE voucher benefit (PRD Membership rev-2): admin membuat NAMA
+ * + aturan potongan bill + level; kode unik per member digenerate otomatis
+ * saat membership aktif. Mengubah template hanya memengaruhi voucher yang
+ * digenerate SETELAHNYA (instance beredar = snapshot).
+ */
 interface Props {
   vouchers: AdminVoucherRow[];
-  /** key level -> nama tampilan (utk label scope). */
   levelNames: Record<string, string>;
 }
 
@@ -40,8 +45,9 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
 
   async function handleDelete(v: AdminVoucherRow) {
     const ok = await confirm({
-      title: `Delete voucher ${v.code}?`,
-      description: "This voucher has never been used, so it can be deleted permanently.",
+      title: `Delete "${v.name}"?`,
+      description:
+        "No member has received a voucher from this template yet, so it can be deleted permanently.",
       confirmText: "Delete",
       variant: "danger",
     });
@@ -53,7 +59,7 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
         toast.error(res.error);
         return;
       }
-      toast.success(`Voucher ${v.code} deleted`);
+      toast.success(`"${v.name}" deleted`);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to delete voucher"));
@@ -67,21 +73,20 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
     try {
       const res = await updateMembershipVoucher({
         id: v.id,
-        code: v.code,
+        name: v.name,
         discountType: v.discount_type,
         discountValue: v.discount_value,
+        maxDiscount: v.max_discount,
+        minSpend: v.min_spend,
         levelKey: (v.level_key as "premium" | "vip" | null) ?? null,
-        maxUses: v.max_uses,
-        perUserLimit: v.per_user_limit,
-        validFrom: v.valid_from,
-        validUntil: v.valid_until,
+        validDays: v.valid_days,
         isActive: !v.is_active,
       });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(`${v.code} ${v.is_active ? "deactivated" : "activated"}`);
+      toast.success(`"${v.name}" ${v.is_active ? "deactivated" : "activated"}`);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to update voucher"));
@@ -100,7 +105,8 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
 
       {vouchers.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground border-dashed">
-          No vouchers yet. Create one for launch promos or targeted discounts.
+          No voucher templates yet. Create one — members will automatically
+          receive their own unique code when their membership activates.
         </Card>
       ) : (
         <Card className="divide-y divide-border">
@@ -111,16 +117,16 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold tracking-wide">
-                    {v.code}
-                  </span>
+                  <span className="text-sm font-semibold">{v.name}</span>
                   <Badge variant="secondary" className="text-[10px]">
                     {v.discount_type === "percent"
-                      ? `${v.discount_value}% off`
+                      ? `${v.discount_value}% off${v.max_discount ? ` (max ${formatIDR(v.max_discount)})` : ""}`
                       : `${formatIDR(v.discount_value)} off`}
                   </Badge>
                   <Badge variant="outline" className="text-[10px]">
-                    {v.level_key ? (levelNames[v.level_key] ?? v.level_key) : "All levels"}
+                    {v.level_key
+                      ? (levelNames[v.level_key] ?? v.level_key)
+                      : "All paid levels"}
                   </Badge>
                   <Badge
                     variant="secondary"
@@ -135,11 +141,9 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Used {v.used_count}
-                  {v.max_uses != null ? ` / ${v.max_uses}` : " (no quota)"}
-                  {" · "}max {v.per_user_limit}× per user
-                  {v.valid_until &&
-                    ` · until ${new Date(v.valid_until).toLocaleDateString("en-US", { dateStyle: "medium" })}`}
+                  Valid {v.valid_days} days after issue
+                  {v.min_spend != null && ` · min. spend ${formatIDR(v.min_spend)}`}
+                  {" · "}issued {v.generated_count}×
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
@@ -165,7 +169,7 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
-                {v.used_count === 0 && (
+                {v.generated_count === 0 && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -183,6 +187,13 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
         </Card>
       )}
 
+      <p className="text-[11px] text-muted-foreground">
+        Members receive one voucher per active template each time their
+        membership activates (purchase, renewal, or admin grant). Every member
+        gets their own unique code; editing a template doesn&apos;t change
+        vouchers already issued.
+      </p>
+
       {editTarget && (
         <VoucherDialog
           target={editTarget}
@@ -194,7 +205,7 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
   );
 }
 
-/* ---------- Dialog create/edit ---------- */
+/* ---------- Dialog create/edit template ---------- */
 
 function VoucherDialog({
   target,
@@ -208,29 +219,21 @@ function VoucherDialog({
   const router = useRouter();
   const v = target.mode === "edit" ? target.voucher : null;
 
-  const [code, setCode] = React.useState(v?.code ?? "");
+  const [name, setName] = React.useState(v?.name ?? "");
   const [discountType, setDiscountType] = React.useState<string>(
     v?.discount_type ?? "percent"
   );
   const [discountValue, setDiscountValue] = React.useState(
     v ? String(v.discount_value) : ""
   );
+  const [maxDiscount, setMaxDiscount] = React.useState(
+    v?.max_discount != null ? String(v.max_discount) : ""
+  );
+  const [minSpend, setMinSpend] = React.useState(
+    v?.min_spend != null ? String(v.min_spend) : ""
+  );
   const [levelKey, setLevelKey] = React.useState<string>(v?.level_key ?? "");
-  const [maxUses, setMaxUses] = React.useState(
-    v?.max_uses != null ? String(v.max_uses) : ""
-  );
-  const [perUserLimit, setPerUserLimit] = React.useState(
-    String(v?.per_user_limit ?? 1)
-  );
-  // datetime-local butuh format "YYYY-MM-DDTHH:mm" waktu lokal.
-  const toLocal = (iso: string | null) =>
-    iso
-      ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000)
-          .toISOString()
-          .slice(0, 16)
-      : "";
-  const [validFrom, setValidFrom] = React.useState(toLocal(v?.valid_from ?? null));
-  const [validUntil, setValidUntil] = React.useState(toLocal(v?.valid_until ?? null));
+  const [validDays, setValidDays] = React.useState(String(v?.valid_days ?? 30));
   const [isActive, setIsActive] = React.useState(v?.is_active ?? true);
   const [saving, setSaving] = React.useState(false);
 
@@ -239,14 +242,18 @@ function VoucherDialog({
     setSaving(true);
     try {
       const payload = {
-        code: code.trim().toUpperCase(),
+        name: name.trim(),
         discountType: discountType as "percent" | "fixed",
         discountValue: Math.max(1, parseInt(discountValue, 10) || 0),
+        maxDiscount:
+          discountType === "percent" && maxDiscount.trim()
+            ? Math.max(1, parseInt(maxDiscount, 10) || 1)
+            : null,
+        minSpend: minSpend.trim()
+          ? Math.max(1, parseInt(minSpend, 10) || 1)
+          : null,
         levelKey: (levelKey || null) as "premium" | "vip" | null,
-        maxUses: maxUses.trim() ? Math.max(1, parseInt(maxUses, 10) || 1) : null,
-        perUserLimit: Math.max(1, parseInt(perUserLimit, 10) || 1),
-        validFrom: validFrom ? new Date(validFrom).toISOString() : null,
-        validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+        validDays: Math.max(1, parseInt(validDays, 10) || 30),
         isActive,
       };
       const res = v
@@ -270,20 +277,18 @@ function VoucherDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{v ? `Edit ${v.code}` : "New Voucher"}</DialogTitle>
+          <DialogTitle>{v ? `Edit "${v.name}"` : "New Voucher"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Code">
+          <Field label="Voucher name (shown to members)">
             <input
               type="text"
-              value={code}
-              onChange={(e) =>
-                setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))
-              }
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
               minLength={3}
-              maxLength={32}
-              placeholder="e.g. LAUNCH50"
+              maxLength={60}
+              placeholder="e.g. Premium Dining Discount"
               className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </Field>
@@ -298,7 +303,9 @@ function VoucherDialog({
                 ]}
               />
             </Field>
-            <Field label={discountType === "percent" ? "Percent (1-100)" : "Amount (IDR)"}>
+            <Field
+              label={discountType === "percent" ? "Percent (1-100)" : "Amount (IDR)"}
+            >
               <input
                 type="number"
                 inputMode="numeric"
@@ -311,54 +318,55 @@ function VoucherDialog({
               />
             </Field>
           </div>
-          <Field label="Applies to">
-            <Select
-              value={levelKey}
-              onChange={setLevelKey}
-              options={[
-                { value: "", label: "All purchasable levels" },
-                { value: "premium", label: levelNames.premium ?? "Premium" },
-                { value: "vip", label: levelNames.vip ?? "VIP" },
-              ]}
-            />
-          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Max uses (empty = unlimited)">
+            {discountType === "percent" ? (
+              <Field label="Max discount IDR (optional)">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={maxDiscount}
+                  onChange={(e) => setMaxDiscount(e.target.value)}
+                  placeholder="No cap"
+                  className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                />
+              </Field>
+            ) : (
+              <div />
+            )}
+            <Field label="Min. payment IDR (optional)">
               <input
                 type="number"
                 inputMode="numeric"
                 min={1}
-                value={maxUses}
-                onChange={(e) => setMaxUses(e.target.value)}
-                className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-              />
-            </Field>
-            <Field label="Limit per user">
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={100}
-                value={perUserLimit}
-                onChange={(e) => setPerUserLimit(e.target.value)}
+                value={minSpend}
+                onChange={(e) => setMinSpend(e.target.value)}
+                placeholder="No minimum"
                 className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
               />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Valid from (optional)">
-              <input
-                type="datetime-local"
-                value={validFrom}
-                onChange={(e) => setValidFrom(e.target.value)}
-                className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+            <Field label="Membership level">
+              <Select
+                value={levelKey}
+                onChange={setLevelKey}
+                options={[
+                  { value: "", label: "All paid levels" },
+                  { value: "premium", label: levelNames.premium ?? "Premium" },
+                  { value: "vip", label: levelNames.vip ?? "VIP" },
+                ]}
               />
             </Field>
-            <Field label="Valid until (optional)">
+            <Field label="Valid for (days after issue)">
               <input
-                type="datetime-local"
-                value={validUntil}
-                onChange={(e) => setValidUntil(e.target.value)}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={3650}
+                value={validDays}
+                onChange={(e) => setValidDays(e.target.value)}
+                required
                 className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
               />
             </Field>
@@ -376,7 +384,9 @@ function VoucherDialog({
             >
               <span>{isActive ? "Active" : "Inactive"}</span>
               <span className="text-xs opacity-70">
-                {isActive ? "Tap to deactivate" : "Tap to activate"}
+                {isActive
+                  ? "Issued on every activation"
+                  : "Not issued to new activations"}
               </span>
             </button>
           </Field>
