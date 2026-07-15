@@ -40,9 +40,9 @@ export async function MembershipBanner({ profileId }: { profileId: string }) {
       href="/membership"
       className="relative flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary to-primary/75 p-3.5 shadow-lg shadow-primary/20 transition hover:shadow-primary/35 group"
     >
-      {/* Aksen dekoratif lembut */}
-      <div className="pointer-events-none absolute -right-6 -top-10 h-28 w-28 rounded-full bg-white/10" />
-      <div className="pointer-events-none absolute -right-12 top-6 h-24 w-24 rounded-full bg-black/10" />
+      {/* Aksen dekoratif lembut — di pojok KIRI-atas, jauh dari pill CTA
+          supaya tepinya tak memotong tombol. */}
+      <div className="pointer-events-none absolute -left-8 -top-12 h-24 w-24 rounded-full bg-white/10" />
 
       <div className="h-10 w-10 rounded-xl bg-black/20 flex items-center justify-center shrink-0">
         <Crown className="h-5 w-5 text-primary-foreground" />
