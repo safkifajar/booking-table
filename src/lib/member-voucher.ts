@@ -105,20 +105,27 @@ export interface ResolvedBillVoucher {
 }
 
 /**
- * Validasi kode voucher utk sebuah pembayaran bill. Pemilik voucher harus
- * member JOINED sesi tsb (host membayar / kasir menginput kode customer di
- * meja — dua-duanya sah selama pemiliknya duduk di meja itu). Return pesan
- * error (bukan throw) — penolakan yang diharapkan.
+ * Validasi kode voucher utk sebuah pembayaran. Kepemilikan divalidasi lewat
+ * SALAH SATU:
+ * - `sessionId` — pemilik harus member JOINED sesi tsb (bayar bill: host
+ *   membayar / kasir menginput kode customer di meja);
+ * - `ownerId` — pemilik harus profil tsb sendiri (DP saat BUKA meja: sesi
+ *   belum ada, voucher wajib milik si host).
+ * Return pesan error (bukan throw) — penolakan yang diharapkan.
  */
 export async function resolveVoucherForBillPayment(input: {
   code: string;
-  sessionId: string;
   amount: number;
+  sessionId?: string;
+  ownerId?: string;
 }): Promise<
   { ok: true; voucher: ResolvedBillVoucher } | { ok: false; error: string }
 > {
   const code = input.code.trim().toUpperCase();
   if (!code) return { ok: false, error: "Enter a voucher code" };
+  if (!input.sessionId && !input.ownerId) {
+    return { ok: false, error: "Invalid voucher context" };
+  }
 
   const [v] = await db
     .select()
@@ -146,23 +153,27 @@ export async function resolveVoucherForBillPayment(input: {
     };
   }
 
-  // Pemilik harus member JOINED di sesi ini (fisik di meja).
-  const [member] = await db
-    .select({ id: sessionMembers.id })
-    .from(sessionMembers)
-    .where(
-      and(
-        eq(sessionMembers.sessionId, input.sessionId),
-        eq(sessionMembers.profileId, v.profileId),
-        eq(sessionMembers.status, "joined")
+  // Kepemilikan: via keanggotaan sesi (bill) atau pemilik langsung (DP open).
+  if (input.sessionId) {
+    const [member] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, input.sessionId),
+          eq(sessionMembers.profileId, v.profileId),
+          eq(sessionMembers.status, "joined")
+        )
       )
-    )
-    .limit(1);
-  if (!member) {
-    return {
-      ok: false,
-      error: "The voucher owner isn't a member of this table",
-    };
+      .limit(1);
+    if (!member) {
+      return {
+        ok: false,
+        error: "The voucher owner isn't a member of this table",
+      };
+    }
+  } else if (input.ownerId && v.profileId !== input.ownerId) {
+    return { ok: false, error: "This voucher belongs to another member" };
   }
 
   const raw =

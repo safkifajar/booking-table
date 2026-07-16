@@ -1038,3 +1038,35 @@ export async function maybeSendExpiryReminder(): Promise<void> {
     link: "/membership",
   });
 }
+
+/**
+ * Preview voucher milik SENDIRI utk DP saat buka meja (sesi belum ada —
+ * kepemilikan = profil sendiri). openTable memvalidasi ulang server-side.
+ */
+export async function previewMyVoucher(input: {
+  code: string;
+  amount: number;
+}): Promise<
+  | { ok: true; code: string; name: string; discount: number }
+  | { ok: false; error: string }
+> {
+  const me = await requireProfile();
+  const parsed = z
+    .object({
+      code: z.string().trim().min(3).max(20),
+      amount: z.number().int().positive(),
+    })
+    .parse(input);
+  const res = await resolveVoucherForBillPayment({
+    code: parsed.code,
+    amount: parsed.amount,
+    ownerId: me.id,
+  });
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    code: res.voucher.code,
+    name: res.voucher.name,
+    discount: res.voucher.discount,
+  };
+}

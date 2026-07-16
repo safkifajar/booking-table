@@ -127,6 +127,8 @@ const openTableSchema = z.object({
   /**
    * Payment method untuk DP. Wajib kalau perlu DP. "mock" untuk dev.
    */
+  /** Kode voucher benefit membership utk potongan DP (PRD Membership rev-3). */
+  voucherCode: z.string().trim().max(20).optional(),
   dpMethod: z
     .enum(["qris", "cash", "card", "gopay", "ovo", "mock"])
     .optional(),
@@ -391,6 +393,40 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     }
   }
 
+  // 6b. Voucher benefit membership utk DP (PRD Membership rev-3). Divalidasi
+  //     DINI — sebelum sesi dibuat, gagal = bersih tanpa sisa. Kepemilikan =
+  //     host sendiri (sesi belum ada). Reservasi ke baris payment DP terjadi
+  //     setelah tx. Penolakan DIKEMBALIKAN (production menyensor throw).
+  let dpVoucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  if (data.voucherCode?.trim()) {
+    if (!dpRequired) {
+      return {
+        ok: false as const,
+        error:
+          "Vouchers apply to payments — use it when paying your table bill instead.",
+      };
+    }
+    const resV = await resolveVoucherForBillPayment({
+      code: data.voucherCode,
+      amount: dpAmount,
+      ownerId: profile.id,
+    });
+    if (!resV.ok) return { ok: false as const, error: resV.error };
+    if (resV.voucher.discount >= dpAmount) {
+      return {
+        ok: false as const,
+        error:
+          "This voucher covers more than the deposit — save it for the bill payment instead.",
+      };
+    }
+    dpVoucher = {
+      voucherId: resV.voucher.voucherId,
+      code: resV.voucher.code,
+      discount: resV.voucher.discount,
+    };
+  }
+
   // 7b. Resolusi user yg diundang. Kandidat mengikuti VISIBILITY meja:
   // - public / invite_only → siapa saja boleh diundang;
   // - friends              → hanya teman host (sejalan K3).
@@ -584,11 +620,25 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
   let dpQris: { paymentId: string; qrString: string } | null = null;
   if (dpPaymentId && dpAmount > 0) {
+    // Reservasi voucher ke payment DP (race-safe). Kalah race (nyaris
+    // mustahil — divalidasi milidetik lalu) → lanjut TANPA diskon; sesi
+    // sudah berdiri, jangan digagalkan.
+    let dpDiscount = 0;
+    if (dpVoucher) {
+      const reserved = await reserveVoucherForPayment(
+        dpVoucher.voucherId,
+        dpPaymentId,
+        dpVoucher.discount
+      );
+      if (reserved) dpDiscount = dpVoucher.discount;
+      else console.error("[openTable] voucher kalah race — DP tanpa diskon");
+    }
+    const dpCharge = dpAmount - dpDiscount;
     try {
       const gateway = getPaymentGateway();
       const chargeResult = await gateway.createCharge({
         paymentId: dpPaymentId,
-        amount: dpAmount,
+        amount: dpCharge,
         method: data.dpMethod!,
         payerName: profile.displayName,
         description: `Table reservation deposit ${tableRow.id.slice(0, 8)}`,
@@ -599,8 +649,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           externalRef: chargeResult.externalRef,
           status: chargeResult.status,
           paidAt: chargeResult.status === "paid" ? new Date() : null,
+          amount: dpCharge,
           splitMeta: {
             isDownPayment: true,
+            ...(dpDiscount > 0 && dpVoucher
+              ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
+              : {}),
             qrString: chargeResult.qrString ?? null,
             redirectUrl: chargeResult.redirectUrl ?? null,
             // DP punya batas 1 menit (DP_TIMEOUT_SECONDS), lebih ketat dari
@@ -617,6 +671,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       // Kalau DP paid, set dp_paid_at di session + order pertama MASUK (Q7:
       // DP lunas cukup utk order pertama masuk dapur).
       if (chargeResult.status === "paid") {
+        // Voucher → cetak baris diskon dulu supaya settle melihat DP penuh.
+        await settleVoucherForPayment(dpPaymentId);
         await db
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
@@ -628,6 +684,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       }
     } catch (err) {
       console.error("[openTable] DP gateway charge failed:", err);
+      // Lepas reservasi voucher — DP akan ditangani manual tanpa diskon ini.
+      await releaseVoucherForPayment(dpPaymentId).catch(() => {});
       // Don't throw — session tetap exist, staff bisa handle manual
     }
   }

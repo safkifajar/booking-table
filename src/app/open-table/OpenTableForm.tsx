@@ -36,6 +36,7 @@ import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { type InviteCandidate } from "@/lib/customer-actions";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
+import { previewMyVoucher } from "@/lib/membership-actions";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { AvatarViewer } from "@/components/network/AvatarViewer";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
@@ -157,6 +158,14 @@ export function OpenTableForm({
   // User yg diundang (semua visibility). SEMUA undangan perlu persetujuan yg
   // diundang — tak ada auto-join.
   const [invited, setInvited] = React.useState<InviteCandidate[]>([]);
+  // Voucher benefit membership utk potongan DP (PRD Membership rev-3).
+  const [voucherInput, setVoucherInput] = React.useState("");
+  const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucher, setVoucher] = React.useState<{
+    code: string;
+    name: string;
+    discount: number;
+  } | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   // Ganti visibility mengubah siapa yg SAH diundang (meja "friends" hanya
@@ -259,6 +268,43 @@ export function OpenTableForm({
     (waktuMode === "reservation" &&
       reservationConfig.minDownPaymentPercent > 0);
 
+  async function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code || dpAmount <= 0) return;
+    setVoucherChecking(true);
+    try {
+      const res = await previewMyVoucher({ code, amount: dpAmount });
+      if (!res.ok) {
+        setVoucher(null);
+        toast.error(res.error);
+        return;
+      }
+      if (res.discount >= dpAmount) {
+        setVoucher(null);
+        toast.error(
+          "This voucher covers more than the deposit — save it for the bill payment instead."
+        );
+        return;
+      }
+      setVoucher({ code: res.code, name: res.name, discount: res.discount });
+      toast.success(`${res.name} applied`);
+    } catch {
+      toast.error("Failed to check voucher");
+    } finally {
+      setVoucherChecking(false);
+    }
+  }
+
+  // Nominal DP yang benar-benar dibayar setelah potongan voucher.
+  const dpPayable = Math.max(0, dpAmount - (voucher?.discount ?? 0));
+
+  // Keranjang berubah → dpAmount berubah → diskon preview basi. Reset supaya
+  // user meng-apply ulang terhadap nominal baru (server toh menghitung ulang).
+  React.useEffect(() => {
+    setVoucher(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dpAmount]);
+
   function toggleVibe(v: string) {
     setVibes((prev) =>
       prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v].slice(0, 5)
@@ -314,6 +360,7 @@ export function OpenTableForm({
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
         dpMethod: dpRequired ? "qris" : undefined,
+        voucherCode: dpRequired && voucher ? voucher.code : undefined,
         // Semua visibility boleh mengundang; yg diundang wajib menyetujui.
         invitedUserIds:
           invited.length > 0 ? invited.map((u) => u.id) : undefined,
@@ -606,6 +653,72 @@ export function OpenTableForm({
                   </span>
                 </div>
               )}
+              {dpRequired && voucher && (
+                <div className="flex items-center justify-between text-emerald-400">
+                  <span className="truncate">
+                    Voucher {voucher.name}
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    - {formatIDR(voucher.discount)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Voucher membership utk DP (PRD Membership rev-3) — hanya saat
+              reservasi ber-DP. Bill tanpa DP: voucher dipakai saat bayar. */}
+          {dpRequired && dpAmount > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Membership voucher{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional — discount on your deposit)
+                </span>
+              </label>
+              {voucher ? (
+                <div className="flex items-center justify-between rounded-md border border-primary/40 bg-primary/5 px-3 h-11 text-sm">
+                  <span className="font-mono text-primary truncate">
+                    {voucher.code}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoucher(null);
+                      setVoucherInput("");
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={voucherInput}
+                    onChange={(e) =>
+                      setVoucherInput(
+                        e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")
+                      )
+                    }
+                    placeholder="e.g. SOHO-AB12-CD34"
+                    className="flex-1 h-11 px-3 rounded-md bg-input border border-border text-sm font-mono focus:outline-none focus:border-primary/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyVoucher}
+                    disabled={voucherChecking || !voucherInput.trim()}
+                    className="h-11 px-4 rounded-md border border-border text-sm hover:border-primary/40 transition disabled:opacity-50"
+                  >
+                    {voucherChecking ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Apply"
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -623,9 +736,9 @@ export function OpenTableForm({
                 Processing...
               </>
             ) : dpIsFull ? (
-              `Pay ${formatIDR(dpAmount)} to reserve`
+              `Pay ${formatIDR(dpPayable)} to reserve`
             ) : dpRequired ? (
-              `Pay deposit ${formatIDR(dpAmount)} & Reserve`
+              `Pay deposit ${formatIDR(dpPayable)} & Reserve`
             ) : (
               "Create Reservation"
             )}
