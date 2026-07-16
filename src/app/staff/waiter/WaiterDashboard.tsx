@@ -150,9 +150,11 @@ export function WaiterDashboard({
     };
   }, [barId, router]);
 
-  // Apply optimistic state — filter out items marked served
-  const visibleQueue = React.useMemo(
-    () => initialQueue.filter((q) => !optimistic.has(q.id)),
+  // Optimistic TIDAK menghilangkan item (feedback user): item yang baru
+  // di-served tetap tampil dgn status berubah, hilang dari daftar pending
+  // saat refresh server (SSE) menyusul. Badge nav = yang BELUM served.
+  const pendingCount = React.useMemo(
+    () => initialQueue.filter((q) => !optimistic.has(q.id)).length,
     [initialQueue, optimistic]
   );
 
@@ -230,8 +232,8 @@ export function WaiterDashboard({
             key: "queue",
             label: "Orders",
             icon: <Utensils className="h-5 w-5" />,
-            badge: visibleQueue.length,
-            alert: visibleQueue.length > 0,
+            badge: pendingCount,
+            alert: pendingCount > 0,
           },
           {
             key: "sessions",
@@ -267,7 +269,7 @@ export function WaiterDashboard({
         {tab === "queue" && (
           <ScrollArea>
             <QueueView
-              items={visibleQueue}
+              items={initialQueue}
               servedItems={initialServed}
               onMarkServed={handleMarkServed}
               optimisticIds={optimistic}
@@ -414,6 +416,7 @@ function QueueView({
                 key={groupItems[0].session_id}
                 items={groupItems}
                 kind="pending"
+                optimisticIds={optimisticIds}
                 onOpen={() =>
                   setSheet({
                     sessionId: groupItems[0].session_id,
@@ -441,6 +444,7 @@ function QueueView({
                 key={groupItems[0].session_id}
                 items={groupItems}
                 kind="served"
+                optimisticIds={optimisticIds}
                 onOpen={() =>
                   setSheet({
                     sessionId: groupItems[0].session_id,
@@ -470,15 +474,21 @@ function QueueView({
 function QueueTableCard({
   items,
   kind,
+  optimisticIds,
   onOpen,
 }: {
   items: WaiterQueueItem[];
   kind: "pending" | "served";
+  optimisticIds: Set<string>;
   onOpen: () => void;
 }) {
   const first = items[0];
   const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
   const pending = kind === "pending";
+  // Item yang baru ditandai served (optimistic) — tampil sbg progres di kartu.
+  const servedNow = pending
+    ? items.filter((i) => optimisticIds.has(i.id)).length
+    : 0;
 
   return (
     <Card
@@ -518,6 +528,11 @@ function QueueTableCard({
               {" "}
               · {totalQty} item{totalQty === 1 ? "" : "s"}
             </span>
+            {servedNow > 0 && (
+              <span className="ml-1.5 text-[11px] font-medium text-emerald-400">
+                ✓ {servedNow}/{items.length} served
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
             <Clock className="h-2.5 w-2.5" />
@@ -641,12 +656,7 @@ function QueueMenuRow({
   }
 
   return (
-    <div
-      className={cn(
-        "px-4 py-3 flex items-center gap-3 transition",
-        optimistic && "opacity-50"
-      )}
-    >
+    <div className="px-4 py-3 flex items-center gap-3 transition">
       <div className="flex-1 min-w-0">
         <h3 className="font-medium text-sm">
           {item.quantity > 1 && (
@@ -680,7 +690,9 @@ function QueueMenuRow({
           />
         </div>
       </div>
-      {served ? (
+      {served || optimistic ? (
+        // Baru di-served (optimistic) / memang served → status berubah di
+        // tempat, item TIDAK hilang (feedback user).
         <span className="inline-flex items-center gap-1 text-xs text-emerald-400 shrink-0">
           <CheckCircle2 className="h-3.5 w-3.5" />
           Served
@@ -690,7 +702,7 @@ function QueueMenuRow({
           variant="gold"
           size="sm"
           onClick={handle}
-          disabled={loading || optimistic}
+          disabled={loading}
           className="shrink-0"
         >
           {loading ? (
