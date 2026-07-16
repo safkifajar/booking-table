@@ -19,6 +19,7 @@ import {
   asc,
   desc,
   eq,
+  gte,
   inArray,
   ne,
   notInArray,
@@ -172,7 +173,9 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
       and(
         eq(floorAreas.barId, ctx.barId),
         eq(orderItems.status, "served"),
-        sql`${orderItems.servedAt} >= ${startOfDay}`
+        // gte() typed — JANGAN sql template mentah utk Date: param-nya
+        // di-stringify jadi format JS yang ditolak Postgres.
+        gte(orderItems.servedAt, startOfDay)
       )
     )
     .orderBy(desc(orderItems.servedAt))
