@@ -4,6 +4,7 @@ import { listMembershipTransactions } from "@/lib/membership-actions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatIDR } from "@/lib/utils";
+import { ExportCsvButton } from "./ExportCsvButton";
 
 export const dynamic = "force-dynamic";
 
@@ -52,13 +53,16 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
   return (
     <main className="flex-1 pb-12">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-5">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">
-            Membership Transactions
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            All membership purchases, renewals, and admin grants ({total}).
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">
+              Membership Transactions
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              All membership purchases, renewals, and admin grants ({total}).
+            </p>
+          </div>
+          <ExportCsvButton rows={rows} page={page} />
         </div>
 
         {/* Filter status */}

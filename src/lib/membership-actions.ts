@@ -25,6 +25,7 @@ import { membershipTransactions } from "@/lib/db/schema/membership-transactions"
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { staffRoles } from "@/lib/db/schema/extras";
+import { notifications } from "@/lib/db/schema/notifications";
 import { requireAdmin } from "@/lib/admin";
 import { getCurrentProfile, requireProfile } from "@/lib/auth-v2/current";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -941,4 +942,99 @@ export async function previewBillVoucher(input: {
     name: res.voucher.name,
     discount: res.voucher.discount,
   };
+}
+
+// ============================================================
+// FASE 5 — statistik & pengingat
+// ============================================================
+
+export interface MembershipStats {
+  /** Jumlah member per level EFEKTIF (kedaluwarsa dihitung basic). */
+  counts: Record<MembershipKey, number>;
+  /** Pendapatan membership PAID 30 hari terakhir (IDR). */
+  revenue_30d: number;
+}
+
+/** Statistik ringkas utk overview admin (member per level + revenue 30 hari). */
+export async function getMembershipStats(): Promise<MembershipStats> {
+  await requireAdmin();
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+  const rows = await db
+    .select({
+      level: profiles.membershipLevel,
+      expiresAt: profiles.membershipExpiresAt,
+    })
+    .from(profiles)
+    .where(
+      and(
+        eq(profiles.isGuest, false),
+        sql`${profiles.id} NOT IN (${staffIds})`
+      )
+    );
+  const counts: Record<MembershipKey, number> = { basic: 0, premium: 0, vip: 0 };
+  for (const r of rows) counts[effectiveLevelKey(r.level, r.expiresAt)]++;
+
+  const [rev] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${membershipTransactions.amount}), 0)::int`,
+    })
+    .from(membershipTransactions)
+    .where(
+      and(
+        eq(membershipTransactions.status, "paid"),
+        sql`${membershipTransactions.paidAt} > now() - interval '30 days'`
+      )
+    );
+  return { counts, revenue_30d: Number(rev?.total ?? 0) };
+}
+
+/**
+ * Pengingat kedaluwarsa H-3 (Fase 5) — LAZY, dipicu kunjungan home (dipanggil
+ * MembershipBanner; tanpa cron). Dedup: skip kalau pengingat serupa sudah
+ * terkirim dalam 4 hari terakhir. Aman dipanggil berulang; hanya utk diri
+ * sendiri (client memanggil pun cuma menspam dirinya — tetap ter-dedup).
+ */
+export async function maybeSendExpiryReminder(): Promise<void> {
+  const me = await getCurrentProfile();
+  if (!me) return;
+  const [row] = await db
+    .select({
+      level: profiles.membershipLevel,
+      expiresAt: profiles.membershipExpiresAt,
+    })
+    .from(profiles)
+    .where(eq(profiles.id, me.id))
+    .limit(1);
+  if (!row?.expiresAt || row.level === "basic") return;
+  const msLeft = row.expiresAt.getTime() - Date.now();
+  const daysLeft = Math.ceil(msLeft / 86_400_000);
+  if (msLeft <= 0 || daysLeft > 3) return;
+
+  // Dedup: sudah ada pengingat dalam 4 hari terakhir?
+  const [existing] = await db
+    .select({ id: notifications.id })
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.profileId, me.id),
+        eq(notifications.link, "/membership"),
+        sql`${notifications.title} LIKE '%expires%'`,
+        sql`${notifications.createdAt} > now() - interval '4 days'`
+      )
+    )
+    .limit(1);
+  if (existing) return;
+
+  const [level] = await db
+    .select({ name: membershipLevels.name })
+    .from(membershipLevels)
+    .where(eq(membershipLevels.key, row.level))
+    .limit(1);
+  await createNotification({
+    profileId: me.id,
+    type: "general",
+    title: `Your ${level?.name ?? "membership"} expires in ${daysLeft <= 1 ? "1 day" : `${daysLeft} days`}`,
+    body: "Renew now — time is added to your current period, nothing is lost.",
+    link: "/membership",
+  });
 }

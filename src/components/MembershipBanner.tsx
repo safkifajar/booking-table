@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Crown, ChevronRight } from "lucide-react";
 import { getMembershipStatus } from "@/lib/membership";
+import { maybeSendExpiryReminder } from "@/lib/membership-actions";
 
 /**
  * Banner membership di home (PRD Membership M11) — server component:
@@ -11,6 +12,10 @@ import { getMembershipStatus } from "@/lib/membership";
  */
 export async function MembershipBanner({ profileId }: { profileId: string }) {
   const status = await getMembershipStatus(profileId);
+
+  // Pengingat H-3 (Fase 5) — lazy via kunjungan home, dedup 4 hari di server.
+  // Fire-and-forget: kegagalan tak boleh menggagalkan render home.
+  void maybeSendExpiryReminder().catch(() => {});
 
   let title: string;
   let body: string;
