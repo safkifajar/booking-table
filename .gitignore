@@ -44,3 +44,6 @@ next-env.d.ts
 # user uploads (avatar, story, etc) — runtime data, jangan masuk repo
 /public/uploads/**
 !/public/uploads/.gitkeep
+
+# Dokumen PRD internal — lokal saja, jangan ikut repo (permintaan user 2026-07-16)
+docs/PRD-*.md
