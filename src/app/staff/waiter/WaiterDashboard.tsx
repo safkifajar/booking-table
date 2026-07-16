@@ -372,32 +372,20 @@ function QueueView({
 
   return (
     <div className="space-y-3">
-      {/* Sub-tab chips */}
-      <div className="flex gap-1.5">
-        <button
-          type="button"
+      {/* Sub-tab — segmented control (pola tab Floor/Menu di BarFloorView) */}
+      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-full">
+        <SubTabButton
+          icon={<Utensils className="h-3.5 w-3.5" />}
+          label={`To Serve (${pendingGroups.size})`}
+          active={sub === "pending"}
           onClick={() => setSub("pending")}
-          className={cn(
-            "rounded-full px-3.5 py-1.5 text-xs font-medium border transition",
-            sub === "pending"
-              ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
-              : "border-border text-muted-foreground hover:border-foreground/30"
-          )}
-        >
-          To Serve ({pendingGroups.size})
-        </button>
-        <button
-          type="button"
+        />
+        <SubTabButton
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          label={`Served Today (${servedGroups.size})`}
+          active={sub === "served"}
           onClick={() => setSub("served")}
-          className={cn(
-            "rounded-full px-3.5 py-1.5 text-xs font-medium border transition",
-            sub === "served"
-              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-              : "border-border text-muted-foreground hover:border-foreground/30"
-          )}
-        >
-          Served Today ({servedGroups.size})
-        </button>
+        />
       </div>
 
       {sub === "pending" &&
@@ -467,6 +455,35 @@ function QueueView({
         />
       )}
     </div>
+  );
+}
+
+/** Tombol segmented sub-tab — pola MainTabButton di BarFloorView. */
+function SubTabButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition",
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
