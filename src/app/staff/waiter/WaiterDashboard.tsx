@@ -17,6 +17,7 @@ import {
   Loader2,
   UserPlus,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -331,21 +332,111 @@ function QueueView({
     );
   }
 
+  // Kelompokkan PER MEJA (session) — permintaan user: list per meja, klik →
+  // tampil menu yang dipesan. Urutan grup = item TERTUA di grup (FIFO antar
+  // meja tetap terjaga; items dari server sudah oldest-first).
+  const groups = new Map<string, WaiterQueueItem[]>();
+  for (const item of items) {
+    const list = groups.get(item.session_id);
+    if (list) list.push(item);
+    else groups.set(item.session_id, [item]);
+  }
+
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {items.map((item) => (
-        <QueueItemCard
-          key={item.id}
-          item={item}
+    <div className="grid sm:grid-cols-2 gap-3 items-start">
+      {Array.from(groups.values()).map((groupItems) => (
+        <QueueTableCard
+          key={groupItems[0].session_id}
+          items={groupItems}
           onMarkServed={onMarkServed}
-          optimistic={optimisticIds.has(item.id)}
+          optimisticIds={optimisticIds}
         />
       ))}
     </div>
   );
 }
 
-function QueueItemCard({
+/** Kartu PER MEJA: header ringkas (meja + jumlah item), klik → buka daftar
+ *  menu yang dipesan dgn tombol Served per item. */
+function QueueTableCard({
+  items,
+  onMarkServed,
+  optimisticIds,
+}: {
+  items: WaiterQueueItem[];
+  onMarkServed: (id: string) => Promise<void>;
+  optimisticIds: Set<string>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const first = items[0];
+  const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+
+  return (
+    <Card className="border-amber-500/30 bg-amber-500/5 overflow-hidden">
+      {/* Header meja — klik utk buka/tutup daftar menu */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full p-4 text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative shrink-0">
+            <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="default" className="text-[10px] px-1.5">
+                {first.table_label}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground">
+                {first.area_name}
+              </span>
+              {first.session_title && (
+                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                  · {first.session_title}
+                </span>
+              )}
+            </div>
+            <div className="text-sm font-semibold mt-0.5">
+              {items.length} order{items.length === 1 ? "" : "s"}
+              <span className="text-muted-foreground font-normal">
+                {" "}
+                · {totalQty} item{totalQty === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
+              <Clock className="h-2.5 w-2.5" />
+              oldest <RelativeTime date={first.created_at} className="text-[10px]" />
+            </div>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground shrink-0 transition-transform",
+              open && "rotate-180"
+            )}
+          />
+        </div>
+      </button>
+
+      {/* Daftar menu meja ini — tampil saat kartu diklik */}
+      {open && (
+        <div className="border-t border-amber-500/20 divide-y divide-border/60">
+          {items.map((item) => (
+            <QueueMenuRow
+              key={item.id}
+              item={item}
+              onMarkServed={onMarkServed}
+              optimistic={optimisticIds.has(item.id)}
+            />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Baris satu menu di dalam kartu meja. */
+function QueueMenuRow({
   item,
   onMarkServed,
   optimistic,
@@ -366,93 +457,53 @@ function QueueItemCard({
   }
 
   return (
-    <Card
+    <div
       className={cn(
-        "p-4 border-amber-500/30 bg-amber-500/5 transition",
+        "px-4 py-3 flex items-center gap-3 transition",
         optimistic && "opacity-50"
       )}
     >
-      <div className="flex items-start gap-3 mb-3">
-        {/* Pulse dot kalau baru */}
-        <div className="shrink-0 mt-1">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative">
-            {!optimistic && (
-              <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
-            )}
-          </span>
-        </div>
-
-        <div className="flex-1 min-w-0">
-          {/* Meja + area */}
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <Badge variant="default" className="text-[10px] px-1.5">
-              {item.table_label}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">
-              {item.area_name}
-            </span>
-            {item.session_title && (
-              <>
-                <span className="text-[10px] text-muted-foreground">·</span>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                  {item.session_title}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Item name */}
-          <h3 className="font-semibold text-sm">
-            {item.quantity > 1 && (
-              <span className="text-primary mr-1">{item.quantity}×</span>
-            )}
-            {item.menu_item_name}
-          </h3>
-
-          {item.notes && (
-            <p className="text-xs text-amber-300/90 mt-0.5 italic">
-              note: {item.notes}
-            </p>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-sm">
+          {item.quantity > 1 && (
+            <span className="text-primary mr-1">{item.quantity}×</span>
           )}
-        </div>
-
-        <div className="text-right shrink-0">
-          <div className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-            <Clock className="h-2.5 w-2.5" />
-            <RelativeTime date={item.created_at} className="text-[10px]" />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Avatar className="h-5 w-5">
-            {item.added_by_avatar && (
-              <AvatarImage src={item.added_by_avatar} />
-            )}
-            <AvatarFallback className="text-[8px]">
+          {item.menu_item_name}
+        </h3>
+        {item.notes && (
+          <p className="text-xs text-amber-300/90 mt-0.5 italic">
+            note: {item.notes}
+          </p>
+        )}
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
+          <Avatar className="h-4 w-4">
+            {item.added_by_avatar && <AvatarImage src={item.added_by_avatar} />}
+            <AvatarFallback className="text-[7px]">
               {initials(item.added_by_name)}
             </AvatarFallback>
           </Avatar>
-          <span className="text-[11px] text-muted-foreground truncate">
+          <span className="text-[10px] text-muted-foreground truncate">
             by {item.added_by_name}
           </span>
+          <span className="text-[10px] text-muted-foreground">·</span>
+          <RelativeTime date={item.created_at} className="text-[10px] text-muted-foreground" />
         </div>
-        <Button
-          variant="gold"
-          size="sm"
-          onClick={handle}
-          disabled={loading || optimistic}
-        >
-          {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <CheckCircle2 className="h-3.5 w-3.5" />
-          )}
-          Served
-        </Button>
       </div>
-    </Card>
+      <Button
+        variant="gold"
+        size="sm"
+        onClick={handle}
+        disabled={loading || optimistic}
+        className="shrink-0"
+      >
+        {loading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        )}
+        Served
+      </Button>
+    </div>
   );
 }
 
