@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ import {
   Loader2,
   UserPlus,
   X,
+  ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import {
   waiterMarkServed,
   waiterJoinSession,
   type WaiterQueueItem,
+  type WaiterServedItem,
   type WaiterSessionItem,
   type AvailableTable,
   type WaiterReservationData,
@@ -49,6 +52,7 @@ import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
   initialQueue: WaiterQueueItem[];
+  initialServed: WaiterServedItem[];
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
   reservationData: WaiterReservationData;
@@ -88,6 +92,7 @@ function sessionWhen(s: WaiterSessionItem): string {
 
 export function WaiterDashboard({
   initialQueue,
+  initialServed,
   initialSessions,
   initialAvailableTables,
   reservationData,
@@ -145,9 +150,11 @@ export function WaiterDashboard({
     };
   }, [barId, router]);
 
-  // Apply optimistic state — filter out items marked served
-  const visibleQueue = React.useMemo(
-    () => initialQueue.filter((q) => !optimistic.has(q.id)),
+  // Optimistic TIDAK menghilangkan item (feedback user): item yang baru
+  // di-served tetap tampil dgn status berubah, hilang dari daftar pending
+  // saat refresh server (SSE) menyusul. Badge nav = yang BELUM served.
+  const pendingCount = React.useMemo(
+    () => initialQueue.filter((q) => !optimistic.has(q.id)).length,
     [initialQueue, optimistic]
   );
 
@@ -225,8 +232,8 @@ export function WaiterDashboard({
             key: "queue",
             label: "Orders",
             icon: <Utensils className="h-5 w-5" />,
-            badge: visibleQueue.length,
-            alert: visibleQueue.length > 0,
+            badge: pendingCount,
+            alert: pendingCount > 0,
           },
           {
             key: "sessions",
@@ -262,7 +269,8 @@ export function WaiterDashboard({
         {tab === "queue" && (
           <ScrollArea>
             <QueueView
-              items={visibleQueue}
+              items={initialQueue}
+              servedItems={initialServed}
               onMarkServed={handleMarkServed}
               optimisticIds={optimistic}
             />
@@ -312,45 +320,344 @@ export function WaiterDashboard({
 
 function QueueView({
   items,
+  servedItems,
   onMarkServed,
   optimisticIds,
 }: {
   items: WaiterQueueItem[];
+  servedItems: WaiterServedItem[];
   onMarkServed: (id: string) => Promise<void>;
   optimisticIds: Set<string>;
 }) {
-  if (items.length === 0) {
-    return (
-      <Card className="p-12 text-center border-dashed">
-        <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/40 mb-3" />
-        <p className="text-sm font-medium mb-1">No new orders</p>
-        <p className="text-xs text-muted-foreground">
-          All orders have been served. Nice!
-        </p>
-      </Card>
-    );
-  }
+  // Sub-tab monitor: yang BELUM diantar vs yang SUDAH diantar hari ini.
+  const [sub, setSub] = React.useState<"pending" | "served">("pending");
+  // Bottom sheet detail menu per meja (bukan dropdown — feedback user).
+  const [sheet, setSheet] = React.useState<{
+    sessionId: string;
+    kind: "pending" | "served";
+  } | null>(null);
+
+  const pendingGroups = React.useMemo(() => {
+    const m = new Map<string, WaiterQueueItem[]>();
+    for (const item of items) {
+      const list = m.get(item.session_id);
+      if (list) list.push(item);
+      else m.set(item.session_id, [item]);
+    }
+    return m;
+  }, [items]);
+
+  const servedGroups = React.useMemo(() => {
+    const m = new Map<string, WaiterServedItem[]>();
+    for (const item of servedItems) {
+      const list = m.get(item.session_id);
+      if (list) list.push(item);
+      else m.set(item.session_id, [item]);
+    }
+    return m;
+  }, [servedItems]);
+
+  // Sheet meja pending yang semua itemnya keburu served → tutup otomatis.
+  React.useEffect(() => {
+    if (sheet?.kind === "pending" && !pendingGroups.has(sheet.sessionId)) {
+      setSheet(null);
+    }
+  }, [sheet, pendingGroups]);
+
+  const sheetItems: WaiterQueueItem[] = sheet
+    ? sheet.kind === "pending"
+      ? (pendingGroups.get(sheet.sessionId) ?? [])
+      : (servedGroups.get(sheet.sessionId) ?? [])
+    : [];
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      {items.map((item) => (
-        <QueueItemCard
-          key={item.id}
-          item={item}
-          onMarkServed={onMarkServed}
-          optimistic={optimisticIds.has(item.id)}
+    <div className="space-y-3">
+      {/* Sub-tab — segmented control (pola tab Floor/Menu di BarFloorView) */}
+      <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-full">
+        <SubTabButton
+          icon={<Utensils className="h-3.5 w-3.5" />}
+          label={`To Serve (${pendingGroups.size})`}
+          active={sub === "pending"}
+          onClick={() => setSub("pending")}
         />
-      ))}
+        <SubTabButton
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          label={`Served Today (${servedGroups.size})`}
+          active={sub === "served"}
+          onClick={() => setSub("served")}
+        />
+      </div>
+
+      {sub === "pending" &&
+        (pendingGroups.size === 0 ? (
+          <Card className="p-12 text-center border-dashed">
+            <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/40 mb-3" />
+            <p className="text-sm font-medium mb-1">No new orders</p>
+            <p className="text-xs text-muted-foreground">
+              All orders have been served. Nice!
+            </p>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3 items-start">
+            {Array.from(pendingGroups.values()).map((groupItems) => (
+              <QueueTableCard
+                key={groupItems[0].session_id}
+                items={groupItems}
+                kind="pending"
+                optimisticIds={optimisticIds}
+                onOpen={() =>
+                  setSheet({
+                    sessionId: groupItems[0].session_id,
+                    kind: "pending",
+                  })
+                }
+              />
+            ))}
+          </div>
+        ))}
+
+      {sub === "served" &&
+        (servedGroups.size === 0 ? (
+          <Card className="p-12 text-center border-dashed">
+            <Utensils className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium mb-1">Nothing served yet today</p>
+            <p className="text-xs text-muted-foreground">
+              Orders you mark as served will appear here.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3 items-start">
+            {Array.from(servedGroups.values()).map((groupItems) => (
+              <QueueTableCard
+                key={groupItems[0].session_id}
+                items={groupItems}
+                kind="served"
+                optimisticIds={optimisticIds}
+                onOpen={() =>
+                  setSheet({
+                    sessionId: groupItems[0].session_id,
+                    kind: "served",
+                  })
+                }
+              />
+            ))}
+          </div>
+        ))}
+
+      {/* Bottom sheet: daftar menu meja terpilih */}
+      {sheet && sheetItems.length > 0 && (
+        <QueueDetailSheet
+          items={sheetItems}
+          kind={sheet.kind}
+          onMarkServed={onMarkServed}
+          optimisticIds={optimisticIds}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </div>
   );
 }
 
-function QueueItemCard({
+/** Tombol segmented sub-tab — pola MainTabButton di BarFloorView. */
+function SubTabButton({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition",
+        active
+          ? "bg-primary/15 text-primary"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+/** Kartu PER MEJA (ringkas). Klik → bottom sheet daftar menu. */
+function QueueTableCard({
+  items,
+  kind,
+  optimisticIds,
+  onOpen,
+}: {
+  items: WaiterQueueItem[];
+  kind: "pending" | "served";
+  optimisticIds: Set<string>;
+  onOpen: () => void;
+}) {
+  const first = items[0];
+  const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+  const pending = kind === "pending";
+  // Item yang baru ditandai served (optimistic) — tampil sbg progres di kartu.
+  const servedNow = pending
+    ? items.filter((i) => optimisticIds.has(i.id)).length
+    : 0;
+
+  return (
+    <Card
+      onClick={onOpen}
+      className={cn(
+        "p-4 cursor-pointer transition hover:border-primary/40",
+        pending
+          ? "border-amber-500/30 bg-amber-500/5"
+          : "border-emerald-500/20 bg-emerald-500/[0.03]"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {pending ? (
+          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative shrink-0">
+            <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
+          </span>
+        ) : (
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="default" className="text-[10px] px-1.5">
+              {first.table_label}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {first.area_name}
+            </span>
+            {first.session_title && (
+              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                · {first.session_title}
+              </span>
+            )}
+          </div>
+          <div className="text-sm font-semibold mt-0.5">
+            {items.length} order{items.length === 1 ? "" : "s"}
+            <span className="text-muted-foreground font-normal">
+              {" "}
+              · {totalQty} item{totalQty === 1 ? "" : "s"}
+            </span>
+            {servedNow > 0 && (
+              <span className="ml-1.5 text-[11px] font-medium text-emerald-400">
+                ✓ {servedNow}/{items.length} served
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
+            <Clock className="h-2.5 w-2.5" />
+            {pending ? (
+              <>
+                oldest{" "}
+                <RelativeTime date={first.created_at} className="text-[10px]" />
+              </>
+            ) : (
+              <>
+                last served{" "}
+                <RelativeTime
+                  date={(items[0] as WaiterServedItem).served_at}
+                  className="text-[10px]"
+                />
+              </>
+            )}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      </div>
+    </Card>
+  );
+}
+
+/** Bottom sheet: daftar menu yang dipesan satu meja. */
+function QueueDetailSheet({
+  items,
+  kind,
+  onMarkServed,
+  optimisticIds,
+  onClose,
+}: {
+  items: WaiterQueueItem[];
+  kind: "pending" | "served";
+  onMarkServed: (id: string) => Promise<void>;
+  optimisticIds: Set<string>;
+  onClose: () => void;
+}) {
+  const first = items[0];
+
+  // Kunci scroll background selama sheet terbuka.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Portal + z-[100]: StaffBottomNav (tombol Open Table) fixed z-50 dan
+  // di-portal ke akhir body — tanpa ini sheet tertimpa bar tsb.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+        {/* Header sheet */}
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+              {first.table_label}
+            </Badge>
+            <span className="text-xs text-muted-foreground truncate">
+              {first.area_name}
+              {first.session_title && ` · ${first.session_title}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center shrink-0"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Daftar menu — scroll internal */}
+        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border/60">
+          {items.map((item) => (
+            <QueueMenuRow
+              key={item.id}
+              item={item}
+              served={kind === "served"}
+              onMarkServed={onMarkServed}
+              optimistic={optimisticIds.has(item.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+/** Baris satu menu di dalam bottom sheet. */
+function QueueMenuRow({
   item,
+  served,
   onMarkServed,
   optimistic,
 }: {
   item: WaiterQueueItem;
+  served: boolean;
   onMarkServed: (id: string) => Promise<void>;
   optimistic: boolean;
 }) {
@@ -366,83 +673,68 @@ function QueueItemCard({
   }
 
   return (
-    <Card
-      className={cn(
-        "p-4 border-amber-500/30 bg-amber-500/5 transition",
-        optimistic && "opacity-50"
-      )}
-    >
-      <div className="flex items-start gap-3 mb-3">
-        {/* Pulse dot kalau baru */}
-        <div className="shrink-0 mt-1">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative">
-            {!optimistic && (
-              <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
-            )}
-          </span>
-        </div>
-
-        <div className="flex-1 min-w-0">
-          {/* Meja + area */}
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <Badge variant="default" className="text-[10px] px-1.5">
-              {item.table_label}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">
-              {item.area_name}
-            </span>
-            {item.session_title && (
-              <>
-                <span className="text-[10px] text-muted-foreground">·</span>
-                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                  {item.session_title}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* Item name */}
-          <h3 className="font-semibold text-sm">
-            {item.quantity > 1 && (
-              <span className="text-primary mr-1">{item.quantity}×</span>
-            )}
-            {item.menu_item_name}
-          </h3>
-
-          {item.notes && (
-            <p className="text-xs text-amber-300/90 mt-0.5 italic">
-              note: {item.notes}
-            </p>
-          )}
-        </div>
-
-        <div className="text-right shrink-0">
-          <div className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-            <Clock className="h-2.5 w-2.5" />
-            <RelativeTime date={item.created_at} className="text-[10px]" />
-          </div>
-        </div>
+    <div className="px-4 py-3 flex items-center gap-3 transition">
+      {/* Foto menu — placeholder ikon kalau tak ada */}
+      <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/40 border border-border shrink-0 flex items-center justify-center">
+        {item.menu_item_image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.menu_item_image}
+            alt={item.menu_item_name}
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <Utensils className="h-5 w-5 text-muted-foreground/50" />
+        )}
       </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Avatar className="h-5 w-5">
-            {item.added_by_avatar && (
-              <AvatarImage src={item.added_by_avatar} />
-            )}
-            <AvatarFallback className="text-[8px]">
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-sm">
+          {item.quantity > 1 && (
+            <span className="text-primary mr-1">{item.quantity}×</span>
+          )}
+          {item.menu_item_name}
+        </h3>
+        {item.notes && (
+          <p className="text-xs text-amber-300/90 mt-0.5 italic">
+            note: {item.notes}
+          </p>
+        )}
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
+          <Avatar className="h-4 w-4">
+            {item.added_by_avatar && <AvatarImage src={item.added_by_avatar} />}
+            <AvatarFallback className="text-[7px]">
               {initials(item.added_by_name)}
             </AvatarFallback>
           </Avatar>
-          <span className="text-[11px] text-muted-foreground truncate">
+          <span className="text-[10px] text-muted-foreground truncate">
             by {item.added_by_name}
           </span>
+          <span className="text-[10px] text-muted-foreground">·</span>
+          <RelativeTime
+            date={
+              served
+                ? ((item as WaiterServedItem).served_at ?? item.created_at)
+                : item.created_at
+            }
+            className="text-[10px] text-muted-foreground"
+          />
         </div>
+      </div>
+      {served || optimistic ? (
+        // Baru di-served (optimistic) / memang served → status berubah di
+        // tempat, item TIDAK hilang (feedback user).
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-400 shrink-0">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Served
+        </span>
+      ) : (
         <Button
           variant="gold"
           size="sm"
           onClick={handle}
-          disabled={loading || optimistic}
+          disabled={loading}
+          className="shrink-0"
         >
           {loading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -451,8 +743,8 @@ function QueueItemCard({
           )}
           Served
         </Button>
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }
 
