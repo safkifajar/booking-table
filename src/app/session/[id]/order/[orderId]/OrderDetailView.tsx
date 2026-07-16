@@ -198,6 +198,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // terjadi begitu ADA pembayaran lunas (mis. DP / baru 1 orang bayar dari
   // split). Jadi status DB 'paid' TIDAK berarti lunas. Kalau masih ada sisa,
   // tampilkan "Unpaid". Konsisten dgn OrderStatusBadge di list order (tab Bill).
+  // Potongan voucher membership (baris payments method='voucher' paid).
+  // Di PEMBUKUAN tetap pembayaran (outstanding tertutup benar), tapi di
+  // TAMPILAN disajikan sbg baris diskon di blok perhitungan — bukan di
+  // riwayat pembayaran (membingungkan; feedback user).
+  const voucherPaid = detail.payments
+    .filter((p) => p.method === "voucher" && p.status === "paid")
+    .reduce((sum, p) => sum + p.amount, 0);
+  const visiblePayments = detail.payments.filter((p) => p.method !== "voucher");
+
   const isClosedOrder = detail.status === "closed";
   const isFullyPaid = !isClosedOrder && detail.outstanding <= 0;
   const statusLabel = isClosedOrder
@@ -284,9 +293,17 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                   <span className="tabular-nums">{formatIDR(detail.charge)}</span>
                 </div>
               )}
+              {voucherPaid > 0 && (
+                <div className="flex justify-between text-emerald-400">
+                  <span>Membership voucher</span>
+                  <span className="tabular-nums">- {formatIDR(voucherPaid)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-semibold pt-1 border-t border-border">
                 <span>Total</span>
-                <span className="text-primary tabular-nums">{formatIDR(detail.total)}</span>
+                <span className="text-primary tabular-nums">
+                  {formatIDR(detail.total - voucherPaid)}
+                </span>
               </div>
               {detail.paid > 0 && detail.outstanding > 0 && (
                 <div className="flex justify-between text-muted-foreground">
@@ -328,12 +345,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           />
         )}
 
-        {/* Payment history */}
-        {detail.payments.length > 0 && (
+        {/* Payment history — baris voucher TIDAK ditampilkan di sini
+            (sudah tampil sbg diskon di blok perhitungan). */}
+        {visiblePayments.length > 0 && (
           <div>
             <h2 className="text-sm font-semibold mb-2">Payment history</h2>
             <div className="space-y-2">
-              {detail.payments.map((p, idx) => {
+              {visiblePayments.map((p, idx) => {
                 const expired =
                   p.status === "pending" && p.expires_at != null && now > 0 && new Date(p.expires_at).getTime() <= now;
                 const canShowQr = p.status === "pending" && !expired && p.qr_string;
@@ -341,7 +359,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                 // (riwayat terurut kronologis). Tanpa ini, tiap percobaan yang
                 // mati menyisakan tombolnya sendiri → menumpuk 3-4 tombol dan
                 // host bisa menerbitkan QRIS beruntun.
-                const isLatestOfMember = !detail.payments.some(
+                const isLatestOfMember = !visiblePayments.some(
                   (q, j) => j > idx && q.paid_by_member_id === p.paid_by_member_id
                 );
                 // Pembayaran anggota ini MATI (QR kadaluarsa / gagal) & order

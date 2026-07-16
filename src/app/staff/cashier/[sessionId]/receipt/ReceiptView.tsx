@@ -109,7 +109,8 @@ export function ReceiptView({ detail }: Props) {
           ))}
         </div>
 
-        {/* Totals */}
+        {/* Totals — potongan voucher tampil sbg baris diskon, bukan payment
+            (feedback user; pembukuan tetap baris payments). */}
         <div className="space-y-1 text-[10px] mb-3">
           <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
           {detail.charge_percent > 0 && (
@@ -118,21 +119,38 @@ export function ReceiptView({ detail }: Props) {
               value={formatIDR(detail.charge)}
             />
           )}
+          {(() => {
+            const voucherPaid = detail.payments
+              .filter((p) => p.method === "voucher" && p.status === "paid")
+              .reduce((sum, p) => sum + p.amount, 0);
+            return voucherPaid > 0 ? (
+              <Row
+                label="Membership voucher"
+                value={`- ${formatIDR(voucherPaid)}`}
+              />
+            ) : null;
+          })()}
           <div className="border-t border-zinc-300 pt-1 mt-1">
             <Row
               label="TOTAL"
-              value={formatIDR(detail.total)}
+              value={formatIDR(
+                detail.total -
+                  detail.payments
+                    .filter((p) => p.method === "voucher" && p.status === "paid")
+                    .reduce((sum, p) => sum + p.amount, 0)
+              )}
               bold
             />
           </div>
         </div>
 
-        {/* Payments */}
-        {detail.payments.filter((p) => p.status === "paid").length > 0 && (
+        {/* Payments — tanpa baris voucher (sudah jadi diskon di atas). */}
+        {detail.payments.filter((p) => p.status === "paid" && p.method !== "voucher")
+          .length > 0 && (
           <div className="space-y-1 text-[10px] mb-3 pb-3 border-b border-dashed border-zinc-300">
             <div className="font-semibold text-center mb-1">PAYMENT</div>
             {detail.payments
-              .filter((p) => p.status === "paid")
+              .filter((p) => p.status === "paid" && p.method !== "voucher")
               .map((p) => (
                 <Row
                   key={p.id}
@@ -143,7 +161,14 @@ export function ReceiptView({ detail }: Props) {
             <div className="border-t border-zinc-300 pt-1 mt-1">
               <Row
                 label="PAID"
-                value={formatIDR(detail.paid_total)}
+                value={formatIDR(
+                  detail.paid_total -
+                    detail.payments
+                      .filter(
+                        (p) => p.method === "voucher" && p.status === "paid"
+                      )
+                      .reduce((sum, p) => sum + p.amount, 0)
+                )}
                 bold
               />
             </div>
