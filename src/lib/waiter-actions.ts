@@ -126,6 +126,74 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
   }));
 }
 
+export interface WaiterServedItem extends WaiterQueueItem {
+  /** Kapan diantar (ISO). */
+  served_at: string;
+}
+
+/**
+ * Item yang SUDAH diantar HARI INI (status='served') — utk tab monitor
+ * "sudah dikirim semua atau belum". Terbaru dulu. Sesi yang sudah closed
+ * tetap ikut (yang dipantau pengantaran hari ini, bukan status meja).
+ */
+export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
+  const ctx = await requirePermission("view_queue", "/staff/waiter");
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const rows = await db
+    .select({
+      id: orderItems.id,
+      quantity: orderItems.quantity,
+      notes: orderItems.notes,
+      created_at: orderItems.createdAt,
+      served_at: orderItems.servedAt,
+      menu_item_name: menuItems.name,
+      added_by_name: profiles.displayName,
+      added_by_avatar: profiles.avatarUrl,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      session_id: tableSessions.id,
+      session_title: tableSessions.title,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .innerJoin(
+      sessionMembers,
+      eq(sessionMembers.id, orderItems.addedByMemberId)
+    )
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, ctx.barId),
+        eq(orderItems.status, "served"),
+        sql`${orderItems.servedAt} >= ${startOfDay}`
+      )
+    )
+    .orderBy(desc(orderItems.servedAt))
+    .limit(200);
+
+  return rows.map((r) => ({
+    id: r.id,
+    quantity: r.quantity,
+    notes: r.notes,
+    created_at: r.created_at.toISOString(),
+    served_at: (r.served_at ?? r.created_at).toISOString(),
+    menu_item_name: r.menu_item_name,
+    added_by_name: r.added_by_name,
+    added_by_avatar: r.added_by_avatar,
+    table_label: r.table_label,
+    area_name: r.area_name,
+    session_id: r.session_id,
+    session_title: r.session_title,
+  }));
+}
+
 // ============================================================
 // ACTIVE SESSIONS (untuk tab "Meja Aktif")
 // ============================================================

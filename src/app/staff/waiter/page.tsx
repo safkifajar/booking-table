@@ -6,6 +6,7 @@ import { requireAnyRole } from "@/lib/auth-v2/permissions";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
   getOrderQueueForWaiter,
+  getServedItemsForWaiter,
   getActiveSessionsForWaiter,
   getAvailableTablesForWaiter,
   getReservationDataForWaiter,
@@ -40,6 +41,7 @@ export default async function StaffWaiterPage() {
     bar,
     profile,
     queue,
+    servedItems,
     sessions,
     availableTables,
     reservationData,
@@ -54,6 +56,7 @@ export default async function StaffWaiterPage() {
       .then((r) => r[0]),
     getCurrentProfile(),
     getOrderQueueForWaiter(),
+    getServedItemsForWaiter(),
     getActiveSessionsForWaiter(),
     getAvailableTablesForWaiter(),
     getReservationDataForWaiter(),
@@ -89,6 +92,7 @@ export default async function StaffWaiterPage() {
         <Suspense>
           <WaiterDashboard
             initialQueue={queue}
+            initialServed={servedItems}
             initialSessions={sessions}
             initialAvailableTables={availableTables}
             reservationData={reservationData}

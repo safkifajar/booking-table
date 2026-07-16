@@ -17,7 +17,7 @@ import {
   Loader2,
   UserPlus,
   X,
-  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   waiterMarkServed,
   waiterJoinSession,
   type WaiterQueueItem,
+  type WaiterServedItem,
   type WaiterSessionItem,
   type AvailableTable,
   type WaiterReservationData,
@@ -50,6 +51,7 @@ import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
   initialQueue: WaiterQueueItem[];
+  initialServed: WaiterServedItem[];
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
   reservationData: WaiterReservationData;
@@ -89,6 +91,7 @@ function sessionWhen(s: WaiterSessionItem): string {
 
 export function WaiterDashboard({
   initialQueue,
+  initialServed,
   initialSessions,
   initialAvailableTables,
   reservationData,
@@ -264,6 +267,7 @@ export function WaiterDashboard({
           <ScrollArea>
             <QueueView
               items={visibleQueue}
+              servedItems={initialServed}
               onMarkServed={handleMarkServed}
               optimisticIds={optimistic}
             />
@@ -313,135 +317,311 @@ export function WaiterDashboard({
 
 function QueueView({
   items,
+  servedItems,
   onMarkServed,
   optimisticIds,
 }: {
   items: WaiterQueueItem[];
+  servedItems: WaiterServedItem[];
   onMarkServed: (id: string) => Promise<void>;
   optimisticIds: Set<string>;
 }) {
-  if (items.length === 0) {
-    return (
-      <Card className="p-12 text-center border-dashed">
-        <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/40 mb-3" />
-        <p className="text-sm font-medium mb-1">No new orders</p>
-        <p className="text-xs text-muted-foreground">
-          All orders have been served. Nice!
-        </p>
-      </Card>
-    );
-  }
+  // Sub-tab monitor: yang BELUM diantar vs yang SUDAH diantar hari ini.
+  const [sub, setSub] = React.useState<"pending" | "served">("pending");
+  // Bottom sheet detail menu per meja (bukan dropdown — feedback user).
+  const [sheet, setSheet] = React.useState<{
+    sessionId: string;
+    kind: "pending" | "served";
+  } | null>(null);
 
-  // Kelompokkan PER MEJA (session) — permintaan user: list per meja, klik →
-  // tampil menu yang dipesan. Urutan grup = item TERTUA di grup (FIFO antar
-  // meja tetap terjaga; items dari server sudah oldest-first).
-  const groups = new Map<string, WaiterQueueItem[]>();
-  for (const item of items) {
-    const list = groups.get(item.session_id);
-    if (list) list.push(item);
-    else groups.set(item.session_id, [item]);
-  }
+  const pendingGroups = React.useMemo(() => {
+    const m = new Map<string, WaiterQueueItem[]>();
+    for (const item of items) {
+      const list = m.get(item.session_id);
+      if (list) list.push(item);
+      else m.set(item.session_id, [item]);
+    }
+    return m;
+  }, [items]);
+
+  const servedGroups = React.useMemo(() => {
+    const m = new Map<string, WaiterServedItem[]>();
+    for (const item of servedItems) {
+      const list = m.get(item.session_id);
+      if (list) list.push(item);
+      else m.set(item.session_id, [item]);
+    }
+    return m;
+  }, [servedItems]);
+
+  // Sheet meja pending yang semua itemnya keburu served → tutup otomatis.
+  React.useEffect(() => {
+    if (sheet?.kind === "pending" && !pendingGroups.has(sheet.sessionId)) {
+      setSheet(null);
+    }
+  }, [sheet, pendingGroups]);
+
+  const sheetItems: WaiterQueueItem[] = sheet
+    ? sheet.kind === "pending"
+      ? (pendingGroups.get(sheet.sessionId) ?? [])
+      : (servedGroups.get(sheet.sessionId) ?? [])
+    : [];
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3 items-start">
-      {Array.from(groups.values()).map((groupItems) => (
-        <QueueTableCard
-          key={groupItems[0].session_id}
-          items={groupItems}
+    <div className="space-y-3">
+      {/* Sub-tab chips */}
+      <div className="flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => setSub("pending")}
+          className={cn(
+            "rounded-full px-3.5 py-1.5 text-xs font-medium border transition",
+            sub === "pending"
+              ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
+              : "border-border text-muted-foreground hover:border-foreground/30"
+          )}
+        >
+          To Serve ({pendingGroups.size})
+        </button>
+        <button
+          type="button"
+          onClick={() => setSub("served")}
+          className={cn(
+            "rounded-full px-3.5 py-1.5 text-xs font-medium border transition",
+            sub === "served"
+              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+              : "border-border text-muted-foreground hover:border-foreground/30"
+          )}
+        >
+          Served Today ({servedGroups.size})
+        </button>
+      </div>
+
+      {sub === "pending" &&
+        (pendingGroups.size === 0 ? (
+          <Card className="p-12 text-center border-dashed">
+            <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-500/40 mb-3" />
+            <p className="text-sm font-medium mb-1">No new orders</p>
+            <p className="text-xs text-muted-foreground">
+              All orders have been served. Nice!
+            </p>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3 items-start">
+            {Array.from(pendingGroups.values()).map((groupItems) => (
+              <QueueTableCard
+                key={groupItems[0].session_id}
+                items={groupItems}
+                kind="pending"
+                onOpen={() =>
+                  setSheet({
+                    sessionId: groupItems[0].session_id,
+                    kind: "pending",
+                  })
+                }
+              />
+            ))}
+          </div>
+        ))}
+
+      {sub === "served" &&
+        (servedGroups.size === 0 ? (
+          <Card className="p-12 text-center border-dashed">
+            <Utensils className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium mb-1">Nothing served yet today</p>
+            <p className="text-xs text-muted-foreground">
+              Orders you mark as served will appear here.
+            </p>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-3 items-start">
+            {Array.from(servedGroups.values()).map((groupItems) => (
+              <QueueTableCard
+                key={groupItems[0].session_id}
+                items={groupItems}
+                kind="served"
+                onOpen={() =>
+                  setSheet({
+                    sessionId: groupItems[0].session_id,
+                    kind: "served",
+                  })
+                }
+              />
+            ))}
+          </div>
+        ))}
+
+      {/* Bottom sheet: daftar menu meja terpilih */}
+      {sheet && sheetItems.length > 0 && (
+        <QueueDetailSheet
+          items={sheetItems}
+          kind={sheet.kind}
           onMarkServed={onMarkServed}
           optimisticIds={optimisticIds}
+          onClose={() => setSheet(null)}
         />
-      ))}
+      )}
     </div>
   );
 }
 
-/** Kartu PER MEJA: header ringkas (meja + jumlah item), klik → buka daftar
- *  menu yang dipesan dgn tombol Served per item. */
+/** Kartu PER MEJA (ringkas). Klik → bottom sheet daftar menu. */
 function QueueTableCard({
   items,
-  onMarkServed,
-  optimisticIds,
+  kind,
+  onOpen,
 }: {
   items: WaiterQueueItem[];
-  onMarkServed: (id: string) => Promise<void>;
-  optimisticIds: Set<string>;
+  kind: "pending" | "served";
+  onOpen: () => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   const first = items[0];
   const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+  const pending = kind === "pending";
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5 overflow-hidden">
-      {/* Header meja — klik utk buka/tutup daftar menu */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full p-4 text-left"
-      >
-        <div className="flex items-center gap-3">
+    <Card
+      onClick={onOpen}
+      className={cn(
+        "p-4 cursor-pointer transition hover:border-primary/40",
+        pending
+          ? "border-amber-500/30 bg-amber-500/5"
+          : "border-emerald-500/20 bg-emerald-500/[0.03]"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {pending ? (
           <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative shrink-0">
             <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
           </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="default" className="text-[10px] px-1.5">
-                {first.table_label}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground">
-                {first.area_name}
+        ) : (
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="default" className="text-[10px] px-1.5">
+              {first.table_label}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">
+              {first.area_name}
+            </span>
+            {first.session_title && (
+              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                · {first.session_title}
               </span>
-              {first.session_title && (
-                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                  · {first.session_title}
-                </span>
-              )}
-            </div>
-            <div className="text-sm font-semibold mt-0.5">
-              {items.length} order{items.length === 1 ? "" : "s"}
-              <span className="text-muted-foreground font-normal">
-                {" "}
-                · {totalQty} item{totalQty === 1 ? "" : "s"}
-              </span>
-            </div>
-            <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
-              <Clock className="h-2.5 w-2.5" />
-              oldest <RelativeTime date={first.created_at} className="text-[10px]" />
-            </div>
-          </div>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground shrink-0 transition-transform",
-              open && "rotate-180"
             )}
-          />
+          </div>
+          <div className="text-sm font-semibold mt-0.5">
+            {items.length} order{items.length === 1 ? "" : "s"}
+            <span className="text-muted-foreground font-normal">
+              {" "}
+              · {totalQty} item{totalQty === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
+            <Clock className="h-2.5 w-2.5" />
+            {pending ? (
+              <>
+                oldest{" "}
+                <RelativeTime date={first.created_at} className="text-[10px]" />
+              </>
+            ) : (
+              <>
+                last served{" "}
+                <RelativeTime
+                  date={(items[0] as WaiterServedItem).served_at}
+                  className="text-[10px]"
+                />
+              </>
+            )}
+          </div>
         </div>
-      </button>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      </div>
+    </Card>
+  );
+}
 
-      {/* Daftar menu meja ini — tampil saat kartu diklik */}
-      {open && (
-        <div className="border-t border-amber-500/20 divide-y divide-border/60">
+/** Bottom sheet: daftar menu yang dipesan satu meja. */
+function QueueDetailSheet({
+  items,
+  kind,
+  onMarkServed,
+  optimisticIds,
+  onClose,
+}: {
+  items: WaiterQueueItem[];
+  kind: "pending" | "served";
+  onMarkServed: (id: string) => Promise<void>;
+  optimisticIds: Set<string>;
+  onClose: () => void;
+}) {
+  const first = items[0];
+
+  // Kunci scroll background selama sheet terbuka.
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+        {/* Header sheet */}
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+              {first.table_label}
+            </Badge>
+            <span className="text-xs text-muted-foreground truncate">
+              {first.area_name}
+              {first.session_title && ` · ${first.session_title}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center shrink-0"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Daftar menu — scroll internal */}
+        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border/60">
           {items.map((item) => (
             <QueueMenuRow
               key={item.id}
               item={item}
+              served={kind === "served"}
               onMarkServed={onMarkServed}
               optimistic={optimisticIds.has(item.id)}
             />
           ))}
         </div>
-      )}
-    </Card>
+      </div>
+    </div>
   );
 }
 
-/** Baris satu menu di dalam kartu meja. */
+/** Baris satu menu di dalam bottom sheet. */
 function QueueMenuRow({
   item,
+  served,
   onMarkServed,
   optimistic,
 }: {
   item: WaiterQueueItem;
+  served: boolean;
   onMarkServed: (id: string) => Promise<void>;
   optimistic: boolean;
 }) {
@@ -486,23 +666,37 @@ function QueueMenuRow({
             by {item.added_by_name}
           </span>
           <span className="text-[10px] text-muted-foreground">·</span>
-          <RelativeTime date={item.created_at} className="text-[10px] text-muted-foreground" />
+          <RelativeTime
+            date={
+              served
+                ? ((item as WaiterServedItem).served_at ?? item.created_at)
+                : item.created_at
+            }
+            className="text-[10px] text-muted-foreground"
+          />
         </div>
       </div>
-      <Button
-        variant="gold"
-        size="sm"
-        onClick={handle}
-        disabled={loading || optimistic}
-        className="shrink-0"
-      >
-        {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
+      {served ? (
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-400 shrink-0">
           <CheckCircle2 className="h-3.5 w-3.5" />
-        )}
-        Served
-      </Button>
+          Served
+        </span>
+      ) : (
+        <Button
+          variant="gold"
+          size="sm"
+          onClick={handle}
+          disabled={loading || optimistic}
+          className="shrink-0"
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          )}
+          Served
+        </Button>
+      )}
     </div>
   );
 }
