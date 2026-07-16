@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -567,8 +568,10 @@ function QueueDetailSheet({
     };
   }, []);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+  // Portal + z-[100]: StaffBottomNav (tombol Open Table) fixed z-50 dan
+  // di-portal ke akhir body — tanpa ini sheet tertimpa bar tsb.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
@@ -609,7 +612,8 @@ function QueueDetailSheet({
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
