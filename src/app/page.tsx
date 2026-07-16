@@ -20,6 +20,7 @@ import {
 } from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
+import { MembershipBanner } from "@/components/MembershipBanner";
 
 /** Sapaan kontekstual berdasar jam (WIB / waktu server). */
 function greeting(hour: number): string {
@@ -129,6 +130,14 @@ export default async function HomePage() {
 
         {/* Banner tagihan belum lunas (user login) — overdue / closed-belum-lunas */}
         {!isAnon && profile && <UnpaidBanner sessions={unpaidSessions} />}
+
+        {/* Banner membership (PRD Membership M11): basic → upgrade;
+            H-7 kedaluwarsa → perpanjang. */}
+        {!isAnon && profile && (
+          <div className="mx-4 sm:mx-6 mt-4">
+            <MembershipBanner profileId={profile.id} />
+          </div>
+        )}
 
         {/* Story bar — logged-in only (Server Component skip render kalau anon) */}
         <StoryBarSection barSlug={barSlug} />

@@ -15,6 +15,8 @@ import {
   getReviewsForUser,
 } from "@/lib/queries";
 import { getFriendsListOf } from "@/lib/friends";
+import { getMembershipStatus, getMembershipLevels } from "@/lib/membership";
+import { MembershipControl } from "./MembershipControl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -33,12 +35,15 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
   await requireAdmin();
   const { id } = await params;
 
-  const [profile, history, reviews, friends, userRow] = await Promise.all([
+  const [profile, history, reviews, friends, membership, levels, userRow] =
+    await Promise.all([
     getPublicProfile(id, { admin: true }),
     getUserTableHistory(id, 50),
     getReviewsForUser(id, 50),
     // Admin lihat daftar teman apa adanya (tanpa saringan blokir viewer).
     getFriendsListOf(id),
+    getMembershipStatus(id),
+    getMembershipLevels(),
     db
       .select({ email: users.email })
       .from(users)
@@ -126,6 +131,22 @@ export default async function AdminCustomerDetailPage({ params }: PageProps) {
                 {email}
               </p>
             </div>
+          </div>
+          {/* Status + kontrol membership (PRD Membership M8/M12) */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <MembershipControl
+              customerId={profile.id}
+              customerName={profile.display_name}
+              membership={{
+                key: membership.key,
+                name: membership.name,
+                expiresAt: membership.expires_at?.toISOString() ?? null,
+                expired: membership.expired,
+              }}
+              levelNames={Object.fromEntries(
+                levels.map((l) => [l.key, l.name])
+              )}
+            />
           </div>
         </div>
 

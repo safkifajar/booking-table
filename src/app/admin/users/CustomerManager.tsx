@@ -112,6 +112,7 @@ export function CustomerManager({
       "WhatsApp number",
       "Visits",
       "Friends",
+      "Membership",
       "Registered",
     ];
     const lines = initialRows.map((r) =>
@@ -122,6 +123,7 @@ export function CustomerManager({
         r.phone ?? "",
         r.visit_count,
         r.friend_count,
+        r.membership_name,
         new Date(r.created_at).toLocaleDateString("en-US"),
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -213,6 +215,19 @@ export function CustomerManager({
                         {r.friend_count}
                       </Badge>
                     )}
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "text-[10px]",
+                        r.membership_key === "vip"
+                          ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                          : r.membership_key === "premium"
+                            ? "bg-primary/15 text-primary border-primary/30"
+                            : "bg-muted text-muted-foreground border-border"
+                      )}
+                    >
+                      {r.membership_name}
+                    </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">
                     {r.username ? `@${r.username} · ` : ""}

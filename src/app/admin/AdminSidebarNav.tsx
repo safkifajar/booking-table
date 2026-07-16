@@ -19,6 +19,8 @@ import {
   FileText,
   Sparkles,
   MessageSquareQuote,
+  Crown,
+  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -116,6 +118,31 @@ const NAV: NavItem[] = [
         href: "/admin/legal",
         label: "Legal",
         icon: <FileText className="h-4 w-4" />,
+      },
+    ],
+  },
+  {
+    type: "group",
+    label: "Membership",
+    icon: <Crown className="h-4 w-4" />,
+    children: [
+      {
+        type: "leaf",
+        href: "/admin/membership",
+        label: "Levels",
+        icon: <Crown className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/membership/vouchers",
+        label: "Vouchers",
+        icon: <Ticket className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/membership/transactions",
+        label: "Transactions",
+        icon: <CreditCard className="h-4 w-4" />,
       },
     ],
   },
@@ -257,8 +284,11 @@ function SidebarGroup({
 }
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/admin") {
-    return pathname === "/admin";
+  // Href yang punya leaf SAUDARA di bawahnya → exact match saja, supaya
+  // "Levels" (/admin/membership) tak ikut menyala saat buka
+  // /admin/membership/vouchers.
+  if (href === "/admin" || href === "/admin/membership") {
+    return pathname === href;
   }
   return pathname === href || pathname.startsWith(href + "/");
 }

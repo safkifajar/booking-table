@@ -95,7 +95,10 @@ export default async function NetworkProfilePage({ params }: PageProps) {
 
   const active = profile.active_session;
   // Akun privat & bukan kita → tampilkan banner + kartu terkunci (blur).
-  const locked = profile.is_private && !isMe;
+  // Terkunci = akun privat ATAU level membership (locked_by_level).
+  // getPublicProfile sudah me-null-kan data & menyatukan keduanya ke
+  // is_private; banner-nya dibedakan via locked_by_level.
+  const locked = (profile.is_private || profile.locked_by_level) && !isMe;
 
   const [history, myActiveSessionIds, hobbyGroups] = await Promise.all([
     getUserTableHistory(profile.id, 20),
@@ -185,15 +188,21 @@ export default async function NetworkProfilePage({ params }: PageProps) {
                 </span>
               )}
             </div>
-            {/* Tombol pertemanan — sebaris dengan nama (PRD Friends k). */}
-            {me && !isMe && (
-              <FriendActions
-                userId={profile.id}
-                displayName={profile.display_name}
-                status={rel.status}
-                pendingRequestId={rel.pendingRequestId}
-              />
-            )}
+            {/* Tombol pertemanan — sebaris dengan nama (PRD Friends k).
+                Terkunci level + belum ada relasi → TANPA tombol Add friend
+                (PRD Membership G2: koneksi lintas level dimulai dari atas);
+                pending_in/pending_out/friends tetap dirender agar bisa
+                direspon (G11). */}
+            {me &&
+              !isMe &&
+              !(profile.locked_by_level && rel.status === "none") && (
+                <FriendActions
+                  userId={profile.id}
+                  displayName={profile.display_name}
+                  status={rel.status}
+                  pendingRequestId={rel.pendingRequestId}
+                />
+              )}
           </div>
 
           {profile.username && (
@@ -260,11 +269,27 @@ export default async function NetworkProfilePage({ params }: PageProps) {
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-primary mb-3">
                 <Lock className="h-5 w-5" />
               </span>
-              <h3 className="text-base font-semibold">This account is private</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Only their basic info is visible. Bio, interests, socials, and
-                hangout history are hidden.
-              </p>
+              {profile.locked_by_level ? (
+                <>
+                  <h3 className="text-base font-semibold">
+                    {profile.membership_name} members only
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Upgrade your membership to view this profile and connect.
+                  </p>
+                  <Button asChild variant="gold" size="sm" className="mt-3">
+                    <Link href="/membership">See membership plans</Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base font-semibold">This account is private</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Only their basic info is visible. Bio, interests, socials, and
+                    hangout history are hidden.
+                  </p>
+                </>
+              )}
             </section>
 
             {/* Preview terkunci: konten diblur + overlay kunci (decorative). */}

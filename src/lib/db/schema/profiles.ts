@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { users } from "./auth";
+import { membershipLevels } from "./membership";
 
 /**
  * Profile = extra data per user (display name, avatar, hobbies, dll).
@@ -86,6 +87,22 @@ export const profiles = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     /** Onboarding (step 2-3 saat daftar) selesai. False = paksa ke /onboarding. */
     onboarded: boolean("onboarded").notNull().default(false),
+
+    // --- Membership (PRD Membership 4.2) ---
+    // Level TERSIMPAN — level EFEKTIF dihitung lazy oleh
+    // src/lib/membership.ts: expires_at < now → efektif 'basic' (tanpa cron).
+    // Baris 'basic' dijamin ada oleh seed pre-migrate 0059 SEBELUM kolom ini
+    // dibuat (default-nya menunjuk ke sana).
+    membershipLevel: text("membership_level")
+      .notNull()
+      .default("basic")
+      .references(() => membershipLevels.key, { onDelete: "restrict" }),
+    /** NULL = tanpa batas (basic / lifetime). */
+    membershipExpiresAt: timestamp("membership_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

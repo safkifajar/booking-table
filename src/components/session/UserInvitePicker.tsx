@@ -152,9 +152,24 @@ export function UserInvitePicker({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{u.name}</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-sm truncate">{u.name}</p>
+                    {/* Badge level (warna per KEY — nama bisa diganti admin) */}
+                    <span
+                      className={
+                        "shrink-0 inline-flex items-center rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider " +
+                        (u.membership_key === "vip"
+                          ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                          : u.membership_key === "premium"
+                            ? "bg-primary/15 text-primary border-primary/30"
+                            : "bg-muted text-muted-foreground border-border")
+                      }
+                    >
+                      {u.membership_name}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted-foreground truncate">
-                    {u.email}
+                    {u.username ? `@${u.username}` : u.email}
                   </p>
                 </div>
                 <Plus className="h-4 w-4 text-primary shrink-0" />

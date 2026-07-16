@@ -59,6 +59,17 @@ import {
   getBlockedIdSet,
   getFriendIdSet,
 } from "@/lib/friends";
+import {
+  getEffectiveRankMap,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
+import {
+  resolveVoucherForBillPayment,
+  reserveVoucherForPayment,
+  settleVoucherForPayment,
+  releaseVoucherForPayment,
+} from "@/lib/member-voucher";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -116,6 +127,8 @@ const openTableSchema = z.object({
   /**
    * Payment method untuk DP. Wajib kalau perlu DP. "mock" untuk dev.
    */
+  /** Kode voucher benefit membership utk potongan DP (PRD Membership rev-3). */
+  voucherCode: z.string().trim().max(20).optional(),
   dpMethod: z
     .enum(["qris", "cash", "card", "gopay", "ovo", "mock"])
     .optional(),
@@ -380,6 +393,40 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
     }
   }
 
+  // 6b. Voucher benefit membership utk DP (PRD Membership rev-3). Divalidasi
+  //     DINI — sebelum sesi dibuat, gagal = bersih tanpa sisa. Kepemilikan =
+  //     host sendiri (sesi belum ada). Reservasi ke baris payment DP terjadi
+  //     setelah tx. Penolakan DIKEMBALIKAN (production menyensor throw).
+  let dpVoucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  if (data.voucherCode?.trim()) {
+    if (!dpRequired) {
+      return {
+        ok: false as const,
+        error:
+          "Vouchers apply to payments — use it when paying your table bill instead.",
+      };
+    }
+    const resV = await resolveVoucherForBillPayment({
+      code: data.voucherCode,
+      amount: dpAmount,
+      ownerId: profile.id,
+    });
+    if (!resV.ok) return { ok: false as const, error: resV.error };
+    if (resV.voucher.discount >= dpAmount) {
+      return {
+        ok: false as const,
+        error:
+          "This voucher covers more than the deposit — save it for the bill payment instead.",
+      };
+    }
+    dpVoucher = {
+      voucherId: resV.voucher.voucherId,
+      code: resV.voucher.code,
+      discount: resV.voucher.discount,
+    };
+  }
+
   // 7b. Resolusi user yg diundang. Kandidat mengikuti VISIBILITY meja:
   // - public / invite_only → siapa saja boleh diundang;
   // - friends              → hanya teman host (sejalan K3).
@@ -421,6 +468,21 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       if (data.visibility === "friends" && invitees.length > 0) {
         const friendIds = await getFriendIdSet(profile.id);
         invitees = invitees.filter((u) => friendIds.has(u.id));
+      }
+      // Kunci LEVEL (PRD Membership M6): target undangan harus level <=
+      // level host, KECUALI teman. Dibuang senyap — picker sudah tak
+      // menawarkan mereka.
+      if (invitees.length > 0) {
+        const [hostRank, rankMap, friendIds2] = await Promise.all([
+          getEffectiveRankOf(profile.id),
+          getEffectiveRankMap(invitees.map((u) => u.id)),
+          getFriendIdSet(profile.id),
+        ]);
+        invitees = invitees.filter(
+          (u) =>
+            friendIds2.has(u.id) ||
+            (rankMap.get(u.id) ?? MEMBERSHIP_RANK.basic) <= hostRank
+        );
       }
       // Undangan pending sudah "memesan" kursi → cek kapasitas (host + undangan).
       // Dilewati kalau meja izinkan over-capacity (setting admin).
@@ -558,11 +620,25 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
   let dpQris: { paymentId: string; qrString: string } | null = null;
   if (dpPaymentId && dpAmount > 0) {
+    // Reservasi voucher ke payment DP (race-safe). Kalah race (nyaris
+    // mustahil — divalidasi milidetik lalu) → lanjut TANPA diskon; sesi
+    // sudah berdiri, jangan digagalkan.
+    let dpDiscount = 0;
+    if (dpVoucher) {
+      const reserved = await reserveVoucherForPayment(
+        dpVoucher.voucherId,
+        dpPaymentId,
+        dpVoucher.discount
+      );
+      if (reserved) dpDiscount = dpVoucher.discount;
+      else console.error("[openTable] voucher kalah race — DP tanpa diskon");
+    }
+    const dpCharge = dpAmount - dpDiscount;
     try {
       const gateway = getPaymentGateway();
       const chargeResult = await gateway.createCharge({
         paymentId: dpPaymentId,
-        amount: dpAmount,
+        amount: dpCharge,
         method: data.dpMethod!,
         payerName: profile.displayName,
         description: `Table reservation deposit ${tableRow.id.slice(0, 8)}`,
@@ -573,8 +649,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           externalRef: chargeResult.externalRef,
           status: chargeResult.status,
           paidAt: chargeResult.status === "paid" ? new Date() : null,
+          amount: dpCharge,
           splitMeta: {
             isDownPayment: true,
+            ...(dpDiscount > 0 && dpVoucher
+              ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
+              : {}),
             qrString: chargeResult.qrString ?? null,
             redirectUrl: chargeResult.redirectUrl ?? null,
             // DP punya batas 1 menit (DP_TIMEOUT_SECONDS), lebih ketat dari
@@ -591,6 +671,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       // Kalau DP paid, set dp_paid_at di session + order pertama MASUK (Q7:
       // DP lunas cukup utk order pertama masuk dapur).
       if (chargeResult.status === "paid") {
+        // Voucher → cetak baris diskon dulu supaya settle melihat DP penuh.
+        await settleVoucherForPayment(dpPaymentId);
         await db
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
@@ -602,6 +684,8 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       }
     } catch (err) {
       console.error("[openTable] DP gateway charge failed:", err);
+      // Lepas reservasi voucher — DP akan ditangani manual tanpa diskon ini.
+      await releaseVoucherForPayment(dpPaymentId).catch(() => {});
       // Don't throw — session tetap exist, staff bisa handle manual
     }
   }
@@ -1233,6 +1317,20 @@ export async function inviteUsersToSession(
   if (row.visibility === "friends" && targets.length > 0) {
     const friendIds = await getFriendIdSet(profile.id);
     targets = targets.filter((u) => friendIds.has(u.id));
+  }
+  // Kunci LEVEL (PRD Membership M6) — sama dgn openTable: level <= host
+  // atau teman; sisanya dibuang senyap.
+  if (targets.length > 0) {
+    const [hostRank, rankMap, friendIds2] = await Promise.all([
+      getEffectiveRankOf(profile.id),
+      getEffectiveRankMap(targets.map((u) => u.id)),
+      getFriendIdSet(profile.id),
+    ]);
+    targets = targets.filter(
+      (u) =>
+        friendIds2.has(u.id) ||
+        (rankMap.get(u.id) ?? MEMBERSHIP_RANK.basic) <= hostRank
+    );
   }
   if (targets.length === 0) throw new Error("No eligible users to invite");
   // Cek kapasitas untuk KEDUA mode: joined + pending-invite + yg baru.
@@ -2211,6 +2309,8 @@ const paySchema = z.object({
   method: z.enum(["qris", "cash", "card", "gopay", "ovo", "mock"]),
   splitMode: z.enum(["equal", "itemized", "custom"]),
   splitMeta: z.record(z.string(), z.unknown()).optional(),
+  /** Kode voucher benefit membership (PRD Membership rev-2) — opsional. */
+  voucherCode: z.string().trim().max(20).optional(),
 });
 
 /**
@@ -2363,20 +2463,110 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     }
   }
 
-  // 3. Insert payment dengan status='pending'
+  // 2d. Voucher benefit membership (PRD Membership rev-2). Divalidasi ULANG
+  //     di sini (UI sudah preview via previewBillVoucher) — devtools tak bisa
+  //     memaksakan kode orang lain/terpakai. Diskon dicatat sbg baris payments
+  //     method='voucher' TERPISAH saat payment utama PAID, jadi outstanding
+  //     bill tertutup benar.
+  let voucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  if (data.voucherCode?.trim()) {
+    const res = await resolveVoucherForBillPayment({
+      code: data.voucherCode,
+      sessionId: data.sessionId,
+      amount: data.amount,
+    });
+    if (!res.ok) throw new Error(res.error);
+    voucher = {
+      voucherId: res.voucher.voucherId,
+      code: res.voucher.code,
+      discount: res.voucher.discount,
+    };
+  }
+  const chargeAmount = data.amount - (voucher?.discount ?? 0);
+
+  // Diskon menutup SELURUH nominal → tak ada yang perlu ditagih: cukup baris
+  // voucher (paid) — tanpa gateway, tanpa QR. CHECK amount > 0 di payments
+  // melarang baris 0, jadi payment utama tidak dibuat sama sekali.
+  if (voucher && chargeAmount <= 0) {
+    const [voucherPayment] = await db
+      .insert(payments)
+      .values({
+        orderId: order.id,
+        paidByMemberId: member.id,
+        amount: voucher.discount,
+        method: "voucher",
+        status: "paid",
+        splitMode: data.splitMode,
+        splitMeta: { voucherCode: voucher.code, voucherId: voucher.voucherId },
+        paidAt: new Date(),
+      })
+      .returning({ id: payments.id });
+    // Tandai voucher USED menempel ke baris ini (reserve+settle sekali jalan;
+    // kalah race → voucher keburu dipakai → batalkan baris tadi).
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      voucherPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db.delete(payments).where(eq(payments.id, voucherPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+    // Tandai used_at TANPA mencetak baris diskon lagi — baris voucherPayment
+    // di atas SUDAH menjadi pembayarannya (skipSyntheticRow).
+    await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
+    await settleOrderIfPaid(order.id);
+    await settleOverdueIfPaid(data.sessionId);
+    await notifySessionAndStaff(data.sessionId);
+    revalidatePath(`/session/${data.sessionId}`);
+    revalidatePath("/staff/cashier");
+    return {
+      paymentId: voucherPayment.id,
+      status: "paid" as PaymentStatus,
+      externalRef: "",
+      qrString: null,
+      redirectUrl: null,
+      expiresAt: null,
+    };
+  }
+
+  // 3. Insert payment dengan status='pending'. Nominal = SETELAH potongan
+  //    voucher (baris diskon menyusul saat paid).
   const [newPayment] = await db
     .insert(payments)
     .values({
       orderId: order.id,
       paidByMemberId: member.id,
-      amount: data.amount,
+      amount: chargeAmount,
       method: data.method,
       status: "pending",
       splitMode: data.splitMode,
-      splitMeta: data.splitMeta ?? {},
+      splitMeta: {
+        ...(data.splitMeta ?? {}),
+        ...(voucher
+          ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+          : {}),
+      },
       paidAt: null,
     })
     .returning({ id: payments.id });
+
+  // Reservasi voucher ke payment ini (race-safe). Kalah race → payment batal.
+  if (voucher) {
+    const reserved = await reserveVoucherForPayment(
+      voucher.voucherId,
+      newPayment.id,
+      voucher.discount
+    );
+    if (!reserved) {
+      await db
+        .update(payments)
+        .set({ status: "failed" })
+        .where(eq(payments.id, newPayment.id));
+      throw new Error("This voucher was just used — try another one");
+    }
+  }
 
   // 3b. Treat (custom, bayar penuh): tautkan SEMUA item order ke payment ini
   // supaya halaman detail transaksi bisa menampilkan seluruh item meja (Q3).
@@ -2405,7 +2595,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
     paymentId: newPayment.id,
-    amount: data.amount,
+    amount: chargeAmount,
     method: data.method,
     payerName: member.displayName,
     description: `Self-pay table - ${data.sessionId.slice(0, 8)}`,
@@ -2430,6 +2620,8 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 
   // Kalau sesi 'overdue' (lewat waktu tapi nunggak) dan kini lunas → tutup.
   if (chargeResult.status === "paid") {
+    // Voucher → cetak baris diskon DULU supaya settle melihat total penuh.
+    await settleVoucherForPayment(newPayment.id);
     // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK (paid + item sent).
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
@@ -2790,6 +2982,7 @@ export async function regenerateMemberPayment(input: {
       .update(payments)
       .set({ status: "failed", paidAt: null })
       .where(and(eq(payments.id, old.id), ne(payments.status, "paid")));
+    await releaseVoucherForPayment(old.id);
   }
 
   // 6. Nominal: SAMA dgn payment lama, tapi di-cap ke sisa yang BENAR-BENAR
@@ -2960,6 +3153,12 @@ export async function cancelSplitBatch(input: {
       )
     )
     .returning({ id: payments.id });
+
+  // Lepas reservasi voucher yang menempel (kalau ada) — aman utk payment
+  // tanpa voucher (no-op).
+  for (const pRow of result) {
+    await releaseVoucherForPayment(pRow.id);
+  }
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
@@ -3188,6 +3387,8 @@ export async function checkPaymentStatus(
       .update(payments)
       .set({ status: "paid", paidAt: new Date() })
       .where(eq(payments.id, row.id));
+    // Voucher yang menempel → tandai used + cetak baris diskon (idempotent).
+    await settleVoucherForPayment(row.id);
     // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi, tak jadi
     // dibatalkan oleh timeout).
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
@@ -3213,6 +3414,8 @@ export async function checkPaymentStatus(
       .update(payments)
       .set({ status: "failed", paidAt: null })
       .where(eq(payments.id, row.id));
+    // Lepas reservasi voucher (bisa dipakai lagi).
+    await releaseVoucherForPayment(row.id);
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
     if (
       meta.isDownPayment &&
@@ -3301,6 +3504,7 @@ export async function cancelPayment(
     .update(payments)
     .set({ status: "failed", paidAt: null })
     .where(eq(payments.id, row.id));
+  await releaseVoucherForPayment(row.id);
 
   // DP booking belum lunas → batalkan booking (meja bebas lagi). Batalkan
   // selama DP belum benar-benar terkonfirmasi (dp_paid_at NULL), baik session
@@ -3401,12 +3605,14 @@ export async function cancelUnpaidOrder(
     }
   }
 
+  let cancelledPaymentIds: { id: string }[] = [];
   await db.transaction(async (tx) => {
     // Batalkan pembayaran pending/failed (belum paid) yang menempel di order.
-    await tx
+    cancelledPaymentIds = await tx
       .update(payments)
       .set({ status: "failed", paidAt: null })
-      .where(and(eq(payments.orderId, orderId), ne(payments.status, "paid")));
+      .where(and(eq(payments.orderId, orderId), ne(payments.status, "paid")))
+      .returning({ id: payments.id });
     // Void semua item (biar tak terhitung di agregat manapun).
     await tx
       .update(orderItems)
@@ -3418,6 +3624,11 @@ export async function cancelUnpaidOrder(
       .set({ status: "cancelled" })
       .where(eq(orders.id, orderId));
   });
+
+  // Lepas reservasi voucher pada payment yang ikut dibatalkan (pasca-commit).
+  for (const pRow of cancelledPaymentIds) {
+    await releaseVoucherForPayment(pRow.id);
+  }
 
   await notifySessionAndStaff(row.sessionId);
   revalidatePath(`/session/${row.sessionId}`);

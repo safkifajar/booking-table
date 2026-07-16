@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Users, Lock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -11,7 +12,13 @@ import {
   isBlockedEitherWay,
   getBlockedIdSet,
   getFriendsListOf,
+  getFriendIdSet,
 } from "@/lib/friends";
+import {
+  getEffectiveRankMap,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
 import { initials } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +57,25 @@ export default async function UserFriendsPage({ params }: PageProps) {
     : await getFriendsListOf(profile.id, {
         excludeIds: me ? await getBlockedIdSet(me.id) : undefined,
       });
+
+  // Kunci LEVEL per-baris (PRD Membership M4): teman si pemilik yang level-nya
+  // > level viewer (dan bukan teman viewer) tampil TERKUNCI — nama terlihat,
+  // tak bisa diklik. Viewer anonim = basic.
+  const rowLockedIds = new Set<string>();
+  if (friends.length > 0) {
+    const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+      me ? getEffectiveRankOf(me.id) : Promise.resolve(MEMBERSHIP_RANK.basic),
+      getEffectiveRankMap(friends.map((f) => f.id)),
+      me ? getFriendIdSet(me.id) : Promise.resolve(new Set<string>()),
+    ]);
+    for (const f of friends) {
+      const isSelf = me?.id === f.id;
+      const r = rankMap.get(f.id) ?? MEMBERSHIP_RANK.basic;
+      if (!isSelf && !myFriendIds.has(f.id) && r > viewerRank) {
+        rowLockedIds.add(f.id);
+      }
+    }
+  }
 
   return (
     <main className="flex-1 pb-12">
@@ -94,30 +120,57 @@ export default async function UserFriendsPage({ params }: PageProps) {
               {friends.length} friend{friends.length === 1 ? "" : "s"}
             </p>
             <Card className="divide-y divide-border">
-              {friends.map((f) => (
-                <Link
-                  key={f.id}
-                  href={`/network/${f.id}`}
-                  className="flex items-center gap-3 p-3 hover:bg-muted/40 transition group"
-                >
-                  <Avatar className="h-10 w-10 shrink-0">
-                    {f.avatar_url && <AvatarImage src={f.avatar_url} />}
-                    <AvatarFallback className="text-xs">
-                      {initials(f.display_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition">
-                      {f.display_name}
-                    </p>
-                    {f.username && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        @{f.username}
+              {friends.map((f) => {
+                const rowLocked = rowLockedIds.has(f.id);
+                const inner = (
+                  <>
+                    <Avatar className="h-10 w-10 shrink-0">
+                      {f.avatar_url && <AvatarImage src={f.avatar_url} />}
+                      <AvatarFallback className="text-xs">
+                        {initials(f.display_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={cn(
+                          "text-sm font-medium truncate",
+                          !rowLocked && "group-hover:text-primary transition"
+                        )}
+                      >
+                        {f.display_name}
                       </p>
+                      {rowLocked ? (
+                        <p className="text-xs text-muted-foreground">
+                          Higher membership tier
+                        </p>
+                      ) : (
+                        f.username && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            @{f.username}
+                          </p>
+                        )
+                      )}
+                    </div>
+                    {rowLocked && (
+                      <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
                     )}
+                  </>
+                );
+                // Terkunci level → bukan link (profilnya toh stub terkunci).
+                return rowLocked ? (
+                  <div key={f.id} className="flex items-center gap-3 p-3 opacity-70">
+                    {inner}
                   </div>
-                </Link>
-              ))}
+                ) : (
+                  <Link
+                    key={f.id}
+                    href={`/network/${f.id}`}
+                    className="flex items-center gap-3 p-3 hover:bg-muted/40 transition group"
+                  >
+                    {inner}
+                  </Link>
+                );
+              })}
             </Card>
           </>
         )}

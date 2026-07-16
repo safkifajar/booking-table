@@ -23,6 +23,8 @@ import {
   Minus,
 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
+import { Crown } from "lucide-react";
+import { getMembershipStats } from "@/lib/membership-actions";
 
 interface PageProps {
   searchParams: Promise<{ range?: string; from?: string; to?: string }>;
@@ -37,6 +39,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
     params.to
   );
 
+  const membershipStats = await getMembershipStats();
   const [summary, topItems, byHour, byDay, paymentMethods] =
     await Promise.all([
       getSummaryWithDelta(bar.id, range.from, range.to),
@@ -128,6 +131,36 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
                   ? `${summary.avg_items_per_transaction} per transaction`
                   : undefined
               }
+            />
+          </div>
+        </section>
+
+        {/* Membership — member per level (efektif) + revenue 30 hari */}
+        <section>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard
+              icon={<Crown className="h-4 w-4" />}
+              label="Basic"
+              value={membershipStats.counts.basic.toLocaleString("en-US")}
+              sub="members"
+            />
+            <StatCard
+              icon={<Crown className="h-4 w-4" />}
+              label="Premium"
+              value={membershipStats.counts.premium.toLocaleString("en-US")}
+              sub="members"
+            />
+            <StatCard
+              icon={<Crown className="h-4 w-4" />}
+              label="VIP"
+              value={membershipStats.counts.vip.toLocaleString("en-US")}
+              sub="members"
+            />
+            <StatCard
+              icon={<Crown className="h-4 w-4" />}
+              label="Membership revenue"
+              value={formatIDR(membershipStats.revenue_30d)}
+              sub="last 30 days"
             />
           </div>
         </section>

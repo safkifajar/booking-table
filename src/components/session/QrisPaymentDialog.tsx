@@ -22,6 +22,8 @@ export function QrisPaymentDialog({
   onExpired,
   onCancelled,
   onClose,
+  checkAction,
+  cancelAction,
 }: {
   paymentId: string;
   qrString: string;
@@ -34,7 +36,16 @@ export function QrisPaymentDialog({
   /** Dipanggil saat user menekan "Batalkan transaksi" & berhasil dibatalkan. */
   onCancelled?: () => void;
   onClose: () => void;
+  /**
+   * Action poll/batal yang bisa DIGANTI — default pembayaran order
+   * (checkPaymentStatus/cancelPayment). Membership menyuntikkan action-nya
+   * sendiri; dialog & UX-nya identik.
+   */
+  checkAction?: (id: string) => Promise<{ status: string }>;
+  cancelAction?: (id: string) => Promise<{ status: string }>;
 }) {
+  const check = checkAction ?? checkPaymentStatus;
+  const cancel = cancelAction ?? cancelPayment;
   const [qrImage, setQrImage] = React.useState<string | null>(null);
   const [checking, setChecking] = React.useState(false);
   const [cancelling, setCancelling] = React.useState(false);
@@ -63,7 +74,7 @@ export function QrisPaymentDialog({
   // Auto-poll status tiap 5 detik.
   React.useEffect(() => {
     const t = setInterval(() => {
-      void checkPaymentStatus(paymentId)
+      void check(paymentId)
         .then((r) => {
           if (r.status === "paid") {
             toast.success("Payment received");
@@ -86,14 +97,14 @@ export function QrisPaymentDialog({
           // Cek sekali lagi kalau-kalau baru saja lunas; kalau belum → batalkan
           // transaksi (server set payment failed + booking cancelled) supaya
           // meja bebas lagi walau host tak balik ke denah.
-          void checkPaymentStatus(paymentId)
+          void check(paymentId)
             .then(async (r) => {
               if (r.status === "paid") {
                 onPaid();
                 return;
               }
               try {
-                await cancelPayment(paymentId);
+                await cancel(paymentId);
               } catch {
                 // best-effort; sweep denah tetap jadi jaring pengaman.
               }
@@ -124,7 +135,7 @@ export function QrisPaymentDialog({
   async function handleCheck() {
     setChecking(true);
     try {
-      const r = await checkPaymentStatus(paymentId);
+      const r = await check(paymentId);
       if (r.status === "paid") {
         toast.success("Payment received");
         onPaid();
@@ -164,7 +175,7 @@ export function QrisPaymentDialog({
   async function handleCancel() {
     setCancelling(true);
     try {
-      await cancelPayment(paymentId);
+      await cancel(paymentId);
       toast.success("Transaction cancelled");
       onCancelled?.();
       onClose();

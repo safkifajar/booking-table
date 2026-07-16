@@ -15,7 +15,18 @@ export type MemberStatus = "pending" | "joined" | "left" | "kicked";
 export type TableShape = "round" | "square" | "rect" | "booth";
 export type OrderStatus = "open" | "submitted" | "preparing" | "served" | "closed";
 export type OrderItemStatus = "draft" | "sent" | "preparing" | "served" | "void";
-export type PaymentMethod = "qris" | "cash" | "card" | "gopay" | "ovo" | "mock";
+export type PaymentMethod =
+  | "qris"
+  | "cash"
+  | "card"
+  | "gopay"
+  | "ovo"
+  | "mock"
+  /** Baris sintetis potongan voucher membership — bukan pilihan user. */
+  | "voucher";
+
+/** Metode yang bisa DIPILIH user saat membayar (tanpa 'voucher'). */
+export type PayableMethod = Exclude<PaymentMethod, "voucher">;
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 export type SplitMode = "equal" | "itemized" | "custom";
 export type StaffRole = "waiter" | "manager" | "admin";
@@ -261,6 +272,15 @@ export interface NetworkSearchUser {
   rating: UserRatingSummary;
   /** Status relasi viewer -> user ini (tombol Add friend di kartu). */
   friend_status: "none" | "pending_out" | "pending_in" | "friends" | "blocked";
+  /** Level membership EFEKTIF user ini (badge; warna menempel ke key). */
+  membership_key: "basic" | "premium" | "vip";
+  membership_name: string;
+  /**
+   * TERKUNCI level (PRD Membership M4/M5): level user > level viewer & bukan
+   * teman. Kartu tetap tampil (nama/foto/at_soho) tapi detail di-NULL-kan
+   * server & UI merender stub kunci + CTA upgrade.
+   */
+  locked: boolean;
 }
 
 /** Satu halaman hasil "Semua member" (infinite scroll). */
@@ -337,6 +357,14 @@ export interface PublicProfile {
     table_label: string;
     visibility: SessionVisibility;
   } | null;
+  /**
+   * TERKUNCI karena level membership viewer < level user ini (PRD Membership
+   * M4) — data detail di-null-kan seperti is_private, tapi UI merender CTA
+   * upgrade (bukan banner akun privat). Teman tak pernah terkunci (G2).
+   */
+  locked_by_level: boolean;
+  /** Nama level user ini (utk copy "X members only" saat terkunci). */
+  membership_name: string;
 }
 
 export interface RatableMember {

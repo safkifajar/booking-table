@@ -22,10 +22,23 @@ import { users } from "@/lib/db/schema/auth";
 import { profiles } from "@/lib/db/schema/profiles";
 import { staffRoles, memberRatings } from "@/lib/db/schema/extras";
 import { friendships } from "@/lib/db/schema/friends";
+import { membershipLevels } from "@/lib/db/schema/membership";
+import {
+  effectiveLevelKey,
+  effectiveRank,
+  getEffectiveRankOf,
+  MEMBERSHIP_RANK,
+  type MembershipKey,
+} from "@/lib/membership";
 import { tableSessions, sessionMembers } from "@/lib/db/schema/sessions";
 import { requireAdmin } from "@/lib/admin";
 import { hashPassword } from "@/lib/auth-v2/password";
-import { getBlockedIdSet, getFriendIdSet, getRelationshipMap } from "@/lib/friends";
+import {
+  getBlockedIdSet,
+  getFriendIdSet,
+  getRelationshipMap,
+} from "@/lib/friends";
+import { getEffectiveRankMap, sqlEffectiveRank } from "@/lib/membership";
 import { normalizeUsername } from "@/lib/utils";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
@@ -76,6 +89,9 @@ export interface AdminCustomerRow {
   rating_count: number;
   /** Jumlah teman (PRD Friends req. i). */
   friend_count: number;
+  /** Level membership EFEKTIF (PRD Membership M12). */
+  membership_key: MembershipKey;
+  membership_name: string;
 }
 
 export interface ListCustomersResult {
@@ -157,6 +173,8 @@ export async function listCustomers(
         is_guest: profiles.isGuest,
         is_active: profiles.isActive,
         created_at: profiles.createdAt,
+        membership_level: profiles.membershipLevel,
+        membership_expires_at: profiles.membershipExpiresAt,
         visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
         rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
         rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
@@ -184,6 +202,12 @@ export async function listCustomers(
       .where(whereClause),
   ]);
 
+  // Nama tampilan level (editable admin) — 3 baris, sekali ambil.
+  const levelRows = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNames = new Map(levelRows.map((l) => [l.key, l.name]));
+
   return {
     rows: rows.map((r) => ({
       id: r.id,
@@ -207,6 +231,11 @@ export async function listCustomers(
       rating_avg: Number(r.rating_avg),
       rating_count: Number(r.rating_count),
       friend_count: Number(r.friend_count),
+      membership_key: effectiveLevelKey(r.membership_level, r.membership_expires_at),
+      membership_name:
+        levelNames.get(
+          effectiveLevelKey(r.membership_level, r.membership_expires_at)
+        ) ?? "Basic",
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };
@@ -500,6 +529,11 @@ export interface InviteCandidate {
   id: string;
   name: string;
   email: string;
+  /** Username unik (handle) — tampil di picker undangan. */
+  username: string | null;
+  /** Level membership EFEKTIF — badge di picker (permintaan user rev-2). */
+  membership_key: MembershipKey;
+  membership_name: string;
 }
 
 /**
@@ -564,19 +598,55 @@ export async function searchInviteCandidates(
     conditions.push(sql`${users.id} NOT IN (${memberIds})`);
   }
 
+  // Over-fetch lalu saring KUNCI LEVEL di JS (PRD Membership M6): kandidat =
+  // level <= level pengundang, KECUALI teman (selalu boleh). friendsOnly
+  // sudah pasti teman → lolos tanpa cek rank.
   const rows = await db
     .select({
       id: users.id,
       name: profiles.displayName,
       email: users.email,
+      username: profiles.username,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
     .where(and(...conditions))
     .orderBy(profiles.displayName)
-    .limit(10);
+    .limit(30);
 
-  return rows.map((r) => ({ id: r.id, name: r.name, email: r.email }));
+  let allowed = rows;
+  if (!friendsOnly && rows.length > 0) {
+    const [viewerRank, rankMap, friendIds] = await Promise.all([
+      getEffectiveRankOf(me.id),
+      getEffectiveRankMap(rows.map((r) => r.id)),
+      getFriendIdSet(me.id),
+    ]);
+    allowed = rows.filter(
+      (r) =>
+        friendIds.has(r.id) ||
+        (rankMap.get(r.id) ?? MEMBERSHIP_RANK.basic) <= viewerRank
+    );
+  }
+
+  // Nama level (editable admin) utk badge picker.
+  const levelRowsPick = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNamesPick = new Map(levelRowsPick.map((l) => [l.key, l.name]));
+
+  return allowed.slice(0, 10).map((r) => {
+    const key = effectiveLevelKey(r.membership_level, r.membership_expires_at);
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      username: r.username,
+      membership_key: key,
+      membership_name: levelNamesPick.get(key) ?? key,
+    };
+  });
 }
 
 // ============================================================
@@ -615,6 +685,9 @@ export async function listAllMembers(opts?: {
   const priorityExpr = wantGender
     ? sql<number>`CASE WHEN ${profiles.gender} = ${wantGender} THEN 0 ELSE 1 END`
     : sql<number>`0`;
+  // Urutan level: VIP → Premium → Basic (rank efektif DESC). Dinegasikan
+  // supaya tuple-compare keyset tetap ASC seragam.
+  const tierExpr = sql<number>`-(${sqlEffectiveRank()})`;
 
   const conditions = [
     sql`${users.id} <> ${me.id}`,
@@ -642,16 +715,19 @@ export async function listAllMembers(opts?: {
     );
     conditions.push(sql`${profiles.hobbies} && ARRAY[${elems}]::text[]`);
   }
-  // Keyset dgn priority: baris SETELAH (priority, displayName, id) terakhir.
-  // Cursor = "<priority>\n<displayName>\n<id>". Tuple compare jaga urutan
-  // konsisten lintas grup priority saat infinite scroll.
+  // Keyset: baris SETELAH (tier, priority, displayName, id) terakhir.
+  // Cursor = "<tier>\n<priority>\n<displayName>\n<id>". Tuple compare jaga
+  // urutan konsisten lintas grup saat infinite scroll. (Rank yg berubah di
+  // tengah scroll — mis. kedaluwarsa — bisa menggeser baris; diterima, sama
+  // seperti prioritas gender.)
   if (opts?.cursor) {
     const parts = opts.cursor.split("\n");
-    if (parts.length === 3) {
-      const [cPrioStr, cName, cId] = parts;
+    if (parts.length === 4) {
+      const [cTierStr, cPrioStr, cName, cId] = parts;
+      const cTier = Number(cTierStr);
       const cPrio = Number(cPrioStr);
       conditions.push(
-        sql`(${priorityExpr}, ${profiles.displayName}, ${users.id}) > (${cPrio}, ${cName}, ${cId})`
+        sql`(${tierExpr}, ${priorityExpr}, ${profiles.displayName}, ${users.id}) > (${cTier}, ${cPrio}, ${cName}, ${cId})`
       );
     }
   }
@@ -670,12 +746,15 @@ export async function listAllMembers(opts?: {
       hide_age: profiles.hideAge,
       hide_location: profiles.hideLocation,
       hobbies: profiles.hobbies,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
       priority: priorityExpr,
+      tier: tierExpr,
     })
     .from(users)
     .innerJoin(profiles, eq(profiles.id, users.id))
     .where(and(...conditions))
-    .orderBy(priorityExpr, profiles.displayName, users.id)
+    .orderBy(tierExpr, priorityExpr, profiles.displayName, users.id)
     .limit(MEMBERS_PAGE_SIZE + 1);
 
   const hasMore = rows.length > MEMBERS_PAGE_SIZE;
@@ -696,27 +775,51 @@ export async function listAllMembers(opts?: {
     me.id,
     pageRows.map((r) => r.id)
   );
+  // Kunci level (PRD Membership M4/M5): viewer melihat level-nya & di bawah;
+  // TEMAN selalu terbuka (G2). Rank target dihitung dari kolom yg sudah
+  // di-select (tanpa query tambahan); rank viewer satu query.
+  const viewerRank = await getEffectiveRankOf(me.id);
+  const levelRowsAll = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNamesAll = new Map(levelRowsAll.map((l) => [l.key, l.name]));
   const last = pageRows[pageRows.length - 1];
   return {
-    users: pageRows.map((r) => ({
-      id: r.id,
-      display_name: r.display_name,
-      username: r.username,
-      avatar_url: r.avatar_url,
-      photos: r.photos ?? [],
-      // Privasi: hormati hide_age / hide_location.
-      age: r.hide_age ? null : ageFromISO(r.birth_date),
-      area: r.hide_location ? null : r.area,
-      education: r.education,
-      gender: r.gender,
-      at_soho: activeIds.has(r.id),
-      hobbies: r.hobbies,
-      rating: ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null },
-      friend_status: relationships.get(r.id) ?? "none",
-    })),
+    users: pageRows.map((r) => {
+      const targetKey = effectiveLevelKey(
+        r.membership_level,
+        r.membership_expires_at
+      );
+      const isFriend = relationships.get(r.id) === "friends";
+      const locked = !isFriend && MEMBERSHIP_RANK[targetKey] > viewerRank;
+      return {
+        id: r.id,
+        // Terkunci → identitas TIDAK dikirim (kartu blur anonim); cursor
+        // keyset tetap aman — dibangun dari baris mentah, bukan hasil map.
+        display_name: locked ? "SOHO member" : r.display_name,
+        username: locked ? null : r.username,
+        avatar_url: r.avatar_url,
+        photos: r.photos ?? [],
+        // Privasi: hormati hide_age / hide_location. Terkunci level →
+        // detail TIDAK dikirim ke client sama sekali (bukan blur CSS).
+        age: locked || r.hide_age ? null : ageFromISO(r.birth_date),
+        area: locked || r.hide_location ? null : r.area,
+        education: locked ? null : r.education,
+        gender: locked ? null : r.gender,
+        at_soho: activeIds.has(r.id), // badge At SOHO TETAP terlihat (M5)
+        hobbies: locked ? [] : r.hobbies,
+        rating: locked
+          ? { avg_stars: 0, rating_count: 0, top_tags: null }
+          : (ratings[r.id] ?? { avg_stars: 0, rating_count: 0, top_tags: null }),
+        friend_status: relationships.get(r.id) ?? "none",
+        membership_key: targetKey,
+        membership_name: levelNamesAll.get(targetKey) ?? targetKey,
+        locked,
+      };
+    }),
     next_cursor:
       hasMore && last
-        ? `${last.priority}\n${last.display_name}\n${last.id}`
+        ? `${last.tier}\n${last.priority}\n${last.display_name}\n${last.id}`
         : null,
   };
 }
