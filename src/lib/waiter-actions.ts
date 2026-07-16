@@ -63,6 +63,7 @@ export interface WaiterQueueItem {
   notes: string | null;
   created_at: string;
   menu_item_name: string;
+  menu_item_image: string | null;
   added_by_name: string;
   added_by_avatar: string | null;
   table_label: string;
@@ -85,6 +86,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
       notes: orderItems.notes,
       created_at: orderItems.createdAt,
       menu_item_name: menuItems.name,
+      menu_item_image: menuItems.imageUrl,
       added_by_name: profiles.displayName,
       added_by_avatar: profiles.avatarUrl,
       table_label: tables.label,
@@ -118,6 +120,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
     notes: r.notes,
     created_at: r.created_at.toISOString(),
     menu_item_name: r.menu_item_name,
+    menu_item_image: r.menu_item_image,
     added_by_name: r.added_by_name,
     added_by_avatar: r.added_by_avatar,
     table_label: r.table_label,
@@ -151,6 +154,7 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
       created_at: orderItems.createdAt,
       served_at: orderItems.servedAt,
       menu_item_name: menuItems.name,
+      menu_item_image: menuItems.imageUrl,
       added_by_name: profiles.displayName,
       added_by_avatar: profiles.avatarUrl,
       table_label: tables.label,
@@ -188,6 +192,7 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
     created_at: r.created_at.toISOString(),
     served_at: (r.served_at ?? r.created_at).toISOString(),
     menu_item_name: r.menu_item_name,
+    menu_item_image: r.menu_item_image,
     added_by_name: r.added_by_name,
     added_by_avatar: r.added_by_avatar,
     table_label: r.table_label,

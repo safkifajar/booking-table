@@ -657,6 +657,20 @@ function QueueMenuRow({
 
   return (
     <div className="px-4 py-3 flex items-center gap-3 transition">
+      {/* Foto menu — placeholder ikon kalau tak ada */}
+      <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/40 border border-border shrink-0 flex items-center justify-center">
+        {item.menu_item_image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.menu_item_image}
+            alt={item.menu_item_name}
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <Utensils className="h-5 w-5 text-muted-foreground/50" />
+        )}
+      </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-medium text-sm">
           {item.quantity > 1 && (
