@@ -70,6 +70,10 @@ import {
   settleVoucherForPayment,
   releaseVoucherForPayment,
 } from "@/lib/member-voucher";
+import {
+  settleRevenueSplitForPayment,
+  settleRevenueSplitForMembershipTx,
+} from "@/lib/revenue-split";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -673,6 +677,9 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       if (chargeResult.status === "paid") {
         // Voucher → cetak baris diskon dulu supaya settle melihat DP penuh.
         await settleVoucherForPayment(dpPaymentId);
+        await settleRevenueSplitForPayment(dpPaymentId).catch((e) =>
+          console.error("[split] openTable DP:", e)
+        );
         await db
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
@@ -2625,6 +2632,10 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   if (chargeResult.status === "paid") {
     // Voucher → cetak baris diskon DULU supaya settle melihat total penuh.
     await settleVoucherForPayment(newPayment.id);
+    // Bagi hasil service fee (best-effort — jangan gagalkan pembayaran).
+    await settleRevenueSplitForPayment(newPayment.id).catch((e) =>
+      console.error("[split] payShare:", e)
+    );
     // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK (paid + item sent).
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
@@ -3398,6 +3409,9 @@ export async function checkPaymentStatus(
       .where(eq(payments.id, row.id));
     // Voucher yang menempel → tandai used + cetak baris diskon (idempotent).
     await settleVoucherForPayment(row.id);
+    await settleRevenueSplitForPayment(row.id).catch((e) =>
+      console.error("[split] checkPaymentStatus:", e)
+    );
     // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi, tak jadi
     // dibatalkan oleh timeout).
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};

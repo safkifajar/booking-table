@@ -33,6 +33,7 @@ import { createNotification } from "@/lib/notifications";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { getBarBySlug } from "@/lib/queries";
 import { computeBillTotals } from "@/lib/settings-constants";
+import { settleRevenueSplitForMembershipTx } from "@/lib/revenue-split";
 import {
   generateMemberVouchers,
   getGeneratedCounts,
@@ -704,6 +705,11 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
     levelKey: string;
     periodEnd: Date | null;
   };
+
+  // Bagi hasil service fee membership (G7; best-effort).
+  await settleRevenueSplitForMembershipTx(txId).catch((e) =>
+    console.error("[split] membership:", e)
+  );
 
   // Post-commit: generate voucher benefit (idempotensi dijamin oleh guard
   // conditional di atas — hanya SATU pemanggil yang sampai sini per tx).

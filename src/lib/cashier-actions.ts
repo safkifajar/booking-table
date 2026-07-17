@@ -48,6 +48,10 @@ import {
   settleVoucherForPayment,
   releaseVoucherForPayment,
 } from "@/lib/member-voucher";
+import {
+  settleRevenueSplitForPayment,
+  settleRevenueSplitForMembershipTx,
+} from "@/lib/revenue-split";
 import { notifyAll } from "@/lib/realtime/notify";
 import { settleOverdueIfPaid, settleOrderIfPaid } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
@@ -1030,6 +1034,9 @@ export async function cashierCreatePayment(
   // Gateway langsung paid (mock/cash) → settle voucher + order sekarang.
   if (chargeResult.status === "paid") {
     await settleVoucherForPayment(newPayment.id);
+    await settleRevenueSplitForPayment(newPayment.id).catch((e) =>
+      console.error("[split] cashierCreate:", e)
+    );
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
   }
@@ -1083,6 +1090,9 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
 
   // Voucher membership yang menempel → tandai used + baris diskon (idempotent).
   await settleVoucherForPayment(paymentId);
+  await settleRevenueSplitForPayment(paymentId).catch((e) =>
+    console.error("[split] cashierMarkPaid:", e)
+  );
 
   // Sesi 'overdue' yang kini lunas → tutup otomatis.
   await settleOverdueIfPaid(payment.sessionId);
@@ -1191,6 +1201,9 @@ export async function markPaymentPaidBySystem(
 
   // Voucher membership yang menempel → tandai used + baris diskon (idempotent).
   await settleVoucherForPayment(payment.id);
+  await settleRevenueSplitForPayment(payment.id).catch((e) =>
+    console.error("[split] webhook:", e)
+  );
 
   // Prepaid hook: kalau order 'unpaid' & kini ada pembayaran lunas → order MASUK
   // (status 'paid' + item draft→sent). (PRD Multi-Order Prepaid.)
