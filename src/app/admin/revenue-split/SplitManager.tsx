@@ -3,23 +3,15 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { History, Loader2, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
-import { useConfirm } from "@/components/ConfirmDialog";
 import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import {
   saveSplitScheme,
-  runSplitBackfill,
-  markSplitPeriodSettled,
-  getSplitPeriodEntries,
-  getSplitRangeReport,
-  getSplitExportRows,
+  getLiveSplitRecap,
   type SplitConfigView,
-  type SplitPeriodRow,
-  type SplitEntryRow,
 } from "@/lib/revenue-split-actions";
 
 interface Row {
@@ -49,15 +41,8 @@ function parsePct(v: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function SplitManager({
-  config,
-  report,
-}: {
-  config: SplitConfigView;
-  report: SplitPeriodRow[];
-}) {
+export function SplitManager({ config }: { config: SplitConfigView }) {
   const router = useRouter();
-  const confirm = useConfirm();
   const [rows, setRows] = React.useState<Row[]>(() =>
     config.active
       ? config.active.categories.map((c) => ({
@@ -68,14 +53,11 @@ export function SplitManager({
         }))
       : SEED
   );
-  // Default: AWAL BULAN berjalan — simpan langsung merekap transaksi
-  // sebulan ini (backfill otomatis).
-  const [effectiveAt, setEffectiveAt] = React.useState(() => {
+  // Rekap rentang: default awal bulan berjalan s/d hari ini.
+  const [rangeFrom, setRangeFrom] = React.useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   });
-  const [note, setNote] = React.useState("");
-  // Rekap rentang (permintaan user): default awal bulan s/d hari ini.
   const [rangeTo, setRangeTo] = React.useState(() =>
     new Date().toISOString().slice(0, 10)
   );
@@ -88,19 +70,33 @@ export function SplitManager({
     async (from: string, to: string) => {
       setRangeLoading(true);
       try {
-        setRangeResult(await getSplitRangeReport({ from, to }));
+        const res = await getLiveSplitRecap({
+          from,
+          to,
+          categories: rows.map((r) => ({
+            name: r.name.trim() || "-",
+            percent: parsePct(r.percent),
+            method: r.method || null,
+            isRemainderSink: r.sink,
+          })),
+        });
+        setRangeResult(res.totals);
+        exportRef.current = res;
       } catch {
         toast.error("Failed to load recap");
       } finally {
         setRangeLoading(false);
       }
     },
-    []
+    [rows]
   );
+  const exportRef = React.useRef<{
+    totals: { category: string; total: number }[];
+    rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[];
+  } | null>(null);
+
   const [sample, setSample] = React.useState("100000");
   const [saving, setSaving] = React.useState(false);
-  const [backfilling, setBackfilling] = React.useState(false);
-  const [showVersions, setShowVersions] = React.useState(false);
 
   const total = rows.reduce((s, r) => s + parsePct(r.percent), 0);
   const servicePct = config.service_enabled ? config.service_percent : 0;
@@ -135,21 +131,14 @@ export function SplitManager({
     return { service, out };
   }
 
+  // Simpan persentase saja (biar form tidak hilang saat reload), lalu
+  // langsung tampilkan rekap rentang yang sedang di-set.
   async function handleSave() {
-    const summary = rows
-      .map((r) => `${r.name} ${r.percent || 0}%${r.method ? ` [${r.method}]` : ""}${r.sink ? " (sink)" : ""}`)
-      .join("\n");
-    const ok = await confirm({
-      title: "Save as new version?",
-      description: `Effective ${effectiveAt} — existing PAID payments since that date are split immediately (backfill), and new payments follow automatically. Old versions stay frozen.\n\n${summary}`,
-      confirmText: "Save version",
-    });
-    if (!ok) return;
     setSaving(true);
     try {
+      const d = new Date();
       const res = await saveSplitScheme({
-        effectiveAt,
-        note: note.trim() || undefined,
+        effectiveAt: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`,
         categories: rows.map((r) => ({
           name: r.name.trim(),
           percent: parsePct(r.percent),
@@ -161,26 +150,13 @@ export function SplitManager({
         toast.error(res.error);
         return;
       }
-      toast.success(`Scheme saved as version ${res.version}`);
-      void loadRange(effectiveAt, rangeTo);
+      toast.success("Percentages saved");
+      void loadRange(rangeFrom, rangeTo);
       router.refresh();
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to save scheme"));
+      toast.error(getActionErrorMessage(err, "Failed to save"));
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleBackfill() {
-    setBackfilling(true);
-    try {
-      const { processed } = await runSplitBackfill();
-      toast.success(`Backfill done — ${processed} source(s) processed`);
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Backfill failed"));
-    } finally {
-      setBackfilling(false);
     }
   }
 
@@ -273,54 +249,11 @@ export function SplitManager({
           </Button>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-3 pt-2 border-t border-border">
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Effective from
-            </label>
-            <input
-              type="date"
-              value={effectiveAt}
-              onChange={(e) => setEffectiveAt(e.target.value)}
-              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-            />
-          </div>
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-              Note (optional)
-            </label>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={200}
-              className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-            />
-          </div>
-        </div>
-
         <div className="flex items-center justify-between pt-2">
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowVersions((v) => !v)}>
-              <History className="h-4 w-4" /> Versions ({config.versions.length})
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={backfilling || config.versions.length === 0}
-              onClick={handleBackfill}
-            >
-              {backfilling ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Backfill
-            </Button>
-          </div>
+          <div />
           <Button variant="gold" disabled={saving || overBudget} onClick={handleSave}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save as new version
+            Save
           </Button>
         </div>
         {/* Rekap RENTANG — nilai pembagian utk range yang di-set */}
@@ -333,8 +266,8 @@ export function SplitManager({
               <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  value={effectiveAt}
-                  onChange={(e) => setEffectiveAt(e.target.value)}
+                  value={rangeFrom}
+                  onChange={(e) => setRangeFrom(e.target.value)}
                   className="h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
                 />
                 <span className="text-xs text-muted-foreground">to</span>
@@ -350,7 +283,7 @@ export function SplitManager({
               variant="outline"
               size="sm"
               disabled={rangeLoading}
-              onClick={() => void loadRange(effectiveAt, rangeTo)}
+              onClick={() => void loadRange(rangeFrom, rangeTo)}
             >
               {rangeLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -363,36 +296,35 @@ export function SplitManager({
               size="sm"
               onClick={async () => {
                 try {
-                  const { categories, rows } = await getSplitExportRows({
-                    from: effectiveAt,
-                    to: rangeTo,
-                  });
-                  if (rows.length === 0) {
-                    toast.info("No entries in this range");
+                  if (!exportRef.current) await loadRange(rangeFrom, rangeTo);
+                  const data = exportRef.current;
+                  if (!data || data.rows.length === 0) {
+                    toast.info("No transactions in this range");
                     return;
                   }
-                  const header = ["Paid at", "Source", "ID", "Service fee", ...categories, "Total"];
-                  const lines = rows.map((r) => {
-                    const cats = categories.map((c) => r.amounts[c] ?? 0);
+                  const cats = Array.from(
+                    new Set(data.rows.flatMap((r) => Object.keys(r.amounts)))
+                  );
+                  const header = ["Paid at", "Source", "ID", "Service fee", ...cats, "Total"];
+                  const lines = data.rows.map((r) => {
+                    const vals = cats.map((c) => r.amounts[c] ?? 0);
                     return [
                       r.paid_at.slice(0, 16).replace("T", " "),
                       r.source,
                       r.source_id.slice(0, 8).toUpperCase(),
                       r.service,
-                      ...cats,
-                      cats.reduce((s2, v) => s2 + v, 0),
+                      ...vals,
+                      vals.reduce((s2, v) => s2 + v, 0),
                     ]
                       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
                       .join(",");
                   });
                   const csv = [header.join(","), ...lines].join("\n");
-                  const blob = new Blob([csv], {
-                    type: "text/csv;charset=utf-8;",
-                  });
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
-                  a.download = `revenue-split_${effectiveAt}_${rangeTo}.csv`;
+                  a.download = `revenue-split_${rangeFrom}_${rangeTo}.csv`;
                   a.click();
                   URL.revokeObjectURL(url);
                 } catch {
@@ -440,27 +372,6 @@ export function SplitManager({
           </p>
         )}
 
-        {showVersions && (
-          <div className="pt-2 border-t border-border space-y-2">
-            {config.versions.map((v) => (
-              <div key={v.version} className="text-xs">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-[10px]">
-                    v{v.version}
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    effective {v.effective_at.slice(0, 10)}
-                    {v.note && ` · ${v.note}`}
-                  </span>
-                </div>
-                <p className="text-muted-foreground mt-0.5">{v.summary}</p>
-              </div>
-            ))}
-            {config.versions.length === 0 && (
-              <p className="text-xs text-muted-foreground">No versions yet.</p>
-            )}
-          </div>
-        )}
       </Card>
 
       {/* SIMULASI */}
@@ -513,144 +424,8 @@ export function SplitManager({
       </Card>
     </div>
 
-    {/* SETTLEMENT — rekap bulanan per kategori (G4), mark settled + drilldown */}
-    <SettlementSection report={report} />
+
     </div>
   );
 }
 
-function SettlementSection({ report }: { report: SplitPeriodRow[] }) {
-  const router = useRouter();
-  const confirm = useConfirm();
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const [openPeriod, setOpenPeriod] = React.useState<string | null>(null);
-  const [entries, setEntries] = React.useState<SplitEntryRow[]>([]);
-  const [loadingEntries, setLoadingEntries] = React.useState(false);
-
-  async function handleSettle(p: SplitPeriodRow) {
-    const total = p.categories.reduce((s, c) => s + c.total, 0);
-    const ok = await confirm({
-      title: `Mark ${p.period} as settled?`,
-      description: `Locks the payout record for this period (${formatIDR(total)} across ${p.categories.length} categories). This is a bookkeeping marker — no money moves automatically.`,
-      confirmText: "Mark settled",
-    });
-    if (!ok) return;
-    setBusy(p.period);
-    try {
-      const res = await markSplitPeriodSettled(p.period);
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success(`${p.period} settled (${res.marked} categories)`);
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to mark settled"));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function toggleDrill(period: string) {
-    if (openPeriod === period) {
-      setOpenPeriod(null);
-      return;
-    }
-    setOpenPeriod(period);
-    setLoadingEntries(true);
-    try {
-      setEntries(await getSplitPeriodEntries(period));
-    } catch {
-      toast.error("Failed to load entries");
-    } finally {
-      setLoadingEntries(false);
-    }
-  }
-
-  return (
-    <Card className="p-5 space-y-3">
-      <h2 className="text-sm font-semibold">Settlement — monthly recap</h2>
-      {report.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          No split entries yet. They appear automatically as payments are made
-          after the scheme&apos;s effective date.
-        </p>
-      ) : (
-        report.map((p) => {
-          const allSettled = p.categories.every((c) => c.settled);
-          return (
-            <div key={p.period} className="rounded-md border border-border p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{p.period}</span>
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "text-[10px]",
-                      allSettled
-                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                        : "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                    )}
-                  >
-                    {allSettled ? "Settled" : "Pending"}
-                  </Badge>
-                  <span className="text-[10px] text-muted-foreground">
-                    {p.source_count} payment{p.source_count === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button variant="outline" size="sm" onClick={() => toggleDrill(p.period)}>
-                    {openPeriod === p.period ? "Hide" : "Details"}
-                  </Button>
-                  {!allSettled && (
-                    <Button
-                      variant="gold"
-                      size="sm"
-                      disabled={busy === p.period}
-                      onClick={() => handleSettle(p)}
-                    >
-                      {busy === p.period ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Mark settled"
-                      )}
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-                {p.categories.map((c) => (
-                  <div key={c.name} className="rounded bg-muted/20 border border-border/60 px-2.5 py-1.5 flex justify-between gap-2">
-                    <span className="truncate text-muted-foreground">{c.name}</span>
-                    <span className={cn("tabular-nums font-medium", c.total < 0 && "text-red-400")}>
-                      {formatIDR(c.total)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {openPeriod === p.period && (
-                <div className="border-t border-border pt-2 max-h-64 overflow-y-auto text-[11px] space-y-1">
-                  {loadingEntries ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    entries.map((e, i) => (
-                      <div key={i} className="flex justify-between gap-2 text-muted-foreground">
-                        <span className="truncate">
-                          {e.paid_at.slice(0, 16).replace("T", " ")} · {e.source} · {e.category}
-                          {e.kind === "reversal" && " (reversal)"}
-                        </span>
-                        <span className={cn("tabular-nums shrink-0", e.amount < 0 && "text-red-400")}>
-                          {formatIDR(e.amount)}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
-    </Card>
-  );
-}

@@ -1,8 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
-import {
-  getSplitConfig,
-  getSplitSettlementReport,
-} from "@/lib/revenue-split-actions";
+import { getSplitConfig } from "@/lib/revenue-split-actions";
 import { SplitManager } from "./SplitManager";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +13,6 @@ export default async function RevenueSplitPage() {
   await requireAdmin();
 
   const config = await getSplitConfig();
-  const report = await getSplitSettlementReport();
 
   return (
     <main className="flex-1 pb-12">
@@ -24,11 +20,10 @@ export default async function RevenueSplitPage() {
         <div>
           <h1 className="text-lg font-bold tracking-tight">Revenue Split</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Service-fee allocation rules. Private page — changes are versioned
-            and audited; history never changes.
+            Recap of service-fee allocation per category for any date range.
           </p>
         </div>
-        <SplitManager config={config} report={report} />
+        <SplitManager config={config} />
       </div>
     </main>
   );
