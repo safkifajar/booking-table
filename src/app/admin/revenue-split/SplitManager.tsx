@@ -16,6 +16,7 @@ import {
   markSplitPeriodSettled,
   getSplitPeriodEntries,
   getSplitRangeReport,
+  getSplitExportRows,
   type SplitConfigView,
   type SplitPeriodRow,
   type SplitEntryRow,
@@ -356,6 +357,50 @@ export function SplitManager({
               ) : (
                 "Show recap"
               )}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const { categories, rows } = await getSplitExportRows({
+                    from: effectiveAt,
+                    to: rangeTo,
+                  });
+                  if (rows.length === 0) {
+                    toast.info("No entries in this range");
+                    return;
+                  }
+                  const header = ["Paid at", "Source", "ID", "Service fee", ...categories, "Total"];
+                  const lines = rows.map((r) => {
+                    const cats = categories.map((c) => r.amounts[c] ?? 0);
+                    return [
+                      r.paid_at.slice(0, 16).replace("T", " "),
+                      r.source,
+                      r.source_id.slice(0, 8).toUpperCase(),
+                      r.service,
+                      ...cats,
+                      cats.reduce((s2, v) => s2 + v, 0),
+                    ]
+                      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+                      .join(",");
+                  });
+                  const csv = [header.join(","), ...lines].join("\n");
+                  const blob = new Blob([csv], {
+                    type: "text/csv;charset=utf-8;",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `revenue-split_${effectiveAt}_${rangeTo}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  toast.error("Export failed");
+                }
+              }}
+            >
+              Export CSV
             </Button>
           </div>
           {rangeResult && (

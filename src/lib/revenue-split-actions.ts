@@ -379,3 +379,59 @@ export async function getSplitRangeReport(input: {
     .orderBy(sql`SUM(${splitEntries.amount}) DESC`);
   return rows.map((r) => ({ category: r.category, total: Number(r.total) }));
 }
+
+/** Data export per TRANSAKSI: service fee + pembagian per kategori. */
+export async function getSplitExportRows(input: {
+  from: string;
+  to: string;
+}): Promise<{
+  categories: string[];
+  rows: {
+    paid_at: string;
+    source: string;
+    source_id: string;
+    service: number;
+    amounts: Record<string, number>;
+  }[];
+}> {
+  await requireAdmin();
+  const { splitEntries } = await import("@/lib/db/schema/revenue-split");
+  const { sql, asc: a } = await import("drizzle-orm");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to)) {
+    return { categories: [], rows: [] };
+  }
+  const entries = await db
+    .select()
+    .from(splitEntries)
+    .where(
+      sql`${splitEntries.paidAt} >= ${input.from}::date AND ${splitEntries.paidAt} < (${input.to}::date + interval '1 day')`
+    )
+    .orderBy(a(splitEntries.paidAt))
+    .limit(5000);
+
+  const catSet = new Set<string>();
+  const bySource = new Map<string, {
+    paid_at: string; source: string; source_id: string; service: number;
+    amounts: Record<string, number>;
+  }>();
+  for (const e of entries) {
+    catSet.add(e.categoryName);
+    const key = `${e.source}|${e.sourceId}`;
+    let row = bySource.get(key);
+    if (!row) {
+      row = {
+        paid_at: e.paidAt.toISOString(),
+        source: e.source,
+        source_id: e.sourceId,
+        service: 0,
+        amounts: {},
+      };
+      bySource.set(key, row);
+    }
+    row.amounts[e.categoryName] = (row.amounts[e.categoryName] ?? 0) + e.amount;
+    // service_collected sama utk semua baris satu sumber (reversal minus).
+    if (e.kind === "split") row.service = e.serviceCollected;
+    else row.service += e.serviceCollected;
+  }
+  return { categories: Array.from(catSet), rows: Array.from(bySource.values()) };
+}
