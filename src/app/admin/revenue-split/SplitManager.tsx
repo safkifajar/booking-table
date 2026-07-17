@@ -13,7 +13,11 @@ import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import {
   saveSplitScheme,
   runSplitBackfill,
+  markSplitPeriodSettled,
+  getSplitPeriodEntries,
   type SplitConfigView,
+  type SplitPeriodRow,
+  type SplitEntryRow,
 } from "@/lib/revenue-split-actions";
 
 interface Row {
@@ -43,7 +47,13 @@ function parsePct(v: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function SplitManager({ config }: { config: SplitConfigView }) {
+export function SplitManager({
+  config,
+  report,
+}: {
+  config: SplitConfigView;
+  report: SplitPeriodRow[];
+}) {
   const router = useRouter();
   const confirm = useConfirm();
   const [rows, setRows] = React.useState<Row[]>(() =>
@@ -150,6 +160,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
   const simCash = simulate("cash");
 
   return (
+    <div className="space-y-4">
     <div className="grid lg:grid-cols-5 gap-4 items-start">
       {/* FORM */}
       <Card className="lg:col-span-3 p-5 space-y-4">
@@ -363,5 +374,145 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
         </p>
       </Card>
     </div>
+
+    {/* SETTLEMENT — rekap bulanan per kategori (G4), mark settled + drilldown */}
+    <SettlementSection report={report} />
+    </div>
+  );
+}
+
+function SettlementSection({ report }: { report: SplitPeriodRow[] }) {
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [openPeriod, setOpenPeriod] = React.useState<string | null>(null);
+  const [entries, setEntries] = React.useState<SplitEntryRow[]>([]);
+  const [loadingEntries, setLoadingEntries] = React.useState(false);
+
+  async function handleSettle(p: SplitPeriodRow) {
+    const total = p.categories.reduce((s, c) => s + c.total, 0);
+    const ok = await confirm({
+      title: `Mark ${p.period} as settled?`,
+      description: `Locks the payout record for this period (${formatIDR(total)} across ${p.categories.length} categories). This is a bookkeeping marker — no money moves automatically.`,
+      confirmText: "Mark settled",
+    });
+    if (!ok) return;
+    setBusy(p.period);
+    try {
+      const res = await markSplitPeriodSettled(p.period);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`${p.period} settled (${res.marked} categories)`);
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to mark settled"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleDrill(period: string) {
+    if (openPeriod === period) {
+      setOpenPeriod(null);
+      return;
+    }
+    setOpenPeriod(period);
+    setLoadingEntries(true);
+    try {
+      setEntries(await getSplitPeriodEntries(period));
+    } catch {
+      toast.error("Failed to load entries");
+    } finally {
+      setLoadingEntries(false);
+    }
+  }
+
+  return (
+    <Card className="p-5 space-y-3">
+      <h2 className="text-sm font-semibold">Settlement — monthly recap</h2>
+      {report.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No split entries yet. They appear automatically as payments are made
+          after the scheme&apos;s effective date.
+        </p>
+      ) : (
+        report.map((p) => {
+          const allSettled = p.categories.every((c) => c.settled);
+          return (
+            <div key={p.period} className="rounded-md border border-border p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{p.period}</span>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px]",
+                      allSettled
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                        : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                    )}
+                  >
+                    {allSettled ? "Settled" : "Pending"}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">
+                    {p.source_count} payment{p.source_count === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => toggleDrill(p.period)}>
+                    {openPeriod === p.period ? "Hide" : "Details"}
+                  </Button>
+                  {!allSettled && (
+                    <Button
+                      variant="gold"
+                      size="sm"
+                      disabled={busy === p.period}
+                      onClick={() => handleSettle(p)}
+                    >
+                      {busy === p.period ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Mark settled"
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                {p.categories.map((c) => (
+                  <div key={c.name} className="rounded bg-muted/20 border border-border/60 px-2.5 py-1.5 flex justify-between gap-2">
+                    <span className="truncate text-muted-foreground">{c.name}</span>
+                    <span className={cn("tabular-nums font-medium", c.total < 0 && "text-red-400")}>
+                      {formatIDR(c.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {openPeriod === p.period && (
+                <div className="border-t border-border pt-2 max-h-64 overflow-y-auto text-[11px] space-y-1">
+                  {loadingEntries ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    entries.map((e, i) => (
+                      <div key={i} className="flex justify-between gap-2 text-muted-foreground">
+                        <span className="truncate">
+                          {e.paid_at.slice(0, 16).replace("T", " ")} · {e.source} · {e.category}
+                          {e.kind === "reversal" && " (reversal)"}
+                        </span>
+                        <span className={cn("tabular-nums shrink-0", e.amount < 0 && "text-red-400")}>
+                          {formatIDR(e.amount)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </Card>
   );
 }

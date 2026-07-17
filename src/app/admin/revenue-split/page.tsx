@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
-import { isSplitAdmin, getSplitConfig } from "@/lib/revenue-split-actions";
+import {
+  isSplitAdmin,
+  getSplitConfig,
+  getSplitSettlementReport,
+} from "@/lib/revenue-split-actions";
 import { SplitManager } from "./SplitManager";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +19,7 @@ export default async function RevenueSplitPage() {
   if (!(await isSplitAdmin())) notFound();
 
   const config = await getSplitConfig();
+  const report = await getSplitSettlementReport();
 
   return (
     <main className="flex-1 pb-12">
@@ -26,7 +31,7 @@ export default async function RevenueSplitPage() {
             and audited; history never changes.
           </p>
         </div>
-        <SplitManager config={config} />
+        <SplitManager config={config} report={report} />
       </div>
     </main>
   );

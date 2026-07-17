@@ -230,3 +230,137 @@ export async function runSplitBackfill(): Promise<{ processed: number }> {
   revalidatePath("/admin/revenue-split");
   return { processed };
 }
+
+// ============================================================
+// FASE 3 — SETTLEMENT (rekap bulanan per kategori, G4)
+// ============================================================
+
+export interface SplitPeriodRow {
+  period: string; // "YYYY-MM"
+  categories: {
+    name: string;
+    total: number;
+    settled: boolean;
+    settled_total: number | null;
+  }[];
+  source_count: number;
+}
+
+export async function getSplitSettlementReport(): Promise<SplitPeriodRow[]> {
+  await requireSplitAdmin();
+  const { splitEntries, splitSettlements } = await import(
+    "@/lib/db/schema/revenue-split"
+  );
+  const { sql } = await import("drizzle-orm");
+
+  const rows = await db
+    .select({
+      period: sql<string>`to_char(${splitEntries.paidAt}, 'YYYY-MM')`,
+      category: splitEntries.categoryName,
+      total: sql<number>`SUM(${splitEntries.amount})::int`,
+      sources: sql<number>`COUNT(DISTINCT ${splitEntries.sourceId})::int`,
+    })
+    .from(splitEntries)
+    .groupBy(sql`to_char(${splitEntries.paidAt}, 'YYYY-MM')`, splitEntries.categoryName)
+    .orderBy(sql`to_char(${splitEntries.paidAt}, 'YYYY-MM') DESC`);
+
+  const settled = await db.select().from(splitSettlements);
+  const settledMap = new Map(
+    settled.map((s) => [`${s.period}|${s.categoryName}`, s.total])
+  );
+
+  const byPeriod = new Map<string, SplitPeriodRow>();
+  for (const r of rows) {
+    let p = byPeriod.get(r.period);
+    if (!p) {
+      p = { period: r.period, categories: [], source_count: 0 };
+      byPeriod.set(r.period, p);
+    }
+    const st = settledMap.get(`${r.period}|${r.category}`);
+    p.categories.push({
+      name: r.category,
+      total: Number(r.total),
+      settled: st != null,
+      settled_total: st ?? null,
+    });
+    p.source_count = Math.max(p.source_count, Number(r.sources));
+  }
+  return Array.from(byPeriod.values());
+}
+
+/** Tandai satu periode SETTLED (semua kategorinya; idempotent per kategori). */
+export async function markSplitPeriodSettled(
+  period: string
+): Promise<{ ok: true; marked: number } | { ok: false; error: string }> {
+  await requireSplitAdmin();
+  const me = await getCurrentProfile();
+  if (!/^\d{4}-\d{2}$/.test(period)) return { ok: false, error: "Bad period" };
+
+  const { splitEntries, splitSettlements } = await import(
+    "@/lib/db/schema/revenue-split"
+  );
+  const { sql } = await import("drizzle-orm");
+  const totals = await db
+    .select({
+      category: splitEntries.categoryName,
+      total: sql<number>`SUM(${splitEntries.amount})::int`,
+    })
+    .from(splitEntries)
+    .where(sql`to_char(${splitEntries.paidAt}, 'YYYY-MM') = ${period}`)
+    .groupBy(splitEntries.categoryName);
+  if (totals.length === 0) return { ok: false, error: "No entries in this period" };
+
+  let marked = 0;
+  for (const t of totals) {
+    const ins = await db
+      .insert(splitSettlements)
+      .values({
+        period,
+        categoryName: t.category,
+        total: Number(t.total),
+        settledBy: me?.id ?? null,
+      })
+      .onConflictDoNothing()
+      .returning({ id: splitSettlements.id });
+    marked += ins.length;
+  }
+  await db.insert(splitAuditLog).values({
+    actorId: me?.id ?? null,
+    action: "settlement.mark",
+    before: null,
+    after: { period, totals },
+  });
+  revalidatePath("/admin/revenue-split");
+  return { ok: true, marked };
+}
+
+export interface SplitEntryRow {
+  paid_at: string;
+  source: "bill" | "membership";
+  category: string;
+  amount: number;
+  kind: "split" | "reversal";
+}
+
+/** Drilldown entries satu periode (terbaru dulu, max 200). */
+export async function getSplitPeriodEntries(
+  period: string
+): Promise<SplitEntryRow[]> {
+  await requireSplitAdmin();
+  if (!/^\d{4}-\d{2}$/.test(period)) return [];
+  const { splitEntries } = await import("@/lib/db/schema/revenue-split");
+  const { sql, desc: d } = await import("drizzle-orm");
+  const rows = await db
+    .select()
+    .from(splitEntries)
+    .where(sql`to_char(${splitEntries.paidAt}, 'YYYY-MM') = ${period}`)
+    .orderBy(d(splitEntries.paidAt))
+    .limit(200);
+  return rows.map((r) => ({
+    paid_at: r.paidAt.toISOString(),
+    source: r.source,
+    category: r.categoryName,
+    amount: r.amount,
+    kind: r.kind,
+  }));
+}
