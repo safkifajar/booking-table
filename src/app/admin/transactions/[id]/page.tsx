@@ -267,8 +267,6 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                 <th className="text-left py-2 w-12">#</th>
                 <th className="text-left py-2">Item</th>
                 <th className="text-right py-2 w-12">Qty</th>
-                <th className="text-right py-2 w-24">Price</th>
-                <th className="text-right py-2 w-28">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -288,17 +286,11 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     </div>
                   </td>
                   <td className="py-2 text-right">{i.quantity}</td>
-                  <td className="py-2 text-right text-muted-foreground print:text-black/60 tabular-nums">
-                    {formatIDR(i.unit_price)}
-                  </td>
-                  <td className="py-2 text-right font-semibold tabular-nums">
-                    {formatIDR(i.quantity * i.unit_price)}
-                  </td>
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={3} className="py-6 text-center text-muted-foreground">
                     No items.
                   </td>
                 </tr>
@@ -354,7 +346,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               Payments
             </h3>
             <div className="space-y-1.5 text-xs">
-              {payments.map((p) => (
+              {payments.map((p) => {
+                // Rincian per pembayaran (feedback user): amount SUDAH
+                // termasuk charge proporsional -> porsi bill = amount /
+                // (1 + pct/100), charge = selisihnya. Derivasi tampilan —
+                // bisa selisih Rp1 karena pembulatan. Baris voucher =
+                // potongan murni, tanpa rincian.
+                const pct = detail.charge_percent;
+                const showBreakdown =
+                  pct > 0 && p.method !== "voucher" && p.amount > 0;
+                const baseShare = showBreakdown
+                  ? Math.round(p.amount / (1 + pct / 100))
+                  : p.amount;
+                const chargeShare = showBreakdown ? p.amount - baseShare : 0;
+                return (
                 <div key={p.id} className="flex justify-between gap-3">
                   <div className="min-w-0">
                     <div>
@@ -402,16 +407,26 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       </div>
                     )}
                   </div>
-                  <span className="tabular-nums shrink-0">
-                    {formatIDR(p.amount)}
-                    {p.status !== "paid" && (
-                      <span className="ml-1 text-[10px] text-amber-400">
-                        ({paymentDisplayStatus(p.status, p.expires_at)})
-                      </span>
+                  <div className="text-right shrink-0">
+                    <div className="tabular-nums font-semibold">
+                      {formatIDR(p.amount)}
+                      {p.status !== "paid" && (
+                        <span className="ml-1 text-[10px] font-normal text-amber-400">
+                          ({paymentDisplayStatus(p.status, p.expires_at)})
+                        </span>
+                      )}
+                    </div>
+                    {showBreakdown && (
+                      <div className="text-[10px] text-muted-foreground print:text-black/50 tabular-nums">
+                        bill {formatIDR(baseShare)} +{" "}
+                        {detail.charge_label.toLowerCase()} ({pct}%){" "}
+                        {formatIDR(chargeShare)}
+                      </div>
                     )}
-                  </span>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
