@@ -15,6 +15,7 @@ import {
   runSplitBackfill,
   markSplitPeriodSettled,
   getSplitPeriodEntries,
+  getSplitRangeReport,
   type SplitConfigView,
   type SplitPeriodRow,
   type SplitEntryRow,
@@ -73,6 +74,28 @@ export function SplitManager({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   });
   const [note, setNote] = React.useState("");
+  // Rekap rentang (permintaan user): default awal bulan s/d hari ini.
+  const [rangeTo, setRangeTo] = React.useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [rangeResult, setRangeResult] = React.useState<
+    { category: string; total: number }[] | null
+  >(null);
+  const [rangeLoading, setRangeLoading] = React.useState(false);
+
+  const loadRange = React.useCallback(
+    async (from: string, to: string) => {
+      setRangeLoading(true);
+      try {
+        setRangeResult(await getSplitRangeReport({ from, to }));
+      } catch {
+        toast.error("Failed to load recap");
+      } finally {
+        setRangeLoading(false);
+      }
+    },
+    []
+  );
   const [sample, setSample] = React.useState("100000");
   const [saving, setSaving] = React.useState(false);
   const [backfilling, setBackfilling] = React.useState(false);
@@ -138,6 +161,7 @@ export function SplitManager({
         return;
       }
       toast.success(`Scheme saved as version ${res.version}`);
+      void loadRange(effectiveAt, rangeTo);
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save scheme"));
@@ -298,6 +322,72 @@ export function SplitManager({
             Save as new version
           </Button>
         </div>
+        {/* Rekap RENTANG — nilai pembagian utk range yang di-set */}
+        <div className="pt-3 border-t border-border space-y-2">
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+                Recap range
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={effectiveAt}
+                  onChange={(e) => setEffectiveAt(e.target.value)}
+                  className="h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <input
+                  type="date"
+                  value={rangeTo}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                  className="h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                />
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={rangeLoading}
+              onClick={() => void loadRange(effectiveAt, rangeTo)}
+            >
+              {rangeLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Show recap"
+              )}
+            </Button>
+          </div>
+          {rangeResult && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+              {rangeResult.length === 0 ? (
+                <p className="text-muted-foreground col-span-full">
+                  No split entries in this range.
+                </p>
+              ) : (
+                rangeResult.map((r) => (
+                  <div
+                    key={r.category}
+                    className="rounded bg-muted/20 border border-border/60 px-2.5 py-1.5 flex justify-between gap-2"
+                  >
+                    <span className="truncate text-muted-foreground">
+                      {r.category}
+                    </span>
+                    <span
+                      className={cn(
+                        "tabular-nums font-medium",
+                        r.total < 0 && "text-red-400"
+                      )}
+                    >
+                      {formatIDR(r.total)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
         {overBudget && (
           <p className="text-xs text-red-400">
             Total {total.toFixed(3).replace(".", ",")}% exceeds the service

@@ -353,3 +353,29 @@ export async function getSplitPeriodEntries(
     kind: r.kind,
   }));
 }
+
+/** Rekap per RENTANG tanggal (inklusif) — permintaan user: setelah simpan,
+ *  tampilkan nilai pembagian utk range yang di-set. */
+export async function getSplitRangeReport(input: {
+  from: string; // YYYY-MM-DD
+  to: string;
+}): Promise<{ category: string; total: number }[]> {
+  await requireAdmin();
+  const { splitEntries } = await import("@/lib/db/schema/revenue-split");
+  const { sql } = await import("drizzle-orm");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to)) {
+    return [];
+  }
+  const rows = await db
+    .select({
+      category: splitEntries.categoryName,
+      total: sql<number>`SUM(${splitEntries.amount})::int`,
+    })
+    .from(splitEntries)
+    .where(
+      sql`${splitEntries.paidAt} >= ${input.from}::date AND ${splitEntries.paidAt} < (${input.to}::date + interval '1 day')`
+    )
+    .groupBy(splitEntries.categoryName)
+    .orderBy(sql`SUM(${splitEntries.amount}) DESC`);
+  return rows.map((r) => ({ category: r.category, total: Number(r.total) }));
+}
