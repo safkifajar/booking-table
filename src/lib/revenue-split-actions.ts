@@ -151,11 +151,12 @@ export async function saveSplitScheme(
     };
   }
 
+  // Tanggal efektif BOLEH mundur (rev — ekspektasi user: simpan → langsung
+  // lihat rekap bulan berjalan dari transaksi yang sudah ada; backfill
+  // otomatis mengisi sejak tanggal ini).
   const effectiveAt = new Date(`${data.effectiveAt}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (Number.isNaN(effectiveAt.getTime()) || effectiveAt < today) {
-    return { ok: false, error: "Effective date can't be in the past" };
+  if (Number.isNaN(effectiveAt.getTime())) {
+    return { ok: false, error: "Invalid effective date" };
   }
 
   const [last] = await db
@@ -192,6 +193,13 @@ export async function saveSplitScheme(
       after: { version, effectiveAt: data.effectiveAt, categories: data.categories },
     });
   });
+
+  // Auto-backfill: hitung split semua pembayaran PAID sejak tanggal efektif
+  // (yang sudah punya entries dilewati — idempotent) → rekap bulan berjalan
+  // langsung terisi begitu simpan.
+  await backfillRevenueSplits().catch((e) =>
+    console.error("[split] auto-backfill:", e)
+  );
 
   revalidatePath("/admin/revenue-split");
   return { ok: true, version };

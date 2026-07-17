@@ -66,9 +66,12 @@ export function SplitManager({
         }))
       : SEED
   );
-  const [effectiveAt, setEffectiveAt] = React.useState(() =>
-    new Date().toISOString().slice(0, 10)
-  );
+  // Default: AWAL BULAN berjalan — simpan langsung merekap transaksi
+  // sebulan ini (backfill otomatis).
+  const [effectiveAt, setEffectiveAt] = React.useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
   const [note, setNote] = React.useState("");
   const [sample, setSample] = React.useState("100000");
   const [saving, setSaving] = React.useState(false);
@@ -114,7 +117,7 @@ export function SplitManager({
       .join("\n");
     const ok = await confirm({
       title: "Save as new version?",
-      description: `Effective ${effectiveAt} — applies to payments PAID from that date. Old versions stay frozen.\n\n${summary}`,
+      description: `Effective ${effectiveAt} — existing PAID payments since that date are split immediately (backfill), and new payments follow automatically. Old versions stay frozen.\n\n${summary}`,
       confirmText: "Save version",
     });
     if (!ok) return;
