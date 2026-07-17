@@ -2,8 +2,8 @@
 
 /**
  * Server Actions — halaman private Bagi Hasil (PRD bagi-hasil rev-2, Fase 2).
- * SEMUA action dijaga whitelist email (SPLIT_ADMIN_EMAILS) DI ATAS guard
- * admin — akun lain (termasuk admin biasa) ditolak seolah fitur tak ada.
+ * Guard: requireAdmin (halaman tetap TANPA entry point di menu — akses via
+ * URL langsung; keputusan user: tanpa whitelist email).
  */
 
 import { z } from "zod";
@@ -16,29 +16,10 @@ import {
   splitAuditLog,
 } from "@/lib/db/schema/revenue-split";
 import { requireAdmin } from "@/lib/admin";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { getBarBySlug } from "@/lib/queries";
 import { backfillRevenueSplits } from "@/lib/revenue-split";
-
-/** Email di whitelist? (dipakai page utk notFound + semua action di sini). */
-export async function isSplitAdmin(): Promise<boolean> {
-  const user = await getCurrentUser();
-  if (!user?.email) return false;
-  const list = (process.env.SPLIT_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return list.includes(user.email.toLowerCase());
-}
-
-async function requireSplitAdmin() {
-  await requireAdmin();
-  if (!(await isSplitAdmin())) {
-    // Pesan generik — keberadaan fitur tak boleh bocor.
-    throw new Error("Not found");
-  }
-}
 
 export interface SplitCategoryInput {
   name: string;
@@ -72,7 +53,7 @@ export interface SplitConfigView {
 }
 
 export async function getSplitConfig(): Promise<SplitConfigView> {
-  await requireSplitAdmin();
+  await requireAdmin();
   const bar = await getBarBySlug(
     process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto"
   );
@@ -143,7 +124,7 @@ const saveSchema = z.object({
 export async function saveSplitScheme(
   input: z.infer<typeof saveSchema>
 ): Promise<{ ok: true; version: number } | { ok: false; error: string }> {
-  await requireSplitAdmin();
+  await requireAdmin();
   const me = await getCurrentProfile();
   const data = saveSchema.parse(input);
 
@@ -218,7 +199,7 @@ export async function saveSplitScheme(
 
 /** Backfill split yang bolong (tombol di halaman private). */
 export async function runSplitBackfill(): Promise<{ processed: number }> {
-  await requireSplitAdmin();
+  await requireAdmin();
   const me = await getCurrentProfile();
   const processed = await backfillRevenueSplits();
   await db.insert(splitAuditLog).values({
@@ -247,7 +228,7 @@ export interface SplitPeriodRow {
 }
 
 export async function getSplitSettlementReport(): Promise<SplitPeriodRow[]> {
-  await requireSplitAdmin();
+  await requireAdmin();
   const { splitEntries, splitSettlements } = await import(
     "@/lib/db/schema/revenue-split"
   );
@@ -292,7 +273,7 @@ export async function getSplitSettlementReport(): Promise<SplitPeriodRow[]> {
 export async function markSplitPeriodSettled(
   period: string
 ): Promise<{ ok: true; marked: number } | { ok: false; error: string }> {
-  await requireSplitAdmin();
+  await requireAdmin();
   const me = await getCurrentProfile();
   if (!/^\d{4}-\d{2}$/.test(period)) return { ok: false, error: "Bad period" };
 
@@ -346,7 +327,7 @@ export interface SplitEntryRow {
 export async function getSplitPeriodEntries(
   period: string
 ): Promise<SplitEntryRow[]> {
-  await requireSplitAdmin();
+  await requireAdmin();
   if (!/^\d{4}-\d{2}$/.test(period)) return [];
   const { splitEntries } = await import("@/lib/db/schema/revenue-split");
   const { sql, desc: d } = await import("drizzle-orm");

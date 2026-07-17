@@ -1,7 +1,5 @@
-import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import {
-  isSplitAdmin,
   getSplitConfig,
   getSplitSettlementReport,
 } from "@/lib/revenue-split-actions";
@@ -10,13 +8,12 @@ import { SplitManager } from "./SplitManager";
 export const dynamic = "force-dynamic";
 
 /**
- * Halaman PRIVATE Bagi Hasil (PRD bagi-hasil D5) — TANPA entry point di menu
- * mana pun; akses hanya via URL langsung. Non-whitelist (termasuk admin
- * lain) → 404, seolah halaman tak pernah ada.
+ * Halaman Bagi Hasil (PRD bagi-hasil D5 rev) — TANPA entry point di menu
+ * mana pun; akses via URL langsung, guard role admin (tanpa whitelist
+ * email — keputusan user).
  */
 export default async function RevenueSplitPage() {
   await requireAdmin();
-  if (!(await isSplitAdmin())) notFound();
 
   const config = await getSplitConfig();
   const report = await getSplitSettlementReport();
