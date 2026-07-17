@@ -11,6 +11,7 @@ import {
   Users,
   ChevronRight,
   ArrowRightLeft,
+  UtensilsCrossed,
 } from "lucide-react";
 import { formatIDR, initials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -264,7 +265,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-muted-foreground print:text-black/60 border-b border-border print:border-black/20">
-                <th className="text-left py-2 w-12">#</th>
+                <th className="text-left py-2 w-12"></th>
                 <th className="text-left py-2">Item</th>
                 <th className="text-right py-2 w-12">Qty</th>
               </tr>
@@ -275,8 +276,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                   key={i.id}
                   className="border-b border-border/40 print:border-black/10 align-top"
                 >
-                  <td className="py-2 text-xs text-muted-foreground print:text-black/60 tabular-nums">
-                    {i.queue_number !== null ? `#${String(i.queue_number).padStart(3, "0")}` : "—"}
+                  <td className="py-2 pr-2">
+                    {/* Foto menu (feedback user — menggantikan kolom #) */}
+                    <span className="inline-flex h-10 w-10 rounded-md overflow-hidden bg-muted/40 border border-border items-center justify-center">
+                      {i.menu_item_image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={i.menu_item_image}
+                          alt={i.menu_item_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <UtensilsCrossed className="h-4 w-4 text-muted-foreground/50" />
+                      )}
+                    </span>
                   </td>
                   <td className="py-2">
                     <div className="font-medium">{i.menu_item_name}</div>

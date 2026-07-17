@@ -583,6 +583,7 @@ export interface TransactionDetailItem {
   status: string;
   queue_number: number | null;
   menu_item_name: string;
+  menu_item_image: string | null;
   added_by_name: string;
 }
 
@@ -713,6 +714,7 @@ export async function getTransactionDetail(
           status: orderItems.status,
           queue_number: orderItems.queueNumber,
           menu_item_name: menuItems.name,
+          menu_item_image: menuItems.imageUrl,
           added_by_name: profiles.displayName,
         })
         .from(orderItems)
@@ -816,6 +818,7 @@ export async function getTransactionDetail(
     notes: i.notes,
     status: i.status,
     queue_number: i.queue_number,
+    menu_item_image: i.menu_item_image,
     menu_item_name: i.menu_item_name,
     added_by_name: i.added_by_name,
   }));
