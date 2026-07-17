@@ -295,7 +295,12 @@ export function MembershipView({
                   </div>
                   {t.tax_amount + t.service_amount > 0 && (
                     <div className="text-[11px] text-muted-foreground">
-                      incl. tax &amp; service
+                      incl.{" "}
+                      {t.tax_amount > 0 && t.service_amount > 0
+                        ? "tax & service"
+                        : t.tax_amount > 0
+                          ? "tax"
+                          : "service charge"}
                     </div>
                   )}
                 </div>

@@ -121,7 +121,12 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
                   </div>
                   {r.tax_amount + r.service_amount > 0 && (
                     <div className="text-[11px] text-muted-foreground">
-                      incl. tax & service{" "}
+                      incl.{" "}
+                      {r.tax_amount > 0 && r.service_amount > 0
+                        ? "tax & service"
+                        : r.tax_amount > 0
+                          ? "tax"
+                          : "service charge"}{" "}
                       {formatIDR(r.tax_amount + r.service_amount)}
                     </div>
                   )}
