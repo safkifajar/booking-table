@@ -307,30 +307,42 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           </table>
         </div>
 
-        {/* Totals */}
+        {/* Totals — charge (tax/service sesuai toggle) TAMPIL & Total =
+            subtotal + charge (dulu Total salah = subtotal saja, sementara
+            Paid sudah termasuk charge). */}
         <div className="pt-4 mt-4 border-t border-border print:border-black/20 space-y-1">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground print:text-black/70">Subtotal</span>
             <span className="font-semibold tabular-nums">{formatIDR(subtotal)}</span>
           </div>
+          {detail.charge > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground print:text-black/70">
+                {detail.charge_label} ({detail.charge_percent}%)
+              </span>
+              <span className="font-semibold tabular-nums">
+                {formatIDR(detail.charge)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground print:text-black/70">Paid</span>
             <span className="font-semibold tabular-nums text-emerald-400 print:text-black">
               {formatIDR(totalPaid)}
             </span>
           </div>
-          {subtotal - totalPaid > 0 && (
+          {detail.total - totalPaid > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground print:text-black/70">Remaining</span>
               <span className="font-semibold tabular-nums text-amber-400 print:text-black">
-                {formatIDR(subtotal - totalPaid)}
+                {formatIDR(detail.total - totalPaid)}
               </span>
             </div>
           )}
           <div className="flex justify-between text-base pt-2 border-t border-border print:border-black/20 mt-2">
             <span className="font-semibold">Total</span>
             <span className="font-bold text-primary text-lg tabular-nums print:text-black">
-              {formatIDR(subtotal)}
+              {formatIDR(detail.total)}
             </span>
           </div>
         </div>

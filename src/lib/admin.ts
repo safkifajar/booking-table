@@ -651,6 +651,8 @@ export interface TransactionDetail {
   charge: number;
   /** Persen gabungan (taxPercent + servicePercent). */
   charge_percent: number;
+  /** Label charge sesuai komponen aktif ("Tax & Service"/"Tax"/"Service charge"). */
+  charge_label: string;
   /** subtotal + tax + service. */
   total: number;
   total_paid: number;
@@ -908,6 +910,7 @@ export async function getTransactionDetail(
     service: bill.service,
     charge: bill.charge,
     charge_percent: bill.chargePercent,
+    charge_label: bill.chargeLabel,
     total: bill.total,
     total_paid: totalPaid,
     move_history: moveHistory,
