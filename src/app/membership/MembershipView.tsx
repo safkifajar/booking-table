@@ -592,7 +592,7 @@ function BuyDialog({
               {(preview.tax_amount ?? 0) + (preview.service_amount ?? 0) >
                 0 && (
                 <Row
-                  label={`Tax & service${preview.charge_percent ? ` (${preview.charge_percent}%)` : ""}`}
+                  label={`${preview.charge_label ?? "Tax & service"}${preview.charge_percent ? ` (${preview.charge_percent}%)` : ""}`}
                   value={formatIDR(
                     (preview.tax_amount ?? 0) + (preview.service_amount ?? 0)
                   )}

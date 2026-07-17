@@ -630,7 +630,7 @@ export function OpenTableForm({
               {bill.charge > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">
-                    Tax &amp; Service ({bill.chargePercent}%)
+                    {bill.chargeLabel} ({bill.chargePercent}%)
                   </span>
                   <span className="font-semibold tabular-nums">
                     {formatIDR(bill.charge)}

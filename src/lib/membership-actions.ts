@@ -444,6 +444,8 @@ export interface PurchasePreview {
   service_amount?: number;
   /** Persen gabungan utk label "(15%)"; 0 = tanpa charge. */
   charge_percent?: number;
+  /** Label charge sesuai komponen aktif. */
+  charge_label?: string;
   /** Total ditagih = base + tax + service. */
   final_amount?: number;
   /** renewal = level sama & masih aktif → masa ditambahkan dari expiry lama. */
@@ -520,6 +522,7 @@ export async function previewMembershipPurchase(input: {
     tax_amount: bill.tax,
     service_amount: bill.service,
     charge_percent: bill.chargePercent,
+    charge_label: bill.chargeLabel,
     final_amount: bill.total,
     kind,
     new_expires_at: end?.toISOString() ?? null,

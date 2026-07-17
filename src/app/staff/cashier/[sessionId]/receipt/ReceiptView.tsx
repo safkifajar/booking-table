@@ -115,7 +115,7 @@ export function ReceiptView({ detail }: Props) {
           <Row label="Subtotal" value={formatIDR(detail.subtotal)} />
           {detail.charge_percent > 0 && (
             <Row
-              label={`Tax & Service (${detail.charge_percent}%)`}
+              label={`${detail.charge_label} (${detail.charge_percent}%)`}
               value={formatIDR(detail.charge)}
             />
           )}

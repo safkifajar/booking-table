@@ -190,7 +190,7 @@ export function TransactionDetailView({
                 </div>
                 {detail.taxService > 0 && (
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Tax &amp; Service</span>
+                    <span>{detail.chargeLabel || "Tax & Service"}</span>
                     <span className="tabular-nums">
                       {formatIDR(detail.taxService)}
                     </span>

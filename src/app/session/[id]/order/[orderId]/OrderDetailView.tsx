@@ -289,7 +289,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
               </div>
               {detail.chargePercent > 0 && (
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Tax &amp; Service ({detail.chargePercent}%)</span>
+                  <span>{detail.chargeLabel} ({detail.chargePercent}%)</span>
                   <span className="tabular-nums">{formatIDR(detail.charge)}</span>
                 </div>
               )}
