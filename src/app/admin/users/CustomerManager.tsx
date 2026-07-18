@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -175,6 +175,9 @@ export function CustomerManager({
                 className="flex items-center gap-3 flex-1 min-w-0 group"
               >
                 <Avatar className="h-9 w-9 shrink-0">
+                  {r.avatar_url && (
+                    <AvatarImage src={r.avatar_url} alt={r.name} />
+                  )}
                   <AvatarFallback className="text-xs">
                     {initials(r.name)}
                   </AvatarFallback>

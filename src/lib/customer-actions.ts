@@ -68,6 +68,7 @@ export interface AdminCustomerRow {
   id: string;
   name: string;
   username: string | null;
+  avatar_url: string | null;
   email: string;
   phone: string | null;
   gender: string | null;
@@ -159,6 +160,7 @@ export async function listCustomers(
         id: users.id,
         name: profiles.displayName,
         username: profiles.username,
+        avatar_url: profiles.avatarUrl,
         email: users.email,
         phone: profiles.phone,
         gender: profiles.gender,
@@ -213,6 +215,7 @@ export async function listCustomers(
       id: r.id,
       name: r.name,
       username: r.username,
+      avatar_url: r.avatar_url,
       email: r.email,
       phone: r.phone,
       gender: r.gender,
