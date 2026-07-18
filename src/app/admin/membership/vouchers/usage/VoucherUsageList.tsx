@@ -109,7 +109,12 @@ export function VoucherUsageList({ rows }: { rows: VoucherUsageRow[] }) {
                 {pageItems.map((r) => (
                   <tr key={r.voucher_id} className="hover:bg-muted/30 transition">
                     <td className="px-4 py-2.5">
-                      <span className="font-mono text-xs block">{r.code}</span>
+                      <Link
+                        href={`/admin/membership/vouchers/usage/${r.voucher_id}`}
+                        className="font-mono text-xs block hover:text-primary transition"
+                      >
+                        {r.code}
+                      </Link>
                       <span className="text-xs text-muted-foreground block truncate max-w-[180px]">
                         {r.voucher_name}
                       </span>

@@ -27,7 +27,7 @@ import {
 } from "@/lib/db/schema/membership-transactions";
 import { payments, orders } from "@/lib/db/schema/orders";
 import { tableSessions } from "@/lib/db/schema/sessions";
-import { tables } from "@/lib/db/schema/venue";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { staffRoles } from "@/lib/db/schema/extras";
@@ -1149,4 +1149,84 @@ export async function listVoucherUsage(): Promise<VoucherUsageRow[]> {
     usage_status: r.used_at ? ("used" as const) : ("reserved" as const),
     used_at: r.used_at?.toISOString() ?? null,
   }));
+}
+
+export interface VoucherUsageDetail {
+  voucher_id: string;
+  code: string;
+  voucher_name: string;
+  /** Snapshot aturan potongan saat voucher digenerate. */
+  discount_type: string; // 'percent' | 'fixed'
+  discount_value: number;
+  max_discount: number | null;
+  min_spend: number | null;
+  received_at: string;
+  expires_at: string;
+  usage_status: "used" | "reserved";
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  discount_applied: number | null;
+  used_at: string | null;
+  payment_id: string | null;
+  payment_amount: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  payment_paid_at: string | null;
+  session_id: string | null;
+  table_label: string | null;
+  area_name: string | null;
+}
+
+export async function getVoucherUsageDetail(
+  id: string
+): Promise<VoucherUsageDetail | null> {
+  await requireAdmin();
+  const voucherId = z.string().uuid().parse(id);
+
+  const [r] = await db
+    .select({
+      voucher_id: memberVouchers.id,
+      code: memberVouchers.code,
+      voucher_name: memberVouchers.name,
+      discount_type: memberVouchers.discountType,
+      discount_value: memberVouchers.discountValue,
+      max_discount: memberVouchers.maxDiscount,
+      min_spend: memberVouchers.minSpend,
+      received_at: memberVouchers.createdAt,
+      expires_at: memberVouchers.expiresAt,
+      customer_id: memberVouchers.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      discount_applied: memberVouchers.discountApplied,
+      used_at: memberVouchers.usedAt,
+      payment_id: payments.id,
+      payment_amount: payments.amount,
+      payment_method: payments.method,
+      payment_status: payments.status,
+      payment_paid_at: payments.paidAt,
+      session_id: orders.sessionId,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .leftJoin(payments, eq(payments.id, memberVouchers.usedPaymentId))
+    .leftJoin(orders, eq(orders.id, payments.orderId))
+    .leftJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .leftJoin(tables, eq(tables.id, tableSessions.tableId))
+    .leftJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(memberVouchers.id, voucherId))
+    .limit(1);
+
+  if (!r) return null;
+  return {
+    ...r,
+    usage_status: r.used_at ? ("used" as const) : ("reserved" as const),
+    received_at: r.received_at.toISOString(),
+    expires_at: r.expires_at.toISOString(),
+    used_at: r.used_at?.toISOString() ?? null,
+    payment_paid_at: r.payment_paid_at?.toISOString() ?? null,
+  };
 }
