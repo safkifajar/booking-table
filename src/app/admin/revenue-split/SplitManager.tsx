@@ -31,7 +31,7 @@ const METHOD_OPTIONS = [
 
 /** Seed 4 kategori (PRD) saat belum ada skema. */
 const SEED: Row[] = [
-  { name: "QRIS Mandiri", percent: "", method: "qris", sink: false },
+  { name: "QRIS", percent: "", method: "qris", sink: false },
   { name: "Outlet", percent: "", method: "", sink: false },
   { name: "Karyawan", percent: "", method: "", sink: false },
   { name: "IT/Kita", percent: "", method: "", sink: true },
