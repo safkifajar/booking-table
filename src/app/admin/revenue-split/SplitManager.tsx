@@ -238,7 +238,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
             </div>
             <Button
               variant="outline"
-              size="sm"
               disabled={rangeLoading}
               onClick={() => void loadRange(rangeFrom, rangeTo)}
             >
@@ -250,7 +249,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
             </Button>
             <Button
               variant="outline"
-              size="sm"
               onClick={async () => {
                 try {
                   if (!exportRef.current) await loadRange(rangeFrom, rangeTo);
