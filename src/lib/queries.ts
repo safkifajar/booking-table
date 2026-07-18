@@ -362,10 +362,14 @@ export async function getOrderOutstanding(orderId: string): Promise<{
  */
 export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
   const [order] = await db
-    .select({ id: orders.id, status: orders.status })
+    .select({
+      id: orders.id,
+      status: orders.status,
+      sessionId: orders.sessionId,
+    })
     .from(orders)
     .where(eq(orders.id, orderId));
-  if (!order || order.status !== "unpaid") return false;
+  if (!order || order.status === "cancelled") return false;
 
   // Order dianggap "masuk" kalau ada DP lunas (order DP) ATAU lunas penuh.
   // Cek: ada payment lunas utk order ini? (DP lunas sudah cukup — Q7.)
@@ -377,61 +381,95 @@ export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
   if (paid <= 0) return false; // belum ada pembayaran lunas → belum masuk.
 
   const now = new Date();
-  await db
-    .update(orders)
-    .set({ status: "paid", paidAt: now })
-    .where(eq(orders.id, orderId));
-  // Item draft → sent (masuk dapur).
-  await db
-    .update(orderItems)
-    .set({ status: "sent" })
-    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.status, "draft")));
+  let entered = false;
+  if (order.status === "unpaid") {
+    await db
+      .update(orders)
+      .set({ status: "paid", paidAt: now })
+      .where(eq(orders.id, orderId));
+    // Item draft → sent (masuk dapur).
+    await db
+      .update(orderItems)
+      .set({ status: "sent" })
+      .where(
+        and(eq(orderItems.orderId, orderId), eq(orderItems.status, "draft"))
+      );
+    entered = true;
+  }
 
-  // Rekonsiliasi DP menggantung: order ini lunas lewat jalur LAIN (mis. kasir
-  // menerima cash sbg pembayaran baru, bukan mark-paid baris DP pay-at-cashier)
-  // padahal DP booking masih pending. Uang sudah diterima ≥ nominal DP →
-  // booking dianggap terkonfirmasi (dp_paid_at di-set) dan baris DP pending
-  // dimatikan — tanpa ini, timeout DP membatalkan booking yang SUDAH dibayar.
-  const [ord] = await db
-    .select({ sessionId: orders.sessionId })
-    .from(orders)
-    .where(eq(orders.id, orderId));
-  if (ord) {
-    const [sess] = await db
-      .select({ dpPaidAt: tableSessions.dpPaidAt })
-      .from(tableSessions)
-      .where(eq(tableSessions.id, ord.sessionId));
-    if (sess && sess.dpPaidAt == null) {
-      const [danglingDp] = await db
-        .select({ id: payments.id, amount: payments.amount })
-        .from(payments)
-        .where(
-          and(
-            eq(payments.orderId, orderId),
-            eq(payments.status, "pending"),
-            sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
-          )
+  // ---- Rekonsiliasi "Pay on Cashier" (jalan juga utk order yg SUDAH paid) ----
+  // Kasir sering menerima uang lewat alur "terima pembayaran" biasa alih-alih
+  // mark-paid baris pending pay-at-cashier → baris itu menggantung selamanya
+  // ("waiting confirmation" padahal sudah dibayar). Dua langkah:
+
+  // (1) DP menggantung: uang diterima ≥ nominal DP → booking terkonfirmasi
+  //     (dp_paid_at di-set) + baris DP pending dimatikan. Tanpa ini, timeout
+  //     DP membatalkan booking yang SUDAH dibayar. Harus jalan SEBELUM (2)
+  //     supaya dp_paid_at tetap ter-set saat barisnya ikut ter-supersede.
+  const [sess] = await db
+    .select({ dpPaidAt: tableSessions.dpPaidAt })
+    .from(tableSessions)
+    .where(eq(tableSessions.id, order.sessionId));
+  if (sess && sess.dpPaidAt == null) {
+    const [danglingDp] = await db
+      .select({ id: payments.id, amount: payments.amount })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.orderId, orderId),
+          eq(payments.status, "pending"),
+          sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
         )
-        .limit(1);
-      if (danglingDp && paid >= danglingDp.amount) {
-        const superseded = await db
-          .update(payments)
-          .set({ status: "failed", paidAt: null })
-          .where(
-            and(eq(payments.id, danglingDp.id), eq(payments.status, "pending"))
-          )
-          .returning({ id: payments.id });
-        if (superseded.length > 0) {
-          await releaseVoucherForPayment(danglingDp.id).catch(() => {});
-          await db
-            .update(tableSessions)
-            .set({ dpPaidAt: now })
-            .where(eq(tableSessions.id, ord.sessionId));
-        }
+      )
+      .limit(1);
+    if (danglingDp && paid >= danglingDp.amount) {
+      const superseded = await db
+        .update(payments)
+        .set({ status: "failed", paidAt: null })
+        .where(
+          and(eq(payments.id, danglingDp.id), eq(payments.status, "pending"))
+        )
+        .returning({ id: payments.id });
+      if (superseded.length > 0) {
+        await releaseVoucherForPayment(danglingDp.id).catch(() => {});
+        await db
+          .update(tableSessions)
+          .set({ dpPaidAt: now })
+          .where(eq(tableSessions.id, order.sessionId));
       }
     }
   }
-  return true;
+
+  // (2) Tagihan order sudah TERTUTUP (outstanding ≤ 0) → semua pending
+  //     pay-at-cashier di order ini tak lagi diperlukan; matikan (conditional)
+  //     supaya tak ada baris "waiting confirmation" menggantung. QRIS pending
+  //     TIDAK disentuh — QR-nya masih hidup di gateway (paidAfterCancelled
+  //     menangani kalau tetap terbayar).
+  const { outstanding } = await getOrderOutstanding(orderId);
+  if (outstanding <= 0) {
+    const danglingCashier = await db
+      .select({ id: payments.id })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.orderId, orderId),
+          eq(payments.status, "pending"),
+          sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`
+        )
+      );
+    for (const d of danglingCashier) {
+      const upd = await db
+        .update(payments)
+        .set({ status: "failed", paidAt: null })
+        .where(and(eq(payments.id, d.id), eq(payments.status, "pending")))
+        .returning({ id: payments.id });
+      if (upd.length > 0) {
+        await releaseVoucherForPayment(d.id).catch(() => {});
+      }
+    }
+  }
+
+  return entered;
 }
 
 /**
