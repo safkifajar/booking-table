@@ -120,8 +120,13 @@ export function MembershipTxList({ rows }: { rows: AdminMembershipTxRow[] }) {
               <tbody className="divide-y divide-border">
                 {pageItems.map((r) => (
                   <tr key={r.id} className="hover:bg-muted/30 transition">
-                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
-                      {r.id.slice(0, 8).toUpperCase()}
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/admin/membership/transactions/${r.id}`}
+                        className="font-mono text-xs text-muted-foreground hover:text-primary transition"
+                      >
+                        {r.id.slice(0, 8).toUpperCase()}
+                      </Link>
                     </td>
                     <td className="px-4 py-2.5">
                       <Link

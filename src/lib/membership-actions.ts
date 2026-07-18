@@ -15,6 +15,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
@@ -1228,5 +1229,108 @@ export async function getVoucherUsageDetail(
     expires_at: r.expires_at.toISOString(),
     used_at: r.used_at?.toISOString() ?? null,
     payment_paid_at: r.payment_paid_at?.toISOString() ?? null,
+  };
+}
+
+export interface MembershipTxDetail {
+  id: string;
+  kind: string;
+  status: string;
+  method: string;
+  external_ref: string | null;
+  level_key: string;
+  level_name: string;
+  base_amount: number;
+  tax_amount: number;
+  service_amount: number;
+  amount: number;
+  period_start: string;
+  period_end: string | null;
+  paid_at: string | null;
+  created_at: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  granted_by_name: string | null;
+  /** Voucher benefit yang digenerate dari transaksi ini. */
+  vouchers: {
+    id: string;
+    code: string;
+    name: string;
+    expires_at: string;
+    used_at: string | null;
+    reserved: boolean;
+  }[];
+}
+
+export async function getMembershipTxDetail(
+  id: string
+): Promise<MembershipTxDetail | null> {
+  await requireAdmin();
+  const txId = z.string().uuid().parse(id);
+  const granter = aliasedTable(profiles, "granter");
+
+  const [r] = await db
+    .select({
+      id: membershipTransactions.id,
+      kind: membershipTransactions.kind,
+      status: membershipTransactions.status,
+      method: membershipTransactions.method,
+      external_ref: membershipTransactions.externalRef,
+      level_key: membershipTransactions.levelKey,
+      level_name: membershipLevels.name,
+      base_amount: membershipTransactions.baseAmount,
+      tax_amount: membershipTransactions.taxAmount,
+      service_amount: membershipTransactions.serviceAmount,
+      amount: membershipTransactions.amount,
+      period_start: membershipTransactions.periodStart,
+      period_end: membershipTransactions.periodEnd,
+      paid_at: membershipTransactions.paidAt,
+      created_at: membershipTransactions.createdAt,
+      customer_id: membershipTransactions.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      granted_by_name: granter.displayName,
+    })
+    .from(membershipTransactions)
+    .innerJoin(profiles, eq(profiles.id, membershipTransactions.profileId))
+    .innerJoin(users, eq(users.id, membershipTransactions.profileId))
+    .innerJoin(
+      membershipLevels,
+      eq(membershipLevels.key, membershipTransactions.levelKey)
+    )
+    .leftJoin(granter, eq(granter.id, membershipTransactions.grantedBy))
+    .where(eq(membershipTransactions.id, txId))
+    .limit(1);
+
+  if (!r) return null;
+
+  const vouchers = await db
+    .select({
+      id: memberVouchers.id,
+      code: memberVouchers.code,
+      name: memberVouchers.name,
+      expires_at: memberVouchers.expiresAt,
+      used_at: memberVouchers.usedAt,
+      used_payment_id: memberVouchers.usedPaymentId,
+    })
+    .from(memberVouchers)
+    .where(eq(memberVouchers.membershipTxId, txId))
+    .orderBy(desc(memberVouchers.createdAt));
+
+  return {
+    ...r,
+    period_start: r.period_start.toISOString(),
+    period_end: r.period_end?.toISOString() ?? null,
+    paid_at: r.paid_at?.toISOString() ?? null,
+    created_at: r.created_at.toISOString(),
+    vouchers: vouchers.map((v) => ({
+      id: v.id,
+      code: v.code,
+      name: v.name,
+      expires_at: v.expires_at.toISOString(),
+      used_at: v.used_at?.toISOString() ?? null,
+      reserved: !v.used_at && v.used_payment_id != null,
+    })),
   };
 }
