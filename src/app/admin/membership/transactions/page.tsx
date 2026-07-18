@@ -83,56 +83,83 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
             No membership transactions{status ? ` with status "${status}"` : ""} yet.
           </Card>
         ) : (
-          <Card className="divide-y divide-border">
-            {rows.map((r) => (
-              <div key={r.id} className="p-3 sm:p-4 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Link
-                      href={`/admin/users/${r.customer_id}`}
-                      className="text-sm font-medium hover:text-primary transition truncate"
-                    >
-                      {r.customer_name}
-                    </Link>
-                    <Badge variant="outline" className="text-[10px]">
-                      {r.level_name}
-                    </Badge>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {KIND_LABEL[r.kind] ?? r.kind}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className={cn("text-[10px]", STATUS_STYLE[r.status])}
-                    >
-                      {r.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {r.customer_email} · {fmt(r.created_at)}
-                    {" · "}
-                    {r.period_end
-                      ? `until ${new Date(r.period_end).toLocaleDateString("en-US", { dateStyle: "medium" })}`
-                      : "lifetime"}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold">
-                    {formatIDR(r.amount)}
-                  </div>
-                  {r.tax_amount + r.service_amount > 0 && (
-                    <div className="text-[11px] text-muted-foreground">
-                      incl.{" "}
-                      {r.tax_amount > 0 && r.service_amount > 0
-                        ? "tax & service"
-                        : r.tax_amount > 0
-                          ? "tax"
-                          : "service charge"}{" "}
-                      {formatIDR(r.tax_amount + r.service_amount)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 font-medium">Customer</th>
+                    <th className="px-4 py-3 font-medium w-24">Level</th>
+                    <th className="px-4 py-3 font-medium w-28">Type</th>
+                    <th className="px-4 py-3 font-medium w-24">Status</th>
+                    <th className="px-4 py-3 font-medium w-40">Date</th>
+                    <th className="px-4 py-3 font-medium w-32">Until</th>
+                    <th className="px-4 py-3 font-medium w-36 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-muted/30 transition">
+                      <td className="px-4 py-2.5">
+                        <Link
+                          href={`/admin/users/${r.customer_id}`}
+                          className="font-medium hover:text-primary transition block truncate max-w-[220px]"
+                        >
+                          {r.customer_name}
+                        </Link>
+                        <span className="text-xs text-muted-foreground block truncate max-w-[220px]">
+                          {r.customer_email}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant="outline" className="text-[10px]">
+                          {r.level_name}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {KIND_LABEL[r.kind] ?? r.kind}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Badge
+                          variant="secondary"
+                          className={cn("text-[10px]", STATUS_STYLE[r.status])}
+                        >
+                          {r.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                        {fmt(r.created_at)}
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                        {r.period_end
+                          ? new Date(r.period_end).toLocaleDateString("en-US", {
+                              dateStyle: "medium",
+                            })
+                          : "Lifetime"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <div className="font-semibold tabular-nums">
+                          {formatIDR(r.amount)}
+                        </div>
+                        {r.tax_amount + r.service_amount > 0 && (
+                          <div className="text-[11px] text-muted-foreground whitespace-nowrap">
+                            incl.{" "}
+                            {r.tax_amount > 0 && r.service_amount > 0
+                              ? "tax & service"
+                              : r.tax_amount > 0
+                                ? "tax"
+                                : "service charge"}{" "}
+                            {formatIDR(r.tax_amount + r.service_amount)}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         )}
 
