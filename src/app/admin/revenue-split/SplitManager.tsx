@@ -81,19 +81,16 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
           })),
         });
         setRangeResult(res.totals);
-        exportRef.current = res;
+        return res;
       } catch {
         toast.error("Failed to load recap");
+        return null;
       } finally {
         setRangeLoading(false);
       }
     },
     [rows]
   );
-  const exportRef = React.useRef<{
-    totals: { category: string; total: number }[];
-    rows: { paid_at: string; source: string; source_id: string; method: string; service: number; amounts: Record<string, number> }[];
-  } | null>(null);
 
   const [saving, setSaving] = React.useState(false);
 
@@ -276,8 +273,9 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
               variant="outline"
               onClick={async () => {
                 try {
-                  if (!exportRef.current) await loadRange(rangeFrom, rangeTo);
-                  const data = exportRef.current;
+                  // SELALU hitung ulang dgn isi form saat ini — jangan pakai
+                  // cache; setting bisa berubah setelah Show recap terakhir.
+                  const data = await loadRange(rangeFrom, rangeTo);
                   if (!data || data.rows.length === 0) {
                     toast.info("No transactions in this range");
                     return;
