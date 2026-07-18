@@ -187,19 +187,25 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
                 options={METHOD_OPTIONS}
                 className="w-32"
               />
-              <button
-                type="button"
-                onClick={() => setSink(i)}
+              <label
                 title="Remainder sink — absorbs leftovers & rounding"
-                className={cn(
-                  "h-10 px-2.5 rounded-md border text-[10px] font-semibold uppercase tracking-wider transition shrink-0",
-                  r.sink
-                    ? "border-primary/50 bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:border-foreground/30"
-                )}
+                className="h-10 flex items-center gap-1.5 px-1.5 cursor-pointer select-none shrink-0"
               >
-                Sink
-              </button>
+                <input
+                  type="checkbox"
+                  checked={r.sink}
+                  onChange={() => setSink(i)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold uppercase tracking-wider",
+                    r.sink ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  Sink
+                </span>
+              </label>
               <Button
                 variant="ghost"
                 size="icon"
