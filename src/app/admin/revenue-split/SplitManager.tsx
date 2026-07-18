@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import {
   saveSplitScheme,
@@ -17,23 +16,15 @@ import {
 interface Row {
   name: string;
   percent: string; // input desimal, koma/titik
-  method: string; // "" = semua
   sink: boolean;
 }
 
-const METHOD_OPTIONS = [
-  { value: "", label: "All methods" },
-  { value: "qris", label: "QRIS" },
-  { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
-];
-
 /** Seed 4 kategori (PRD) saat belum ada skema. */
 const SEED: Row[] = [
-  { name: "QRIS Mandiri", percent: "", method: "qris", sink: false },
-  { name: "Outlet", percent: "", method: "", sink: false },
-  { name: "Karyawan", percent: "", method: "", sink: false },
-  { name: "IT/Kita", percent: "", method: "", sink: true },
+  { name: "QRIS Mandiri", percent: "", sink: false },
+  { name: "Outlet", percent: "", sink: false },
+  { name: "Karyawan", percent: "", sink: false },
+  { name: "IT/Kita", percent: "", sink: true },
 ];
 
 function parsePct(v: string): number {
@@ -48,7 +39,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
       ? config.active.categories.map((c) => ({
           name: c.name,
           percent: String(c.percent).replace(".", ","),
-          method: c.method ?? "",
           sink: c.is_remainder_sink,
         }))
       : SEED
@@ -76,7 +66,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
           categories: rows.map((r) => ({
             name: r.name.trim() || "-",
             percent: parsePct(r.percent),
-            method: r.method || null,
             isRemainderSink: r.sink,
           })),
         });
@@ -120,7 +109,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
         categories: rows.map((r) => ({
           name: r.name.trim(),
           percent: parsePct(r.percent),
-          method: r.method || null,
+          method: null,
           isRemainderSink: r.sink,
         })),
       });
@@ -181,12 +170,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
                 className="w-20 h-10 px-2 rounded-md bg-input border border-border text-sm text-right tabular-nums focus:outline-none focus:border-primary/60"
               />
               <span className="text-xs text-muted-foreground">%</span>
-              <Select
-                value={r.method}
-                onChange={(v) => patch(i, { method: v })}
-                options={METHOD_OPTIONS}
-                className="w-32"
-              />
               <button
                 type="button"
                 onClick={() => setSink(i)}
@@ -216,7 +199,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
             variant="outline"
             size="sm"
             onClick={() =>
-              setRows((p) => [...p, { name: "", percent: "", method: "", sink: false }])
+              setRows((p) => [...p, { name: "", percent: "", sink: false }])
             }
           >
             <Plus className="h-4 w-4" /> Add category
