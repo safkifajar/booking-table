@@ -360,7 +360,6 @@ export function SessionView(props: SessionViewProps) {
                 label="Bill"
                 active={effTab === "bill"}
                 onClick={() => changeTab("bill")}
-                badge={props.orderItems.length || undefined}
               />
             )}
           </div>
