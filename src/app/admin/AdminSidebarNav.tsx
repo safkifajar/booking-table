@@ -21,6 +21,7 @@ import {
   MessageSquareQuote,
   Crown,
   Ticket,
+  TicketCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -137,6 +138,12 @@ const NAV: NavItem[] = [
         href: "/admin/membership/vouchers",
         label: "Vouchers",
         icon: <Ticket className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/membership/vouchers/usage",
+        label: "Voucher Usage",
+        icon: <TicketCheck className="h-4 w-4" />,
       },
       {
         type: "leaf",
@@ -286,8 +293,12 @@ function SidebarGroup({
 function isActive(pathname: string, href: string): boolean {
   // Href yang punya leaf SAUDARA di bawahnya → exact match saja, supaya
   // "Levels" (/admin/membership) tak ikut menyala saat buka
-  // /admin/membership/vouchers.
-  if (href === "/admin" || href === "/admin/membership") {
+  // /admin/membership/vouchers, dan "Vouchers" tak menyala di /usage.
+  if (
+    href === "/admin" ||
+    href === "/admin/membership" ||
+    href === "/admin/membership/vouchers"
+  ) {
     return pathname === href;
   }
   return pathname === href || pathname.startsWith(href + "/");
