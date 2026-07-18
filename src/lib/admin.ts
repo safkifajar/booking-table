@@ -15,7 +15,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, sql, desc } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
@@ -583,6 +583,7 @@ export interface TransactionDetailItem {
   status: string;
   queue_number: number | null;
   menu_item_name: string;
+  menu_item_image: string | null;
   added_by_name: string;
 }
 
@@ -651,6 +652,8 @@ export interface TransactionDetail {
   charge: number;
   /** Persen gabungan (taxPercent + servicePercent). */
   charge_percent: number;
+  /** Label charge sesuai komponen aktif ("Tax & Service"/"Tax"/"Service charge"). */
+  charge_label: string;
   /** subtotal + tax + service. */
   total: number;
   total_paid: number;
@@ -689,17 +692,19 @@ export async function getTransactionDetail(
   if (!sessionRow) return null;
   if (sessionRow.bar_id !== barId) return null;
 
-  // 2. Order(s) — ambil yg pertama dibuat
-  const [order] = await db
+  // 2. SEMUA order sesi — sejak multi-order, satu sesi bisa punya banyak
+  //    order; detail transaksi harus agregat SELURUHNYA (dulu limit 1 →
+  //    item/pembayaran order lain hilang & Total beda dgn list).
+  const orderRows = await db
     .select({ id: orders.id })
     .from(orders)
     .where(eq(orders.sessionId, sessionId))
-    .orderBy(orders.createdAt)
-    .limit(1);
+    .orderBy(orders.createdAt);
+  const orderIds = orderRows.map((o) => o.id);
 
   // 3. Items + Payments (kalau ada order)
   // pakai profile aliases supaya bisa join 2x (menu_item, added_by member)
-  const itemsRaw = order
+  const itemsRaw = orderIds.length
     ? await db
         .select({
           id: orderItems.id,
@@ -709,6 +714,7 @@ export async function getTransactionDetail(
           status: orderItems.status,
           queue_number: orderItems.queueNumber,
           menu_item_name: menuItems.name,
+          menu_item_image: menuItems.imageUrl,
           added_by_name: profiles.displayName,
         })
         .from(orderItems)
@@ -716,12 +722,15 @@ export async function getTransactionDetail(
         .innerJoin(sessionMembers, eq(sessionMembers.id, orderItems.addedByMemberId))
         .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
         .where(
-          and(eq(orderItems.orderId, order.id), sql`${orderItems.status} <> 'void'`)
+          and(
+            inArray(orderItems.orderId, orderIds),
+            sql`${orderItems.status} <> 'void'`
+          )
         )
         .orderBy(orderItems.queueNumber)
     : [];
 
-  const paymentsRaw = order
+  const paymentsRaw = orderIds.length
     ? await db
         .select({
           id: payments.id,
@@ -737,12 +746,12 @@ export async function getTransactionDetail(
         .from(payments)
         .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
         .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
-        .where(eq(payments.orderId, order.id))
+        .where(inArray(payments.orderId, orderIds))
         .orderBy(payments.createdAt)
     : [];
 
   // Rincian item per pembayaran itemized (untuk expand di detail transaksi).
-  const paymentItemsRaw = order
+  const paymentItemsRaw = orderIds.length
     ? await db
         .select({
           payment_id: paymentItems.paymentId,
@@ -754,7 +763,7 @@ export async function getTransactionDetail(
         .innerJoin(payments, eq(payments.id, paymentItems.paymentId))
         .innerJoin(orderItems, eq(orderItems.id, paymentItems.orderItemId))
         .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
-        .where(eq(payments.orderId, order.id))
+        .where(inArray(payments.orderId, orderIds))
     : [];
   const itemsByPayment = new Map<
     string,
@@ -809,6 +818,7 @@ export async function getTransactionDetail(
     notes: i.notes,
     status: i.status,
     queue_number: i.queue_number,
+    menu_item_image: i.menu_item_image,
     menu_item_name: i.menu_item_name,
     added_by_name: i.added_by_name,
   }));
@@ -908,6 +918,7 @@ export async function getTransactionDetail(
     service: bill.service,
     charge: bill.charge,
     charge_percent: bill.chargePercent,
+    charge_label: bill.chargeLabel,
     total: bill.total,
     total_paid: totalPaid,
     move_history: moveHistory,

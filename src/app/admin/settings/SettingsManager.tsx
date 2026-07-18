@@ -85,32 +85,56 @@ function ChargeSection({
         <div>
           <h2 className="text-base font-semibold">Tax &amp; Service Charge</h2>
           <p className="text-xs text-muted-foreground">
-            Added on top of the bill subtotal. Set 0% to disable.
+            Added on top of the bill subtotal. Toggle each component on/off —
+            the wording on bills follows automatically.
           </p>
         </div>
       </div>
 
       <div className="space-y-3">
-        <ConfigField
-          label="Tax (PB1/PPN)"
-          hint="Percentage of the subtotal"
-          value={config.taxPercent}
-          unit="%"
-          min={0}
-          max={100}
-          step={0.5}
-          onChange={(v) => patch({ taxPercent: v })}
-        />
-        <ConfigField
-          label="Service charge"
-          hint="Percentage of the subtotal"
-          value={config.servicePercent}
-          unit="%"
-          min={0}
-          max={100}
-          step={0.5}
-          onChange={(v) => patch({ servicePercent: v })}
-        />
+        {/* Toggle per komponen — nilai % tetap tersimpan saat dimatikan;
+            wording di transaksi mengikuti (Tax & Service / Tax / Service /
+            tanpa baris). */}
+        <div className="flex items-center justify-between gap-3">
+          <ChargeToggle
+            label="Tax (PB1/PPN)"
+            enabled={config.taxEnabled !== false}
+            onToggle={() => patch({ taxEnabled: config.taxEnabled === false })}
+          />
+        </div>
+        {config.taxEnabled !== false && (
+          <ConfigField
+            label="Tax rate"
+            hint="Percentage of the subtotal"
+            value={config.taxPercent}
+            unit="%"
+            min={0}
+            max={100}
+            step={0.5}
+            onChange={(v) => patch({ taxPercent: v })}
+          />
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <ChargeToggle
+            label="Service charge"
+            enabled={config.serviceEnabled !== false}
+            onToggle={() =>
+              patch({ serviceEnabled: config.serviceEnabled === false })
+            }
+          />
+        </div>
+        {config.serviceEnabled !== false && (
+          <ConfigField
+            label="Service rate"
+            hint="Percentage of the subtotal"
+            value={config.servicePercent}
+            unit="%"
+            min={0}
+            max={100}
+            step={0.5}
+            onChange={(v) => patch({ servicePercent: v })}
+          />
+        )}
 
         {/* Rounding mode */}
         <div className="space-y-1.5">
@@ -142,7 +166,7 @@ function ChargeSection({
         <PreviewRow label="Subtotal" value={preview.subtotal} />
         {preview.chargePercent > 0 && (
           <PreviewRow
-            label={`Tax & Service (${preview.chargePercent}%)`}
+            label={`${preview.chargeLabel} (${preview.chargePercent}%)`}
             value={preview.charge}
           />
         )}
@@ -582,6 +606,47 @@ function ConfigField({
         />
         <span className="text-xs text-muted-foreground">{unit}</span>
       </div>
+    </div>
+  );
+}
+
+/** Switch aktif/nonaktif komponen charge — pola switch PrivacyToggleSection. */
+function ChargeToggle({
+  label,
+  enabled,
+  onToggle,
+}: {
+  label: string;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex w-full items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-xs text-muted-foreground">
+          {enabled ? "On — added to bills" : "Off — not charged"}
+        </div>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={enabled ? `Turn off ${label}` : `Turn on ${label}`}
+        onClick={onToggle}
+        className={cn(
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+          enabled ? "bg-primary" : "bg-muted-foreground/30"
+        )}
+      >
+        <span
+          className={cn(
+            "inline-flex h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+            enabled ? "translate-x-[22px]" : "translate-x-0.5"
+          )}
+        />
+      </button>
     </div>
   );
 }

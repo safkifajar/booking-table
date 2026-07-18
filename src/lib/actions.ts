@@ -70,6 +70,10 @@ import {
   settleVoucherForPayment,
   releaseVoucherForPayment,
 } from "@/lib/member-voucher";
+import {
+  settleRevenueSplitForPayment,
+  settleRevenueSplitForMembershipTx,
+} from "@/lib/revenue-split";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 import { getPaymentGateway } from "@/lib/payments/gateway";
@@ -673,6 +677,9 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       if (chargeResult.status === "paid") {
         // Voucher → cetak baris diskon dulu supaya settle melihat DP penuh.
         await settleVoucherForPayment(dpPaymentId);
+        await settleRevenueSplitForPayment(dpPaymentId).catch((e) =>
+          console.error("[split] openTable DP:", e)
+        );
         await db
           .update(tableSessions)
           .set({ dpPaidAt: new Date() })
@@ -2011,6 +2018,8 @@ export interface OrderDetail {
   subtotal: number;
   charge: number;
   chargePercent: number;
+  /** Label charge sesuai komponen aktif ("Tax & Service"/"Tax"/"Service charge"). */
+  chargeLabel: string;
   total: number;
   paid: number;
   outstanding: number;
@@ -2195,6 +2204,7 @@ export async function getOrderDetail(
     subtotal: isViewOnly ? 0 : bill.subtotal,
     charge: isViewOnly ? 0 : bill.charge,
     chargePercent: bill.chargePercent,
+    chargeLabel: bill.chargeLabel,
     total: isViewOnly ? 0 : bill.total,
     paid: isViewOnly ? 0 : paid,
     outstanding: isViewOnly ? 0 : outstanding,
@@ -2622,6 +2632,10 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   if (chargeResult.status === "paid") {
     // Voucher → cetak baris diskon DULU supaya settle melihat total penuh.
     await settleVoucherForPayment(newPayment.id);
+    // Bagi hasil service fee (best-effort — jangan gagalkan pembayaran).
+    await settleRevenueSplitForPayment(newPayment.id).catch((e) =>
+      console.error("[split] payShare:", e)
+    );
     // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK (paid + item sent).
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
@@ -3184,6 +3198,8 @@ export interface SessionPaymentDetail {
   itemsSubtotal: number;
   /** Tax & service atas transaksi ini = amount − itemsSubtotal (≥ 0). */
   taxService: number;
+  /** Label charge sesuai komponen aktif. */
+  chargeLabel: string;
   /** QR string — HANYA diisi utk pemilik payment atau staff. */
   qrString: string | null;
   expiresAt: string | null;
@@ -3317,6 +3333,10 @@ export async function getSessionPaymentDetail(
     // Untuk itemized/treat: tax = amount − subtotal item. Untuk non-item (equal/DP)
     // tak ada rincian item → taxService 0 (amount ditampilkan apa adanya).
     taxService: itemsSubtotal > 0 ? Math.max(0, row.amount - itemsSubtotal) : 0,
+    chargeLabel: (await import("@/lib/settings-constants")).computeBillTotals(
+      0,
+      await getChargeConfig(row.barId)
+    ).chargeLabel,
     qrString: canSeeQr ? meta.qrString ?? null : null,
     expiresAt: meta.expiresAt ?? null,
     batchMembers,
@@ -3389,6 +3409,9 @@ export async function checkPaymentStatus(
       .where(eq(payments.id, row.id));
     // Voucher yang menempel → tandai used + cetak baris diskon (idempotent).
     await settleVoucherForPayment(row.id);
+    await settleRevenueSplitForPayment(row.id).catch((e) =>
+      console.error("[split] checkPaymentStatus:", e)
+    );
     // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi, tak jadi
     // dibatalkan oleh timeout).
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};

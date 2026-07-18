@@ -205,6 +205,9 @@ export async function updateReservationConfig(
 const chargeConfigSchema = z.object({
   taxPercent: z.number().min(0).max(100),
   servicePercent: z.number().min(0).max(100),
+  // Toggle per komponen (nilai % tetap tersimpan saat nonaktif).
+  taxEnabled: z.boolean(),
+  serviceEnabled: z.boolean(),
   rounding: z.enum(["none", "up", "down"]),
 });
 

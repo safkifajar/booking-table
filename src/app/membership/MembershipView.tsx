@@ -295,7 +295,12 @@ export function MembershipView({
                   </div>
                   {t.tax_amount + t.service_amount > 0 && (
                     <div className="text-[11px] text-muted-foreground">
-                      incl. tax &amp; service
+                      incl.{" "}
+                      {t.tax_amount > 0 && t.service_amount > 0
+                        ? "tax & service"
+                        : t.tax_amount > 0
+                          ? "tax"
+                          : "service charge"}
                     </div>
                   )}
                 </div>
@@ -592,7 +597,7 @@ function BuyDialog({
               {(preview.tax_amount ?? 0) + (preview.service_amount ?? 0) >
                 0 && (
                 <Row
-                  label={`Tax & service${preview.charge_percent ? ` (${preview.charge_percent}%)` : ""}`}
+                  label={`${preview.charge_label ?? "Tax & service"}${preview.charge_percent ? ` (${preview.charge_percent}%)` : ""}`}
                   value={formatIDR(
                     (preview.tax_amount ?? 0) + (preview.service_amount ?? 0)
                   )}

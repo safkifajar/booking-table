@@ -14,14 +14,21 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
   membershipLevels,
   membershipVouchers,
 } from "@/lib/db/schema/membership";
-import { membershipTransactions } from "@/lib/db/schema/membership-transactions";
+import {
+  membershipTransactions,
+  memberVouchers,
+} from "@/lib/db/schema/membership-transactions";
+import { payments, orders } from "@/lib/db/schema/orders";
+import { tableSessions } from "@/lib/db/schema/sessions";
+import { tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { staffRoles } from "@/lib/db/schema/extras";
@@ -33,6 +40,7 @@ import { createNotification } from "@/lib/notifications";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { getBarBySlug } from "@/lib/queries";
 import { computeBillTotals } from "@/lib/settings-constants";
+import { settleRevenueSplitForMembershipTx } from "@/lib/revenue-split";
 import {
   generateMemberVouchers,
   getGeneratedCounts,
@@ -259,9 +267,11 @@ const TX_PAGE_SIZE = 25;
 export async function listMembershipTransactions(opts?: {
   status?: "pending" | "paid" | "failed" | "refunded";
   page?: number;
+  pageSize?: number;
 }): Promise<{ rows: AdminMembershipTxRow[]; total: number }> {
   await requireAdmin();
   const page = Math.max(1, opts?.page ?? 1);
+  const pageSize = Math.min(500, Math.max(1, opts?.pageSize ?? TX_PAGE_SIZE));
   const where = opts?.status
     ? eq(membershipTransactions.status, opts.status)
     : undefined;
@@ -295,8 +305,8 @@ export async function listMembershipTransactions(opts?: {
       )
       .where(where)
       .orderBy(desc(membershipTransactions.createdAt))
-      .limit(TX_PAGE_SIZE)
-      .offset((page - 1) * TX_PAGE_SIZE),
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
     db
       .select({ total: count() })
       .from(membershipTransactions)
@@ -444,6 +454,8 @@ export interface PurchasePreview {
   service_amount?: number;
   /** Persen gabungan utk label "(15%)"; 0 = tanpa charge. */
   charge_percent?: number;
+  /** Label charge sesuai komponen aktif. */
+  charge_label?: string;
   /** Total ditagih = base + tax + service. */
   final_amount?: number;
   /** renewal = level sama & masih aktif → masa ditambahkan dari expiry lama. */
@@ -520,6 +532,7 @@ export async function previewMembershipPurchase(input: {
     tax_amount: bill.tax,
     service_amount: bill.service,
     charge_percent: bill.chargePercent,
+    charge_label: bill.chargeLabel,
     final_amount: bill.total,
     kind,
     new_expires_at: end?.toISOString() ?? null,
@@ -701,6 +714,11 @@ async function activateMembershipTx(txId: string): Promise<boolean> {
     levelKey: string;
     periodEnd: Date | null;
   };
+
+  // Bagi hasil service fee membership (G7; best-effort).
+  await settleRevenueSplitForMembershipTx(txId).catch((e) =>
+    console.error("[split] membership:", e)
+  );
 
   // Post-commit: generate voucher benefit (idempotensi dijamin oleh guard
   // conditional di atas — hanya SATU pemanggil yang sampai sini per tx).
@@ -1068,5 +1086,336 @@ export async function previewMyVoucher(input: {
     code: res.voucher.code,
     name: res.voucher.name,
     discount: res.voucher.discount,
+  };
+}
+
+// ============================================================
+// VOUCHER USAGE — siapa pakai voucher di transaksi mana (admin)
+// ============================================================
+
+export interface VoucherUsageRow {
+  voucher_id: string;
+  code: string;
+  voucher_name: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  /** Nominal potongan yang dikunci saat reserve/settle. */
+  discount_applied: number | null;
+  /** 'used' = payment-nya sudah PAID; 'reserved' = masih menempel di payment pending. */
+  usage_status: "used" | "reserved";
+  used_at: string | null;
+  /** Payment bill tempat voucher dipakai (nominal yang DIBAYAR user setelah potongan). */
+  payment_amount: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  /** Sesi transaksi (untuk link ke detail transaksi admin) + meja. */
+  session_id: string | null;
+  table_label: string | null;
+}
+
+export async function listVoucherUsage(): Promise<VoucherUsageRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select({
+      voucher_id: memberVouchers.id,
+      code: memberVouchers.code,
+      voucher_name: memberVouchers.name,
+      customer_id: memberVouchers.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      discount_applied: memberVouchers.discountApplied,
+      used_at: memberVouchers.usedAt,
+      payment_amount: payments.amount,
+      payment_method: payments.method,
+      payment_status: payments.status,
+      session_id: orders.sessionId,
+      table_label: tables.label,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .leftJoin(payments, eq(payments.id, memberVouchers.usedPaymentId))
+    .leftJoin(orders, eq(orders.id, payments.orderId))
+    .leftJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .leftJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      or(isNotNull(memberVouchers.usedAt), isNotNull(memberVouchers.usedPaymentId))
+    )
+    .orderBy(desc(sql`COALESCE(${memberVouchers.usedAt}, ${memberVouchers.createdAt})`))
+    .limit(500);
+
+  return rows.map((r) => ({
+    ...r,
+    usage_status: r.used_at ? ("used" as const) : ("reserved" as const),
+    used_at: r.used_at?.toISOString() ?? null,
+  }));
+}
+
+export interface VoucherUsageDetail {
+  voucher_id: string;
+  code: string;
+  voucher_name: string;
+  /** Snapshot aturan potongan saat voucher digenerate. */
+  discount_type: string; // 'percent' | 'fixed'
+  discount_value: number;
+  max_discount: number | null;
+  min_spend: number | null;
+  received_at: string;
+  expires_at: string;
+  usage_status: "used" | "reserved";
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  discount_applied: number | null;
+  used_at: string | null;
+  payment_id: string | null;
+  payment_amount: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  payment_paid_at: string | null;
+  session_id: string | null;
+  table_label: string | null;
+  area_name: string | null;
+}
+
+export async function getVoucherUsageDetail(
+  id: string
+): Promise<VoucherUsageDetail | null> {
+  await requireAdmin();
+  const voucherId = z.string().uuid().parse(id);
+
+  const [r] = await db
+    .select({
+      voucher_id: memberVouchers.id,
+      code: memberVouchers.code,
+      voucher_name: memberVouchers.name,
+      discount_type: memberVouchers.discountType,
+      discount_value: memberVouchers.discountValue,
+      max_discount: memberVouchers.maxDiscount,
+      min_spend: memberVouchers.minSpend,
+      received_at: memberVouchers.createdAt,
+      expires_at: memberVouchers.expiresAt,
+      customer_id: memberVouchers.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      discount_applied: memberVouchers.discountApplied,
+      used_at: memberVouchers.usedAt,
+      payment_id: payments.id,
+      payment_amount: payments.amount,
+      payment_method: payments.method,
+      payment_status: payments.status,
+      payment_paid_at: payments.paidAt,
+      session_id: orders.sessionId,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .leftJoin(payments, eq(payments.id, memberVouchers.usedPaymentId))
+    .leftJoin(orders, eq(orders.id, payments.orderId))
+    .leftJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .leftJoin(tables, eq(tables.id, tableSessions.tableId))
+    .leftJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(memberVouchers.id, voucherId))
+    .limit(1);
+
+  if (!r) return null;
+  return {
+    ...r,
+    usage_status: r.used_at ? ("used" as const) : ("reserved" as const),
+    received_at: r.received_at.toISOString(),
+    expires_at: r.expires_at.toISOString(),
+    used_at: r.used_at?.toISOString() ?? null,
+    payment_paid_at: r.payment_paid_at?.toISOString() ?? null,
+  };
+}
+
+export interface MembershipTxDetail {
+  id: string;
+  kind: string;
+  status: string;
+  method: string;
+  external_ref: string | null;
+  level_key: string;
+  level_name: string;
+  base_amount: number;
+  tax_amount: number;
+  service_amount: number;
+  amount: number;
+  period_start: string;
+  period_end: string | null;
+  paid_at: string | null;
+  created_at: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  granted_by_name: string | null;
+  /** Voucher benefit yang digenerate dari transaksi ini. */
+  vouchers: {
+    id: string;
+    code: string;
+    name: string;
+    expires_at: string;
+    used_at: string | null;
+    reserved: boolean;
+  }[];
+}
+
+export async function getMembershipTxDetail(
+  id: string
+): Promise<MembershipTxDetail | null> {
+  await requireAdmin();
+  const txId = z.string().uuid().parse(id);
+  const granter = aliasedTable(profiles, "granter");
+
+  const [r] = await db
+    .select({
+      id: membershipTransactions.id,
+      kind: membershipTransactions.kind,
+      status: membershipTransactions.status,
+      method: membershipTransactions.method,
+      external_ref: membershipTransactions.externalRef,
+      level_key: membershipTransactions.levelKey,
+      level_name: membershipLevels.name,
+      base_amount: membershipTransactions.baseAmount,
+      tax_amount: membershipTransactions.taxAmount,
+      service_amount: membershipTransactions.serviceAmount,
+      amount: membershipTransactions.amount,
+      period_start: membershipTransactions.periodStart,
+      period_end: membershipTransactions.periodEnd,
+      paid_at: membershipTransactions.paidAt,
+      created_at: membershipTransactions.createdAt,
+      customer_id: membershipTransactions.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      granted_by_name: granter.displayName,
+    })
+    .from(membershipTransactions)
+    .innerJoin(profiles, eq(profiles.id, membershipTransactions.profileId))
+    .innerJoin(users, eq(users.id, membershipTransactions.profileId))
+    .innerJoin(
+      membershipLevels,
+      eq(membershipLevels.key, membershipTransactions.levelKey)
+    )
+    .leftJoin(granter, eq(granter.id, membershipTransactions.grantedBy))
+    .where(eq(membershipTransactions.id, txId))
+    .limit(1);
+
+  if (!r) return null;
+
+  const vouchers = await db
+    .select({
+      id: memberVouchers.id,
+      code: memberVouchers.code,
+      name: memberVouchers.name,
+      expires_at: memberVouchers.expiresAt,
+      used_at: memberVouchers.usedAt,
+      used_payment_id: memberVouchers.usedPaymentId,
+    })
+    .from(memberVouchers)
+    .where(eq(memberVouchers.membershipTxId, txId))
+    .orderBy(desc(memberVouchers.createdAt));
+
+  return {
+    ...r,
+    period_start: r.period_start.toISOString(),
+    period_end: r.period_end?.toISOString() ?? null,
+    paid_at: r.paid_at?.toISOString() ?? null,
+    created_at: r.created_at.toISOString(),
+    vouchers: vouchers.map((v) => ({
+      id: v.id,
+      code: v.code,
+      name: v.name,
+      expires_at: v.expires_at.toISOString(),
+      used_at: v.used_at?.toISOString() ?? null,
+      reserved: !v.used_at && v.used_payment_id != null,
+    })),
+  };
+}
+
+export interface VoucherTemplateDetail {
+  id: string;
+  name: string;
+  discount_type: string;
+  discount_value: number;
+  max_discount: number | null;
+  min_spend: number | null;
+  level_key: string | null;
+  valid_days: number;
+  is_active: boolean;
+  created_at: string;
+  /** Semua kode yang pernah digenerate ke member dari template ini. */
+  instances: {
+    id: string;
+    code: string;
+    member_id: string;
+    member_name: string;
+    member_email: string;
+    generated_at: string;
+    expires_at: string;
+    used_at: string | null;
+    reserved: boolean;
+    discount_applied: number | null;
+  }[];
+}
+
+export async function getVoucherTemplateDetail(
+  id: string
+): Promise<VoucherTemplateDetail | null> {
+  await requireAdmin();
+  const templateId = z.string().uuid().parse(id);
+
+  const [tpl] = await db
+    .select()
+    .from(membershipVouchers)
+    .where(eq(membershipVouchers.id, templateId))
+    .limit(1);
+  if (!tpl) return null;
+
+  const instances = await db
+    .select({
+      id: memberVouchers.id,
+      code: memberVouchers.code,
+      member_id: memberVouchers.profileId,
+      member_name: profiles.displayName,
+      member_email: users.email,
+      generated_at: memberVouchers.createdAt,
+      expires_at: memberVouchers.expiresAt,
+      used_at: memberVouchers.usedAt,
+      used_payment_id: memberVouchers.usedPaymentId,
+      discount_applied: memberVouchers.discountApplied,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .where(eq(memberVouchers.templateId, templateId))
+    .orderBy(desc(memberVouchers.createdAt))
+    .limit(1000);
+
+  return {
+    id: tpl.id,
+    name: tpl.name,
+    discount_type: tpl.discountType,
+    discount_value: tpl.discountValue,
+    max_discount: tpl.maxDiscount,
+    min_spend: tpl.minSpend,
+    level_key: tpl.levelKey,
+    valid_days: tpl.validDays,
+    is_active: tpl.isActive,
+    created_at: tpl.createdAt.toISOString(),
+    instances: instances.map((i) => ({
+      id: i.id,
+      code: i.code,
+      member_id: i.member_id,
+      member_name: i.member_name,
+      member_email: i.member_email,
+      generated_at: i.generated_at.toISOString(),
+      expires_at: i.expires_at.toISOString(),
+      used_at: i.used_at?.toISOString() ?? null,
+      reserved: !i.used_at && i.used_payment_id != null,
+      discount_applied: i.discount_applied,
+    })),
   };
 }

@@ -11,6 +11,7 @@ import {
   Users,
   ChevronRight,
   ArrowRightLeft,
+  UtensilsCrossed,
 } from "lucide-react";
 import { formatIDR, initials } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -264,11 +265,9 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-wider text-muted-foreground print:text-black/60 border-b border-border print:border-black/20">
-                <th className="text-left py-2 w-12">#</th>
+                <th className="text-left py-2 w-12"></th>
                 <th className="text-left py-2">Item</th>
                 <th className="text-right py-2 w-12">Qty</th>
-                <th className="text-right py-2 w-24">Price</th>
-                <th className="text-right py-2 w-28">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -277,8 +276,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                   key={i.id}
                   className="border-b border-border/40 print:border-black/10 align-top"
                 >
-                  <td className="py-2 text-xs text-muted-foreground print:text-black/60 tabular-nums">
-                    {i.queue_number !== null ? `#${String(i.queue_number).padStart(3, "0")}` : "—"}
+                  <td className="py-2 pr-2">
+                    {/* Foto menu (feedback user — menggantikan kolom #) */}
+                    <span className="inline-flex h-10 w-10 rounded-md overflow-hidden bg-muted/40 border border-border items-center justify-center">
+                      {i.menu_item_image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={i.menu_item_image}
+                          alt={i.menu_item_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <UtensilsCrossed className="h-4 w-4 text-muted-foreground/50" />
+                      )}
+                    </span>
                   </td>
                   <td className="py-2">
                     <div className="font-medium">{i.menu_item_name}</div>
@@ -288,51 +299,17 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                     </div>
                   </td>
                   <td className="py-2 text-right">{i.quantity}</td>
-                  <td className="py-2 text-right text-muted-foreground print:text-black/60 tabular-nums">
-                    {formatIDR(i.unit_price)}
-                  </td>
-                  <td className="py-2 text-right font-semibold tabular-nums">
-                    {formatIDR(i.quantity * i.unit_price)}
-                  </td>
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={3} className="py-6 text-center text-muted-foreground">
                     No items.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-
-        {/* Totals */}
-        <div className="pt-4 mt-4 border-t border-border print:border-black/20 space-y-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground print:text-black/70">Subtotal</span>
-            <span className="font-semibold tabular-nums">{formatIDR(subtotal)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground print:text-black/70">Paid</span>
-            <span className="font-semibold tabular-nums text-emerald-400 print:text-black">
-              {formatIDR(totalPaid)}
-            </span>
-          </div>
-          {subtotal - totalPaid > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground print:text-black/70">Remaining</span>
-              <span className="font-semibold tabular-nums text-amber-400 print:text-black">
-                {formatIDR(subtotal - totalPaid)}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between text-base pt-2 border-t border-border print:border-black/20 mt-2">
-            <span className="font-semibold">Total</span>
-            <span className="font-bold text-primary text-lg tabular-nums print:text-black">
-              {formatIDR(subtotal)}
-            </span>
-          </div>
         </div>
 
         {/* Payment details */}
@@ -342,7 +319,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               Payments
             </h3>
             <div className="space-y-1.5 text-xs">
-              {payments.map((p) => (
+              {payments.map((p) => {
+                // Rincian per pembayaran (feedback user): amount SUDAH
+                // termasuk charge proporsional -> porsi bill = amount /
+                // (1 + pct/100), charge = selisihnya. Derivasi tampilan —
+                // bisa selisih Rp1 karena pembulatan. Baris voucher =
+                // potongan murni, tanpa rincian.
+                const pct = detail.charge_percent;
+                const showBreakdown =
+                  pct > 0 && p.method !== "voucher" && p.amount > 0;
+                const baseShare = showBreakdown
+                  ? Math.round(p.amount / (1 + pct / 100))
+                  : p.amount;
+                const chargeShare = showBreakdown ? p.amount - baseShare : 0;
+                return (
                 <div key={p.id} className="flex justify-between gap-3">
                   <div className="min-w-0">
                     <div>
@@ -390,19 +380,70 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                       </div>
                     )}
                   </div>
-                  <span className="tabular-nums shrink-0">
-                    {formatIDR(p.amount)}
-                    {p.status !== "paid" && (
-                      <span className="ml-1 text-[10px] text-amber-400">
-                        ({paymentDisplayStatus(p.status, p.expires_at)})
-                      </span>
+                  <div className="text-right shrink-0">
+                    <div className="tabular-nums font-semibold">
+                      {formatIDR(p.amount)}
+                      {p.status !== "paid" && (
+                        <span className="ml-1 text-[10px] font-normal text-amber-400">
+                          ({paymentDisplayStatus(p.status, p.expires_at)})
+                        </span>
+                      )}
+                    </div>
+                    {showBreakdown && (
+                      <div className="text-[10px] text-muted-foreground print:text-black/50 tabular-nums">
+                        bill {formatIDR(baseShare)} +{" "}
+                        {detail.charge_label.toLowerCase()} ({pct}%){" "}
+                        {formatIDR(chargeShare)}
+                      </div>
                     )}
-                  </span>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* Totals — charge (tax/service sesuai toggle) TAMPIL & Total =
+            subtotal + charge (dulu Total salah = subtotal saja, sementara
+            Paid sudah termasuk charge). */}
+        <div className="pt-4 mt-4 border-t border-border print:border-black/20 space-y-1">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground print:text-black/70">Subtotal</span>
+            <span className="font-semibold tabular-nums">{formatIDR(subtotal)}</span>
+          </div>
+          {detail.charge > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground print:text-black/70">
+                {detail.charge_label} ({detail.charge_percent}%)
+              </span>
+              <span className="font-semibold tabular-nums">
+                {formatIDR(detail.charge)}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground print:text-black/70">Paid</span>
+            <span className="font-semibold tabular-nums text-emerald-400 print:text-black">
+              {formatIDR(totalPaid)}
+            </span>
+          </div>
+          {detail.total - totalPaid > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground print:text-black/70">Remaining</span>
+              <span className="font-semibold tabular-nums text-amber-400 print:text-black">
+                {formatIDR(detail.total - totalPaid)}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between text-base pt-2 border-t border-border print:border-black/20 mt-2">
+            <span className="font-semibold">Total</span>
+            <span className="font-bold text-primary text-lg tabular-nums print:text-black">
+              {formatIDR(detail.total)}
+            </span>
+          </div>
+        </div>
+
 
         {/* Footer */}
         <div className="pt-6 mt-6 border-t border-border print:border-black/20 text-center">

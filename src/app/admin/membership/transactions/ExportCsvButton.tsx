@@ -4,16 +4,11 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AdminMembershipTxRow } from "@/lib/membership-actions";
 
-/** Ekspor halaman transaksi membership yang sedang tampil ke CSV (Fase 5). */
-export function ExportCsvButton({
-  rows,
-  page,
-}: {
-  rows: AdminMembershipTxRow[];
-  page: number;
-}) {
+/** Ekspor seluruh transaksi membership yang dimuat ke CSV (Fase 5). */
+export function ExportCsvButton({ rows }: { rows: AdminMembershipTxRow[] }) {
   function exportCsv() {
     const header = [
+      "ID",
       "Date",
       "Customer",
       "Email",
@@ -28,6 +23,7 @@ export function ExportCsvButton({
     ];
     const lines = rows.map((r) =>
       [
+        r.id.slice(0, 8).toUpperCase(),
         new Date(r.created_at).toLocaleString("en-US"),
         r.customer_name,
         r.customer_email,
@@ -50,7 +46,7 @@ export function ExportCsvButton({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `membership-transactions-page${page}.csv`;
+    a.download = `membership-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

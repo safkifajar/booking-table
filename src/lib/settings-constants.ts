@@ -58,6 +58,12 @@ export interface ChargeConfig {
   /** Service charge (%) dari subtotal. 0 = tidak dikenakan. */
   servicePercent: number;
   /**
+   * Toggle aktif per komponen (nilai % tetap tersimpan saat dimatikan).
+   * Config lama tanpa flag → default TRUE (merge DEFAULT) — kompatibel.
+   */
+  taxEnabled: boolean;
+  serviceEnabled: boolean;
+  /**
    * Pembulatan tiap komponen (tax & service):
    * - "none" = tanpa pembulatan (dibulatkan ke bilangan bulat terdekat)
    * - "up"   = dibulatkan ke atas (Math.ceil)
@@ -93,6 +99,8 @@ export const DEFAULT_RESERVATION_CONFIG: ReservationConfig = {
 export const DEFAULT_CHARGE_CONFIG: ChargeConfig = {
   taxPercent: 0,
   servicePercent: 0,
+  taxEnabled: true,
+  serviceEnabled: true,
   rounding: "none",
 };
 
@@ -109,8 +117,14 @@ export interface BillTotals {
   service: number;
   /** Gabungan tax + service (ditampilkan 1 baris ke user). */
   charge: number;
-  /** Persen gabungan (taxPercent + servicePercent) untuk label "(15%)". */
+  /** Persen gabungan komponen yang AKTIF untuk label "(15%)". */
   chargePercent: number;
+  /**
+   * Label baris charge sesuai komponen yang aktif & bernilai:
+   * "Tax & Service" | "Tax" | "Service charge" | "" (tak ada charge).
+   * SEMUA layar wajib memakai ini — jangan hardcode "Tax & Service".
+   */
+  chargeLabel: string;
   /** subtotal + tax + service (yang dibayar user). */
   total: number;
 }
@@ -126,18 +140,28 @@ export function computeBillTotals(
 ): BillTotals {
   const c = cfg ?? DEFAULT_CHARGE_CONFIG;
   const sub = Math.max(0, Math.round(subtotal));
-  const tax =
-    c.taxPercent > 0 ? roundCharge((sub * c.taxPercent) / 100, c.rounding) : 0;
+  // Toggle per komponen: nonaktif = 0 di perhitungan & label, nilai % tetap
+  // tersimpan. Config lama tanpa flag → undefined → dianggap aktif.
+  const taxPct = c.taxEnabled !== false ? c.taxPercent : 0;
+  const servicePct = c.serviceEnabled !== false ? c.servicePercent : 0;
+  const tax = taxPct > 0 ? roundCharge((sub * taxPct) / 100, c.rounding) : 0;
   const service =
-    c.servicePercent > 0
-      ? roundCharge((sub * c.servicePercent) / 100, c.rounding)
-      : 0;
+    servicePct > 0 ? roundCharge((sub * servicePct) / 100, c.rounding) : 0;
+  const chargeLabel =
+    taxPct > 0 && servicePct > 0
+      ? "Tax & Service"
+      : taxPct > 0
+        ? "Tax"
+        : servicePct > 0
+          ? "Service charge"
+          : "";
   return {
     subtotal: sub,
     tax,
     service,
     charge: tax + service,
-    chargePercent: c.taxPercent + c.servicePercent,
+    chargePercent: taxPct + servicePct,
+    chargeLabel,
     total: sub + tax + service,
   };
 }
