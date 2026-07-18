@@ -260,9 +260,11 @@ const TX_PAGE_SIZE = 25;
 export async function listMembershipTransactions(opts?: {
   status?: "pending" | "paid" | "failed" | "refunded";
   page?: number;
+  pageSize?: number;
 }): Promise<{ rows: AdminMembershipTxRow[]; total: number }> {
   await requireAdmin();
   const page = Math.max(1, opts?.page ?? 1);
+  const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? TX_PAGE_SIZE));
   const where = opts?.status
     ? eq(membershipTransactions.status, opts.status)
     : undefined;
@@ -296,8 +298,8 @@ export async function listMembershipTransactions(opts?: {
       )
       .where(where)
       .orderBy(desc(membershipTransactions.createdAt))
-      .limit(TX_PAGE_SIZE)
-      .offset((page - 1) * TX_PAGE_SIZE),
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
     db
       .select({ total: count() })
       .from(membershipTransactions)

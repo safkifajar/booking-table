@@ -10,12 +10,12 @@ import { TxPagination } from "./TxPagination";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; page?: string; per?: string }>;
 }
 
 const STATUSES = ["pending", "paid", "failed", "refunded"] as const;
 type TxStatus = (typeof STATUSES)[number];
-const PAGE_SIZE = 25;
+const PER_OPTIONS = [10, 25, 50, 100];
 
 const KIND_LABEL: Record<string, string> = {
   purchase: "Purchase",
@@ -45,11 +45,21 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
     ? (params.status as TxStatus)
     : undefined;
   const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
-  const { rows, total } = await listMembershipTransactions({ status, page });
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const per = PER_OPTIONS.includes(parseInt(params.per ?? "", 10))
+    ? parseInt(params.per!, 10)
+    : 10;
+  const { rows, total } = await listMembershipTransactions({
+    status,
+    page,
+    pageSize: per,
+  });
+  const totalPages = Math.max(1, Math.ceil(total / per));
 
   const filterHref = (s?: string) =>
-    s ? `/admin/membership/transactions?status=${s}` : "/admin/membership/transactions";
+    `/admin/membership/transactions?${new URLSearchParams({
+      ...(s ? { status: s } : {}),
+      per: String(per),
+    }).toString()}`;
 
   return (
     <main className="flex-1 pb-12">
@@ -168,12 +178,13 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
           </Card>
         )}
 
-        {/* Pagination — komponen admin bersama */}
-        {totalPages > 1 && (
-          <div className="flex justify-end">
-            <TxPagination page={page} totalPages={totalPages} status={status} />
-          </div>
-        )}
+        {/* Footer: per-page + pagination — selalu tampil */}
+        <TxPagination
+          page={page}
+          totalPages={totalPages}
+          perPage={per}
+          status={status}
+        />
       </div>
     </main>
   );
