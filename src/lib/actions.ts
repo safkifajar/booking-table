@@ -3664,7 +3664,10 @@ export async function cancelPayment(
  */
 export async function cancelUnpaidOrder(
   orderId: string
-): Promise<{ status: "cancelled" | "already_paid" }> {
+): Promise<{
+  status: "cancelled" | "already_paid";
+  bookingCancelled?: boolean;
+}> {
   const profile = await requireProfile();
 
   const [row] = await db
@@ -3672,8 +3675,11 @@ export async function cancelUnpaidOrder(
       id: orders.id,
       status: orders.status,
       sessionId: orders.sessionId,
+      sessionStatus: tableSessions.status,
+      dpPaidAt: tableSessions.dpPaidAt,
     })
     .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
     .where(eq(orders.id, orderId));
   if (!row) throw new Error("Order not found");
 
@@ -3724,6 +3730,27 @@ export async function cancelUnpaidOrder(
     }
   }
 
+  // Order ini punya DP booking yang belum terkonfirmasi? (mis. reservasi yg
+  // DP-nya pay-at-cashier/QRIS belum dibayar). Kalau ya, membatalkan order =
+  // membatalkan SELURUH booking: sesi 'reserved'/'open' + dp_paid_at NULL harus
+  // ikut jadi 'cancelled', kalau tidak sesi 'reserved' yatim akan ke-promote
+  // jadi 'open' (meja aktif) saat waktunya tiba. (Bug: cancel malah meja aktif.)
+  const [pendingDp] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orderId, orderId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
+      )
+    )
+    .limit(1);
+  const cancelBooking =
+    !!pendingDp &&
+    row.dpPaidAt == null &&
+    (row.sessionStatus === "reserved" || row.sessionStatus === "open");
+
   let cancelledPaymentIds: { id: string }[] = [];
   await db.transaction(async (tx) => {
     // Batalkan pembayaran pending/failed (belum paid) yang menempel di order.
@@ -3742,6 +3769,13 @@ export async function cancelUnpaidOrder(
       .update(orders)
       .set({ status: "cancelled" })
       .where(eq(orders.id, orderId));
+    // Booking belum terkonfirmasi → batalkan sesinya juga (meja bebas lagi).
+    if (cancelBooking) {
+      await tx
+        .update(tableSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
+        .where(eq(tableSessions.id, row.sessionId));
+    }
   });
 
   // Lepas reservasi voucher pada payment yang ikut dibatalkan (pasca-commit).
@@ -3753,7 +3787,8 @@ export async function cancelUnpaidOrder(
   revalidatePath(`/session/${row.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath("/staff/waiter");
-  return { status: "cancelled" };
+  if (cancelBooking) revalidatePath("/bar/[slug]", "page");
+  return { status: "cancelled", bookingCancelled: cancelBooking };
 }
 
 // ============================================================

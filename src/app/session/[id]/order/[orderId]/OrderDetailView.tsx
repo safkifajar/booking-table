@@ -76,7 +76,14 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     if (!ok) return;
     setBackBusy(true);
     try {
-      await cancelUnpaidOrder(detail.id);
+      const res = await cancelUnpaidOrder(detail.id);
+      // Kalau ini DP booking yang belum terkonfirmasi, seluruh booking ikut
+      // batal (sesi cancelled) → JANGAN kembali ke halaman sesi (sudah mati);
+      // keluar ke home supaya tidak memantul & meja tidak tampak aktif.
+      if (res.bookingCancelled) {
+        router.replace("/");
+        return;
+      }
       router.push(backHref);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel the order"));
