@@ -30,9 +30,8 @@ import {
   ChevronUp,
   ChevronDown,
   Trash2,
-  QrCode,
-  Banknote,
 } from "lucide-react";
+import { Select } from "@/components/ui/select";
 import { openTable } from "@/lib/actions";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -738,34 +737,15 @@ export function OpenTableForm({
               <label className="block text-sm font-medium mb-2">
                 Deposit payment method
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDpMethod("qris")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 h-11 text-sm transition",
-                    dpMethod === "qris"
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border hover:border-foreground/30"
-                  )}
-                >
-                  <QrCode className="h-4 w-4 shrink-0" />
-                  QRIS
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDpMethod("cash")}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md border px-3 h-11 text-sm transition",
-                    dpMethod === "cash"
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-border hover:border-foreground/30"
-                  )}
-                >
-                  <Banknote className="h-4 w-4 shrink-0" />
-                  Pay at cashier
-                </button>
-              </div>
+              <Select
+                value={dpMethod}
+                onChange={(v) => setDpMethod(v as "qris" | "cash")}
+                ariaLabel="Deposit payment method"
+                options={[
+                  { value: "qris", label: "QRIS" },
+                  { value: "cash", label: "Pay at cashier" },
+                ]}
+              />
               {dpMethod === "cash" && (
                 <p className="mt-1.5 text-xs text-amber-400">
                   Confirm &amp; pay at the cashier desk within 10 minutes —
