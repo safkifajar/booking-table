@@ -487,17 +487,22 @@ export async function getLiveSplitRecap(input: {
   // di-match sebagai cash tapi tetap tampil 'admin' di export).
   function apply(source: string, id: string, paidAt: Date, base: number, service: number, method: string, displayMethod = method) {
     const amounts: Record<string, number> = {};
-    let allocated = 0;
-    let sink: string | null = null;
-    for (const c of input.categories) {
-      if (c.isRemainderSink) { sink = c.name; continue; }
-      if (c.method && c.method !== method) continue;
-      const amt = Math.round((base * Math.round(c.percent * 1000)) / 100_000);
-      amounts[c.name] = (amounts[c.name] ?? 0) + amt;
-      allocated += amt;
+    // Transaksi tanpa service fee (mis. membership lama sebelum tax & service
+    // diberlakukan): tidak ada yang bisa dibagi — semua kategori 0, tanpa
+    // sink minus. Barisnya tetap tampil di export utk transparansi.
+    if (service > 0) {
+      let allocated = 0;
+      let sink: string | null = null;
+      for (const c of input.categories) {
+        if (c.isRemainderSink) { sink = c.name; continue; }
+        if (c.method && c.method !== method) continue;
+        const amt = Math.round((base * Math.round(c.percent * 1000)) / 100_000);
+        amounts[c.name] = (amounts[c.name] ?? 0) + amt;
+        allocated += amt;
+      }
+      if (sink) amounts[sink] = (amounts[sink] ?? 0) + (service - allocated);
+      for (const [k, v] of Object.entries(amounts)) totalsMap.set(k, (totalsMap.get(k) ?? 0) + v);
     }
-    if (sink) amounts[sink] = (amounts[sink] ?? 0) + (service - allocated);
-    for (const [k, v] of Object.entries(amounts)) totalsMap.set(k, (totalsMap.get(k) ?? 0) + v);
     rows.push({ paid_at: paidAt.toISOString(), source, source_id: id, method: displayMethod, service, amounts });
   }
 
