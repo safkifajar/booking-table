@@ -13,7 +13,7 @@ import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import {
   cashierCreatePayment,
-  cashierMarkPaymentPaid,
+  cashierConfirmPendingPayment,
 } from "@/lib/cashier-actions";
 import {
   payShare,
@@ -192,13 +192,29 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   }
   // KASIR konfirmasi pending "Pay at cashier" LANGSUNG dari baris riwayat —
   // alur kasir memang lewat halaman ini (session → Bill → order), bukan
-  // /staff/cashier/[sessionId], jadi tombolnya harus ada di sini.
+  // /staff/cashier/[sessionId]. Kasir PILIH metode aktual (arahan user):
+  // cash → langsung lunas; QRIS → payment dikonversi jadi QR utk di-scan.
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
-  async function handleCashierConfirm(paymentId: string) {
+  async function handleCashierConfirm(
+    paymentId: string,
+    method: "cash" | "qris"
+  ) {
     setConfirmingId(paymentId);
     try {
-      await cashierMarkPaymentPaid(paymentId);
-      toast.success("Payment confirmed — order sent to the kitchen");
+      const res = await cashierConfirmPendingPayment({ paymentId, method });
+      if (res.status === "paid") {
+        toast.success("Payment confirmed — order sent to the kitchen");
+      } else if (res.qrString) {
+        // QRIS pending → tampilkan QR utk di-scan customer di meja kasir.
+        setActiveQr({
+          paymentId,
+          qrString: res.qrString,
+          amount: res.amount,
+          expirySeconds: toExpirySeconds(res.expiresAt),
+        });
+      } else {
+        toast.info("Payment is being processed");
+      }
       router.refresh();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to confirm payment"));
@@ -461,16 +477,27 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                         </p>
                         <div className="flex gap-1.5 flex-wrap">
                           {detail.isCashier && (
-                            <button
-                              type="button"
-                              disabled={confirmingId === p.id || cancellingId === p.id}
-                              onClick={() => handleCashierConfirm(p.id)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-50"
-                            >
-                              {confirmingId === p.id
-                                ? "Confirming…"
-                                : `Confirm received ${formatIDR(p.amount)}`}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                disabled={confirmingId === p.id || cancellingId === p.id}
+                                onClick={() => handleCashierConfirm(p.id, "cash")}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-50"
+                              >
+                                {confirmingId === p.id
+                                  ? "Confirming…"
+                                  : `Cash ${formatIDR(p.amount)}`}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={confirmingId === p.id || cancellingId === p.id}
+                                onClick={() => handleCashierConfirm(p.id, "qris")}
+                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-50"
+                              >
+                                <QrCode className="h-3.5 w-3.5" />
+                                QRIS
+                              </button>
+                            </>
                           )}
                           {(p.paid_by_member_id === detail.myMemberId ||
                             detail.isHost ||

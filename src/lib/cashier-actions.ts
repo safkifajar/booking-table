@@ -1158,6 +1158,124 @@ export async function cashierCreatePayment(
 }
 
 /**
+ * Konfirmasi payment pending "Pay at cashier" dengan PILIHAN metode aktual —
+ * customer di meja kasir bisa bayar tunai ATAU minta QRIS (arahan user):
+ * - cash → delegasi ke cashierMarkPaymentPaid (semua hook: dp_paid_at,
+ *   settleOrderIfPaid, voucher, split, notif).
+ * - qris → payment DIKONVERSI jadi tagihan QRIS di gateway (method 'qris',
+ *   flag payAtCashier dilepas): mock → langsung paid via
+ *   markPaymentPaidBySystem; Duitku → return qrString utk di-scan, lunas
+ *   lewat callback/polling seperti QRIS biasa.
+ */
+export async function cashierConfirmPendingPayment(input: {
+  paymentId: string;
+  method: "cash" | "qris";
+}): Promise<{
+  status: string;
+  qrString: string | null;
+  expiresAt: string | null;
+  amount: number;
+}> {
+  const ctx = await requirePermission("receive_payment", "/staff/cashier");
+  const data = z
+    .object({ paymentId: z.string().uuid(), method: z.enum(["cash", "qris"]) })
+    .parse(input);
+
+  const [payment] = await db
+    .select({
+      id: payments.id,
+      amount: payments.amount,
+      status: payments.status,
+      splitMeta: payments.splitMeta,
+      sessionId: orders.sessionId,
+      barId: floorAreas.barId,
+      payerName: profiles.displayName,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(eq(payments.id, data.paymentId));
+  if (!payment) throw new Error("Payment not found");
+  if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
+  if (payment.status !== "pending") {
+    throw new Error(
+      "This payment is no longer pending (already confirmed, cancelled, or expired)"
+    );
+  }
+
+  if (data.method === "cash") {
+    await cashierMarkPaymentPaid(payment.id);
+    return {
+      status: "paid",
+      qrString: null,
+      expiresAt: null,
+      amount: payment.amount,
+    };
+  }
+
+  // QRIS di meja kasir: konversi payment jadi charge gateway.
+  const meta =
+    (payment.splitMeta as Record<string, unknown> | null) ?? {};
+  const { payAtCashier: _dropped, ...restMeta } = meta;
+  void _dropped;
+  const gateway = getPaymentGateway();
+  const cr = await gateway.createCharge({
+    paymentId: payment.id,
+    amount: payment.amount,
+    method: "qris",
+    payerName: payment.payerName,
+    description: `Cashier QRIS - ${payment.sessionId.slice(0, 8)}`,
+  });
+
+  // Update conditional (WHERE pending) — jangan menimpa payment yang keburu
+  // berubah status di sela panggilan gateway.
+  const updated = await db
+    .update(payments)
+    .set({
+      method: "qris",
+      externalRef: cr.externalRef,
+      splitMeta: {
+        ...restMeta,
+        qrString: cr.qrString ?? null,
+        redirectUrl: cr.redirectUrl ?? null,
+        expiresAt: cr.expiresAt ?? null,
+        merchantOrderId: cr.merchantOrderId ?? payment.id,
+      },
+    })
+    .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")))
+    .returning({ id: payments.id });
+  if (updated.length === 0) {
+    throw new Error("This payment just changed state — refresh and try again");
+  }
+
+  if (cr.status === "paid") {
+    // Mock gateway: langsung lunas → jalankan SEMUA hook via jalur sistem
+    // (dp_paid_at, settleOrderIfPaid, voucher, split, notif) — idempotent.
+    await markPaymentPaidBySystem(payment.id);
+    return {
+      status: "paid",
+      qrString: cr.qrString ?? null,
+      expiresAt: null,
+      amount: payment.amount,
+    };
+  }
+
+  revalidatePath(`/staff/cashier/${payment.sessionId}`);
+  revalidatePath("/staff/cashier");
+  revalidatePath(`/session/${payment.sessionId}`);
+  return {
+    status: cr.status,
+    qrString: cr.qrString ?? null,
+    expiresAt: cr.expiresAt ?? null,
+    amount: payment.amount,
+  };
+}
+
+/**
  * Manual mark payment sebagai paid (untuk method non-gateway atau cashier
  * konfirmasi customer sudah bayar).
  *
