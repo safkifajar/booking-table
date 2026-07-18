@@ -790,15 +790,14 @@ function TableSheet({
 
   // GUARD click-through: sheet muncul TEPAT di bawah kursor saat klik meja
   // (onPointerUp di FloorMap). "Ghost click" bawaan browser lalu nembus ke slot
-  // jam di posisi kursor yg sama → 1 klik meja = slot ikut ke-klik. Abaikan
-  // interaksi slot ~350ms pertama setelah sheet mount.
-  const [ready, setReady] = React.useState(false);
-  React.useEffect(() => {
-    // 500ms: cukup melewati ghost-click bawaan (biasanya ~300ms setelah tap)
-    // pada perangkat yang lambat sekalipun.
-    const t = setTimeout(() => setReady(true), 500);
-    return () => clearTimeout(t);
-  }, []);
+  // jam di posisi kursor yg sama → 1 klik meja = slot ikut ke-klik.
+  //
+  // Bulletproof (tak bergantung timing): slot hanya diproses SETELAH ada
+  // pointerdown SUNGGUHAN yang dimulai di dalam SHEET. Ghost click tak
+  // membawa pointerdown → armedRef tetap false → tertolak, berapa lama pun
+  // jeda ghost-nya. Mouse/keyboard: pointerdown/klik asli langsung meng-arm,
+  // jadi tak ada delay yang terasa.
+  const armedRef = React.useRef(false);
 
   // Ref chip tanggal yg aktif → auto-scroll strip supaya tanggal terpilih
   // (dari denah) langsung kelihatan di tengah, bukan mulai dari kiri.
@@ -886,7 +885,9 @@ function TableSheet({
   // setelah → perpanjang; klik sebelum → mulai baru. Tidak boleh menembus
   // slot non-selectable (booked/lewat) di antara.
   function clickSlot(h: HourRow) {
-    if (!ready) return; // abaikan ghost-click saat sheet baru muncul
+    // Tolak ghost-click: hanya proses kalau pointer benar-benar ditekan di
+    // dalam sheet lebih dulu. Ghost click (tanpa pointerdown) tertolak.
+    if (!armedRef.current) return;
     const iso = h.startIso;
     const ms = new Date(iso).getTime();
     if (!selStart) {
@@ -949,7 +950,14 @@ function TableSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center sm:p-4">
-      <div className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] flex flex-col bg-card border border-border sm:rounded-2xl shadow-2xl">
+      <div
+        // Pointer SUNGGUHAN mulai di dalam sheet → arm guard slot (cegah
+        // ghost-click tembus dari tap yg membuka sheet).
+        onPointerDown={() => {
+          armedRef.current = true;
+        }}
+        className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[90vh] flex flex-col bg-card border border-border sm:rounded-2xl shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-start justify-between gap-4 p-4 sm:p-5 border-b border-border shrink-0">
           <div>
