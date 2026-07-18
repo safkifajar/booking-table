@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { QrCode, Check, X, ChevronRight } from "lucide-react";
+import { QrCode, Check, X, ChevronRight, Banknote } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import type { PayableMethod, SplitMode } from "@/types/db";
 import { toast } from "sonner";
@@ -240,7 +240,12 @@ export function PaymentSheet({
               className="w-full flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-3 text-left hover:border-primary/40 transition"
             >
               <div className="flex items-center gap-2 min-w-0">
-                {method ? (
+                {method === "cash" ? (
+                  <>
+                    <Banknote className="h-5 w-5" />
+                    <span className="text-sm font-medium">Pay at cashier</span>
+                  </>
+                ) : method ? (
                   <>
                     <QrCode className="h-5 w-5" />
                     <span className="text-sm font-medium">QRIS</span>
@@ -267,9 +272,9 @@ export function PaymentSheet({
                 : !method
                   ? "Select payment method"
                   : isBatchMode
-                    ? mode === "equal"
-                      ? "Generate QRIS for everyone"
-                      : "Generate QRIS per order"
+                    ? method === "cash"
+                      ? "Create cashier payments for everyone"
+                      : "Generate QRIS for everyone"
                     : myAmount > 0
                       ? `Pay ${formatIDR(myAmount)}`
                       : "Nothing to pay"}
@@ -286,6 +291,13 @@ export function PaymentSheet({
         {methodSheet && (
           <PickerOverlay title="Payment method" onClose={() => setMethodSheet(false)}>
             <PickerRow icon={<QrCode className="h-5 w-5" />} label="QRIS" active={method === "qris"} onClick={() => { setMethod("qris"); setMethodSheet(false); }} />
+            <PickerRow
+              icon={<Banknote className="h-5 w-5" />}
+              label="Pay at cashier"
+              desc="Confirm & pay at the cashier desk — order is sent once confirmed"
+              active={method === "cash"}
+              onClick={() => { setMethod("cash"); setMethodSheet(false); }}
+            />
           </PickerOverlay>
         )}
       </div>

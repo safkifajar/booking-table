@@ -205,6 +205,14 @@ export function CashierPaymentPanel({
                     >
                       {p.is_down_payment ? "DP" : "Bill"}
                     </Badge>
+                    {p.pay_at_cashier && p.status === "pending" && !isPaymentExpired(p) && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[9px] px-1.5 bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      >
+                        Pay at cashier
+                      </Badge>
+                    )}
                     <Badge
                       variant={
                         p.status === "paid"
@@ -222,12 +230,14 @@ export function CashierPaymentPanel({
                           : p.status === "pending"
                             ? "Pending"
                             : p.status === "failed"
-                              ? "Cancelled"
+                              ? p.superseded
+                                ? "Replaced"
+                                : "Cancelled"
                               : p.status}
                     </Badge>
                   </div>
                   <div className="text-[11px] text-muted-foreground capitalize">
-                    {p.method.toUpperCase()}
+                    {p.pay_at_cashier ? "PAY AT CASHIER" : p.method.toUpperCase()}
                     {" · "}
                     <span className="tabular-nums">
                       {fmtDateTime(p.paid_at ?? p.created_at)}

@@ -24,6 +24,10 @@ import { CashierSessionList } from "./CashierSessionList";
 import { NotificationBell } from "@/components/NotificationBell";
 import { getMoveRequests } from "@/lib/move-approval-actions";
 
+// Selalu dinamis: expireFinishedSessions/promoteDueReservations HARUS jalan
+// tiap kunjungan (sesi lewat-waktu → Selesai). Jangan disajikan dari cache.
+export const dynamic = "force-dynamic";
+
 /**
  * Cashier dashboard utama.
  * Allowed roles: cashier, manager, admin.

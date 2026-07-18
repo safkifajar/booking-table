@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { payments, orders } from "@/lib/db/schema/orders";
 import { tableSessions } from "@/lib/db/schema/sessions";
@@ -83,5 +83,66 @@ export async function notifyPaymentEvent(
     );
   } catch {
     // best-effort — jangan ganggu alur pembayaran.
+  }
+}
+
+/**
+ * Beri tahu KASIR (role cashier/manager/admin aktif di bar) bahwa ada customer
+ * yang memilih "Pay at cashier" — mereka perlu siap menerima uang & konfirmasi.
+ * Dipanggil saat payment pending pay-at-cashier dibuat (bill maupun DP booking).
+ * Best-effort; tak menggagalkan alur pembayaran.
+ */
+export async function notifyCashiersPayAtCashier(input: {
+  paymentId: string;
+  isDownPayment: boolean;
+}): Promise<void> {
+  try {
+    const [row] = await db
+      .select({
+        amount: payments.amount,
+        sessionId: orders.sessionId,
+        tableLabel: tables.label,
+        barId: floorAreas.barId,
+      })
+      .from(payments)
+      .innerJoin(orders, eq(orders.id, payments.orderId))
+      .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+      .where(eq(payments.id, input.paymentId));
+    if (!row) return;
+
+    const label = row.tableLabel ?? "table";
+    const amount = formatIDR(row.amount);
+    const kind = input.isDownPayment ? "Deposit" : "Bill";
+    const title = "Pay at cashier";
+    const body = `${kind} ${amount} for table ${label} — customer will pay at the cashier. Confirm once received.`;
+    const link = `/session/${row.sessionId}`;
+
+    // Hanya staff yang boleh menerima pembayaran: cashier/manager/admin.
+    const staff = await db
+      .select({ profileId: staffRoles.profileId })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.barId, row.barId),
+          eq(staffRoles.isActive, true),
+          inArray(staffRoles.role, ["cashier", "manager", "admin"])
+        )
+      );
+
+    await Promise.allSettled(
+      staff.map((s) =>
+        createNotification({
+          profileId: s.profileId,
+          type: "general",
+          title,
+          body,
+          link,
+        })
+      )
+    );
+  } catch {
+    // best-effort.
   }
 }

@@ -332,7 +332,6 @@ export function SessionView(props: SessionViewProps) {
               label="Table"
               active={effTab === "vibe"}
               onClick={() => changeTab("vibe")}
-              badge={props.members.filter((m) => m.status === "joined").length}
               alert={
                 props.isHost &&
                 // Alert kuning hanya untuk request-join (butuh aksi host).
@@ -360,7 +359,6 @@ export function SessionView(props: SessionViewProps) {
                 label="Bill"
                 active={effTab === "bill"}
                 onClick={() => changeTab("bill")}
-                badge={props.orderItems.length || undefined}
               />
             )}
           </div>

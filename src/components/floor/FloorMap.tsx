@@ -251,6 +251,11 @@ export function FloorMap({
       // onClick DOM, karena pointer capture di container menelan click.
       const ps = panStart.current;
       if (ps && !ps.moved && ps.table) {
+        // Cegah "ghost click" bawaan browser (touch → synthetic click ~300ms
+        // kemudian) menembus ke sheet yg baru muncul TEPAT di posisi tap ini
+        // (mis. slot jam ikut ke-klik). preventDefault di pointerup menekan
+        // click sintetis tsb pada perangkat sentuh.
+        e.preventDefault();
         onSelectTable?.(ps.table);
       }
       panStart.current = null;

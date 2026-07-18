@@ -252,7 +252,34 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        inArray(tableSessions.status, ["open", "locked", "overdue"])
+        inArray(tableSessions.status, ["open", "locked", "overdue"]),
+        // Jaring pengaman DISPLAY: walau expireFinishedSessions harusnya sudah
+        // menutup sesi lewat-waktu, jangan pernah tampilkan sesi yang JELAS
+        // sudah usai — reservation_end_at sudah lewat, ATAU sesi (apa pun)
+        // dimulai > 12 jam lalu. Reservasi masa depan (end di masa depan) &
+        // sesi baru tetap tampil.
+        sql`(
+          (${tableSessions.reservationEndAt} IS NULL OR ${tableSessions.reservationEndAt} > now())
+          AND ${tableSessions.startedAt} > now() - interval '12 hours'
+        )`,
+        // Sembunyikan meja yang HANYA "open" karena menunggu pembayaran
+        // pay-at-cashier & belum punya order yang benar-benar masuk (paid).
+        // Baru tampil ke waiter setelah ada order masuk / DP terkonfirmasi.
+        // (Meja tanpa pending pay-at-cashier tetap tampil seperti biasa.)
+        sql`(
+          NOT EXISTS (
+            SELECT 1 FROM ${orders} o
+            JOIN ${payments} p ON p.order_id = o.id
+            WHERE o.session_id = ${tableSessions.id}
+              AND p.status = 'pending'
+              AND (p.split_meta ->> 'payAtCashier')::boolean IS TRUE
+          )
+          OR EXISTS (
+            SELECT 1 FROM ${orders} o2
+            WHERE o2.session_id = ${tableSessions.id}
+              AND o2.status NOT IN ('unpaid', 'cancelled')
+          )
+        )`
       )
     )
     .orderBy(asc(tableSessions.startedAt));
@@ -511,7 +538,20 @@ export async function getBookingsForWaiter(): Promise<WaiterBookingItem[]> {
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        eq(tableSessions.status, "reserved")
+        eq(tableSessions.status, "reserved"),
+        // Booking yang DP-nya BELUM dikonfirmasi (mis. pay-at-cashier menunggu
+        // kasir) belum terkonfirmasi → JANGAN tampil ke waiter. Baru muncul
+        // setelah dp_paid_at terisi (kasir konfirmasi) — arahan produk.
+        sql`(
+          ${tableSessions.dpPaidAt} IS NOT NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM ${orders} o
+            JOIN ${payments} p ON p.order_id = o.id
+            WHERE o.session_id = ${tableSessions.id}
+              AND p.status = 'pending'
+              AND (p.split_meta ->> 'isDownPayment')::boolean IS TRUE
+          )
+        )`
       )
     )
     .orderBy(asc(tableSessions.reservationAt));

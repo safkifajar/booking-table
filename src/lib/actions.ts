@@ -51,8 +51,12 @@ import {
   getOrderOutstanding,
   settleOrderIfPaid,
   DP_TIMEOUT_SECONDS,
+  PAY_AT_CASHIER_TIMEOUT_SECONDS,
 } from "@/lib/queries";
-import { notifyPaymentEvent } from "@/lib/payment-notify";
+import {
+  notifyPaymentEvent,
+  notifyCashiersPayAtCashier,
+} from "@/lib/payment-notify";
 import {
   areFriends,
   isBlockedEitherWay,
@@ -387,6 +391,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   const dpAmount = dpRequired
     ? calculateDP(billAtOpen.total, resConfig.minDownPaymentPercent)
     : 0;
+  // DP yang menutup SELURUH tagihan (mis. minDownPaymentPercent = 100) = bukan
+  // deposit parsial, melainkan PELUNASAN penuh di muka. Ditandai supaya jalur
+  // pay-at-cashier tidak menjebaknya di lifecycle "DP menggantung": begitu
+  // dikonfirmasi kasir, order langsung lunas & meja aktif.
+  const dpIsFullPrepay = dpRequired && dpAmount >= billAtOpen.total;
 
   if (dpRequired) {
     if (resolvedItems.length === 0) {
@@ -623,6 +632,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // tetap created tapi DP pending — staff bisa konfirmasi manual nanti.
   // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
   let dpQris: { paymentId: string; qrString: string } | null = null;
+  let dpAwaitCashier = false;
   if (dpPaymentId && dpAmount > 0) {
     // Reservasi voucher ke payment DP (race-safe). Kalah race (nyaris
     // mustahil — divalidasi milidetik lalu) → lanjut TANPA diskon; sesi
@@ -638,6 +648,39 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       else console.error("[openTable] voucher kalah race — DP tanpa diskon");
     }
     const dpCharge = dpAmount - dpDiscount;
+
+    // "Pay at cashier" (method cash): TANPA gateway — DP tetap 'pending',
+    // booking menunggu konfirmasi kasir maks 10 menit
+    // (PAY_AT_CASHIER_TIMEOUT_SECONDS). Lewat itu → expireDpIfOverdue
+    // membatalkan booking & slot mejanya bebas lagi.
+    if (data.dpMethod === "cash") {
+      await db
+        .update(payments)
+        .set({
+          externalRef: `cashier_${dpPaymentId}`,
+          amount: dpCharge,
+          splitMeta: {
+            isDownPayment: true,
+            // Tandai pelunasan penuh: cancelPayment & guard redirect
+            // memperlakukannya sbg tagihan biasa, bukan deposit menggantung.
+            ...(dpIsFullPrepay ? { dpFull: true } : {}),
+            ...(dpDiscount > 0 && dpVoucher
+              ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
+              : {}),
+            payAtCashier: true,
+            expiresAt: new Date(
+              Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
+            ).toISOString(),
+          },
+        })
+        .where(eq(payments.id, dpPaymentId));
+      dpAwaitCashier = true;
+      // Kabari kasir: ada DP booking yang mau dibayar di kasir.
+      await notifyCashiersPayAtCashier({
+        paymentId: dpPaymentId,
+        isDownPayment: true,
+      });
+    } else {
     try {
       const gateway = getPaymentGateway();
       const chargeResult = await gateway.createCharge({
@@ -695,6 +738,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       await releaseVoucherForPayment(dpPaymentId).catch(() => {});
       // Don't throw — session tetap exist, staff bisa handle manual
     }
+    }
   }
 
   await notifySessionAndStaff(sessionId);
@@ -732,6 +776,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   }
 
   void dpStatus; // unused warning suppress
+
+  // DP "Pay at cashier" → arahkan ke halaman tunggu (/booking/[id]/pay):
+  // instruksi konfirmasi ke kasir + countdown 10 menit.
+  if (dpAwaitCashier) {
+    return { ok: true as const, sessionId, awaitCashier: true as const };
+  }
 
   // DP QRIS menunggu bayar → JANGAN redirect; kembalikan qrString supaya
   // client tampilkan QR + polling. Setelah lunas, client redirect sendiri.
@@ -2049,6 +2099,10 @@ export interface OrderDetail {
     status: string;
     split_mode: string;
     is_down_payment: boolean;
+    /** "Pay at cashier": pending menunggu konfirmasi kasir (tanpa QR). */
+    pay_at_cashier: boolean;
+    /** Digantikan pembayaran lain yang menutup tagihan (bukan batal biasa). */
+    superseded: boolean;
     created_at: string;
     paid_at: string | null;
     paid_by: string;
@@ -2230,7 +2284,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -2238,7 +2292,11 @@ export async function getOrderDetail(
             method: p.method,
             status: p.status,
             split_mode: p.split_mode,
-            is_down_payment: !!meta.isDownPayment,
+            // DP yang menutup seluruh tagihan bukan "deposit" — tampil sbg bill
+            // biasa (badge "Bill"), bukan "DP", supaya tak membingungkan.
+            is_down_payment: !!meta.isDownPayment && !meta.dpFull,
+            pay_at_cashier: !!meta.payAtCashier,
+            superseded: !!meta.supersededByPaid,
             created_at: p.created_at.toISOString(),
             paid_at: p.paid_at ? p.paid_at.toISOString() : null,
             paid_by: p.paid_by,
@@ -2602,6 +2660,43 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   }
 
   // 4. Call gateway abstraction. Mock → auto-paid. Real gateway → pending + qrString.
+  //    KECUALI "Pay at cashier" (method cash dari customer): TANPA gateway —
+  //    payment tetap 'pending' sampai KASIR konfirmasi uang diterima
+  //    (cashierMarkPaymentPaid). Selama pending, order tak masuk dapur.
+  if (data.method === "cash") {
+    await db
+      .update(payments)
+      .set({
+        externalRef: `cashier_${newPayment.id}`,
+        splitMeta: {
+          ...(data.splitMeta ?? {}),
+          ...(voucher
+            ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+            : {}),
+          payAtCashier: true,
+        },
+      })
+      .where(eq(payments.id, newPayment.id));
+
+    await notifySessionAndStaff(data.sessionId);
+    // Kabari kasir: ada bill yang mau dibayar di kasir → siap terima & konfirmasi.
+    await notifyCashiersPayAtCashier({
+      paymentId: newPayment.id,
+      isDownPayment: false,
+    });
+    revalidatePath(`/session/${data.sessionId}`);
+    revalidatePath("/staff/cashier");
+    revalidatePath(`/staff/cashier/${data.sessionId}`);
+    return {
+      paymentId: newPayment.id,
+      status: "pending" as PaymentStatus,
+      externalRef: `cashier_${newPayment.id}`,
+      qrString: null,
+      redirectUrl: null,
+      expiresAt: null,
+    };
+  }
+
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
     paymentId: newPayment.id,
@@ -2829,6 +2924,20 @@ export async function createSplitBatch(
       // Catatan: mode 'equal' tak menulis payment_items (tak ada tautan item).
       // Dulu ada cabang 'itemized' di sini — dihapus bersama mode-nya.
 
+      // "Pay at cashier": tanpa gateway — tiap share pending sampai anggota
+      // datang ke kasir & kasir konfirmasi satu-satu.
+      if (data.method === "cash") {
+        await db
+          .update(payments)
+          .set({
+            externalRef: `cashier_${pay.id}`,
+            splitMeta: { batchId, payAtCashier: true },
+          })
+          .where(eq(payments.id, pay.id));
+        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: null });
+        continue;
+      }
+
       const cr = await gateway.createCharge({
         paymentId: pay.id,
         amount: t.amount,
@@ -2868,6 +2977,19 @@ export async function createSplitBatch(
   }
 
   await notifySessionAndStaff(data.sessionId);
+  // Split bayar-di-kasir: kabari kasir SEKALI (bukan per anggota) kalau ada
+  // share pay-at-cashier yang pending.
+  if (data.method === "cash") {
+    const firstCashier = results.find(
+      (r) => r.status === "pending" && r.paymentId
+    );
+    if (firstCashier?.paymentId) {
+      await notifyCashiersPayAtCashier({
+        paymentId: firstCashier.paymentId,
+        isDownPayment: false,
+      });
+    }
+  }
   revalidatePath(`/session/${data.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/staff/cashier/${data.sessionId}`);
@@ -3568,7 +3690,10 @@ export async function cancelPayment(
  */
 export async function cancelUnpaidOrder(
   orderId: string
-): Promise<{ status: "cancelled" | "already_paid" }> {
+): Promise<{
+  status: "cancelled" | "already_paid";
+  bookingCancelled?: boolean;
+}> {
   const profile = await requireProfile();
 
   const [row] = await db
@@ -3576,8 +3701,11 @@ export async function cancelUnpaidOrder(
       id: orders.id,
       status: orders.status,
       sessionId: orders.sessionId,
+      sessionStatus: tableSessions.status,
+      dpPaidAt: tableSessions.dpPaidAt,
     })
     .from(orders)
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
     .where(eq(orders.id, orderId));
   if (!row) throw new Error("Order not found");
 
@@ -3628,6 +3756,27 @@ export async function cancelUnpaidOrder(
     }
   }
 
+  // Order ini punya DP booking yang belum terkonfirmasi? (mis. reservasi yg
+  // DP-nya pay-at-cashier/QRIS belum dibayar). Kalau ya, membatalkan order =
+  // membatalkan SELURUH booking: sesi 'reserved'/'open' + dp_paid_at NULL harus
+  // ikut jadi 'cancelled', kalau tidak sesi 'reserved' yatim akan ke-promote
+  // jadi 'open' (meja aktif) saat waktunya tiba. (Bug: cancel malah meja aktif.)
+  const [pendingDp] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orderId, orderId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
+      )
+    )
+    .limit(1);
+  const cancelBooking =
+    !!pendingDp &&
+    row.dpPaidAt == null &&
+    (row.sessionStatus === "reserved" || row.sessionStatus === "open");
+
   let cancelledPaymentIds: { id: string }[] = [];
   await db.transaction(async (tx) => {
     // Batalkan pembayaran pending/failed (belum paid) yang menempel di order.
@@ -3646,6 +3795,13 @@ export async function cancelUnpaidOrder(
       .update(orders)
       .set({ status: "cancelled" })
       .where(eq(orders.id, orderId));
+    // Booking belum terkonfirmasi → batalkan sesinya juga (meja bebas lagi).
+    if (cancelBooking) {
+      await tx
+        .update(tableSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
+        .where(eq(tableSessions.id, row.sessionId));
+    }
   });
 
   // Lepas reservasi voucher pada payment yang ikut dibatalkan (pasca-commit).
@@ -3657,7 +3813,8 @@ export async function cancelUnpaidOrder(
   revalidatePath(`/session/${row.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath("/staff/waiter");
-  return { status: "cancelled" };
+  if (cancelBooking) revalidatePath("/bar/[slug]", "page");
+  return { status: "cancelled", bookingCancelled: cancelBooking };
 }
 
 // ============================================================

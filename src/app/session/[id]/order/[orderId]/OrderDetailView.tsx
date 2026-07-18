@@ -11,11 +11,15 @@ import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
-import { cashierCreatePayment } from "@/lib/cashier-actions";
+import {
+  cashierCreatePayment,
+  cashierConfirmPendingPayment,
+} from "@/lib/cashier-actions";
 import {
   payShare,
   createSplitBatch,
   cancelUnpaidOrder,
+  cancelPayment,
   regenerateMemberPayment,
   type OrderDetail,
 } from "@/lib/actions";
@@ -64,15 +68,24 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     const ok = await confirm({
       title: "Cancel this order?",
       description:
-        "If you go back now, this new order and its payment will be cancelled.",
-      confirmText: "Yes, cancel",
-      cancelText: "Keep paying",
+        "This order and its pending payment will be cancelled and removed. This can't be undone.",
+      // Wording tegas: tombol merah = benar-benar membatalkan; tombol netral =
+      // tetap di halaman (jangan batal). Sebelumnya "Keep paying" ambigu.
+      confirmText: "Cancel order",
+      cancelText: "Keep order",
       variant: "danger",
     });
     if (!ok) return;
     setBackBusy(true);
     try {
-      await cancelUnpaidOrder(detail.id);
+      const res = await cancelUnpaidOrder(detail.id);
+      // Kalau ini DP booking yang belum terkonfirmasi, seluruh booking ikut
+      // batal (sesi cancelled) → JANGAN kembali ke halaman sesi (sudah mati);
+      // keluar ke home supaya tidak memantul & meja tidak tampak aktif.
+      if (res.bookingCancelled) {
+        router.replace("/");
+        return;
+      }
       router.push(backHref);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel the order"));
@@ -124,6 +137,10 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           amount,
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
+      } else if (method === "cash" && result.status === "pending") {
+        toast.success(
+          "Payment created — confirm & pay at the cashier desk. Your order is sent to the kitchen once confirmed."
+        );
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -167,6 +184,70 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // gagal (telat bayar). Payment lama di-failed-kan, dibuat QRIS baru dgn
   // nominal sama, dan HANYA anggota itu yang dapat notifikasi.
   const [regenId, setRegenId] = React.useState<string | null>(null);
+  // Batalkan pending "Pay at cashier" (customer berubah pikiran → bisa pilih
+  // metode lain; slot outstanding-nya bebas lagi).
+  const [cancellingId, setCancellingId] = React.useState<string | null>(null);
+  async function handleCancelCashierPayment(paymentId: string) {
+    setCancellingId(paymentId);
+    try {
+      const res = await cancelPayment(paymentId);
+      // Kalau ini DP booking → cancel membatalkan SELURUH booking (meja bebas
+      // lagi). Jangan router.refresh() (guard akan memantulkan host balik ke
+      // halaman tunggu → tampak "malah berhasil booking"); keluar dari sesi.
+      if (res.bookingCancelled) {
+        toast.success("Booking cancelled");
+        router.replace("/");
+        return;
+      }
+      toast.success("Payment cancelled");
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to cancel payment"));
+    } finally {
+      setCancellingId(null);
+    }
+  }
+  // KASIR konfirmasi pending "Pay at cashier" LANGSUNG dari baris riwayat —
+  // alur kasir memang lewat halaman ini (session → Bill → order), bukan
+  // /staff/cashier/[sessionId]. Kasir PILIH metode aktual (arahan user):
+  // cash → langsung lunas; QRIS → payment dikonversi jadi QR utk di-scan.
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  async function handleCashierConfirm(
+    paymentId: string,
+    method: "cash" | "qris",
+    cashReceived?: number
+  ) {
+    setConfirmingId(paymentId);
+    try {
+      const res = await cashierConfirmPendingPayment({
+        paymentId,
+        method,
+        cashReceived,
+      });
+      if (res.status === "paid") {
+        toast.success(
+          method === "cash" && res.change > 0
+            ? `Payment confirmed — change ${formatIDR(res.change)}`
+            : "Payment confirmed — order sent to the kitchen"
+        );
+      } else if (res.qrString) {
+        // QRIS pending → tampilkan QR utk di-scan customer di meja kasir.
+        setActiveQr({
+          paymentId,
+          qrString: res.qrString,
+          amount: res.amount,
+          expirySeconds: toExpirySeconds(res.expiresAt),
+        });
+      } else {
+        toast.info("Payment is being processed");
+      }
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to confirm payment"));
+    } finally {
+      setConfirmingId(null);
+    }
+  }
   async function handleRegenerate(paymentId: string, memberName: string) {
     setRegenId(paymentId);
     try {
@@ -206,6 +287,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     .filter((p) => p.method === "voucher" && p.status === "paid")
     .reduce((sum, p) => sum + p.amount, 0);
   const visiblePayments = detail.payments.filter((p) => p.method !== "voucher");
+  // Ada pembayaran "Pay at cashier" yang masih menunggu konfirmasi? Kalau ya,
+  // kasir HARUS mengonfirmasi baris itu (tombol Cash/QRIS di riwayat), BUKAN
+  // membuat pembayaran baru lewat CashierPayBox — mencegah pembayaran dobel &
+  // baris "Replaced" yang membingungkan.
+  const hasPendingCashierPay = detail.payments.some(
+    (p) => p.status === "pending" && p.pay_at_cashier
+  );
 
   const isClosedOrder = detail.status === "closed";
   const isFullyPaid = !isClosedOrder && detail.outstanding <= 0;
@@ -328,6 +416,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         {!detail.canPay &&
           !detail.isCashier &&
           !detail.viewOnly &&
+          !hasPendingCashierPay &&
           (detail.isHost || detail.isStaff) &&
           detail.outstanding > 0 && (
             <Card className="p-4 text-sm text-muted-foreground text-center">
@@ -336,13 +425,29 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
             </Card>
           )}
 
-        {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). */}
-        {detail.canPay && detail.isCashier && (
+        {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). Disembunyikan
+            saat ada pembayaran "Pay at cashier" pending — kasir konfirmasi
+            baris itu (di riwayat) daripada membuat pembayaran paralel. */}
+        {detail.canPay && detail.isCashier && !hasPendingCashierPay && (
           <CashierPayBox
             detail={detail}
             onQr={(qr) => setActiveQr(qr)}
             onDone={() => router.refresh()}
           />
+        )}
+
+        {/* Kasir: sorotan pembayaran "Pay at cashier" yang menunggu konfirmasi —
+            arahkan ke baris di riwayat (tombol Cash/QRIS ada di sana). */}
+        {detail.isCashier && hasPendingCashierPay && (
+          <Card className="p-4 border-amber-500/30 bg-amber-500/[0.06]">
+            <p className="text-sm font-medium text-amber-400">
+              Customer chose to pay at the cashier
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Confirm the pending payment below (Cash or QRIS) once you receive
+              the money — the order is sent to the kitchen right after.
+            </p>
+          </Card>
         )}
 
         {/* Payment history — baris voucher TIDAK ditampilkan di sini
@@ -372,6 +477,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                   isDead &&
                   isLatestOfMember &&
                   !p.is_down_payment &&
+                  // Pay-at-cashier bukan QRIS — regenerate QR tak berlaku.
+                  !p.pay_at_cashier &&
                   detail.outstanding > 0;
                 return (
                   <Card key={p.id} className="p-3">
@@ -384,7 +491,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           </Badge>
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {p.method.toUpperCase()} · {fmtTime(p.paid_at ?? p.created_at)}
+                          {p.pay_at_cashier ? "PAY AT CASHIER" : p.method.toUpperCase()} · {fmtTime(p.paid_at ?? p.created_at)}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -393,7 +500,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           variant={p.status === "paid" ? "success" : p.status === "pending" && !expired ? "warning" : "secondary"}
                           className="text-[10px]"
                         >
-                          {p.status === "paid" ? "Paid" : expired ? "Cancelled" : p.status === "pending" ? "Pending" : "Cancelled"}
+                          {p.status === "paid" ? "Paid" : expired ? "Cancelled" : p.status === "pending" ? "Pending" : p.superseded ? "Replaced" : "Cancelled"}
                         </Badge>
                       </div>
                     </div>
@@ -412,6 +519,44 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                       >
                         <QrCode className="h-3.5 w-3.5" /> Show QR
                       </button>
+                    )}
+                    {p.status === "pending" && p.pay_at_cashier && !expired && (
+                      <div className="mt-2 space-y-2">
+                        {/* KASIR: form terima pembayaran (pilih metode + uang
+                            tunai + kembalian) yang mengonfirmasi baris ini. */}
+                        {detail.isCashier && (
+                          <CashierConfirmBox
+                            payerName={p.paid_by}
+                            amount={p.amount}
+                            busy={confirmingId === p.id}
+                            onConfirm={(method, cashReceived) =>
+                              handleCashierConfirm(p.id, method, cashReceived)
+                            }
+                          />
+                        )}
+                        {!detail.isCashier && (
+                          <p className="text-[11px] text-amber-400">
+                            Waiting for cashier confirmation — pay at the cashier
+                            desk to complete this payment.
+                          </p>
+                        )}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {(p.paid_by_member_id === detail.myMemberId ||
+                            detail.isHost ||
+                            detail.isStaff) && (
+                            <button
+                              type="button"
+                              disabled={cancellingId === p.id || confirmingId === p.id}
+                              onClick={() => handleCancelCashierPayment(p.id)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
+                            >
+                              {cancellingId === p.id
+                                ? "Cancelling…"
+                                : "Cancel this payment"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
                     {canRegenerate && (
                       <button
@@ -602,6 +747,110 @@ function CashierPayBox({
 
       <Button variant="gold" size="lg" className="w-full" disabled={loading || !cashValid} onClick={accept}>
         {loading ? "Processing…" : method === "cash" ? "Accept cash" : "Generate QRIS"}
+      </Button>
+    </Card>
+  );
+}
+
+/**
+ * Form konfirmasi pembayaran "Pay at cashier" (kasir). Sama seperti
+ * CashierPayBox — pilih metode + uang tunai + kembalian — TAPI nominal &
+ * pembayar TERKUNCI ke baris pending yang dikonfirmasi (bukan bikin pembayaran
+ * baru). Submit → cashierConfirmPendingPayment.
+ */
+function CashierConfirmBox({
+  payerName,
+  amount,
+  busy,
+  onConfirm,
+}: {
+  payerName: string;
+  amount: number;
+  busy: boolean;
+  onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
+}) {
+  const [method, setMethod] = React.useState<"cash" | "qris">("cash");
+  const [cashReceived, setCashReceived] = React.useState("");
+  const received = parseInt(cashReceived || "0", 10) || 0;
+  const change = method === "cash" ? Math.max(0, received - amount) : 0;
+  const cashValid = method !== "cash" || received >= amount;
+
+  return (
+    <Card className="p-3 space-y-2.5 border-amber-500/30 bg-amber-500/[0.04]">
+      <div className="text-xs font-semibold text-amber-400">
+        Confirm payment (cashier)
+      </div>
+
+      {/* Pembayar — terkunci ke pemilih pay-at-cashier */}
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Payer</span>
+        <span className="font-medium">{payerName}</span>
+      </div>
+
+      {/* Metode */}
+      <div className="flex gap-2">
+        {(["cash", "qris"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={
+              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
+              (method === m
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border hover:border-primary/40")
+            }
+          >
+            {m === "qris" ? "QRIS" : "Cash"}
+          </button>
+        ))}
+      </div>
+
+      {/* Uang tunai + kembalian */}
+      {method === "cash" && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Cash received</label>
+          <input
+            inputMode="numeric"
+            value={cashReceived}
+            onChange={(e) =>
+              setCashReceived(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            placeholder={String(amount)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
+          />
+          {received > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Change</span>
+              <span className="text-emerald-400 tabular-nums">
+                {formatIDR(change)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-between text-sm pt-1 border-t border-border">
+        <span className="text-muted-foreground">Amount due</span>
+        <span className="font-semibold text-primary tabular-nums">
+          {formatIDR(amount)}
+        </span>
+      </div>
+
+      <Button
+        variant="gold"
+        size="lg"
+        className="w-full"
+        disabled={busy || !cashValid}
+        onClick={() =>
+          onConfirm(method, method === "cash" ? received : undefined)
+        }
+      >
+        {busy
+          ? "Processing…"
+          : method === "cash"
+            ? "Accept cash"
+            : "Generate QRIS"}
       </Button>
     </Card>
   );

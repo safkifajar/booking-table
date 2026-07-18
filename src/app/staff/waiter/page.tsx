@@ -22,6 +22,11 @@ import { StaffProfileButton } from "@/components/staff/StaffProfileButton";
 import { WaiterDashboard } from "./WaiterDashboard";
 import { NotificationBell } from "@/components/NotificationBell";
 
+// Selalu render dinamis: transisi status berbasis waktu (expireFinishedSessions
+// / promoteDueReservations) HARUS jalan tiap kunjungan supaya sesi lewat-waktu
+// pindah ke Selesai — jangan disajikan dari cache statis.
+export const dynamic = "force-dynamic";
+
 /**
  * Waiter dashboard — order queue + bantu pesan flow.
  * Allowed roles: waiter, manager, admin.

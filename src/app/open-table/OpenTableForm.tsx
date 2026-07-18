@@ -31,6 +31,7 @@ import {
   ChevronDown,
   Trash2,
 } from "lucide-react";
+import { Select } from "@/components/ui/select";
 import { openTable } from "@/lib/actions";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -166,6 +167,9 @@ export function OpenTableForm({
     name: string;
     discount: number;
   } | null>(null);
+  // Metode DP: QRIS (bayar sekarang, batas 1 menit) atau Pay at cashier
+  // (konfirmasi ke kasir, batas 10 menit — lewat itu booking batal).
+  const [dpMethod, setDpMethod] = React.useState<"qris" | "cash">("qris");
   const [loading, setLoading] = React.useState(false);
 
   // Ganti visibility mengubah siapa yg SAH diundang (meja "friends" hanya
@@ -359,7 +363,7 @@ export function OpenTableForm({
         reservationAt: selectedSlot || null,
         reservationEndAt: effectiveEnd || null,
         initialOrder: initialOrder.length > 0 ? initialOrder : undefined,
-        dpMethod: dpRequired ? "qris" : undefined,
+        dpMethod: dpRequired ? dpMethod : undefined,
         voucherCode: dpRequired && voucher ? voucher.code : undefined,
         // Semua visibility boleh mengundang; yg diundang wajib menyetujui.
         invitedUserIds:
@@ -375,6 +379,11 @@ export function OpenTableForm({
           return;
         }
         setLoading(false);
+        return;
+      }
+      // DP "Pay at cashier" → ke halaman tunggu konfirmasi (countdown 10 menit).
+      if (result && result.ok === true && "awaitCashier" in result && result.awaitCashier) {
+        router.push(`/booking/${result.sessionId}/pay`);
         return;
       }
       // DP QRIS menunggu bayar → tampilkan QR dialog, jangan redirect.
@@ -722,6 +731,30 @@ export function OpenTableForm({
             </div>
           )}
 
+          {/* Metode pembayaran DP: QRIS sekarang vs konfirmasi di kasir */}
+          {dpRequired && dpAmount > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Deposit payment method
+              </label>
+              <Select
+                value={dpMethod}
+                onChange={(v) => setDpMethod(v as "qris" | "cash")}
+                ariaLabel="Deposit payment method"
+                options={[
+                  { value: "qris", label: "QRIS" },
+                  { value: "cash", label: "Pay at cashier" },
+                ]}
+              />
+              {dpMethod === "cash" && (
+                <p className="mt-1.5 text-xs text-amber-400">
+                  Confirm &amp; pay at the cashier desk within 10 minutes —
+                  otherwise the booking is cancelled and the slot reopens.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Submit */}
           <Button
             type="submit"
@@ -735,6 +768,8 @@ export function OpenTableForm({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Processing...
               </>
+            ) : dpRequired && dpMethod === "cash" ? (
+              `Reserve & pay ${formatIDR(dpPayable)} at cashier`
             ) : dpIsFull ? (
               `Pay ${formatIDR(dpPayable)} to reserve`
             ) : dpRequired ? (

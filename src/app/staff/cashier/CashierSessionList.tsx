@@ -14,6 +14,7 @@ import {
   Layers,
   CalendarClock,
   ArrowRightLeft,
+  Banknote,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -410,7 +411,13 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
           {filtered.map((b) => (
             <Link
               key={b.session_id}
-              href={`/session/${b.session_id}?from=/staff/cashier`}
+              // DP menunggu konfirmasi kasir → langsung ke panel pembayaran
+              // kasir (tombol mark-paid); selain itu ke halaman sesi biasa.
+              href={
+                b.dp_pending_cashier
+                  ? `/staff/cashier/${b.session_id}`
+                  : `/session/${b.session_id}?from=/staff/cashier`
+              }
             >
               <Card className="p-4 hover:border-primary/40 transition">
                 <div className="flex items-start gap-2 mb-2">
@@ -454,6 +461,15 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
                     {b.reservation_end_at && `–${fmtTime(b.reservation_end_at)}`}
                   </span>
                 </div>
+                {b.dp_pending_cashier && (
+                  <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-xs text-amber-400">
+                    <Banknote className="h-3.5 w-3.5 shrink-0" />
+                    <span className="font-medium truncate">
+                      DP {formatIDR(b.dp_pending_cashier.amount)} — waiting
+                      payment at cashier
+                    </span>
+                  </div>
+                )}
               </Card>
             </Link>
           ))}
@@ -541,6 +557,18 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
                 >
                   <Sparkles className="h-2.5 w-2.5" />
                   Walk-in
+                </Badge>
+              )}
+              {session.cash_pending_count > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] px-1.5 gap-1"
+                >
+                  <Banknote className="h-2.5 w-2.5" />
+                  Pay at cashier
+                  {session.cash_pending_count > 1
+                    ? ` ×${session.cash_pending_count}`
+                    : ""}
                 </Badge>
               )}
             </div>
