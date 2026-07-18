@@ -53,7 +53,10 @@ import {
   DP_TIMEOUT_SECONDS,
   PAY_AT_CASHIER_TIMEOUT_SECONDS,
 } from "@/lib/queries";
-import { notifyPaymentEvent } from "@/lib/payment-notify";
+import {
+  notifyPaymentEvent,
+  notifyCashiersPayAtCashier,
+} from "@/lib/payment-notify";
 import {
   areFriends,
   isBlockedEitherWay,
@@ -672,6 +675,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         })
         .where(eq(payments.id, dpPaymentId));
       dpAwaitCashier = true;
+      // Kabari kasir: ada DP booking yang mau dibayar di kasir.
+      await notifyCashiersPayAtCashier({
+        paymentId: dpPaymentId,
+        isDownPayment: true,
+      });
     } else {
     try {
       const gateway = getPaymentGateway();
@@ -2671,6 +2679,11 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       .where(eq(payments.id, newPayment.id));
 
     await notifySessionAndStaff(data.sessionId);
+    // Kabari kasir: ada bill yang mau dibayar di kasir → siap terima & konfirmasi.
+    await notifyCashiersPayAtCashier({
+      paymentId: newPayment.id,
+      isDownPayment: false,
+    });
     revalidatePath(`/session/${data.sessionId}`);
     revalidatePath("/staff/cashier");
     revalidatePath(`/staff/cashier/${data.sessionId}`);
@@ -2964,6 +2977,19 @@ export async function createSplitBatch(
   }
 
   await notifySessionAndStaff(data.sessionId);
+  // Split bayar-di-kasir: kabari kasir SEKALI (bukan per anggota) kalau ada
+  // share pay-at-cashier yang pending.
+  if (data.method === "cash") {
+    const firstCashier = results.find(
+      (r) => r.status === "pending" && r.paymentId
+    );
+    if (firstCashier?.paymentId) {
+      await notifyCashiersPayAtCashier({
+        paymentId: firstCashier.paymentId,
+        isDownPayment: false,
+      });
+    }
+  }
   revalidatePath(`/session/${data.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/staff/cashier/${data.sessionId}`);
