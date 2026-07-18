@@ -794,7 +794,9 @@ function TableSheet({
   // interaksi slot ~350ms pertama setelah sheet mount.
   const [ready, setReady] = React.useState(false);
   React.useEffect(() => {
-    const t = setTimeout(() => setReady(true), 350);
+    // 500ms: cukup melewati ghost-click bawaan (biasanya ~300ms setelah tap)
+    // pada perangkat yang lambat sekalipun.
+    const t = setTimeout(() => setReady(true), 500);
     return () => clearTimeout(t);
   }, []);
 
