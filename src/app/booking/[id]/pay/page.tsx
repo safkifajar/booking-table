@@ -40,6 +40,7 @@ export default async function BookingPayPage({ params }: PageProps) {
       status: tableSessions.status,
       host_id: tableSessions.hostId,
       dp_paid_at: tableSessions.dpPaidAt,
+      table_label: tables.label,
       bar_id: bars.id,
       bar_slug: bars.slug,
     })
@@ -87,8 +88,10 @@ export default async function BookingPayPage({ params }: PageProps) {
   const meta = (dp.split_meta ?? {}) as {
     qrString?: string | null;
     expiresAt?: string | null;
+    payAtCashier?: boolean;
   };
-  if (!meta.qrString) {
+  const isCashier = !!meta.payAtCashier;
+  if (!isCashier && !meta.qrString) {
     // DP pending tapi tak ada QR (mis. gateway gagal) → serahkan ke detail.
     redirect(`/session/${id}`);
   }
@@ -103,11 +106,13 @@ export default async function BookingPayPage({ params }: PageProps) {
   return (
     <BookingPayView
       paymentId={dp.id}
-      qrString={meta.qrString}
+      qrString={meta.qrString ?? null}
       amount={dp.amount}
       secondsLeft={secondsLeft}
       sessionId={id}
       barSlug={row.bar_slug}
+      mode={isCashier ? "cashier" : "qris"}
+      tableLabel={row.table_label}
     />
   );
 }

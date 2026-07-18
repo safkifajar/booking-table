@@ -35,6 +35,7 @@ import { memberRatings } from "@/lib/db/schema/extras";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
+import { releaseVoucherForPayment } from "@/lib/member-voucher";
 import type {
   Bar,
   FloorArea,
@@ -481,15 +482,25 @@ export async function settleOverdueIfPaid(sessionId: string): Promise<boolean> {
   return true;
 }
 
-/** Batas waktu bayar DP booking (detik). Lewat ini → booking dibatalkan. */
+/** Batas waktu bayar DP booking via QRIS (detik). Lewat ini → booking batal. */
 export const DP_TIMEOUT_SECONDS = 60;
 
 /**
- * Batalkan booking yang DP-nya tak dibayar dalam DP_TIMEOUT_SECONDS.
+ * Batas konfirmasi DP "Pay at cashier" (detik) — 10 menit. Customer harus
+ * datang & bayar ke kasir dalam waktu ini; lewat → booking dibatalkan dan
+ * slot mejanya bebas lagi (arahan user, fitur Pay on Cashier).
+ */
+export const PAY_AT_CASHIER_TIMEOUT_SECONDS = 10 * 60;
+
+/**
+ * Batalkan booking yang DP-nya tak dibayar dalam batas waktunya.
+ * Batas per payment: splitMeta.expiresAt kalau ada (QRIS gateway / pay-at-
+ * cashier 10 menit), fallback created_at + DP_TIMEOUT_SECONDS.
  * Kondisi: session 'reserved', dp_paid_at NULL, punya payment DP (isDownPayment)
- * berstatus 'pending' yang dibuat > timeout lalu → set payment 'failed' +
- * session 'cancelled'. Return true kalau session ini dibatalkan.
- * Lazy: dipanggil saat buka /session, load denah, atau saat countdown habis.
+ * pending yang sudah lewat batas → set payment 'failed' + session 'cancelled'.
+ * Return true kalau session ini dibatalkan.
+ * Lazy: dipanggil saat buka /session, load denah, dashboard kasir, atau saat
+ * countdown habis.
  */
 export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
   const [s] = await db
@@ -508,28 +519,43 @@ export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
   )
     return false;
 
-  const cutoff = new Date(Date.now() - DP_TIMEOUT_SECONDS * 1000);
-  // Cari payment DP pending untuk sesi ini yg sudah lewat batas.
+  // Cari payment DP pending sesi ini, evaluasi deadline-nya di kode (meta
+  // expiresAt beda-beda per metode: QRIS 60 dtk, pay-at-cashier 10 menit).
   const [dp] = await db
-    .select({ id: payments.id, createdAt: payments.createdAt })
+    .select({
+      id: payments.id,
+      createdAt: payments.createdAt,
+      splitMeta: payments.splitMeta,
+    })
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(
       and(
         eq(orders.sessionId, sessionId),
         eq(payments.status, "pending"),
-        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
-        lte(payments.createdAt, cutoff)
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
       )
     )
     .limit(1);
   if (!dp) return false;
 
-  // Batalkan: payment gagal + session cancelled (meja bebas lagi).
-  await db
+  const meta = (dp.splitMeta ?? {}) as { expiresAt?: string | null };
+  const deadlineMs = meta.expiresAt
+    ? new Date(meta.expiresAt).getTime()
+    : dp.createdAt.getTime() + DP_TIMEOUT_SECONDS * 1000;
+  if (Date.now() <= deadlineMs) return false;
+
+  // Batalkan: payment gagal + session cancelled (meja bebas lagi). Transisi
+  // conditional (WHERE pending) — kalau kasir keburu konfirmasi di sela ini,
+  // jangan menimpa 'paid'.
+  const cancelled = await db
     .update(payments)
     .set({ status: "failed", paidAt: null })
-    .where(eq(payments.id, dp.id));
+    .where(and(eq(payments.id, dp.id), eq(payments.status, "pending")))
+    .returning({ id: payments.id });
+  if (cancelled.length === 0) return false;
+  // Voucher benefit yang menempel di DP ini → lepas lagi (bisa dipakai ulang).
+  await releaseVoucherForPayment(dp.id).catch(() => {});
   await db
     .update(tableSessions)
     .set({ status: "cancelled", closedAt: new Date() })
@@ -540,12 +566,13 @@ export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
 }
 
 /**
- * Sweep semua DP booking basi (>1 menit belum bayar) di satu bar → batalkan.
- * Dipanggil saat denah bar di-load supaya meja bebas lagi walau host tak balik.
+ * Sweep semua DP booking basi di satu bar → batalkan. Deadline per payment
+ * dievaluasi di expireDpIfOverdue (QRIS 60 dtk / pay-at-cashier 10 menit).
+ * Dipanggil saat denah bar / dashboard kasir di-load supaya meja bebas lagi
+ * walau host tak balik.
  */
 export async function expireOverdueDpBookings(barId: string): Promise<number> {
-  const cutoff = new Date(Date.now() - DP_TIMEOUT_SECONDS * 1000);
-  // Sesi 'reserved' di bar ini, dp belum dibayar, punya DP pending basi.
+  // Sesi 'reserved' di bar ini, dp belum dibayar, punya DP pending.
   const rows = await db
     .selectDistinct({ sessionId: tableSessions.id })
     .from(tableSessions)
@@ -559,8 +586,7 @@ export async function expireOverdueDpBookings(barId: string): Promise<number> {
         inArray(tableSessions.status, ["reserved", "open"]),
         sql`${tableSessions.dpPaidAt} IS NULL`,
         eq(payments.status, "pending"),
-        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
-        lte(payments.createdAt, cutoff)
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
       )
     );
   let n = 0;

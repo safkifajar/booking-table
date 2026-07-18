@@ -16,6 +16,7 @@ import {
   payShare,
   createSplitBatch,
   cancelUnpaidOrder,
+  cancelPayment,
   regenerateMemberPayment,
   type OrderDetail,
 } from "@/lib/actions";
@@ -124,6 +125,10 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           amount,
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
+      } else if (method === "cash" && result.status === "pending") {
+        toast.success(
+          "Payment created — confirm & pay at the cashier desk. Your order is sent to the kitchen once confirmed."
+        );
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -167,6 +172,21 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // gagal (telat bayar). Payment lama di-failed-kan, dibuat QRIS baru dgn
   // nominal sama, dan HANYA anggota itu yang dapat notifikasi.
   const [regenId, setRegenId] = React.useState<string | null>(null);
+  // Batalkan pending "Pay at cashier" (customer berubah pikiran → bisa pilih
+  // metode lain; slot outstanding-nya bebas lagi).
+  const [cancellingId, setCancellingId] = React.useState<string | null>(null);
+  async function handleCancelCashierPayment(paymentId: string) {
+    setCancellingId(paymentId);
+    try {
+      await cancelPayment(paymentId);
+      toast.success("Payment cancelled");
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to cancel payment"));
+    } finally {
+      setCancellingId(null);
+    }
+  }
   async function handleRegenerate(paymentId: string, memberName: string) {
     setRegenId(paymentId);
     try {
@@ -384,7 +404,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           </Badge>
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {p.method.toUpperCase()} · {fmtTime(p.paid_at ?? p.created_at)}
+                          {p.pay_at_cashier ? "PAY AT CASHIER" : p.method.toUpperCase()} · {fmtTime(p.paid_at ?? p.created_at)}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -412,6 +432,28 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                       >
                         <QrCode className="h-3.5 w-3.5" /> Show QR
                       </button>
+                    )}
+                    {p.status === "pending" && p.pay_at_cashier && !expired && (
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[11px] text-amber-400">
+                          Waiting for cashier confirmation — pay at the cashier
+                          desk to complete this payment.
+                        </p>
+                        {(p.paid_by_member_id === detail.myMemberId ||
+                          detail.isHost ||
+                          detail.isStaff) && (
+                          <button
+                            type="button"
+                            disabled={cancellingId === p.id}
+                            onClick={() => handleCancelCashierPayment(p.id)}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
+                          >
+                            {cancellingId === p.id
+                              ? "Cancelling…"
+                              : "Cancel this payment"}
+                          </button>
+                        )}
+                      </div>
                     )}
                     {canRegenerate && (
                       <button

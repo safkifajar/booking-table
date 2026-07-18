@@ -53,7 +53,11 @@ import {
   settleRevenueSplitForMembershipTx,
 } from "@/lib/revenue-split";
 import { notifyAll } from "@/lib/realtime/notify";
-import { settleOverdueIfPaid, settleOrderIfPaid } from "@/lib/queries";
+import {
+  settleOverdueIfPaid,
+  settleOrderIfPaid,
+  expireOverdueDpBookings,
+} from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
@@ -86,6 +90,8 @@ export interface CashierSessionItem {
   opened_by_staff_name: string | null;
   /** Nama-nama tamu di meja (kalau walk-in). Empty array untuk session customer regular */
   guest_names: string[];
+  /** Jumlah payment "Pay at cashier" yang menunggu konfirmasi kasir. */
+  cash_pending_count: number;
 }
 
 export async function getActiveSessionsForCashier(): Promise<
@@ -189,6 +195,28 @@ export async function getActiveSessionsForCashier(): Promise<
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
   );
 
+  // Payment "Pay at cashier" pending per session — customer menunggu
+  // konfirmasi di kasir (order belum masuk dapur sampai dikonfirmasi).
+  const cashPendingRows = await db
+    .select({
+      session_id: orders.sessionId,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`,
+        notInArray(orders.status, ["cancelled"])
+      )
+    )
+    .groupBy(orders.sessionId);
+  const cashPendingMap = new Map(
+    cashPendingRows.map((r) => [r.session_id, Number(r.count)])
+  );
+
   // Batch lookup nama staff yang buka session walk-in (unique IDs)
   const staffIds = Array.from(
     new Set(
@@ -237,6 +265,7 @@ export async function getActiveSessionsForCashier(): Promise<
         ? staffNameMap.get(s.opened_by_staff_id) ?? null
         : null,
       guest_names: s.guest_names ?? [],
+      cash_pending_count: cashPendingMap.get(s.id) ?? 0,
     };
   });
 }
@@ -382,6 +411,7 @@ export async function getClosedSessionsForCashier(): Promise<
         ? staffNameMap.get(s.opened_by_staff_id) ?? null
         : null,
       guest_names: s.guest_names ?? [],
+      cash_pending_count: 0,
     };
   });
 }
@@ -401,14 +431,28 @@ export interface CashierBookingItem {
   table_capacity: number;
   reservation_at: string;
   reservation_end_at: string | null;
+  /** DP pending "Pay at cashier" — customer menunggu konfirmasi di kasir. */
+  dp_pending_cashier: {
+    payment_id: string;
+    amount: number;
+    expires_at: string | null;
+  } | null;
 }
 
 /**
  * Daftar reservasi TERJADWAL (status 'reserved') di bar — untuk kasir.
  * Permission receive_payment (kasir/manager/admin). Urut by reservation_at.
+ * Sekalian sweep DP basi (lazy expiry) supaya booking yang lewat batas
+ * konfirmasi hilang dari daftar & mejanya bebas lagi.
  */
 export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
   const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  // Lazy expiry: batalkan booking yang DP-nya lewat batas (QRIS 60 dtk /
+  // pay-at-cashier 10 menit) sebelum menampilkan daftar.
+  await expireOverdueDpBookings(ctx.barId).catch((e) =>
+    console.error("[cashier] expire DP sweep:", e)
+  );
 
   const rows = await db
     .select({
@@ -454,6 +498,39 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     memberRows.map((m) => [m.session_id, Number(m.count)])
   );
 
+  // DP pending "Pay at cashier" per booking (kasir perlu tahu siapa yang
+  // sedang menunggu konfirmasi + sisa waktunya).
+  const dpRows = await db
+    .select({
+      session_id: orders.sessionId,
+      payment_id: payments.id,
+      amount: payments.amount,
+      split_meta: payments.splitMeta,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        inArray(orders.sessionId, ids),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`
+      )
+    );
+  const dpMap = new Map(
+    dpRows.map((d) => {
+      const meta = (d.split_meta ?? {}) as { expiresAt?: string | null };
+      return [
+        d.session_id,
+        {
+          payment_id: d.payment_id,
+          amount: d.amount,
+          expires_at: meta.expiresAt ?? null,
+        },
+      ];
+    })
+  );
+
   return rows.map((r) => ({
     session_id: r.id,
     table_label: r.table_label,
@@ -469,6 +546,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     reservation_end_at: r.reservation_end_at
       ? r.reservation_end_at.toISOString()
       : null,
+    dp_pending_cashier: dpMap.get(r.id) ?? null,
   }));
 }
 
@@ -493,6 +571,8 @@ export interface CashierPayment {
   paid_at: string | null;
   created_at: string;
   is_down_payment: boolean;
+  /** "Pay at cashier": customer menunggu konfirmasi kasir (tanpa QR). */
+  pay_at_cashier: boolean;
   qr_string: string | null;
   expires_at: string | null;
   paid_by_name: string;
@@ -596,13 +676,27 @@ export async function getSessionDetailForCashier(
 
   // Multi-order: kasir melihat SEMUA order yang sudah "masuk" (paid/closed),
   // BUKAN order 'unpaid' (belum dibayar → belum masuk ke kasir/dapur).
+  // PENGECUALIAN (Pay on Cashier): order 'unpaid' yang punya payment pending
+  // "payAtCashier" HARUS tampil — customer sedang menunggu konfirmasi di
+  // kasir; kasir perlu melihat item + tombol mark-paid utk mengonfirmasi.
   const orderRows = await db
     .select({ id: orders.id })
     .from(orders)
     .where(
       and(
         eq(orders.sessionId, sessionId),
-        notInArray(orders.status, ["unpaid", "cancelled"])
+        sql`(
+          ${orders.status} NOT IN ('unpaid', 'cancelled')
+          OR (
+            ${orders.status} = 'unpaid'
+            AND EXISTS (
+              SELECT 1 FROM ${payments} p
+              WHERE p.order_id = ${orders.id}
+                AND p.status = 'pending'
+                AND (p.split_meta ->> 'payAtCashier')::boolean IS TRUE
+            )
+          )
+        )`
       )
     )
     .orderBy(orders.createdAt);
@@ -739,6 +833,7 @@ export async function getSessionDetailForCashier(
     payments: paymentsRaw.map((p) => {
       const meta = (p.split_meta ?? {}) as {
         isDownPayment?: boolean;
+        payAtCashier?: boolean;
         qrString?: string;
         expiresAt?: string | null;
       };
@@ -750,6 +845,7 @@ export async function getSessionDetailForCashier(
         paid_at: p.paid_at ? p.paid_at.toISOString() : null,
         created_at: p.created_at.toISOString(),
         is_down_payment: !!meta.isDownPayment,
+        pay_at_cashier: !!meta.payAtCashier,
         qr_string: meta.qrString ?? null,
         expires_at: meta.expiresAt ?? null,
         paid_by_name: p.paid_by_name,
@@ -1070,6 +1166,8 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
   const [payment] = await db
     .select({
       id: payments.id,
+      orderId: payments.orderId,
+      splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
     })
@@ -1083,10 +1181,19 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
   if (!payment) throw new Error("Payment not found");
   if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
 
-  await db
+  // Transisi conditional pending→paid: kalau payment keburu expired/dibatalkan
+  // (mis. DP pay-at-cashier lewat 10 menit → booking sudah cancelled), JANGAN
+  // menghidupkan lagi — kasir dapat error yang jelas.
+  const updated = await db
     .update(payments)
     .set({ status: "paid", paidAt: new Date() })
-    .where(eq(payments.id, paymentId));
+    .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
+    .returning({ id: payments.id });
+  if (updated.length === 0) {
+    throw new Error(
+      "This payment is no longer pending (already confirmed, cancelled, or expired)"
+    );
+  }
 
   // Voucher membership yang menempel → tandai used + baris diskon (idempotent).
   await settleVoucherForPayment(paymentId);
@@ -1094,13 +1201,33 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     console.error("[split] cashierMarkPaid:", e)
   );
 
+  // DP booking dikonfirmasi → tandai dp_paid_at (booking sah; reservasi bisa
+  // dipromote saat waktunya).
+  const meta = (payment.splitMeta as { isDownPayment?: boolean } | null) ?? {};
+  if (meta.isDownPayment) {
+    await db
+      .update(tableSessions)
+      .set({ dpPaidAt: new Date() })
+      .where(eq(tableSessions.id, payment.sessionId));
+  }
+
+  // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK dapur
+  // (status 'paid' + item draft→sent → tampil di antrean waiter).
+  await settleOrderIfPaid(payment.orderId);
+
   // Sesi 'overdue' yang kini lunas → tutup otomatis.
   await settleOverdueIfPaid(payment.sessionId);
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.paid" });
+  // Notif in-app + push ke host/pembayar (konsisten dgn jalur webhook/polling).
+  await notifyPaymentEvent(
+    paymentId,
+    meta.isDownPayment ? "dp_confirmed" : "paid"
+  );
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
+  revalidatePath(`/session/${payment.sessionId}`);
 }
 
 /**

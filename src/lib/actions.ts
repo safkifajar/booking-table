@@ -51,6 +51,7 @@ import {
   getOrderOutstanding,
   settleOrderIfPaid,
   DP_TIMEOUT_SECONDS,
+  PAY_AT_CASHIER_TIMEOUT_SECONDS,
 } from "@/lib/queries";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import {
@@ -623,6 +624,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // tetap created tapi DP pending — staff bisa konfirmasi manual nanti.
   // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
   let dpQris: { paymentId: string; qrString: string } | null = null;
+  let dpAwaitCashier = false;
   if (dpPaymentId && dpAmount > 0) {
     // Reservasi voucher ke payment DP (race-safe). Kalah race (nyaris
     // mustahil — divalidasi milidetik lalu) → lanjut TANPA diskon; sesi
@@ -638,6 +640,31 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       else console.error("[openTable] voucher kalah race — DP tanpa diskon");
     }
     const dpCharge = dpAmount - dpDiscount;
+
+    // "Pay at cashier" (method cash): TANPA gateway — DP tetap 'pending',
+    // booking menunggu konfirmasi kasir maks 10 menit
+    // (PAY_AT_CASHIER_TIMEOUT_SECONDS). Lewat itu → expireDpIfOverdue
+    // membatalkan booking & slot mejanya bebas lagi.
+    if (data.dpMethod === "cash") {
+      await db
+        .update(payments)
+        .set({
+          externalRef: `cashier_${dpPaymentId}`,
+          amount: dpCharge,
+          splitMeta: {
+            isDownPayment: true,
+            ...(dpDiscount > 0 && dpVoucher
+              ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
+              : {}),
+            payAtCashier: true,
+            expiresAt: new Date(
+              Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
+            ).toISOString(),
+          },
+        })
+        .where(eq(payments.id, dpPaymentId));
+      dpAwaitCashier = true;
+    } else {
     try {
       const gateway = getPaymentGateway();
       const chargeResult = await gateway.createCharge({
@@ -695,6 +722,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       await releaseVoucherForPayment(dpPaymentId).catch(() => {});
       // Don't throw — session tetap exist, staff bisa handle manual
     }
+    }
   }
 
   await notifySessionAndStaff(sessionId);
@@ -732,6 +760,12 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   }
 
   void dpStatus; // unused warning suppress
+
+  // DP "Pay at cashier" → arahkan ke halaman tunggu (/booking/[id]/pay):
+  // instruksi konfirmasi ke kasir + countdown 10 menit.
+  if (dpAwaitCashier) {
+    return { ok: true as const, sessionId, awaitCashier: true as const };
+  }
 
   // DP QRIS menunggu bayar → JANGAN redirect; kembalikan qrString supaya
   // client tampilkan QR + polling. Setelah lunas, client redirect sendiri.
@@ -2049,6 +2083,8 @@ export interface OrderDetail {
     status: string;
     split_mode: string;
     is_down_payment: boolean;
+    /** "Pay at cashier": pending menunggu konfirmasi kasir (tanpa QR). */
+    pay_at_cashier: boolean;
     created_at: string;
     paid_at: string | null;
     paid_by: string;
@@ -2230,7 +2266,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; payAtCashier?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -2239,6 +2275,7 @@ export async function getOrderDetail(
             status: p.status,
             split_mode: p.split_mode,
             is_down_payment: !!meta.isDownPayment,
+            pay_at_cashier: !!meta.payAtCashier,
             created_at: p.created_at.toISOString(),
             paid_at: p.paid_at ? p.paid_at.toISOString() : null,
             paid_by: p.paid_by,
@@ -2602,6 +2639,38 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   }
 
   // 4. Call gateway abstraction. Mock → auto-paid. Real gateway → pending + qrString.
+  //    KECUALI "Pay at cashier" (method cash dari customer): TANPA gateway —
+  //    payment tetap 'pending' sampai KASIR konfirmasi uang diterima
+  //    (cashierMarkPaymentPaid). Selama pending, order tak masuk dapur.
+  if (data.method === "cash") {
+    await db
+      .update(payments)
+      .set({
+        externalRef: `cashier_${newPayment.id}`,
+        splitMeta: {
+          ...(data.splitMeta ?? {}),
+          ...(voucher
+            ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+            : {}),
+          payAtCashier: true,
+        },
+      })
+      .where(eq(payments.id, newPayment.id));
+
+    await notifySessionAndStaff(data.sessionId);
+    revalidatePath(`/session/${data.sessionId}`);
+    revalidatePath("/staff/cashier");
+    revalidatePath(`/staff/cashier/${data.sessionId}`);
+    return {
+      paymentId: newPayment.id,
+      status: "pending" as PaymentStatus,
+      externalRef: `cashier_${newPayment.id}`,
+      qrString: null,
+      redirectUrl: null,
+      expiresAt: null,
+    };
+  }
+
   const gateway = getPaymentGateway();
   const chargeResult = await gateway.createCharge({
     paymentId: newPayment.id,
@@ -2828,6 +2897,20 @@ export async function createSplitBatch(
 
       // Catatan: mode 'equal' tak menulis payment_items (tak ada tautan item).
       // Dulu ada cabang 'itemized' di sini — dihapus bersama mode-nya.
+
+      // "Pay at cashier": tanpa gateway — tiap share pending sampai anggota
+      // datang ke kasir & kasir konfirmasi satu-satu.
+      if (data.method === "cash") {
+        await db
+          .update(payments)
+          .set({
+            externalRef: `cashier_${pay.id}`,
+            splitMeta: { batchId, payAtCashier: true },
+          })
+          .where(eq(payments.id, pay.id));
+        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: null });
+        continue;
+      }
 
       const cr = await gateway.createCharge({
         paymentId: pay.id,
