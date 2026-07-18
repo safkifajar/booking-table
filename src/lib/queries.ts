@@ -386,6 +386,51 @@ export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
     .update(orderItems)
     .set({ status: "sent" })
     .where(and(eq(orderItems.orderId, orderId), eq(orderItems.status, "draft")));
+
+  // Rekonsiliasi DP menggantung: order ini lunas lewat jalur LAIN (mis. kasir
+  // menerima cash sbg pembayaran baru, bukan mark-paid baris DP pay-at-cashier)
+  // padahal DP booking masih pending. Uang sudah diterima ≥ nominal DP →
+  // booking dianggap terkonfirmasi (dp_paid_at di-set) dan baris DP pending
+  // dimatikan — tanpa ini, timeout DP membatalkan booking yang SUDAH dibayar.
+  const [ord] = await db
+    .select({ sessionId: orders.sessionId })
+    .from(orders)
+    .where(eq(orders.id, orderId));
+  if (ord) {
+    const [sess] = await db
+      .select({ dpPaidAt: tableSessions.dpPaidAt })
+      .from(tableSessions)
+      .where(eq(tableSessions.id, ord.sessionId));
+    if (sess && sess.dpPaidAt == null) {
+      const [danglingDp] = await db
+        .select({ id: payments.id, amount: payments.amount })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.orderId, orderId),
+            eq(payments.status, "pending"),
+            sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`
+          )
+        )
+        .limit(1);
+      if (danglingDp && paid >= danglingDp.amount) {
+        const superseded = await db
+          .update(payments)
+          .set({ status: "failed", paidAt: null })
+          .where(
+            and(eq(payments.id, danglingDp.id), eq(payments.status, "pending"))
+          )
+          .returning({ id: payments.id });
+        if (superseded.length > 0) {
+          await releaseVoucherForPayment(danglingDp.id).catch(() => {});
+          await db
+            .update(tableSessions)
+            .set({ dpPaidAt: now })
+            .where(eq(tableSessions.id, ord.sessionId));
+        }
+      }
+    }
+  }
   return true;
 }
 
