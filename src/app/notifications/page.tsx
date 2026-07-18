@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import { getNotifications } from "@/lib/notifications";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { NotificationsList } from "./NotificationsList";
@@ -13,7 +13,11 @@ export default async function NotificationsPage() {
   if (!profile) {
     redirect("/auth?next=/notifications");
   }
-  if (!profile.onboarded) {
+  // Onboarding wizard HANYA untuk customer. Staff (kasir/waiter/manager/admin)
+  // tak pernah "onboarded" tapi tetap boleh buka notifikasi — jangan pantulkan
+  // ke form onboarding customer.
+  const staffRole = await getStaffRole();
+  if (!staffRole && !profile.onboarded) {
     redirect("/onboarding");
   }
 
