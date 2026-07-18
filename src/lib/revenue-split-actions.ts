@@ -448,7 +448,7 @@ export async function getLiveSplitRecap(input: {
   categories: { name: string; percent: number; method: string | null; isRemainderSink: boolean }[];
 }): Promise<{
   totals: { category: string; total: number }[];
-  rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[];
+  rows: { paid_at: string; source: string; source_id: string; method: string; service: number; amounts: Record<string, number> }[];
 }> {
   await requireAdmin();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to)) {
@@ -481,9 +481,11 @@ export async function getLiveSplitRecap(input: {
     .limit(2000);
 
   const totalsMap = new Map<string, number>();
-  const rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[] = [];
+  const rows: { paid_at: string; source: string; source_id: string; method: string; service: number; amounts: Record<string, number> }[] = [];
 
-  function apply(source: string, id: string, paidAt: Date, base: number, service: number, method: string) {
+  // displayMethod: metode asli utk ditampilkan (mis. membership 'admin'
+  // di-match sebagai cash tapi tetap tampil 'admin' di export).
+  function apply(source: string, id: string, paidAt: Date, base: number, service: number, method: string, displayMethod = method) {
     const amounts: Record<string, number> = {};
     let allocated = 0;
     let sink: string | null = null;
@@ -496,7 +498,7 @@ export async function getLiveSplitRecap(input: {
     }
     if (sink) amounts[sink] = (amounts[sink] ?? 0) + (service - allocated);
     for (const [k, v] of Object.entries(amounts)) totalsMap.set(k, (totalsMap.get(k) ?? 0) + v);
-    rows.push({ paid_at: paidAt.toISOString(), source, source_id: id, service, amounts });
+    rows.push({ paid_at: paidAt.toISOString(), source, source_id: id, method: displayMethod, service, amounts });
   }
 
   for (const p of bills) {
@@ -505,7 +507,7 @@ export async function getLiveSplitRecap(input: {
     apply("bill", p.id, p.paidAt ?? new Date(), base, service, p.method);
   }
   for (const m of members) {
-    apply("membership", m.id, m.paidAt ?? new Date(), m.base, m.service, m.method === "admin" ? "cash" : m.method);
+    apply("membership", m.id, m.paidAt ?? new Date(), m.base, m.service, m.method === "admin" ? "cash" : m.method, m.method);
   }
 
   return {

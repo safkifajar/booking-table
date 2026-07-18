@@ -92,7 +92,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
   );
   const exportRef = React.useRef<{
     totals: { category: string; total: number }[];
-    rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[];
+    rows: { paid_at: string; source: string; source_id: string; method: string; service: number; amounts: Record<string, number> }[];
   } | null>(null);
 
   const [saving, setSaving] = React.useState(false);
@@ -279,13 +279,14 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
                   const cats = Array.from(
                     new Set(data.rows.flatMap((r) => Object.keys(r.amounts)))
                   );
-                  const header = ["Paid at", "Source", "ID", "Service fee", ...cats, "Total"];
+                  const header = ["Paid at", "Source", "ID", "Method", "Service fee", ...cats, "Total"];
                   const lines = data.rows.map((r) => {
                     const vals = cats.map((c) => r.amounts[c] ?? 0);
                     return [
                       r.paid_at.slice(0, 16).replace("T", " "),
                       r.source,
                       r.source_id.slice(0, 8).toUpperCase(),
+                      r.method,
                       r.service,
                       ...vals,
                       vals.reduce((s2, v) => s2 + v, 0),
