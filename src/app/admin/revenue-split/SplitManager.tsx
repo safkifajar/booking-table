@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import {
   saveSplitScheme,
@@ -221,18 +222,20 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
                 Recap range
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
+                <DatePicker
                   value={rangeFrom}
-                  onChange={(e) => setRangeFrom(e.target.value)}
-                  className="h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                  max={rangeTo || undefined}
+                  onChange={setRangeFrom}
+                  ariaLabel="Recap from"
+                  className="h-10 w-36"
                 />
                 <span className="text-xs text-muted-foreground">to</span>
-                <input
-                  type="date"
+                <DatePicker
                   value={rangeTo}
-                  onChange={(e) => setRangeTo(e.target.value)}
-                  className="h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+                  min={rangeFrom || undefined}
+                  onChange={setRangeTo}
+                  ariaLabel="Recap to"
+                  className="h-10 w-36"
                 />
               </div>
             </div>
