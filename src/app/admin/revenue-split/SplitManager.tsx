@@ -26,7 +26,6 @@ const METHOD_OPTIONS = [
   { value: "", label: "All methods" },
   { value: "qris", label: "QRIS" },
   { value: "cash", label: "Cash" },
-  { value: "card", label: "Card" },
 ];
 
 /** Seed 4 kategori (PRD) saat belum ada skema. */
