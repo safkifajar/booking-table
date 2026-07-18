@@ -95,7 +95,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
     rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[];
   } | null>(null);
 
-  const [sample, setSample] = React.useState("100000");
   const [saving, setSaving] = React.useState(false);
 
   const total = rows.reduce((s, r) => s + parsePct(r.percent), 0);
@@ -108,27 +107,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
   }
   function setSink(i: number) {
     setRows((prev) => prev.map((r, j) => ({ ...r, sink: j === i })));
-  }
-
-  // Simulasi (logika sama dgn engine): basis = contoh subtotal.
-  function simulate(method: string) {
-    const base = Math.max(0, parseInt(sample, 10) || 0);
-    const service = Math.round((base * servicePct) / 100);
-    const out: { name: string; amount: number }[] = [];
-    let allocated = 0;
-    let sink: string | null = null;
-    for (const r of rows) {
-      if (r.sink) {
-        sink = r.name || "Sink";
-        continue;
-      }
-      if (r.method && r.method !== method) continue;
-      const amount = Math.round((base * Math.round(parsePct(r.percent) * 1000)) / 100_000);
-      out.push({ name: r.name || "—", amount });
-      allocated += amount;
-    }
-    if (sink) out.push({ name: `${sink} (sink)`, amount: service - allocated });
-    return { service, out };
   }
 
   // Simpan persentase saja (biar form tidak hilang saat reload), lalu
@@ -160,14 +138,10 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
     }
   }
 
-  const simQris = simulate("qris");
-  const simCash = simulate("cash");
-
   return (
     <div className="space-y-4">
-    <div className="grid lg:grid-cols-5 gap-4 items-start">
-      {/* FORM */}
-      <Card className="lg:col-span-3 p-5 space-y-4">
+    {/* FORM */}
+    <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             Service charge (Settings):{" "}
@@ -373,58 +347,6 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
         )}
 
       </Card>
-
-      {/* SIMULASI */}
-      <Card className="lg:col-span-2 p-5 space-y-3">
-        <h2 className="text-sm font-semibold">Live simulation</h2>
-        <div>
-          <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-            Sample subtotal (IDR)
-          </label>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={sample}
-            onChange={(e) => setSample(e.target.value.replace(/\D/g, ""))}
-            className="w-full h-10 px-3 rounded-md bg-input border border-border text-sm tabular-nums focus:outline-none focus:border-primary/60"
-          />
-        </div>
-        {[
-          { label: "QRIS payment", sim: simQris },
-          { label: "Cash payment", sim: simCash },
-        ].map(({ label, sim }) => (
-          <div key={label} className="rounded-md border border-border bg-muted/20 p-3 text-xs space-y-1">
-            <div className="flex justify-between text-muted-foreground">
-              <span className="font-medium">{label}</span>
-              <span>service {formatIDR(sim.service)}</span>
-            </div>
-            {sim.out.map((r, i) => (
-              <div key={i} className="flex justify-between">
-                <span className="truncate">{r.name}</span>
-                <span
-                  className={cn("tabular-nums", r.amount < 0 && "text-red-400")}
-                >
-                  {formatIDR(r.amount)}
-                </span>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-border pt-1 font-semibold">
-              <span>Total</span>
-              <span className="tabular-nums">
-                {formatIDR(sim.out.reduce((s, r) => s + r.amount, 0))}
-              </span>
-            </div>
-          </div>
-        ))}
-        <p className="text-[11px] text-muted-foreground">
-          Category rows bound to a method only apply to payments of that
-          method; the sink absorbs whatever remains so the total always equals
-          the service collected.
-        </p>
-      </Card>
-    </div>
-
-
     </div>
   );
 }
