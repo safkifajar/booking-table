@@ -68,9 +68,11 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     const ok = await confirm({
       title: "Cancel this order?",
       description:
-        "If you go back now, this new order and its payment will be cancelled.",
-      confirmText: "Yes, cancel",
-      cancelText: "Keep paying",
+        "This order and its pending payment will be cancelled and removed. This can't be undone.",
+      // Wording tegas: tombol merah = benar-benar membatalkan; tombol netral =
+      // tetap di halaman (jangan batal). Sebelumnya "Keep paying" ambigu.
+      confirmText: "Cancel order",
+      cancelText: "Keep order",
       variant: "danger",
     });
     if (!ok) return;
