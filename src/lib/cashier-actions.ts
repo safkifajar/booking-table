@@ -1170,15 +1170,22 @@ export async function cashierCreatePayment(
 export async function cashierConfirmPendingPayment(input: {
   paymentId: string;
   method: "cash" | "qris";
+  /** Uang tunai diterima (utk catat kembalian) — hanya method cash. */
+  cashReceived?: number;
 }): Promise<{
   status: string;
   qrString: string | null;
   expiresAt: string | null;
   amount: number;
+  change: number;
 }> {
   const ctx = await requirePermission("receive_payment", "/staff/cashier");
   const data = z
-    .object({ paymentId: z.string().uuid(), method: z.enum(["cash", "qris"]) })
+    .object({
+      paymentId: z.string().uuid(),
+      method: z.enum(["cash", "qris"]),
+      cashReceived: z.number().int().min(0).optional(),
+    })
     .parse(input);
 
   const [payment] = await db
@@ -1207,13 +1214,29 @@ export async function cashierConfirmPendingPayment(input: {
     );
   }
 
+  const change =
+    data.method === "cash" && data.cashReceived != null
+      ? Math.max(0, data.cashReceived - payment.amount)
+      : 0;
+
   if (data.method === "cash") {
+    // Catat uang diterima + kembalian di splitMeta (utk struk) sebelum settle.
+    if (data.cashReceived != null) {
+      const meta0 = (payment.splitMeta as Record<string, unknown> | null) ?? {};
+      await db
+        .update(payments)
+        .set({
+          splitMeta: { ...meta0, cashReceived: data.cashReceived, change },
+        })
+        .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
+    }
     await cashierMarkPaymentPaid(payment.id);
     return {
       status: "paid",
       qrString: null,
       expiresAt: null,
       amount: payment.amount,
+      change,
     };
   }
 
@@ -1261,6 +1284,7 @@ export async function cashierConfirmPendingPayment(input: {
       qrString: cr.qrString ?? null,
       expiresAt: null,
       amount: payment.amount,
+      change: 0,
     };
   }
 
@@ -1272,6 +1296,7 @@ export async function cashierConfirmPendingPayment(input: {
     qrString: cr.qrString ?? null,
     expiresAt: cr.expiresAt ?? null,
     amount: payment.amount,
+    change: 0,
   };
 }
 

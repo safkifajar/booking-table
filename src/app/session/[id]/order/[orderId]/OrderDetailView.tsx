@@ -212,13 +212,22 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
   async function handleCashierConfirm(
     paymentId: string,
-    method: "cash" | "qris"
+    method: "cash" | "qris",
+    cashReceived?: number
   ) {
     setConfirmingId(paymentId);
     try {
-      const res = await cashierConfirmPendingPayment({ paymentId, method });
+      const res = await cashierConfirmPendingPayment({
+        paymentId,
+        method,
+        cashReceived,
+      });
       if (res.status === "paid") {
-        toast.success("Payment confirmed — order sent to the kitchen");
+        toast.success(
+          method === "cash" && res.change > 0
+            ? `Payment confirmed — change ${formatIDR(res.change)}`
+            : "Payment confirmed — order sent to the kitchen"
+        );
       } else if (res.qrString) {
         // QRIS pending → tampilkan QR utk di-scan customer di meja kasir.
         setActiveQr({
@@ -510,36 +519,26 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                       </button>
                     )}
                     {p.status === "pending" && p.pay_at_cashier && !expired && (
-                      <div className="mt-2 space-y-1.5">
-                        <p className="text-[11px] text-amber-400">
-                          {detail.isCashier
-                            ? "Customer chose to pay at the cashier — confirm below once you receive the money."
-                            : "Waiting for cashier confirmation — pay at the cashier desk to complete this payment."}
-                        </p>
+                      <div className="mt-2 space-y-2">
+                        {/* KASIR: form terima pembayaran (pilih metode + uang
+                            tunai + kembalian) yang mengonfirmasi baris ini. */}
+                        {detail.isCashier && (
+                          <CashierConfirmBox
+                            payerName={p.paid_by}
+                            amount={p.amount}
+                            busy={confirmingId === p.id}
+                            onConfirm={(method, cashReceived) =>
+                              handleCashierConfirm(p.id, method, cashReceived)
+                            }
+                          />
+                        )}
+                        {!detail.isCashier && (
+                          <p className="text-[11px] text-amber-400">
+                            Waiting for cashier confirmation — pay at the cashier
+                            desk to complete this payment.
+                          </p>
+                        )}
                         <div className="flex gap-1.5 flex-wrap">
-                          {detail.isCashier && (
-                            <>
-                              <button
-                                type="button"
-                                disabled={confirmingId === p.id || cancellingId === p.id}
-                                onClick={() => handleCashierConfirm(p.id, "cash")}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-50"
-                              >
-                                {confirmingId === p.id
-                                  ? "Confirming…"
-                                  : `Cash ${formatIDR(p.amount)}`}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={confirmingId === p.id || cancellingId === p.id}
-                                onClick={() => handleCashierConfirm(p.id, "qris")}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition disabled:opacity-50"
-                              >
-                                <QrCode className="h-3.5 w-3.5" />
-                                QRIS
-                              </button>
-                            </>
-                          )}
                           {(p.paid_by_member_id === detail.myMemberId ||
                             detail.isHost ||
                             detail.isStaff) && (
@@ -746,6 +745,110 @@ function CashierPayBox({
 
       <Button variant="gold" size="lg" className="w-full" disabled={loading || !cashValid} onClick={accept}>
         {loading ? "Processing…" : method === "cash" ? "Accept cash" : "Generate QRIS"}
+      </Button>
+    </Card>
+  );
+}
+
+/**
+ * Form konfirmasi pembayaran "Pay at cashier" (kasir). Sama seperti
+ * CashierPayBox — pilih metode + uang tunai + kembalian — TAPI nominal &
+ * pembayar TERKUNCI ke baris pending yang dikonfirmasi (bukan bikin pembayaran
+ * baru). Submit → cashierConfirmPendingPayment.
+ */
+function CashierConfirmBox({
+  payerName,
+  amount,
+  busy,
+  onConfirm,
+}: {
+  payerName: string;
+  amount: number;
+  busy: boolean;
+  onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
+}) {
+  const [method, setMethod] = React.useState<"cash" | "qris">("cash");
+  const [cashReceived, setCashReceived] = React.useState("");
+  const received = parseInt(cashReceived || "0", 10) || 0;
+  const change = method === "cash" ? Math.max(0, received - amount) : 0;
+  const cashValid = method !== "cash" || received >= amount;
+
+  return (
+    <Card className="p-3 space-y-2.5 border-amber-500/30 bg-amber-500/[0.04]">
+      <div className="text-xs font-semibold text-amber-400">
+        Confirm payment (cashier)
+      </div>
+
+      {/* Pembayar — terkunci ke pemilih pay-at-cashier */}
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">Payer</span>
+        <span className="font-medium">{payerName}</span>
+      </div>
+
+      {/* Metode */}
+      <div className="flex gap-2">
+        {(["cash", "qris"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={
+              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
+              (method === m
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border hover:border-primary/40")
+            }
+          >
+            {m === "qris" ? "QRIS" : "Cash"}
+          </button>
+        ))}
+      </div>
+
+      {/* Uang tunai + kembalian */}
+      {method === "cash" && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Cash received</label>
+          <input
+            inputMode="numeric"
+            value={cashReceived}
+            onChange={(e) =>
+              setCashReceived(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            placeholder={String(amount)}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
+          />
+          {received > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Change</span>
+              <span className="text-emerald-400 tabular-nums">
+                {formatIDR(change)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-between text-sm pt-1 border-t border-border">
+        <span className="text-muted-foreground">Amount due</span>
+        <span className="font-semibold text-primary tabular-nums">
+          {formatIDR(amount)}
+        </span>
+      </div>
+
+      <Button
+        variant="gold"
+        size="lg"
+        className="w-full"
+        disabled={busy || !cashValid}
+        onClick={() =>
+          onConfirm(method, method === "cash" ? received : undefined)
+        }
+      >
+        {busy
+          ? "Processing…"
+          : method === "cash"
+            ? "Accept cash"
+            : "Generate QRIS"}
       </Button>
     </Card>
   );
