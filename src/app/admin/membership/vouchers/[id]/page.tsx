@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatIDR } from "@/lib/utils";
 import { GeneratedCodesList } from "./GeneratedCodesList";
+import { EditVoucherButton } from "./EditVoucherButton";
 
 export const dynamic = "force-dynamic";
 
@@ -70,17 +71,35 @@ export default async function VoucherTemplateDetailPage({ params }: PageProps) {
               Created {fmt(d.created_at)}
             </p>
           </div>
-          <Badge
-            variant="secondary"
-            className={cn(
-              "text-[10px]",
-              d.is_active
-                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                : "bg-red-500/15 text-red-400 border-red-500/30"
-            )}
-          >
-            {d.is_active ? "Active" : "Inactive"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className={cn(
+                "text-[10px]",
+                d.is_active
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                  : "bg-red-500/15 text-red-400 border-red-500/30"
+              )}
+            >
+              {d.is_active ? "Active" : "Inactive"}
+            </Badge>
+            <EditVoucherButton
+              voucher={{
+                id: d.id,
+                name: d.name,
+                discount_type: d.discount_type as "percent" | "fixed",
+                discount_value: d.discount_value,
+                max_discount: d.max_discount,
+                min_spend: d.min_spend,
+                level_key: d.level_key,
+                valid_days: d.valid_days,
+                is_active: d.is_active,
+                generated_count: d.instances.length,
+                created_at: d.created_at,
+              }}
+              levelNames={levelNames}
+            />
+          </div>
         </div>
 
         {/* Stats */}
