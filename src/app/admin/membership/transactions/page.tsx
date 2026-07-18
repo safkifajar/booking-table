@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatIDR } from "@/lib/utils";
 import { ExportCsvButton } from "./ExportCsvButton";
+import { TxPagination } from "./TxPagination";
 
 export const dynamic = "force-dynamic";
 
@@ -163,26 +164,10 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
           </Card>
         )}
 
-        {/* Pagination sederhana via link */}
+        {/* Pagination — komponen admin bersama */}
         {totalPages > 1 && (
-          <div className="flex justify-end gap-1.5 text-sm">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-              <Link
-                key={p}
-                href={`/admin/membership/transactions?${new URLSearchParams({
-                  ...(status ? { status } : {}),
-                  page: String(p),
-                }).toString()}`}
-                className={cn(
-                  "h-8 min-w-8 px-2 rounded-md border flex items-center justify-center",
-                  p === page
-                    ? "border-primary/40 bg-primary/15 text-primary"
-                    : "border-border hover:border-foreground/30"
-                )}
-              >
-                {p}
-              </Link>
-            ))}
+          <div className="flex justify-end">
+            <TxPagination page={page} totalPages={totalPages} status={status} />
           </div>
         )}
       </div>
