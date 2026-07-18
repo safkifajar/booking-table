@@ -749,7 +749,16 @@ export async function expireFinishedSessions(barId: string): Promise<number> {
       s.status !== "reserved" &&
       !s.reservationAt &&
       s.startedAt.getTime() <= walkinCutoff.getTime();
-    return reservationEnded || staleWalkIn;
+    // Reservasi LAMA tanpa reservation_end_at (data sebelum field ini ada, atau
+    // reservasi tak lengkap): tak tertangkap reservationEnded (butuh endAt) &
+    // tak tertangkap staleWalkIn (punya reservationAt) → BOCOR selamanya di tab
+    // Aktif. Jaring pengaman: kalau reservationAt-nya sendiri sudah lewat batas
+    // basi (>12 jam lalu) & belum ada endAt, anggap selesai.
+    const staleReservationNoEnd =
+      !!s.reservationAt &&
+      !s.reservationEndAt &&
+      s.reservationAt.getTime() <= walkinCutoff.getTime();
+    return reservationEnded || staleWalkIn || staleReservationNoEnd;
   });
   if (expiring.length === 0) return 0;
 

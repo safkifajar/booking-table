@@ -21,6 +21,10 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+// Selalu dinamis: transisi status berbasis waktu (expireFinishedSessions dll)
+// HARUS jalan tiap kunjungan denah supaya meja lewat-waktu tak menggantung.
+export const dynamic = "force-dynamic";
+
 /** Window history reservasi: dari kemarin sampai N hari ke depan + 'now'. */
 function historyWindow(bookingWindowDays: number): {
   start: Date;

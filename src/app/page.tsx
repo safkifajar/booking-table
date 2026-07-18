@@ -22,6 +22,10 @@ import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
 import { MembershipBanner } from "@/components/MembershipBanner";
 
+// Selalu dinamis: expireFinishedSessions/promoteDueReservations jalan tiap
+// kunjungan (sesi lewat-waktu tak menggantung di denah/riwayat).
+export const dynamic = "force-dynamic";
+
 /** Sapaan kontekstual berdasar jam (WIB / waktu server). */
 function greeting(hour: number): string {
   if (hour < 11) return "Good morning";
