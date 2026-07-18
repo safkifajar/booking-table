@@ -89,6 +89,7 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b border-border">
                   <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 font-medium w-24">ID</th>
                     <th className="px-4 py-3 font-medium">Customer</th>
                     <th className="px-4 py-3 font-medium w-24">Level</th>
                     <th className="px-4 py-3 font-medium w-28">Type</th>
@@ -101,6 +102,9 @@ export default async function AdminMembershipTxPage({ searchParams }: PageProps)
                 <tbody className="divide-y divide-border">
                   {rows.map((r) => (
                     <tr key={r.id} className="hover:bg-muted/30 transition">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                        {r.id.slice(0, 8).toUpperCase()}
+                      </td>
                       <td className="px-4 py-2.5">
                         <Link
                           href={`/admin/users/${r.customer_id}`}
