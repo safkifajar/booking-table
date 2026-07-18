@@ -573,6 +573,8 @@ export interface CashierPayment {
   is_down_payment: boolean;
   /** "Pay at cashier": customer menunggu konfirmasi kasir (tanpa QR). */
   pay_at_cashier: boolean;
+  /** Digantikan pembayaran lain yang menutup tagihan (tampil "Replaced"). */
+  superseded: boolean;
   qr_string: string | null;
   expires_at: string | null;
   paid_by_name: string;
@@ -834,6 +836,7 @@ export async function getSessionDetailForCashier(
       const meta = (p.split_meta ?? {}) as {
         isDownPayment?: boolean;
         payAtCashier?: boolean;
+        supersededByPaid?: boolean;
         qrString?: string;
         expiresAt?: string | null;
       };
@@ -846,6 +849,7 @@ export async function getSessionDetailForCashier(
         created_at: p.created_at.toISOString(),
         is_down_payment: !!meta.isDownPayment,
         pay_at_cashier: !!meta.payAtCashier,
+        superseded: !!meta.supersededByPaid,
         qr_string: meta.qrString ?? null,
         expires_at: meta.expiresAt ?? null,
         paid_by_name: p.paid_by_name,

@@ -11,7 +11,10 @@ import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
-import { cashierCreatePayment } from "@/lib/cashier-actions";
+import {
+  cashierCreatePayment,
+  cashierMarkPaymentPaid,
+} from "@/lib/cashier-actions";
 import {
   payShare,
   createSplitBatch,
@@ -185,6 +188,22 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       toast.error(getActionErrorMessage(err, "Failed to cancel payment"));
     } finally {
       setCancellingId(null);
+    }
+  }
+  // KASIR konfirmasi pending "Pay at cashier" LANGSUNG dari baris riwayat —
+  // alur kasir memang lewat halaman ini (session → Bill → order), bukan
+  // /staff/cashier/[sessionId], jadi tombolnya harus ada di sini.
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
+  async function handleCashierConfirm(paymentId: string) {
+    setConfirmingId(paymentId);
+    try {
+      await cashierMarkPaymentPaid(paymentId);
+      toast.success("Payment confirmed — order sent to the kitchen");
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to confirm payment"));
+    } finally {
+      setConfirmingId(null);
     }
   }
   async function handleRegenerate(paymentId: string, memberName: string) {
@@ -413,7 +432,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           variant={p.status === "paid" ? "success" : p.status === "pending" && !expired ? "warning" : "secondary"}
                           className="text-[10px]"
                         >
-                          {p.status === "paid" ? "Paid" : expired ? "Cancelled" : p.status === "pending" ? "Pending" : "Cancelled"}
+                          {p.status === "paid" ? "Paid" : expired ? "Cancelled" : p.status === "pending" ? "Pending" : p.superseded ? "Replaced" : "Cancelled"}
                         </Badge>
                       </div>
                     </div>
@@ -436,23 +455,38 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                     {p.status === "pending" && p.pay_at_cashier && !expired && (
                       <div className="mt-2 space-y-1.5">
                         <p className="text-[11px] text-amber-400">
-                          Waiting for cashier confirmation — pay at the cashier
-                          desk to complete this payment.
+                          {detail.isCashier
+                            ? "Customer chose to pay at the cashier — confirm below once you receive the money."
+                            : "Waiting for cashier confirmation — pay at the cashier desk to complete this payment."}
                         </p>
-                        {(p.paid_by_member_id === detail.myMemberId ||
-                          detail.isHost ||
-                          detail.isStaff) && (
-                          <button
-                            type="button"
-                            disabled={cancellingId === p.id}
-                            onClick={() => handleCancelCashierPayment(p.id)}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
-                          >
-                            {cancellingId === p.id
-                              ? "Cancelling…"
-                              : "Cancel this payment"}
-                          </button>
-                        )}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {detail.isCashier && (
+                            <button
+                              type="button"
+                              disabled={confirmingId === p.id || cancellingId === p.id}
+                              onClick={() => handleCashierConfirm(p.id)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-50"
+                            >
+                              {confirmingId === p.id
+                                ? "Confirming…"
+                                : `Confirm received ${formatIDR(p.amount)}`}
+                            </button>
+                          )}
+                          {(p.paid_by_member_id === detail.myMemberId ||
+                            detail.isHost ||
+                            detail.isStaff) && (
+                            <button
+                              type="button"
+                              disabled={cancellingId === p.id || confirmingId === p.id}
+                              onClick={() => handleCancelCashierPayment(p.id)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
+                            >
+                              {cancellingId === p.id
+                                ? "Cancelling…"
+                                : "Cancel this payment"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                     {canRegenerate && (

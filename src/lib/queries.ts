@@ -425,7 +425,13 @@ export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
     if (danglingDp && paid >= danglingDp.amount) {
       const superseded = await db
         .update(payments)
-        .set({ status: "failed", paidAt: null })
+        .set({
+          status: "failed",
+          paidAt: null,
+          // Penanda utk UI: baris ini DIGANTIKAN pembayaran lain (bukan batal
+          // biasa) — tampil "Replaced", bukan "Cancelled".
+          splitMeta: sql`${payments.splitMeta} || '{"supersededByPaid": true}'::jsonb`,
+        })
         .where(
           and(eq(payments.id, danglingDp.id), eq(payments.status, "pending"))
         )
@@ -460,7 +466,11 @@ export async function settleOrderIfPaid(orderId: string): Promise<boolean> {
     for (const d of danglingCashier) {
       const upd = await db
         .update(payments)
-        .set({ status: "failed", paidAt: null })
+        .set({
+          status: "failed",
+          paidAt: null,
+          splitMeta: sql`${payments.splitMeta} || '{"supersededByPaid": true}'::jsonb`,
+        })
         .where(and(eq(payments.id, d.id), eq(payments.status, "pending")))
         .returning({ id: payments.id });
       if (upd.length > 0) {

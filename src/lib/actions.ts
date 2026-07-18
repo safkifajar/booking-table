@@ -2085,6 +2085,8 @@ export interface OrderDetail {
     is_down_payment: boolean;
     /** "Pay at cashier": pending menunggu konfirmasi kasir (tanpa QR). */
     pay_at_cashier: boolean;
+    /** Digantikan pembayaran lain yang menutup tagihan (bukan batal biasa). */
+    superseded: boolean;
     created_at: string;
     paid_at: string | null;
     paid_by: string;
@@ -2266,7 +2268,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; payAtCashier?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -2276,6 +2278,7 @@ export async function getOrderDetail(
             split_mode: p.split_mode,
             is_down_payment: !!meta.isDownPayment,
             pay_at_cashier: !!meta.payAtCashier,
+            superseded: !!meta.supersededByPaid,
             created_at: p.created_at.toISOString(),
             paid_at: p.paid_at ? p.paid_at.toISOString() : null,
             paid_by: p.paid_by,

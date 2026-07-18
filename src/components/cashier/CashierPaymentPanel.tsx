@@ -230,7 +230,9 @@ export function CashierPaymentPanel({
                           : p.status === "pending"
                             ? "Pending"
                             : p.status === "failed"
-                              ? "Cancelled"
+                              ? p.superseded
+                                ? "Replaced"
+                                : "Cancelled"
                               : p.status}
                     </Badge>
                   </div>
