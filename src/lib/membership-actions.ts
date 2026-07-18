@@ -264,7 +264,7 @@ export async function listMembershipTransactions(opts?: {
 }): Promise<{ rows: AdminMembershipTxRow[]; total: number }> {
   await requireAdmin();
   const page = Math.max(1, opts?.page ?? 1);
-  const pageSize = Math.min(100, Math.max(1, opts?.pageSize ?? TX_PAGE_SIZE));
+  const pageSize = Math.min(500, Math.max(1, opts?.pageSize ?? TX_PAGE_SIZE));
   const where = opts?.status
     ? eq(membershipTransactions.status, opts.status)
     : undefined;
