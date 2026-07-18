@@ -388,6 +388,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   const dpAmount = dpRequired
     ? calculateDP(billAtOpen.total, resConfig.minDownPaymentPercent)
     : 0;
+  // DP yang menutup SELURUH tagihan (mis. minDownPaymentPercent = 100) = bukan
+  // deposit parsial, melainkan PELUNASAN penuh di muka. Ditandai supaya jalur
+  // pay-at-cashier tidak menjebaknya di lifecycle "DP menggantung": begitu
+  // dikonfirmasi kasir, order langsung lunas & meja aktif.
+  const dpIsFullPrepay = dpRequired && dpAmount >= billAtOpen.total;
 
   if (dpRequired) {
     if (resolvedItems.length === 0) {
@@ -653,6 +658,9 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           amount: dpCharge,
           splitMeta: {
             isDownPayment: true,
+            // Tandai pelunasan penuh: cancelPayment & guard redirect
+            // memperlakukannya sbg tagihan biasa, bukan deposit menggantung.
+            ...(dpIsFullPrepay ? { dpFull: true } : {}),
             ...(dpDiscount > 0 && dpVoucher
               ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
               : {}),
@@ -2268,7 +2276,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -2276,7 +2284,9 @@ export async function getOrderDetail(
             method: p.method,
             status: p.status,
             split_mode: p.split_mode,
-            is_down_payment: !!meta.isDownPayment,
+            // DP yang menutup seluruh tagihan bukan "deposit" — tampil sbg bill
+            // biasa (badge "Bill"), bukan "DP", supaya tak membingungkan.
+            is_down_payment: !!meta.isDownPayment && !meta.dpFull,
             pay_at_cashier: !!meta.payAtCashier,
             superseded: !!meta.supersededByPaid,
             created_at: p.created_at.toISOString(),

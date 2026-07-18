@@ -181,7 +181,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   async function handleCancelCashierPayment(paymentId: string) {
     setCancellingId(paymentId);
     try {
-      await cancelPayment(paymentId);
+      const res = await cancelPayment(paymentId);
+      // Kalau ini DP booking → cancel membatalkan SELURUH booking (meja bebas
+      // lagi). Jangan router.refresh() (guard akan memantulkan host balik ke
+      // halaman tunggu → tampak "malah berhasil booking"); keluar dari sesi.
+      if (res.bookingCancelled) {
+        toast.success("Booking cancelled");
+        router.replace("/");
+        return;
+      }
       toast.success("Payment cancelled");
       router.refresh();
     } catch (err) {
@@ -261,6 +269,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     .filter((p) => p.method === "voucher" && p.status === "paid")
     .reduce((sum, p) => sum + p.amount, 0);
   const visiblePayments = detail.payments.filter((p) => p.method !== "voucher");
+  // Ada pembayaran "Pay at cashier" yang masih menunggu konfirmasi? Kalau ya,
+  // kasir HARUS mengonfirmasi baris itu (tombol Cash/QRIS di riwayat), BUKAN
+  // membuat pembayaran baru lewat CashierPayBox — mencegah pembayaran dobel &
+  // baris "Replaced" yang membingungkan.
+  const hasPendingCashierPay = detail.payments.some(
+    (p) => p.status === "pending" && p.pay_at_cashier
+  );
 
   const isClosedOrder = detail.status === "closed";
   const isFullyPaid = !isClosedOrder && detail.outstanding <= 0;
@@ -383,6 +398,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         {!detail.canPay &&
           !detail.isCashier &&
           !detail.viewOnly &&
+          !hasPendingCashierPay &&
           (detail.isHost || detail.isStaff) &&
           detail.outstanding > 0 && (
             <Card className="p-4 text-sm text-muted-foreground text-center">
@@ -391,13 +407,29 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
             </Card>
           )}
 
-        {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). */}
-        {detail.canPay && detail.isCashier && (
+        {/* Kasir: terima pembayaran (QRIS / Cash + kembalian). Disembunyikan
+            saat ada pembayaran "Pay at cashier" pending — kasir konfirmasi
+            baris itu (di riwayat) daripada membuat pembayaran paralel. */}
+        {detail.canPay && detail.isCashier && !hasPendingCashierPay && (
           <CashierPayBox
             detail={detail}
             onQr={(qr) => setActiveQr(qr)}
             onDone={() => router.refresh()}
           />
+        )}
+
+        {/* Kasir: sorotan pembayaran "Pay at cashier" yang menunggu konfirmasi —
+            arahkan ke baris di riwayat (tombol Cash/QRIS ada di sana). */}
+        {detail.isCashier && hasPendingCashierPay && (
+          <Card className="p-4 border-amber-500/30 bg-amber-500/[0.06]">
+            <p className="text-sm font-medium text-amber-400">
+              Customer chose to pay at the cashier
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Confirm the pending payment below (Cash or QRIS) once you receive
+              the money — the order is sent to the kitchen right after.
+            </p>
+          </Card>
         )}
 
         {/* Payment history — baris voucher TIDAK ditampilkan di sini
@@ -427,6 +459,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                   isDead &&
                   isLatestOfMember &&
                   !p.is_down_payment &&
+                  // Pay-at-cashier bukan QRIS — regenerate QR tak berlaku.
+                  !p.pay_at_cashier &&
                   detail.outstanding > 0;
                 return (
                   <Card key={p.id} className="p-3">
