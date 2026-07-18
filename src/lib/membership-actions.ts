@@ -14,14 +14,20 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
   membershipLevels,
   membershipVouchers,
 } from "@/lib/db/schema/membership";
-import { membershipTransactions } from "@/lib/db/schema/membership-transactions";
+import {
+  membershipTransactions,
+  memberVouchers,
+} from "@/lib/db/schema/membership-transactions";
+import { payments, orders } from "@/lib/db/schema/orders";
+import { tableSessions } from "@/lib/db/schema/sessions";
+import { tables } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { staffRoles } from "@/lib/db/schema/extras";
@@ -1080,4 +1086,67 @@ export async function previewMyVoucher(input: {
     name: res.voucher.name,
     discount: res.voucher.discount,
   };
+}
+
+// ============================================================
+// VOUCHER USAGE — siapa pakai voucher di transaksi mana (admin)
+// ============================================================
+
+export interface VoucherUsageRow {
+  voucher_id: string;
+  code: string;
+  voucher_name: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  /** Nominal potongan yang dikunci saat reserve/settle. */
+  discount_applied: number | null;
+  /** 'used' = payment-nya sudah PAID; 'reserved' = masih menempel di payment pending. */
+  usage_status: "used" | "reserved";
+  used_at: string | null;
+  /** Payment bill tempat voucher dipakai (nominal yang DIBAYAR user setelah potongan). */
+  payment_amount: number | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  /** Sesi transaksi (untuk link ke detail transaksi admin) + meja. */
+  session_id: string | null;
+  table_label: string | null;
+}
+
+export async function listVoucherUsage(): Promise<VoucherUsageRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select({
+      voucher_id: memberVouchers.id,
+      code: memberVouchers.code,
+      voucher_name: memberVouchers.name,
+      customer_id: memberVouchers.profileId,
+      customer_name: profiles.displayName,
+      customer_email: users.email,
+      discount_applied: memberVouchers.discountApplied,
+      used_at: memberVouchers.usedAt,
+      payment_amount: payments.amount,
+      payment_method: payments.method,
+      payment_status: payments.status,
+      session_id: orders.sessionId,
+      table_label: tables.label,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .leftJoin(payments, eq(payments.id, memberVouchers.usedPaymentId))
+    .leftJoin(orders, eq(orders.id, payments.orderId))
+    .leftJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .leftJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      or(isNotNull(memberVouchers.usedAt), isNotNull(memberVouchers.usedPaymentId))
+    )
+    .orderBy(desc(sql`COALESCE(${memberVouchers.usedAt}, ${memberVouchers.createdAt})`))
+    .limit(500);
+
+  return rows.map((r) => ({
+    ...r,
+    usage_status: r.used_at ? ("used" as const) : ("reserved" as const),
+    used_at: r.used_at?.toISOString() ?? null,
+  }));
 }
