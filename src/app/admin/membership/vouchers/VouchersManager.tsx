@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, Ticket, Trash2 } from "lucide-react";
@@ -117,7 +118,12 @@ export function VouchersManager({ vouchers, levelNames }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">{v.name}</span>
+                  <Link
+                    href={`/admin/membership/vouchers/${v.id}`}
+                    className="text-sm font-semibold hover:text-primary transition"
+                  >
+                    {v.name}
+                  </Link>
                   <Badge variant="secondary" className="text-[10px]">
                     {v.discount_type === "percent"
                       ? `${v.discount_value}% off${v.max_discount ? ` (max ${formatIDR(v.max_discount)})` : ""}`

@@ -1334,3 +1334,88 @@ export async function getMembershipTxDetail(
     })),
   };
 }
+
+export interface VoucherTemplateDetail {
+  id: string;
+  name: string;
+  discount_type: string;
+  discount_value: number;
+  max_discount: number | null;
+  min_spend: number | null;
+  level_key: string | null;
+  valid_days: number;
+  is_active: boolean;
+  created_at: string;
+  /** Semua kode yang pernah digenerate ke member dari template ini. */
+  instances: {
+    id: string;
+    code: string;
+    member_id: string;
+    member_name: string;
+    member_email: string;
+    generated_at: string;
+    expires_at: string;
+    used_at: string | null;
+    reserved: boolean;
+    discount_applied: number | null;
+  }[];
+}
+
+export async function getVoucherTemplateDetail(
+  id: string
+): Promise<VoucherTemplateDetail | null> {
+  await requireAdmin();
+  const templateId = z.string().uuid().parse(id);
+
+  const [tpl] = await db
+    .select()
+    .from(membershipVouchers)
+    .where(eq(membershipVouchers.id, templateId))
+    .limit(1);
+  if (!tpl) return null;
+
+  const instances = await db
+    .select({
+      id: memberVouchers.id,
+      code: memberVouchers.code,
+      member_id: memberVouchers.profileId,
+      member_name: profiles.displayName,
+      member_email: users.email,
+      generated_at: memberVouchers.createdAt,
+      expires_at: memberVouchers.expiresAt,
+      used_at: memberVouchers.usedAt,
+      used_payment_id: memberVouchers.usedPaymentId,
+      discount_applied: memberVouchers.discountApplied,
+    })
+    .from(memberVouchers)
+    .innerJoin(profiles, eq(profiles.id, memberVouchers.profileId))
+    .innerJoin(users, eq(users.id, memberVouchers.profileId))
+    .where(eq(memberVouchers.templateId, templateId))
+    .orderBy(desc(memberVouchers.createdAt))
+    .limit(1000);
+
+  return {
+    id: tpl.id,
+    name: tpl.name,
+    discount_type: tpl.discountType,
+    discount_value: tpl.discountValue,
+    max_discount: tpl.maxDiscount,
+    min_spend: tpl.minSpend,
+    level_key: tpl.levelKey,
+    valid_days: tpl.validDays,
+    is_active: tpl.isActive,
+    created_at: tpl.createdAt.toISOString(),
+    instances: instances.map((i) => ({
+      id: i.id,
+      code: i.code,
+      member_id: i.member_id,
+      member_name: i.member_name,
+      member_email: i.member_email,
+      generated_at: i.generated_at.toISOString(),
+      expires_at: i.expires_at.toISOString(),
+      used_at: i.used_at?.toISOString() ?? null,
+      reserved: !i.used_at && i.used_payment_id != null,
+      discount_applied: i.discount_applied,
+    })),
+  };
+}
