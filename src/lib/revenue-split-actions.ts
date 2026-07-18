@@ -445,7 +445,7 @@ export async function getSplitExportRows(input: {
 export async function getLiveSplitRecap(input: {
   from: string;
   to: string;
-  categories: { name: string; percent: number; isRemainderSink: boolean }[];
+  categories: { name: string; percent: number; method: string | null; isRemainderSink: boolean }[];
 }): Promise<{
   totals: { category: string; total: number }[];
   rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[];
@@ -468,27 +468,28 @@ export async function getLiveSplitRecap(input: {
     sql`${col} >= ${input.from}::date AND ${col} < (${input.to}::date + interval '1 day')`;
 
   const bills = await db
-    .select({ id: payments.id, amount: payments.amount, paidAt: payments.paidAt })
+    .select({ id: payments.id, amount: payments.amount, method: payments.method, paidAt: payments.paidAt })
     .from(payments)
     .innerJoin(orders, E(orders.id, payments.orderId))
-    .where(A(E(payments.status, "paid"), E(payments.method, "qris"), range(payments.paidAt)))
+    .where(A(E(payments.status, "paid"), sql`${payments.method} <> 'voucher'`, range(payments.paidAt)))
     .orderBy(a(payments.paidAt))
     .limit(5000);
   const members = await db
-    .select({ id: membershipTransactions.id, base: membershipTransactions.baseAmount, service: membershipTransactions.serviceAmount, paidAt: membershipTransactions.paidAt })
+    .select({ id: membershipTransactions.id, base: membershipTransactions.baseAmount, service: membershipTransactions.serviceAmount, method: membershipTransactions.method, paidAt: membershipTransactions.paidAt })
     .from(membershipTransactions)
-    .where(A(E(membershipTransactions.status, "paid"), E(membershipTransactions.method, "qris"), range(membershipTransactions.paidAt)))
+    .where(A(E(membershipTransactions.status, "paid"), range(membershipTransactions.paidAt)))
     .limit(2000);
 
   const totalsMap = new Map<string, number>();
   const rows: { paid_at: string; source: string; source_id: string; service: number; amounts: Record<string, number> }[] = [];
 
-  function apply(source: string, id: string, paidAt: Date, base: number, service: number) {
+  function apply(source: string, id: string, paidAt: Date, base: number, service: number, method: string) {
     const amounts: Record<string, number> = {};
     let allocated = 0;
     let sink: string | null = null;
     for (const c of input.categories) {
       if (c.isRemainderSink) { sink = c.name; continue; }
+      if (c.method && c.method !== method) continue;
       const amt = Math.round((base * Math.round(c.percent * 1000)) / 100_000);
       amounts[c.name] = (amounts[c.name] ?? 0) + amt;
       allocated += amt;
@@ -501,10 +502,10 @@ export async function getLiveSplitRecap(input: {
   for (const p of bills) {
     const base = Math.round((p.amount * 100) / denom);
     const service = Math.round((p.amount * svcPct) / denom);
-    apply("bill", p.id, p.paidAt ?? new Date(), base, service);
+    apply("bill", p.id, p.paidAt ?? new Date(), base, service, p.method);
   }
   for (const m of members) {
-    apply("membership", m.id, m.paidAt ?? new Date(), m.base, m.service);
+    apply("membership", m.id, m.paidAt ?? new Date(), m.base, m.service, m.method === "admin" ? "cash" : m.method);
   }
 
   return {

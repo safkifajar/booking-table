@@ -21,7 +21,6 @@ export default async function RevenueSplitPage() {
           <h1 className="text-lg font-bold tracking-tight">Revenue Split</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Recap of service-fee allocation per category for any date range.
-            QRIS payments only.
           </p>
         </div>
         <SplitManager config={config} />
