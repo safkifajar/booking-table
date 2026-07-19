@@ -156,7 +156,9 @@ async function main() {
   console.log(`  Bar     : ${bar.name}`);
   console.log(`  Status  : ${created ? "user BARU dibuat" : "user sudah ada — password di-reset"}`);
   console.log("");
-  console.log("  Login di: https://admin.<domain-kamu>/auth");
+  // CATATAN: pintu masuk admin adalah /login (di-rewrite ke /admin-login),
+  // BUKAN /auth — /auth itu halaman auth CUSTOMER.
+  console.log("  Login di: https://admin.<domain-kamu>/login");
   console.log("");
   process.exit(0);
 }
