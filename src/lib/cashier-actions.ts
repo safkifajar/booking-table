@@ -78,6 +78,8 @@ export interface CashierSessionItem {
   member_count: number;
   status: string;
   started_at: string;
+  /** Kapan sesi ditutup (null = masih aktif) — utk filter "hari ini" & urutan. */
+  closed_at: string | null;
   reservation_at: string | null;
   reservation_end_at: string | null;
   subtotal: number;
@@ -111,6 +113,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      closed_at: tableSessions.closedAt,
       status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
@@ -253,6 +256,7 @@ export async function getActiveSessionsForCashier(): Promise<
       member_count: memberMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
+      closed_at: s.closed_at ? s.closed_at.toISOString() : null,
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at
         ? s.reservation_end_at.toISOString()
@@ -293,6 +297,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      closed_at: tableSessions.closedAt,
       status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
@@ -402,6 +407,7 @@ export async function getClosedSessionsForCashier(): Promise<
       member_count: memberMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
+      closed_at: s.closed_at ? s.closed_at.toISOString() : null,
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at
         ? s.reservation_end_at.toISOString()
