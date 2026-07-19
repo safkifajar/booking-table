@@ -225,6 +225,30 @@ export async function getActiveSessionsByBar(
   return all.filter((s) => s.bar_id === barId).map(({ bar_id: _b, ...rest }) => rest);
 }
 
+/**
+ * Set sessionId yang DIIKUTI profil ini (status 'joined') — dipakai feed
+ * "Live now" untuk menandai meja mana yang ada dirinya. Dipisah dari
+ * activeSessionsBase() supaya query bersama (denah, area) tak ikut terbebani
+ * dan hasilnya tetap bisa di-cache per-user di pemanggil.
+ */
+export async function getJoinedSessionIds(
+  profileId: string,
+  sessionIds: string[]
+): Promise<Set<string>> {
+  if (sessionIds.length === 0) return new Set();
+  const rows = await db
+    .select({ sessionId: sessionMembers.sessionId })
+    .from(sessionMembers)
+    .where(
+      and(
+        eq(sessionMembers.profileId, profileId),
+        eq(sessionMembers.status, "joined"),
+        inArray(sessionMembers.sessionId, sessionIds)
+      )
+    );
+  return new Set(rows.map((r) => r.sessionId));
+}
+
 export async function getActiveSessionsForArea(
   areaId: string
 ): Promise<ActiveSessionView[]> {

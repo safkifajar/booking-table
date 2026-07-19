@@ -2,14 +2,31 @@ import Link from "next/link";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
-import { Users, Crown, Lock, Sparkles, ChevronRight } from "lucide-react";
-import { initials } from "@/lib/utils";
+import {
+  Users,
+  Crown,
+  Lock,
+  Sparkles,
+  ChevronRight,
+  MapPin,
+  Check,
+} from "lucide-react";
+import { initials, cn } from "@/lib/utils";
 import type { ActiveSessionView } from "@/types/db";
 
 interface Props {
   sessions: ActiveSessionView[];
   /** Anon mode: card link ke /auth bukan ke session preview */
   isAnon?: boolean;
+  /** Session yang DIIKUTI user ini → kartu ditandai "You're in". */
+  joinedIds?: string[];
+}
+
+/** Label visibility — samakan dgn Booking Schedule di halaman denah. */
+function visibilityLabel(v: ActiveSessionView["visibility"]): string {
+  if (v === "public") return "Public";
+  if (v === "friends") return "Friends";
+  return "Invite only";
 }
 
 /**
@@ -18,7 +35,8 @@ interface Props {
  * Card lengkap clickable → /session/[id]/preview (atau /auth kalau anon).
  * Empty state: "Belum ada meja aktif" + CTA buka meja sendiri.
  */
-export function LiveTablesFeed({ sessions, isAnon }: Props) {
+export function LiveTablesFeed({ sessions, isAnon, joinedIds }: Props) {
+  const joined = new Set(joinedIds ?? []);
   if (sessions.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center">
@@ -34,7 +52,12 @@ export function LiveTablesFeed({ sessions, isAnon }: Props) {
   return (
     <div className="space-y-3">
       {sessions.map((s) => (
-        <TableCard key={s.id} session={s} isAnon={isAnon} />
+        <TableCard
+          key={s.id}
+          session={s}
+          isAnon={isAnon}
+          isJoined={joined.has(s.id)}
+        />
       ))}
     </div>
   );
@@ -43,9 +66,11 @@ export function LiveTablesFeed({ sessions, isAnon }: Props) {
 function TableCard({
   session,
   isAnon,
+  isJoined,
 }: {
   session: ActiveSessionView;
   isAnon?: boolean;
+  isJoined?: boolean;
 }) {
   // Meja public → langsung tampilan penuh (/session): ada tab + "Minta gabung".
   // Meja friends/invite_only → preview saja (bukan untuk umum).
@@ -62,7 +87,14 @@ function TableCard({
   return (
     <Link
       href={href}
-      className="block group rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-primary/[0.03] transition overflow-hidden"
+      className={cn(
+        "block group rounded-xl border bg-card transition overflow-hidden",
+        // Meja yang DIIKUTI user ditonjolkan (border + tint) supaya langsung
+        // kebedain dari meja orang lain.
+        isJoined
+          ? "border-primary/50 bg-primary/[0.06] hover:border-primary/70"
+          : "border-border hover:border-primary/40 hover:bg-primary/[0.03]"
+      )}
     >
       <div className="p-4 flex items-start gap-3">
         <Avatar className="h-12 w-12 ring-2 ring-primary/20">
@@ -78,12 +110,23 @@ function TableCard({
             <Badge variant="default" className="text-[10px] px-1.5">
               {session.table_label}
             </Badge>
-            <span className="text-[10px] text-muted-foreground">
+            {/* Visibility — samakan dgn kartu Booking Schedule. */}
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              {visibilityLabel(session.visibility)}
+            </Badge>
+            {/* Area + ikon lokasi — pola sama dgn Booking Schedule. */}
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/80">
+              <MapPin className="h-3 w-3" />
               {session.area_name}
             </span>
             {isLocked && (
               <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-400">
                 <Lock className="h-3 w-3" /> Locked
+              </span>
+            )}
+            {isJoined && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 border border-primary/40 px-1.5 py-0 text-[10px] font-medium text-primary">
+                <Check className="h-3 w-3" /> You&apos;re in
               </span>
             )}
           </div>
@@ -102,6 +145,19 @@ function TableCard({
               <Users className="h-3 w-3" />
               {session.member_count}/{session.table_capacity}
             </span>
+            {/* Sisa kursi / Full — samakan dgn kartu Booking Schedule. */}
+            {session.table_capacity > 0 && (
+              <>
+                <span>·</span>
+                {session.table_capacity - session.member_count > 0 ? (
+                  <span className="whitespace-nowrap text-muted-foreground/80">
+                    {session.table_capacity - session.member_count} seats left
+                  </span>
+                ) : (
+                  <span className="whitespace-nowrap text-primary/80">Full</span>
+                )}
+              </>
+            )}
             <span>·</span>
             <RelativeTime
               date={session.started_at}
