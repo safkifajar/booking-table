@@ -197,6 +197,7 @@ export default async function HomePage() {
             sessions={activeSessions.slice(0, 5)}
             isAnon={isAnon}
             joinedIds={Array.from(joinedIds)}
+            viewerId={profile?.id ?? null}
           />
 
           {/* Lihat semua kalau ada lebih dari 5 meja live */}

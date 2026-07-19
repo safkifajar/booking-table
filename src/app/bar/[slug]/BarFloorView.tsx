@@ -466,6 +466,8 @@ export function BarFloorView({
           bookingWindowDays={bookingWindowDays}
           activeDate={activeDate}
           onDateChange={setActiveDate}
+          joinedIds={joinedIds}
+          viewerId={userId}
         />
           </div>
         )}
@@ -559,6 +561,7 @@ function BookingSchedule({
   activeDate,
   onDateChange,
   joinedIds,
+  viewerId,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
   bookingWindowDays?: number;
@@ -567,6 +570,8 @@ function BookingSchedule({
   onDateChange: (gk: string) => void;
   /** Session yang DIIKUTI user → badge "You're in". */
   joinedIds?: string[];
+  /** Profile id penonton — badge tak tampil di booking miliknya sendiri. */
+  viewerId?: string | null;
 }) {
   const [nowMs] = React.useState(() => Date.now());
   const joined = React.useMemo(() => new Set(joinedIds ?? []), [joinedIds]);
@@ -699,8 +704,9 @@ function BookingSchedule({
                         {r.area_name}
                       </span>
                     )}
-                    {/* Penanda user ikut di meja/booking ini. */}
-                    {joined.has(r.id) && (
+                    {/* Penanda user ikut di booking ini. Host TIDAK ditandai —
+                        dia jelas tahu itu miliknya sendiri. */}
+                    {joined.has(r.id) && r.host_id !== viewerId && (
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 border border-primary/40 px-1.5 py-0 text-[10px] font-medium text-primary">
                         <Check className="h-3 w-3" /> You&apos;re in
                       </span>
@@ -755,12 +761,7 @@ function BookingSchedule({
               <Link
                 key={r.id}
                 href={`/session/${r.id}`}
-                className={cn(
-                  rowCls,
-                  "transition hover:bg-muted/40",
-                  // Booking yg DIIKUTI user ditonjolkan (selaras kartu Live now).
-                  joined.has(r.id) && "bg-primary/[0.06] hover:bg-primary/[0.1]"
-                )}
+                className={cn(rowCls, "transition hover:bg-muted/40")}
               >
                 {inner}
               </Link>
