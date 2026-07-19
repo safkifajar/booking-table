@@ -177,8 +177,7 @@ Production: simpan uploads di **luar project folder** supaya tidak ke-bundle
 saat `next build` dan persistent saat update deployment.
 
 ```bash
-sudo mkdir -p /var/lib/booking-table/uploads/avatars
-sudo mkdir -p /var/lib/booking-table/uploads/stories
+sudo mkdir -p /var/lib/booking-table/uploads/{avatars,stories,photos,banners,menu}
 sudo chown -R booking:booking /var/lib/booking-table
 ```
 
@@ -546,8 +545,8 @@ VAPID_SUBJECT=mailto:you@bookingsoho.com
 ### 11.4 Folder uploads persistent per-env
 
 ```bash
-sudo mkdir -p /var/lib/soho-prod/uploads/{avatars,stories,photos}
-sudo mkdir -p /var/lib/soho-staging/uploads/{avatars,stories,photos}
+sudo mkdir -p /var/lib/soho-prod/uploads/{avatars,stories,photos,banners,menu}
+sudo mkdir -p /var/lib/soho-staging/uploads/{avatars,stories,photos,banners,menu}
 sudo chown -R booking:booking /var/lib/soho-prod /var/lib/soho-staging
 ```
 
@@ -619,6 +618,13 @@ server {                              # admin prod → port sama, middleware rou
     listen 80;
     server_name admin.bookingsoho.com;
     client_max_body_size 10M;
+    # WAJIB juga di subdomain admin: file upload (banner/menu/avatar) dipakai
+    # halaman admin. Tanpa blok ini request /uploads/* diteruskan ke Next.js
+    # yang TIDAK menyimpan file tsb (file ada di /var/lib/...) → gambar rusak.
+    location /uploads/ {
+        alias /var/lib/soho-prod/uploads/;
+        expires 1d; add_header Cache-Control "public, immutable"; access_log off;
+    }
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -665,6 +671,11 @@ server {                              # admin staging → port 3001
     listen 80;
     server_name admin.staging.bookingsoho.com;
     client_max_body_size 10M;
+    # Sama seperti admin prod — subdomain admin butuh /uploads/ sendiri.
+    location /uploads/ {
+        alias /var/lib/soho-staging/uploads/;
+        expires 1d; add_header Cache-Control "public, immutable"; access_log off;
+    }
     location / {
         proxy_pass http://localhost:3001;
         proxy_http_version 1.1;

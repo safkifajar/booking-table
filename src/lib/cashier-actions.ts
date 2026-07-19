@@ -41,6 +41,7 @@ import { menuItems } from "@/lib/db/schema/menu";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { createNotification } from "@/lib/notifications";
 import { requirePermission } from "@/lib/auth-v2/permissions";
+import { sortUnpaidFirst } from "@/lib/session-sort";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import {
   resolveVoucherForBillPayment,
@@ -77,6 +78,8 @@ export interface CashierSessionItem {
   member_count: number;
   status: string;
   started_at: string;
+  /** Kapan sesi ditutup (null = masih aktif) — utk filter "hari ini" & urutan. */
+  closed_at: string | null;
   reservation_at: string | null;
   reservation_end_at: string | null;
   subtotal: number;
@@ -110,6 +113,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      closed_at: tableSessions.closedAt,
       status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
@@ -238,7 +242,7 @@ export async function getActiveSessionsForCashier(): Promise<
 
   const charge = await getChargeConfig(ctx.barId);
 
-  return sessionRows.map((s) => {
+  const rows = sessionRows.map((s) => {
     const subtotal = billMap.get(s.id) ?? 0;
     const paid = paidMap.get(s.id) ?? 0;
     const bill = computeBillTotals(subtotal, charge);
@@ -252,6 +256,7 @@ export async function getActiveSessionsForCashier(): Promise<
       member_count: memberMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
+      closed_at: s.closed_at ? s.closed_at.toISOString() : null,
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at
         ? s.reservation_end_at.toISOString()
@@ -268,7 +273,10 @@ export async function getActiveSessionsForCashier(): Promise<
       cash_pending_count: cashPendingMap.get(s.id) ?? 0,
     };
   });
+
+  return sortUnpaidFirst(rows);
 }
+
 
 /**
  * Sesi yang sudah SELESAI (closed) — untuk tab "Selesai" di dashboard kasir.
@@ -289,6 +297,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: profiles.displayName,
       host_avatar: profiles.avatarUrl,
       started_at: tableSessions.startedAt,
+      closed_at: tableSessions.closedAt,
       status: tableSessions.status,
       reservation_at: tableSessions.reservationAt,
       reservation_end_at: tableSessions.reservationEndAt,
@@ -384,7 +393,7 @@ export async function getClosedSessionsForCashier(): Promise<
 
   const charge = await getChargeConfig(ctx.barId);
 
-  return sessionRows.map((s) => {
+  const rows = sessionRows.map((s) => {
     const subtotal = billMap.get(s.id) ?? 0;
     const paid = paidMap.get(s.id) ?? 0;
     const bill = computeBillTotals(subtotal, charge);
@@ -398,6 +407,7 @@ export async function getClosedSessionsForCashier(): Promise<
       member_count: memberMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
+      closed_at: s.closed_at ? s.closed_at.toISOString() : null,
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
       reservation_end_at: s.reservation_end_at
         ? s.reservation_end_at.toISOString()
@@ -414,6 +424,8 @@ export async function getClosedSessionsForCashier(): Promise<
       cash_pending_count: 0,
     };
   });
+
+  return sortUnpaidFirst(rows);
 }
 
 // ============================================================

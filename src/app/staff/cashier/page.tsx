@@ -93,8 +93,10 @@ export default async function CashierPage() {
           <Button asChild variant="outline" size="sm">
             <Link href="/staff/cashier/shift">
               <FileText className="h-4 w-4" />
-              <span className="hidden sm:inline">Shift Report</span>
-              <span className="sm:hidden">Shift</span>
+              {/* Isinya riwayat transaksi (bukan laporan shift) — samakan dgn
+                  judul halamannya: "Transactions". */}
+              <span className="hidden sm:inline">Transactions</span>
+              <span className="sm:hidden">History</span>
             </Link>
           </Button>
           {profile && <NotificationBell userId={profile.id} />}

@@ -31,6 +31,12 @@ export const barBanners = pgTable(
     imageUrl: text("image_url").notNull(),
     title: text("title"),
     subtitle: text("subtitle"),
+    /**
+     * Isi detail promo (multi-paragraf, mis. syarat & ketentuan). Ditampilkan
+     * di halaman detail /promo/[id] saat customer mengklik banner. NULL/kosong
+     * = halaman detail hanya menampilkan gambar + judul + subtitle.
+     */
+    content: text("content"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     startsAt: timestamp("starts_at", { withTimezone: true, mode: "date" }),

@@ -36,6 +36,7 @@ import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems } from "@/lib/db/schema/menu";
 import { requirePermission } from "@/lib/auth-v2/permissions";
+import { sortUnpaidFirst } from "@/lib/session-sort";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { isDbConstraintError } from "@/lib/utils";
@@ -347,7 +348,7 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
   );
 
-  return sessionRows.map((s) => {
+  const rows = sessionRows.map((s) => {
     const subtotal = Number(billMap.get(s.id)?.subtotal ?? 0);
     const paid = paidMap.get(s.id) ?? 0;
     return {
@@ -372,6 +373,8 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
       item_count: Number(billMap.get(s.id)?.item_count ?? 0),
     };
   });
+
+  return sortUnpaidFirst(rows);
 }
 
 /**
@@ -467,7 +470,7 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
   );
 
-  return sessionRows.map((s) => {
+  const rows = sessionRows.map((s) => {
     const subtotal = Number(billMap.get(s.id)?.subtotal ?? 0);
     const paid = paidMap.get(s.id) ?? 0;
     return {
@@ -492,6 +495,8 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
       item_count: Number(billMap.get(s.id)?.item_count ?? 0),
     };
   });
+
+  return sortUnpaidFirst(rows);
 }
 
 // ============================================================

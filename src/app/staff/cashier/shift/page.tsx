@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireAnyRole } from "@/lib/auth-v2/permissions";
 import { getShiftReport } from "@/lib/cashier-actions";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText } from "lucide-react";
-import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ShiftReportView } from "./ShiftReportView";
 
 interface PageProps {
@@ -18,24 +18,28 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
   );
 
   const { from, to } = await searchParams;
-  const [user, profile] = await Promise.all([
-    getCurrentUser(),
-    getCurrentProfile(),
-  ]);
+  const profile = await getCurrentProfile();
 
-  // Default: hari ini (00:00 → 23:59 Jakarta time = UTC+7)
+  // Default (arahan user): BULAN BERJALAN — tgl 1 s/d hari ini (Jakarta UTC+7).
   const now = new Date();
   const TZ_OFFSET = 7 * 60 * 60 * 1000;
   const nowJkt = new Date(now.getTime() + TZ_OFFSET);
-  const startJkt = new Date(
+  // Awal hari ini (utk batas akhir: hari ini + 1 hari = eksklusif).
+  const todayJkt = new Date(
     Date.UTC(
       nowJkt.getUTCFullYear(),
       nowJkt.getUTCMonth(),
       nowJkt.getUTCDate()
     )
   );
-  const startUtc = new Date(startJkt.getTime() - TZ_OFFSET);
-  const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+  // Awal bulan berjalan.
+  const monthStartJkt = new Date(
+    Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), 1)
+  );
+  const startUtc = new Date(monthStartJkt.getTime() - TZ_OFFSET);
+  const endUtc = new Date(
+    todayJkt.getTime() - TZ_OFFSET + 24 * 60 * 60 * 1000
+  );
 
   const fromIso = from
     ? new Date(`${from}T00:00:00+07:00`).toISOString()
@@ -48,8 +52,13 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
 
   const { summary, transactions } = await getShiftReport(fromIso, toIso);
 
-  const defaultFromDate = (from ?? fromIso.slice(0, 10));
-  const defaultToDate = (to ?? toIso.slice(0, 10));
+  // Tanggal utk input filter — dihitung di zona Jakarta (bukan slice ISO UTC,
+  // yang bisa meleset sehari).
+  // resetFrom/resetTo = DEFAULT halaman (bulan berjalan) → dipakai tombol Reset.
+  const resetFromDate = monthStartJkt.toISOString().slice(0, 10);
+  const resetToDate = todayJkt.toISOString().slice(0, 10);
+  const defaultFromDate = from ?? resetFromDate;
+  const defaultToDate = to ?? resetToDate;
 
   return (
     <main className="flex-1 pb-12">
@@ -68,14 +77,7 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
               Transactions
             </h1>
           </div>
-          {profile && (
-            <AdminHeaderProfile
-              displayName={profile.displayName}
-              email={user?.email ?? ""}
-              avatarUrl={profile.avatarUrl}
-              profileHref="/staff/profile"
-            />
-          )}
+          {profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
 
@@ -85,6 +87,8 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
           transactions={transactions}
           defaultFromDate={defaultFromDate}
           defaultToDate={defaultToDate}
+          resetFromDate={resetFromDate}
+          resetToDate={resetToDate}
         />
       </div>
     </main>

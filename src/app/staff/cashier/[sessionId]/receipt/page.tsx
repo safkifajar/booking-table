@@ -8,6 +8,14 @@ import { ReceiptView } from "./ReceiptView";
 
 interface PageProps {
   params: Promise<{ sessionId: string }>;
+  /** ?from= — halaman asal utk tombol kembali (mis. list transaksi). */
+  searchParams: Promise<{ from?: string }>;
+}
+
+/** Hanya izinkan path internal (cegah open-redirect). */
+function safeBackHref(from?: string): string {
+  if (from && from.startsWith("/") && !from.startsWith("//")) return from;
+  return "/staff/cashier";
 }
 
 /**
@@ -18,8 +26,10 @@ interface PageProps {
  * "Receipt printable page" (todo terpisah). Sekarang minimal:
  * preview struk + tombol Print pakai browser dialog.
  */
-export default async function ReceiptPage({ params }: PageProps) {
+export default async function ReceiptPage({ params, searchParams }: PageProps) {
   const { sessionId } = await params;
+  const { from } = await searchParams;
+  const backHref = safeBackHref(from);
   await requireAnyRole(
     ["cashier", "manager", "admin"],
     `/staff/cashier/${sessionId}/receipt`
@@ -33,7 +43,7 @@ export default async function ReceiptPage({ params }: PageProps) {
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md print:hidden">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">
-            <Link href="/staff/cashier" aria-label="Back to list">
+            <Link href={backHref} aria-label="Back">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>

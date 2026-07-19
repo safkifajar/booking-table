@@ -97,7 +97,6 @@ export function BannerManager({ barId, initialBanners }: Props) {
                   <th className="px-4 py-3 font-medium w-16">Photo</th>
                   <th className="px-4 py-3 font-medium">Title & Description</th>
                   <th className="px-4 py-3 font-medium w-24">Status</th>
-                  <th className="px-4 py-3 font-medium w-20 text-center">Order</th>
                   <th className="px-4 py-3 font-medium w-44">Period</th>
                   <th className="px-4 py-3 font-medium w-40 text-right">Actions</th>
                 </tr>
@@ -213,11 +212,6 @@ function BannerRow({
         </Badge>
       </td>
 
-      {/* Urutan */}
-      <td className="px-4 py-2.5 align-middle text-center text-xs text-muted-foreground tabular-nums">
-        {banner.sortOrder}
-      </td>
-
       {/* Periode */}
       <td className="px-4 py-2.5 align-middle text-xs text-muted-foreground">
         {banner.startsAt || banner.endsAt ? (
@@ -278,7 +272,10 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
 
   const [title, setTitle] = React.useState(banner?.title ?? "");
   const [subtitle, setSubtitle] = React.useState(banner?.subtitle ?? "");
-  const [sortOrder, setSortOrder] = React.useState(banner?.sortOrder ?? 0);
+  const [content, setContent] = React.useState(banner?.content ?? "");
+  // Urutan tak lagi diedit manual (field Order dihapus) — tetap dikirim agar
+  // banner lama mempertahankan urutannya; baru = 0 (list diurut createdAt).
+  const sortOrder = banner?.sortOrder ?? 0;
   const [isActive, setIsActive] = React.useState(banner?.isActive ?? true);
   const [startsAt, setStartsAt] = React.useState(
     banner?.startsAt?.toISOString().slice(0, 10) ?? ""
@@ -344,6 +341,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           id: banner.id,
           title,
           subtitle,
+          content,
           sortOrder,
           isActive,
           startsAt,
@@ -362,6 +360,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           ...banner,
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
+          content: content.trim() || null,
           sortOrder,
           isActive,
           startsAt: startsAt ? new Date(startsAt) : null,
@@ -378,6 +377,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         fd.append("file", file);
         if (title.trim()) fd.append("title", title.trim());
         if (subtitle.trim()) fd.append("subtitle", subtitle.trim());
+        if (content.trim()) fd.append("content", content.trim());
         fd.append("sortOrder", String(sortOrder));
         fd.append("isActive", String(isActive));
         if (startsAt) fd.append("startsAt", startsAt);
@@ -391,6 +391,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           imageUrl: previewUrl ?? "",
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
+          content: content.trim() || null,
           sortOrder,
           isActive,
           startsAt: startsAt ? new Date(startsAt) : null,
@@ -503,38 +504,55 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
             />
           </div>
 
-          {/* Sort + active */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                Order (lower = top)
-              </label>
-              <input
-                type="number"
-                value={sortOrder}
-                onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
-                min={0}
-                max={999}
-                className="w-full h-11 px-3 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition"
-              />
+          {/* Detail content — tampil di halaman detail promo (customer) */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Detail content (optional, max 5000)
+            </label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value.slice(0, 5000))}
+              maxLength={5000}
+              rows={6}
+              placeholder={
+                "Full promo details shown when a customer taps this banner.\n\nExample:\nEnjoy 50% off all cocktails every Friday, 17:00–19:00.\n\nTerms:\n- Dine-in only\n- Cannot be combined with other promos"
+              }
+              className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {content.trim().length} / 5000 · Line breaks are preserved.
+            </p>
+          </div>
+
+          {/* Status — toggle switch (pola sama dgn Settings) */}
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 px-3 py-2.5">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Active</p>
+              <p className="text-xs text-muted-foreground">
+                {isActive
+                  ? "Shown to customers (within its date range)"
+                  : "Hidden from customers"}
+              </p>
             </div>
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                Status
-              </label>
-              <button
-                type="button"
-                onClick={() => setIsActive((v) => !v)}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isActive}
+              aria-label={isActive ? "Deactivate banner" : "Activate banner"}
+              onClick={() => setIsActive((v) => !v)}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-card",
+                isActive ? "bg-primary" : "bg-muted-foreground/30"
+              )}
+            >
+              <span
                 className={cn(
-                  "w-full h-11 px-3 rounded-md border text-sm font-medium transition",
-                  isActive
-                    ? "bg-primary/15 border-primary/40 text-primary"
-                    : "bg-muted/40 border-border text-muted-foreground"
+                  "inline-flex h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                  isActive ? "translate-x-[22px]" : "translate-x-0.5"
                 )}
-              >
-                {isActive ? "Active" : "Off"}
-              </button>
-            </div>
+              />
+            </button>
           </div>
 
           {/* Date range */}

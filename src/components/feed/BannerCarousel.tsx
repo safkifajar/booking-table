@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PublicBanner } from "@/lib/banner-actions";
@@ -155,7 +156,13 @@ export function BannerCarousel({ banners, autoPlayMs = 5000 }: Props) {
 
 function BannerSlide({ banner }: { banner: PublicBanner }) {
   return (
-    <div className="relative shrink-0 w-full snap-center aspect-[16/9] bg-zinc-900">
+    // Seluruh slide bisa diklik → halaman detail promo. Swipe TIDAK memicu
+    // klik (browser membedakan drag vs tap), jadi gesture carousel tetap aman.
+    <Link
+      href={`/promo/${banner.id}`}
+      className="relative shrink-0 w-full snap-center aspect-[16/9] bg-zinc-900 block"
+      aria-label={banner.title ? `Promo: ${banner.title}` : "Promo detail"}
+    >
       <Image
         src={banner.imageUrl}
         alt={banner.title ?? "Promo"}
@@ -180,6 +187,6 @@ function BannerSlide({ banner }: { banner: PublicBanner }) {
           )}
         </div>
       )}
-    </div>
+    </Link>
   );
 }

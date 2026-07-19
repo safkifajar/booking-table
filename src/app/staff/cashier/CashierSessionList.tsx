@@ -154,18 +154,36 @@ export function CashierSessionList({
     [closedSessions, doneFilter, doneQuery]
   );
 
-  // Quick stats. "Meja aktif" = jumlah sesi aktif. "Outstanding" & "Sudah bayar"
-  // mencakup sesi aktif DAN sesi closed yg masih punya sisa tagihan (closed
-  // belum lunas) — supaya tagihan yg masih perlu ditagih tetap terhitung, tidak
-  // hilang begitu sesi ditutup.
-  const totalOpen = sessions.length;
-  const closedUnpaid = closedSessions.filter((x) => x.outstanding > 0);
+  // Quick stats — HANYA DATA HARI INI (arahan user). "Meja aktif" = sesi aktif
+  // hari ini; "Paid"/"Outstanding" dari sesi hari ini (aktif + closed yg masih
+  // punya sisa tagihan). Patokan tanggal: closed_at (kalau sudah tutup) →
+  // reservation_at → started_at, dibandingkan di zona WIB.
+  const isToday = React.useCallback((s: CashierSessionItem) => {
+    const iso = s.closed_at ?? s.reservation_at ?? s.started_at;
+    const t = new Date(iso).getTime();
+    if (Number.isNaN(t)) return false;
+    const TZ = 7 * 3600 * 1000;
+    const dayOf = (ms: number) =>
+      Math.floor((ms + TZ) / (24 * 3600 * 1000)); // indeks hari di WIB
+    return dayOf(t) === dayOf(Date.now());
+  }, []);
+
+  const todaySessions = React.useMemo(
+    () => sessions.filter(isToday),
+    [sessions, isToday]
+  );
+  const todayClosedUnpaid = React.useMemo(
+    () => closedSessions.filter((x) => x.outstanding > 0 && isToday(x)),
+    [closedSessions, isToday]
+  );
+
+  const totalOpen = todaySessions.length;
   const totalUnpaid =
-    sessions.reduce((s, x) => s + x.outstanding, 0) +
-    closedUnpaid.reduce((s, x) => s + x.outstanding, 0);
+    todaySessions.reduce((s, x) => s + x.outstanding, 0) +
+    todayClosedUnpaid.reduce((s, x) => s + x.outstanding, 0);
   const totalPaidPartial =
-    sessions.reduce((s, x) => s + x.paid_total, 0) +
-    closedUnpaid.reduce((s, x) => s + x.paid_total, 0);
+    todaySessions.reduce((s, x) => s + x.paid_total, 0) +
+    todayClosedUnpaid.reduce((s, x) => s + x.paid_total, 0);
 
   return (
     // Flex column setinggi sisa layar (di bawah header ~64px, minus py-6
@@ -178,18 +196,18 @@ export function CashierSessionList({
         <div className="grid grid-cols-3 gap-2">
           <StatCard
             icon={<Users className="h-3.5 w-3.5" />}
-            label="Active tables"
+            label="Active today"
             value={totalOpen.toString()}
           />
           <StatCard
             icon={<Wallet className="h-3.5 w-3.5" />}
-            label="Paid"
+            label="Paid today"
             value={formatIDR(totalPaidPartial)}
             tone="success"
           />
           <StatCard
             icon={<Clock className="h-3.5 w-3.5" />}
-            label="Outstanding"
+            label="Outstanding today"
             value={formatIDR(totalUnpaid)}
             tone={totalUnpaid > 0 ? "warning" : "muted"}
           />
