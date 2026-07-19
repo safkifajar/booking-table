@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyDuitkuCallback } from "@/lib/payments/gateway";
 import { markPaymentPaidBySystem } from "@/lib/cashier-actions";
+import { activateMembershipTx } from "@/lib/membership-actions";
 
 /**
  * Callback (webhook) Duitku — dipanggil server Duitku saat status transaksi
@@ -50,10 +51,28 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Invalid signature", { status: 200 });
   }
 
-  // 2. resultCode "00" = sukses → tandai payment lunas (idempotent).
+  // 2. resultCode "00" = sukses → tandai lunas (idempotent).
+  //
+  // merchantOrderId bisa merujuk DUA entitas berbeda, karena keduanya memanggil
+  // createCharge dgn id barisnya sendiri sebagai paymentId:
+  //   - payments.id                  → tagihan meja / order menu
+  //   - membership_transactions.id   → pembelian langganan membership
+  // markPaymentPaidBySystem hanya melihat tabel payments dan mengembalikan null
+  // kalau tak ketemu; tanpa fallback ini pembayaran membership diam-diam
+  // terabaikan (callback tetap balas 200 → Duitku tak retry).
   if (resultCode === "00" && merchantOrderId) {
     try {
-      await markPaymentPaidBySystem(merchantOrderId);
+      const paid = await markPaymentPaidBySystem(merchantOrderId);
+      if (!paid) {
+        const activated = await activateMembershipTx(merchantOrderId);
+        if (!activated) {
+          // Bukan payment, bukan membership pending (atau sudah diproses).
+          // Bukan error — jangan minta Duitku retry.
+          console.warn("[duitku/callback] tak ada baris pending untuk", {
+            merchantOrderId,
+          });
+        }
+      }
     } catch (err) {
       console.error("[duitku/callback] gagal update payment", err);
       // Balas non-200 supaya Duitku retry.

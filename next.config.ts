@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
        */
       allowedOrigins: [
         "localhost:3000",
-        "192.168.1.3:3000",
+        "192.168.1.6:3000",
         "*.local:3000",
       ],
     },
@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
    * Izinkan dev resources (HMR) diakses dari device LAN saat tes mobile.
    * Dev-only.
    */
-  allowedDevOrigins: ["192.168.1.3"],
+  allowedDevOrigins: ["192.168.1.6"],
   images: {
     /**
      * Matikan Image Optimization. Semua gambar app = lokal: static /public
