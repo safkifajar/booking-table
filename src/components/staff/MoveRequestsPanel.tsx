@@ -144,58 +144,64 @@ export function MoveRequestsPanel({
   }
 
   return (
-    <div className="space-y-3">
-      {/* Filter: chip bulan SCROLL (kiri) — status & tahun FIX (kanan). */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-          <FilterChip
-            label="All"
-            active={month === "all"}
-            onClick={() => setMonth("all")}
-          />
-          {MONTH_LABELS.map((m, i) => (
+    // space-y HANYA antar kartu request; header filter diberi margin bawah
+    // sendiri supaya tak ada celah transparan di atas elemen sticky.
+    <div className="[&>*+*]:mt-3">
+      {/* Filter: STICKY saat scroll vertikal (arahan user) — menempel di atas
+          area scroll (kasir & waiter sama-sama overflow-y-auto). Bleed ke tepi
+          (-mx) + background solid supaya konten di bawahnya tak menembus. */}
+      <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1 pb-2 bg-background border-b border-border space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
             <FilterChip
-              key={m}
-              label={m}
-              active={month === i}
-              onClick={() => setMonth(i)}
+              label="All"
+              active={month === "all"}
+              onClick={() => setMonth("all")}
             />
-          ))}
+            {MONTH_LABELS.map((m, i) => (
+              <FilterChip
+                key={m}
+                label={m}
+                active={month === i}
+                onClick={() => setMonth(i)}
+              />
+            ))}
+          </div>
+
+          {/* FIX (tak ikut scroll horizontal): status ikon, tahun angka. */}
+          <div className="shrink-0 flex items-center gap-1.5">
+            <StatusFilterButton value={status} onChange={setStatus} />
+            <Select
+              value={String(year)}
+              onChange={(v) => setYear(v === "all" ? "all" : Number(v))}
+              options={[
+                { value: "all", label: "All" },
+                ...years.map((y) => ({ value: String(y), label: String(y) })),
+              ]}
+              ariaLabel="Filter year"
+              className="w-[86px]"
+            />
+          </div>
         </div>
 
-        {/* FIX (tak ikut scroll): status pakai IKON saja, tahun angka saja. */}
-        <div className="shrink-0 flex items-center gap-1.5">
-          <StatusFilterButton value={status} onChange={setStatus} />
-          <Select
-            value={String(year)}
-            onChange={(v) => setYear(v === "all" ? "all" : Number(v))}
-            options={[
-              { value: "all", label: "All" },
-              ...years.map((y) => ({ value: String(y), label: String(y) })),
-            ]}
-            ariaLabel="Filter year"
-            className="w-[86px]"
-          />
+        {/* Ringkasan selalu tampil: default kini SUDAH memfilter (bulan
+            berjalan), jadi user perlu tahu berapa yg tersaring. */}
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {filtered.length} of {requests.length} request
+            {requests.length === 1 ? "" : "s"}
+          </span>
+          {hasFilter && (
+            <button
+              type="button"
+              onClick={resetFilter}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 hover:text-foreground hover:border-foreground/30 transition"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset
+            </button>
+          )}
         </div>
-      </div>
-
-      {/* Ringkasan selalu tampil: default kini SUDAH memfilter (bulan
-          berjalan), jadi user perlu tahu berapa yg tersaring. */}
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>
-          {filtered.length} of {requests.length} request
-          {requests.length === 1 ? "" : "s"}
-        </span>
-        {hasFilter && (
-          <button
-            type="button"
-            onClick={resetFilter}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 hover:text-foreground hover:border-foreground/30 transition"
-          >
-            <RotateCcw className="h-3 w-3" />
-            Reset
-          </button>
-        )}
       </div>
 
       {filtered.length === 0 ? (
