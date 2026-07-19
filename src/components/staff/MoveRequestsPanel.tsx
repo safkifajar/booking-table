@@ -85,9 +85,25 @@ export function MoveRequestsPanel({
   // Patokan tanggal = created_at (kapan request dibuat).
   // Default: BULAN & TAHUN SEKARANG (arahan user) — bukan "all".
   const now = React.useMemo(() => new Date(), []);
-  const [month, setMonth] = React.useState<number | "all">(now.getMonth());
+  const [month, setMonth] = React.useState<number>(now.getMonth());
   const [year, setYear] = React.useState<number | "all">(now.getFullYear());
   const [status, setStatus] = React.useState("all");
+
+  // Auto-scroll strip bulan ke chip AKTIF saat pertama render — default =
+  // bulan sekarang yang sering berada di luar layar (mis. Jul).
+  const monthStripRef = React.useRef<HTMLDivElement>(null);
+  const activeChipRef = React.useRef<HTMLButtonElement>(null);
+  React.useLayoutEffect(() => {
+    const strip = monthStripRef.current;
+    const chip = activeChipRef.current;
+    if (!strip || !chip) return;
+    // Scroll HANYA strip-nya (bukan halaman) — hitung offset manual supaya
+    // scrollIntoView tak menggeser container induk.
+    strip.scrollLeft =
+      chip.offsetLeft - strip.clientWidth / 2 + chip.clientWidth / 2;
+    // Sekali saat mount: setelahnya user yang mengendalikan scroll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Tahun yg ADA di data + tahun sekarang (supaya default selalu valid). */
   const years = React.useMemo(() => {
@@ -102,11 +118,10 @@ export function MoveRequestsPanel({
   const filtered = React.useMemo(() => {
     return requests.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
-      if (month === "all" && year === "all") return true;
       const d = new Date(r.created_at);
       if (Number.isNaN(d.getTime())) return false;
       if (year !== "all" && d.getFullYear() !== year) return false;
-      if (month !== "all" && d.getMonth() !== month) return false;
+      if (d.getMonth() !== month) return false;
       return true;
     });
   }, [requests, status, month, year]);
@@ -152,15 +167,16 @@ export function MoveRequestsPanel({
           (-mx) + background solid supaya konten di bawahnya tak menembus. */}
       <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-1 pb-2 bg-background border-b border-border space-y-2">
         <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-            <FilterChip
-              label="All"
-              active={month === "all"}
-              onClick={() => setMonth("all")}
-            />
+          <div
+            ref={monthStripRef}
+            className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
+          >
             {MONTH_LABELS.map((m, i) => (
               <FilterChip
                 key={m}
+                // Chip bulan AKTIF di-scroll ke tengah saat halaman dibuka
+                // (default = bulan sekarang, sering di luar layar).
+                ref={month === i ? activeChipRef : undefined}
                 label={m}
                 active={month === i}
                 onClick={() => setMonth(i)}
@@ -299,7 +315,8 @@ function StatusFilterButton({
         title={current}
         aria-pressed={active}
         className={cn(
-          "h-9 w-9 inline-flex items-center justify-center rounded-md border transition",
+          // h-11 = samakan dgn komponen Select (tahun) di sebelahnya.
+          "h-11 w-11 inline-flex items-center justify-center rounded-md border transition",
           active
             ? "border-primary/50 bg-primary/15 text-primary"
             : "border-border bg-input text-muted-foreground hover:text-foreground"
@@ -334,18 +351,15 @@ function StatusFilterButton({
   );
 }
 
-/** Chip filter bulan — menyala saat aktif. */
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+/** Chip filter bulan — menyala saat aktif. Ref diteruskan supaya chip aktif
+ *  bisa di-scroll ke tengah strip saat mount. */
+const FilterChip = React.forwardRef<
+  HTMLButtonElement,
+  { label: string; active: boolean; onClick: () => void }
+>(function FilterChip({ label, active, onClick }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       aria-pressed={active}
@@ -359,7 +373,7 @@ function FilterChip({
       {label}
     </button>
   );
-}
+});
 
 /** Jumlah request pending (utk badge tab). */
 export function countPending(requests: MoveRequestRow[]): number {
