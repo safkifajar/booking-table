@@ -1928,7 +1928,7 @@ export async function createOrder(
   //    (unpaid ATAU order yg masih punya sisa/DP, outstanding > 0). Order closed
   //    diabaikan. (Revisi Q1: "belum lunas" mencakup sisa DP, bukan cuma unpaid.)
   const activeOrders = await db
-    .select({ id: orders.id })
+    .select({ id: orders.id, status: orders.status })
     .from(orders)
     .where(
       and(
@@ -1937,6 +1937,25 @@ export async function createOrder(
       )
     );
   for (const o of activeOrders) {
+    // Order 'unpaid' menghalangi APAPUN outstanding-nya — DB punya unique index
+    // uq_unpaid_order_per_session (maks 1 unpaid per sesi). Tanpa cek status ini,
+    // order DP yg outstanding-nya sudah 0 (DP menutup total) lolos guard lalu
+    // INSERT menabrak constraint → error Server Component, bukan pesan rapi.
+    // settleOrderIfPaid semestinya sudah menaikkannya jadi 'paid'; kalau masih
+    // 'unpaid' di sini berarti ada yg belum tersettle — jangan dipaksa lanjut.
+    if (o.status === "unpaid") {
+      await settleOrderIfPaid(o.id); // coba settle dulu (mis. DP sudah lunas)
+      const [fresh] = await db
+        .select({ status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, o.id));
+      if (fresh?.status === "unpaid") {
+        throw new Error(
+          "Please settle the previous order before creating a new one"
+        );
+      }
+      continue;
+    }
     const { outstanding } = await getOrderOutstanding(o.id);
     if (outstanding > 0) {
       throw new Error("Please settle the previous order before creating a new one");
@@ -3481,6 +3500,7 @@ export async function checkPaymentStatus(
       id: payments.id,
       status: payments.status,
       splitMeta: payments.splitMeta,
+      orderId: payments.orderId,
       sessionId: orders.sessionId,
       sessionStatus: tableSessions.status,
       dpPaidAt: tableSessions.dpPaidAt,
@@ -3543,6 +3563,13 @@ export async function checkPaymentStatus(
         .set({ dpPaidAt: new Date() })
         .where(eq(tableSessions.id, row.sessionId));
     }
+    // Prepaid hook: order 'unpaid' + kini ada pembayaran lunas → order MASUK
+    // (status 'paid' + item draft→sent). WAJIB sama seperti jalur webhook
+    // (markPaymentPaidBySystem) — tanpa ini, pembayaran yang dikenali lewat
+    // polling ("cek status", saat callback Duitku tak sampai) meninggalkan
+    // order 'unpaid' selamanya: item tak pernah masuk dapur, dan order baru
+    // menabrak uq_unpaid_order_per_session (crash render halaman order).
+    await settleOrderIfPaid(row.orderId);
     await settleOverdueIfPaid(row.sessionId);
     await notifySessionAndStaff(row.sessionId);
     await notifyPaymentEvent(row.id, meta.isDownPayment ? "dp_confirmed" : "paid");
