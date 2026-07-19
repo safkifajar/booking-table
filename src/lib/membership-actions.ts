@@ -673,7 +673,11 @@ export async function purchaseMembership(input: {
  * Terapkan SNAPSHOT (level + period_end) ke profil; lalu GENERATE voucher
  * benefit pribadi dari template aktif level tsb (rev-2) + notif pasca-commit.
  */
-async function activateMembershipTx(txId: string): Promise<boolean> {
+export async function activateMembershipTx(txId: string): Promise<boolean> {
+  // Dipanggil juga dari webhook Duitku dgn merchantOrderId mentah — id non-UUID
+  // akan bikin Postgres melempar (→ callback 500 → retry tanpa henti).
+  if (!z.string().uuid().safeParse(txId).success) return false;
+
   let activated: {
     profileId: string;
     levelKey: string;
@@ -777,7 +781,10 @@ export async function checkMembershipPaymentStatus(
   if (row.status !== "pending") return { status: row.status };
   if (!row.externalRef) return { status: "pending" };
 
-  const gwStatus = await getPaymentGateway().checkStatus(row.externalRef);
+  // Kunci lookup gateway = merchantOrderId, dan saat createCharge kita mengirim
+  // paymentId: tx.id. externalRef itu 'reference' MILIK gateway — bukan kunci
+  // pencarian, jadi memakainya selalu meleset → status mentok 'pending'.
+  const gwStatus = await getPaymentGateway().checkStatus(row.id);
   if (gwStatus === "paid") {
     await activateMembershipTx(row.id);
     return { status: "paid" };
