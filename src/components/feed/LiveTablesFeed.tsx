@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { RelativeTime } from "@/components/ui/relative-time";
 import { Lock, Sparkles, ChevronRight, MapPin, Check } from "lucide-react";
 import { initials, cn } from "@/lib/utils";
 import type { ActiveSessionView } from "@/types/db";
@@ -14,6 +13,14 @@ interface Props {
   joinedIds?: string[];
   /** Profile id penonton — badge "You're in" tak tampil di meja miliknya. */
   viewerId?: string | null;
+}
+
+/** "HH:MM" dari ISO — sama dgn helper di Booking Schedule. */
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
 }
 
 /** Label visibility — samakan dgn Booking Schedule di halaman denah. */
@@ -116,11 +123,17 @@ function TableCard({
             </p>
           )}
 
-          {/* Sejak kapan meja berjalan (padanan jam booking). */}
-          <RelativeTime
-            date={session.started_at}
-            className="text-xs text-muted-foreground tabular-nums"
-          />
+          {/* Jam booking (mulai–selesai), sama seperti Booking Schedule.
+              Walk-in tanpa reservasi → fallback jam mulai sesi. */}
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {session.reservation_at
+              ? `${formatTime(session.reservation_at)}${
+                  session.reservation_end_at
+                    ? `–${formatTime(session.reservation_end_at)}`
+                    : ""
+                }`
+              : `from ${formatTime(session.started_at)}`}
+          </p>
 
           {/* Visibility + area + status khusus */}
           <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
