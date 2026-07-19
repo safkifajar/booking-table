@@ -3,13 +3,14 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { ArrowRightLeft, Check, X, Loader2 } from "lucide-react";
+import { ArrowRightLeft, Check, X, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   resolveMoveRequest,
   type MoveRequestRow,
 } from "@/lib/move-approval-actions";
-import { getActionErrorMessage } from "@/lib/utils";
+import { getActionErrorMessage, cn } from "@/lib/utils";
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
@@ -52,6 +53,19 @@ function StatusBadge({ status }: { status: string }) {
  * Meja". Pending bisa di-approve/tolak; yg sudah diproses tetap tampil sbg
  * riwayat dgn badge status.
  */
+const MONTH_LABELS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "approved", label: "Approved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
 export function MoveRequestsPanel({
   requests,
 }: {
@@ -59,6 +73,41 @@ export function MoveRequestsPanel({
 }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
+
+  // Filter (pola referensi user): chip BULAN + dropdown TAHUN + status.
+  // Patokan tanggal = created_at (kapan request dibuat).
+  const [month, setMonth] = React.useState<number | "all">("all");
+  const [year, setYear] = React.useState<number | "all">("all");
+  const [status, setStatus] = React.useState("all");
+
+  /** Tahun yang benar-benar ADA di data (jangan tawarkan tahun kosong). */
+  const years = React.useMemo(() => {
+    const set = new Set<number>();
+    for (const r of requests) {
+      const d = new Date(r.created_at);
+      if (!Number.isNaN(d.getTime())) set.add(d.getFullYear());
+    }
+    return Array.from(set).sort((a, b) => b - a);
+  }, [requests]);
+
+  const filtered = React.useMemo(() => {
+    return requests.filter((r) => {
+      if (status !== "all" && r.status !== status) return false;
+      if (month === "all" && year === "all") return true;
+      const d = new Date(r.created_at);
+      if (Number.isNaN(d.getTime())) return false;
+      if (year !== "all" && d.getFullYear() !== year) return false;
+      if (month !== "all" && d.getMonth() !== month) return false;
+      return true;
+    });
+  }, [requests, status, month, year]);
+
+  const hasFilter = month !== "all" || year !== "all" || status !== "all";
+  function resetFilter() {
+    setMonth("all");
+    setYear("all");
+    setStatus("all");
+  }
 
   async function resolve(id: string, approve: boolean) {
     setBusy(id);
@@ -82,8 +131,66 @@ export function MoveRequestsPanel({
   }
 
   return (
-    <div className="space-y-2">
-      {requests.map((r) => (
+    <div className="space-y-3">
+      {/* Filter: chip bulan (scroll horizontal) + tahun + status */}
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <FilterChip
+          label="All"
+          active={month === "all"}
+          onClick={() => setMonth("all")}
+        />
+        {MONTH_LABELS.map((m, i) => (
+          <FilterChip
+            key={m}
+            label={m}
+            active={month === i}
+            onClick={() => setMonth(i)}
+          />
+        ))}
+        <div className="shrink-0 flex items-center gap-1.5 ml-1">
+          <Select
+            value={String(status)}
+            onChange={setStatus}
+            options={STATUS_OPTIONS}
+            ariaLabel="Filter status"
+            className="w-32"
+          />
+          <Select
+            value={String(year)}
+            onChange={(v) => setYear(v === "all" ? "all" : Number(v))}
+            options={[
+              { value: "all", label: "All years" },
+              ...years.map((y) => ({ value: String(y), label: String(y) })),
+            ]}
+            ariaLabel="Filter year"
+            className="w-24"
+          />
+        </div>
+      </div>
+
+      {hasFilter && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {filtered.length} of {requests.length} request
+            {requests.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={resetFilter}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 hover:text-foreground hover:border-foreground/30 transition"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset
+          </button>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          No requests match this filter.
+        </div>
+      ) : (
+        filtered.map((r) => (
         <div
           key={r.id}
           className="rounded-lg border border-border bg-card p-3 flex items-center gap-3 flex-wrap"
@@ -127,8 +234,36 @@ export function MoveRequestsPanel({
             </div>
           )}
         </div>
-      ))}
+        ))
+      )}
     </div>
+  );
+}
+
+/** Chip filter bulan — menyala saat aktif. */
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "shrink-0 text-xs px-3 py-1.5 rounded-full border transition",
+        active
+          ? "border-primary/50 bg-primary/15 text-primary font-medium"
+          : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/60"
+      )}
+    >
+      {label}
+    </button>
   );
 }
 
