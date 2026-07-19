@@ -42,7 +42,10 @@ export function ShiftReportView({
     router.push(`/staff/cashier/shift?${params.toString()}`);
   }
 
-  function setQuickRange(preset: "today" | "yesterday" | "week") {
+  type Preset = "today" | "yesterday" | "week";
+
+  /** Rentang tanggal (WIB) untuk tiap preset — dipakai set & deteksi aktif. */
+  const presetRange = React.useCallback((preset: Preset) => {
     const now = new Date();
     const TZ = 7;
     const nowJkt = new Date(now.getTime() + TZ * 3600 * 1000);
@@ -57,21 +60,35 @@ export function ShiftReportView({
 
     if (preset === "today") {
       const t = toDate(todayJkt);
-      setFrom(t);
-      setTo(t);
-    } else if (preset === "yesterday") {
+      return { from: t, to: t };
+    }
+    if (preset === "yesterday") {
       const y = new Date(todayJkt);
       y.setUTCDate(y.getUTCDate() - 1);
       const t = toDate(y);
-      setFrom(t);
-      setTo(t);
-    } else {
-      const start = new Date(todayJkt);
-      start.setUTCDate(start.getUTCDate() - 6);
-      setFrom(toDate(start));
-      setTo(toDate(todayJkt));
+      return { from: t, to: t };
     }
+    const start = new Date(todayJkt);
+    start.setUTCDate(start.getUTCDate() - 6);
+    return { from: toDate(start), to: toDate(todayJkt) };
+  }, []);
+
+  function setQuickRange(preset: Preset) {
+    const r = presetRange(preset);
+    setFrom(r.from);
+    setTo(r.to);
   }
+
+  /** Preset yang SEDANG cocok dgn rentang terpilih → chip-nya menyala.
+   *  Dihitung dari nilai from/to (bukan disimpan terpisah) supaya tetap benar
+   *  saat user mengubah tanggal manual lewat DatePicker. */
+  const activePreset: Preset | null = React.useMemo(() => {
+    for (const p of ["today", "yesterday", "week"] as const) {
+      const r = presetRange(p);
+      if (r.from === from && r.to === to) return p;
+    }
+    return null;
+  }, [from, to, presetRange]);
 
   return (
     <div className="space-y-4">
@@ -95,28 +112,22 @@ export function ShiftReportView({
             <DatePicker value={to} onChange={setTo} />
           </div>
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            type="button"
+        <div className="flex gap-1.5 flex-wrap items-center">
+          <PresetChip
+            label="Today"
+            active={activePreset === "today"}
             onClick={() => setQuickRange("today")}
-            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
-          >
-            Today
-          </button>
-          <button
-            type="button"
+          />
+          <PresetChip
+            label="Yesterday"
+            active={activePreset === "yesterday"}
             onClick={() => setQuickRange("yesterday")}
-            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
-          >
-            Yesterday
-          </button>
-          <button
-            type="button"
+          />
+          <PresetChip
+            label="Last 7 days"
+            active={activePreset === "week"}
             onClick={() => setQuickRange("week")}
-            className="text-[10px] px-2.5 py-1 rounded-full bg-muted/40 text-muted-foreground hover:bg-muted/60"
-          >
-            Last 7 days
-          </button>
+          />
           <div className="flex-1" />
           <Button size="sm" variant="gold" onClick={applyFilter}>
             Apply
@@ -274,5 +285,32 @@ function SummaryCard({
         {value}
       </div>
     </Card>
+  );
+}
+
+/** Chip preset rentang tanggal — menyala saat rentangnya sedang dipakai. */
+function PresetChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "text-[10px] px-2.5 py-1 rounded-full border transition",
+        active
+          ? "border-primary/50 bg-primary/15 text-primary font-medium"
+          : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/60"
+      )}
+    >
+      {label}
+    </button>
   );
 }
