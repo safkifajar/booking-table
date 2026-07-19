@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireAnyRole } from "@/lib/auth-v2/permissions";
 import { getShiftReport } from "@/lib/cashier-actions";
-import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
+import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText } from "lucide-react";
-import { AdminHeaderProfile } from "@/app/admin/AdminHeaderProfile";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ShiftReportView } from "./ShiftReportView";
 
 interface PageProps {
@@ -18,10 +18,7 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
   );
 
   const { from, to } = await searchParams;
-  const [user, profile] = await Promise.all([
-    getCurrentUser(),
-    getCurrentProfile(),
-  ]);
+  const profile = await getCurrentProfile();
 
   // Default (arahan user): BULAN BERJALAN — tgl 1 s/d hari ini (Jakarta UTC+7).
   const now = new Date();
@@ -57,8 +54,11 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
 
   // Tanggal utk input filter — dihitung di zona Jakarta (bukan slice ISO UTC,
   // yang bisa meleset sehari).
-  const defaultFromDate = from ?? monthStartJkt.toISOString().slice(0, 10);
-  const defaultToDate = to ?? todayJkt.toISOString().slice(0, 10);
+  // resetFrom/resetTo = DEFAULT halaman (bulan berjalan) → dipakai tombol Reset.
+  const resetFromDate = monthStartJkt.toISOString().slice(0, 10);
+  const resetToDate = todayJkt.toISOString().slice(0, 10);
+  const defaultFromDate = from ?? resetFromDate;
+  const defaultToDate = to ?? resetToDate;
 
   return (
     <main className="flex-1 pb-12">
@@ -77,14 +77,7 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
               Transactions
             </h1>
           </div>
-          {profile && (
-            <AdminHeaderProfile
-              displayName={profile.displayName}
-              email={user?.email ?? ""}
-              avatarUrl={profile.avatarUrl}
-              profileHref="/staff/profile"
-            />
-          )}
+          {profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
 
@@ -94,6 +87,8 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
           transactions={transactions}
           defaultFromDate={defaultFromDate}
           defaultToDate={defaultToDate}
+          resetFromDate={resetFromDate}
+          resetToDate={resetToDate}
         />
       </div>
     </main>

@@ -12,6 +12,7 @@ import {
   CreditCard,
   Calendar,
   TrendingUp,
+  RotateCcw,
 } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -22,6 +23,9 @@ interface Props {
   transactions: ShiftTransaction[];
   defaultFromDate: string;
   defaultToDate: string;
+  /** Rentang DEFAULT halaman (bulan berjalan) — target tombol Reset. */
+  resetFromDate: string;
+  resetToDate: string;
 }
 
 export function ShiftReportView({
@@ -29,6 +33,8 @@ export function ShiftReportView({
   transactions,
   defaultFromDate,
   defaultToDate,
+  resetFromDate,
+  resetToDate,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -41,6 +47,16 @@ export function ShiftReportView({
     params.set("to", to);
     router.push(`/staff/cashier/shift?${params.toString()}`);
   }
+
+  /** Kembali ke default halaman (bulan berjalan) — buang query dari URL. */
+  function resetFilter() {
+    setFrom(resetFromDate);
+    setTo(resetToDate);
+    router.push("/staff/cashier/shift");
+  }
+
+  /** Filter sedang menyimpang dari default → tampilkan tombol Reset. */
+  const isDefaultRange = from === resetFromDate && to === resetToDate;
 
   type Preset = "today" | "yesterday" | "week";
 
@@ -128,6 +144,18 @@ export function ShiftReportView({
             active={activePreset === "week"}
             onClick={() => setQuickRange("week")}
           />
+          {/* Reset → kembali ke default (bulan berjalan). Muncul hanya saat
+              rentang menyimpang dari default. */}
+          {!isDefaultRange && (
+            <button
+              type="button"
+              onClick={resetFilter}
+              className="text-[10px] px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition inline-flex items-center gap-1"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset
+            </button>
+          )}
           <div className="flex-1" />
           <Button size="sm" variant="gold" onClick={applyFilter}>
             Apply
