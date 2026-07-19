@@ -23,19 +23,26 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
     getCurrentProfile(),
   ]);
 
-  // Default: hari ini (00:00 → 23:59 Jakarta time = UTC+7)
+  // Default (arahan user): BULAN BERJALAN — tgl 1 s/d hari ini (Jakarta UTC+7).
   const now = new Date();
   const TZ_OFFSET = 7 * 60 * 60 * 1000;
   const nowJkt = new Date(now.getTime() + TZ_OFFSET);
-  const startJkt = new Date(
+  // Awal hari ini (utk batas akhir: hari ini + 1 hari = eksklusif).
+  const todayJkt = new Date(
     Date.UTC(
       nowJkt.getUTCFullYear(),
       nowJkt.getUTCMonth(),
       nowJkt.getUTCDate()
     )
   );
-  const startUtc = new Date(startJkt.getTime() - TZ_OFFSET);
-  const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
+  // Awal bulan berjalan.
+  const monthStartJkt = new Date(
+    Date.UTC(nowJkt.getUTCFullYear(), nowJkt.getUTCMonth(), 1)
+  );
+  const startUtc = new Date(monthStartJkt.getTime() - TZ_OFFSET);
+  const endUtc = new Date(
+    todayJkt.getTime() - TZ_OFFSET + 24 * 60 * 60 * 1000
+  );
 
   const fromIso = from
     ? new Date(`${from}T00:00:00+07:00`).toISOString()
@@ -48,8 +55,10 @@ export default async function CashierShiftPage({ searchParams }: PageProps) {
 
   const { summary, transactions } = await getShiftReport(fromIso, toIso);
 
-  const defaultFromDate = (from ?? fromIso.slice(0, 10));
-  const defaultToDate = (to ?? toIso.slice(0, 10));
+  // Tanggal utk input filter — dihitung di zona Jakarta (bukan slice ISO UTC,
+  // yang bisa meleset sehari).
+  const defaultFromDate = from ?? monthStartJkt.toISOString().slice(0, 10);
+  const defaultToDate = to ?? todayJkt.toISOString().slice(0, 10);
 
   return (
     <main className="flex-1 pb-12">

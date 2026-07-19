@@ -175,20 +175,22 @@ export function ShiftReportView({
             <table className="w-full text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-medium w-24">Action</th>
+                  <th className="px-4 py-3 font-medium w-24">ID</th>
                   <th className="px-4 py-3 font-medium">Time</th>
                   <th className="px-4 py-3 font-medium">Table</th>
                   <th className="px-4 py-3 font-medium">Host</th>
                   <th className="px-4 py-3 font-medium text-right">Subtotal</th>
                   <th className="px-4 py-3 font-medium text-right">Paid</th>
                   <th className="px-4 py-3 font-medium">Method</th>
-                  <th className="px-4 py-3 font-medium text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {transactions.map((t) => {
+                  // Jam 24 (arahan user): hindari AM/PM.
                   const time = new Date(t.closed_at).toLocaleTimeString(
-                    "en-US",
-                    { hour: "2-digit", minute: "2-digit" }
+                    "en-GB",
+                    { hour: "2-digit", minute: "2-digit", hour12: false }
                   );
                   const date = new Date(t.closed_at).toLocaleDateString(
                     "en-US",
@@ -197,7 +199,23 @@ export function ShiftReportView({
                   return (
                     <tr key={t.session_id} className="hover:bg-muted/30 transition">
                       <td className="px-4 py-2.5">
-                        <div className="text-sm font-medium">{time}</div>
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          <Link href={`/staff/cashier/${t.session_id}/receipt`}>
+                            <Receipt className="h-3.5 w-3.5" />
+                            Receipt
+                          </Link>
+                        </Button>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                        #{t.session_id.slice(0, 8).toUpperCase()}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="text-sm font-medium tabular-nums">{time}</div>
                         <div className="text-[10px] text-muted-foreground">
                           {date}
                         </div>
@@ -231,21 +249,6 @@ export function ShiftReportView({
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          asChild
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                        >
-                          <Link
-                            href={`/staff/cashier/${t.session_id}/receipt`}
-                          >
-                            <Receipt className="h-3.5 w-3.5" />
-                            Receipt
-                          </Link>
-                        </Button>
                       </td>
                     </tr>
                   );
