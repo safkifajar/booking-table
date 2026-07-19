@@ -278,6 +278,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
 
   const [title, setTitle] = React.useState(banner?.title ?? "");
   const [subtitle, setSubtitle] = React.useState(banner?.subtitle ?? "");
+  const [content, setContent] = React.useState(banner?.content ?? "");
   const [sortOrder, setSortOrder] = React.useState(banner?.sortOrder ?? 0);
   const [isActive, setIsActive] = React.useState(banner?.isActive ?? true);
   const [startsAt, setStartsAt] = React.useState(
@@ -344,6 +345,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           id: banner.id,
           title,
           subtitle,
+          content,
           sortOrder,
           isActive,
           startsAt,
@@ -362,6 +364,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           ...banner,
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
+          content: content.trim() || null,
           sortOrder,
           isActive,
           startsAt: startsAt ? new Date(startsAt) : null,
@@ -378,6 +381,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         fd.append("file", file);
         if (title.trim()) fd.append("title", title.trim());
         if (subtitle.trim()) fd.append("subtitle", subtitle.trim());
+        if (content.trim()) fd.append("content", content.trim());
         fd.append("sortOrder", String(sortOrder));
         fd.append("isActive", String(isActive));
         if (startsAt) fd.append("startsAt", startsAt);
@@ -391,6 +395,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
           imageUrl: previewUrl ?? "",
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
+          content: content.trim() || null,
           sortOrder,
           isActive,
           startsAt: startsAt ? new Date(startsAt) : null,
@@ -501,6 +506,26 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
               placeholder="e.g. Buy 1 get 1 free mocktail, 5-7pm"
               className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition resize-none text-sm"
             />
+          </div>
+
+          {/* Detail content — tampil di halaman detail promo (customer) */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Detail content (optional, max 5000)
+            </label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value.slice(0, 5000))}
+              maxLength={5000}
+              rows={6}
+              placeholder={
+                "Full promo details shown when a customer taps this banner.\n\nExample:\nEnjoy 50% off all cocktails every Friday, 17:00–19:00.\n\nTerms:\n- Dine-in only\n- Cannot be combined with other promos"
+              }
+              className="w-full px-3 py-2 rounded-md bg-input border border-border focus:outline-none focus:border-primary/60 transition text-sm"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {content.trim().length} / 5000 · Line breaks are preserved.
+            </p>
           </div>
 
           {/* Sort + active */}

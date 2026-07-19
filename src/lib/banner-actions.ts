@@ -25,7 +25,40 @@ export interface PublicBanner {
   imageUrl: string;
   title: string | null;
   subtitle: string | null;
+  content: string | null;
   sortOrder: number;
+}
+
+/**
+ * Satu banner utk halaman detail promo (/promo/[id]).
+ * Hanya mengembalikan banner yang SEDANG tayang (aktif + dalam jadwal) —
+ * promo yang sudah lewat/nonaktif tak bisa diakses lewat URL langsung.
+ * NULL = tak ada / tak tayang → caller notFound().
+ */
+export async function getPublicBannerById(
+  id: string
+): Promise<PublicBanner | null> {
+  const now = new Date();
+  const [row] = await db
+    .select({
+      id: barBanners.id,
+      imageUrl: barBanners.imageUrl,
+      title: barBanners.title,
+      subtitle: barBanners.subtitle,
+      content: barBanners.content,
+      sortOrder: barBanners.sortOrder,
+    })
+    .from(barBanners)
+    .where(
+      and(
+        eq(barBanners.id, id),
+        eq(barBanners.isActive, true),
+        or(isNull(barBanners.startsAt), lte(barBanners.startsAt, now)),
+        or(isNull(barBanners.endsAt), gte(barBanners.endsAt, now))
+      )
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
@@ -36,6 +69,7 @@ export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
       imageUrl: barBanners.imageUrl,
       title: barBanners.title,
       subtitle: barBanners.subtitle,
+      content: barBanners.content,
       sortOrder: barBanners.sortOrder,
     })
     .from(barBanners)
@@ -85,6 +119,7 @@ export interface AdminBanner {
   imageUrl: string;
   title: string | null;
   subtitle: string | null;
+  content: string | null;
   sortOrder: number;
   isActive: boolean;
   startsAt: Date | null;
@@ -103,6 +138,7 @@ export async function getAllBannersForAdmin(
       imageUrl: barBanners.imageUrl,
       title: barBanners.title,
       subtitle: barBanners.subtitle,
+      content: barBanners.content,
       sortOrder: barBanners.sortOrder,
       isActive: barBanners.isActive,
       startsAt: barBanners.startsAt,
@@ -138,6 +174,7 @@ const bannerMetaSchema = z.object({
   barId: z.string().uuid(),
   title: z.string().max(80).optional().or(z.literal("")),
   subtitle: z.string().max(200).optional().or(z.literal("")),
+  content: z.string().max(5000).optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).max(999).default(0),
   isActive: z.boolean().default(true),
   startsAt: z
@@ -162,6 +199,7 @@ export async function createBanner(
     barId: formData.get("barId"),
     title: formData.get("title") || undefined,
     subtitle: formData.get("subtitle") || undefined,
+    content: formData.get("content") || undefined,
     sortOrder: Number(formData.get("sortOrder") ?? 0),
     isActive: formData.get("isActive") === "true",
     startsAt: formData.get("startsAt") || undefined,
@@ -215,6 +253,7 @@ export async function createBanner(
       imageUrl: "PENDING",
       title: meta.title?.trim() || null,
       subtitle: meta.subtitle?.trim() || null,
+      content: meta.content?.trim() || null,
       sortOrder: meta.sortOrder,
       isActive: meta.isActive,
       startsAt: meta.startsAt ? new Date(meta.startsAt) : null,
@@ -247,6 +286,7 @@ const updateMetaSchema = z.object({
   id: z.string().uuid(),
   title: z.string().max(80).optional().or(z.literal("")),
   subtitle: z.string().max(200).optional().or(z.literal("")),
+  content: z.string().max(5000).optional().or(z.literal("")),
   sortOrder: z.number().int().min(0).max(999),
   isActive: z.boolean(),
   startsAt: z
@@ -278,6 +318,7 @@ export async function updateBanner(input: z.infer<typeof updateMetaSchema>) {
     .set({
       title: data.title?.trim() || null,
       subtitle: data.subtitle?.trim() || null,
+      content: data.content?.trim() || null,
       sortOrder: data.sortOrder,
       isActive: data.isActive,
       startsAt: data.startsAt ? new Date(data.startsAt) : null,
