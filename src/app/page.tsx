@@ -17,6 +17,7 @@ import {
   getUnpaidSessionsForProfile,
   expireFinishedSessions,
   promoteDueReservations,
+  getJoinedSessionIds,
 } from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
@@ -75,6 +76,14 @@ export default async function HomePage() {
   const activeSessions = allSessions.filter(
     (s) => s.status === "open" || s.status === "locked"
   );
+
+  // Meja mana yang DIIKUTI user ini → dipakai badge "You're in" di kartu.
+  const joinedIds = profile
+    ? await getJoinedSessionIds(
+        profile.id,
+        activeSessions.map((s) => s.id)
+      )
+    : new Set<string>();
 
   const isAnon = !profile;
   // Sapaan (Server Component — aman akses Date di server). WIB.
@@ -187,6 +196,7 @@ export default async function HomePage() {
           <LiveTablesFeed
             sessions={activeSessions.slice(0, 5)}
             isAnon={isAnon}
+            joinedIds={Array.from(joinedIds)}
           />
 
           {/* Lihat semua kalau ada lebih dari 5 meja live */}
