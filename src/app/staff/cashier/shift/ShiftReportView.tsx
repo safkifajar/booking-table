@@ -13,6 +13,7 @@ import {
   Calendar,
   TrendingUp,
   RotateCcw,
+  Search,
 } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -57,6 +58,30 @@ export function ShiftReportView({
 
   /** Filter sedang menyimpang dari default → tampilkan tombol Reset. */
   const isDefaultRange = from === resetFromDate && to === resetToDate;
+
+  /** URL list ini BESERTA filter aktif — dipakai tombol kembali di halaman
+   *  struk supaya user balik ke rentang & hasil yang sama. */
+  const backToListHref = React.useMemo(() => {
+    const qs = searchParams.toString();
+    return qs ? `/staff/cashier/shift?${qs}` : "/staff/cashier/shift";
+  }, [searchParams]);
+
+  /** Pencarian cepat di sisi klien (ID transaksi, meja, area, host, metode). */
+  const [search, setSearch] = React.useState("");
+  const q = search.trim().toLowerCase();
+  const visibleTransactions = React.useMemo(() => {
+    if (!q) return transactions;
+    return transactions.filter((t) => {
+      const id = t.session_id.slice(0, 8).toLowerCase();
+      return (
+        id.includes(q) ||
+        t.table_label.toLowerCase().includes(q) ||
+        t.area_name.toLowerCase().includes(q) ||
+        t.host_name.toLowerCase().includes(q) ||
+        t.payment_methods.some((m) => m.toLowerCase().includes(q))
+      );
+    });
+  }, [transactions, q]);
 
   type Preset = "today" | "yesterday" | "week";
 
@@ -163,8 +188,9 @@ export function ShiftReportView({
         </div>
       </Card>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {/* Summary — STICKY saat scroll (arahan user): statistik tetap terlihat.
+          top-[57px] = tinggi header sticky halaman. */}
+      <div className="sticky top-[57px] z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2 bg-background/95 backdrop-blur-md border-b border-border grid grid-cols-2 sm:grid-cols-4 gap-2">
         <SummaryCard
           icon={<Receipt className="h-3.5 w-3.5" />}
           label="Transactions"
@@ -188,6 +214,20 @@ export function ShiftReportView({
         />
       </div>
 
+      {/* Search — cari cepat di hasil periode ini */}
+      {transactions.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search transaction ID, table, host, or method…"
+            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+          />
+        </div>
+      )}
+
       {/* Transactions table */}
       {transactions.length === 0 ? (
         <Card className="p-12 text-center border-dashed">
@@ -195,6 +235,13 @@ export function ShiftReportView({
           <p className="text-sm font-medium mb-1">No transactions</p>
           <p className="text-xs text-muted-foreground">
             No tables were closed in this period.
+          </p>
+        </Card>
+      ) : visibleTransactions.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <p className="text-sm font-medium mb-1">No matching transactions</p>
+          <p className="text-xs text-muted-foreground">
+            Try a different keyword (ID, table, host, or method).
           </p>
         </Card>
       ) : (
@@ -214,7 +261,7 @@ export function ShiftReportView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {transactions.map((t) => {
+                {visibleTransactions.map((t) => {
                   // Jam 24 (arahan user): hindari AM/PM.
                   const time = new Date(t.closed_at).toLocaleTimeString(
                     "en-GB",
@@ -227,13 +274,18 @@ export function ShiftReportView({
                   return (
                     <tr key={t.session_id} className="hover:bg-muted/30 transition">
                       <td className="px-4 py-2.5">
+                        {/* Tombol nyata (outline) — bukan teks polos — supaya
+                            jelas bisa diklik. Bawa ?from= agar tombol kembali
+                            di halaman struk balik ke list ini. */}
                         <Button
                           asChild
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-xs"
+                          className="text-xs whitespace-nowrap"
                         >
-                          <Link href={`/staff/cashier/${t.session_id}/receipt`}>
+                          <Link
+                            href={`/staff/cashier/${t.session_id}/receipt?from=${encodeURIComponent(backToListHref)}`}
+                          >
                             <Receipt className="h-3.5 w-3.5" />
                             Receipt
                           </Link>

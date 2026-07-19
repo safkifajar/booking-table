@@ -32,20 +32,6 @@ export function ReceiptView({ detail }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Action buttons - hidden saat print */}
-      <div className="flex gap-2 print:hidden">
-        <Button onClick={handlePrint} variant="gold" size="lg" className="flex-1">
-          <Printer className="h-4 w-4" />
-          Print Receipt
-        </Button>
-        <Button asChild variant="outline" size="lg" className="flex-1">
-          <Link href="/staff/cashier">
-            <ArrowLeft className="h-4 w-4" />
-            Done
-          </Link>
-        </Button>
-      </div>
-
       {/* Receipt container — visually printable */}
       <Card
         className="mx-auto bg-white text-zinc-900 p-5 print:border-none print:shadow-none print:p-3"
@@ -188,6 +174,19 @@ export function ReceiptView({ detail }: Props) {
           <div>~ SOHO Social House ~</div>
         </div>
       </Card>
+
+      {/* Aksi di BAWAH struk (arahan user) — sembunyi saat print. */}
+      <div className="print:hidden mx-auto" style={{ maxWidth: "320px" }}>
+        <Button
+          onClick={handlePrint}
+          variant="gold"
+          size="lg"
+          className="w-full"
+        >
+          <Printer className="h-4 w-4" />
+          Print Receipt
+        </Button>
+      </div>
 
       {/* Hide everything except receipt for print */}
       <style jsx global>{`
