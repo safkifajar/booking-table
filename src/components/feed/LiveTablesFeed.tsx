@@ -12,6 +12,8 @@ interface Props {
   isAnon?: boolean;
   /** Session yang DIIKUTI user ini → kartu ditandai "You're in". */
   joinedIds?: string[];
+  /** Profile id penonton — badge "You're in" tak tampil di meja miliknya. */
+  viewerId?: string | null;
 }
 
 /** Label visibility — samakan dgn Booking Schedule di halaman denah. */
@@ -27,7 +29,12 @@ function visibilityLabel(v: ActiveSessionView["visibility"]): string {
  * Card lengkap clickable → /session/[id]/preview (atau /auth kalau anon).
  * Empty state: "Belum ada meja aktif" + CTA buka meja sendiri.
  */
-export function LiveTablesFeed({ sessions, isAnon, joinedIds }: Props) {
+export function LiveTablesFeed({
+  sessions,
+  isAnon,
+  joinedIds,
+  viewerId,
+}: Props) {
   const joined = new Set(joinedIds ?? []);
   if (sessions.length === 0) {
     return (
@@ -48,7 +55,8 @@ export function LiveTablesFeed({ sessions, isAnon, joinedIds }: Props) {
           key={s.id}
           session={s}
           isAnon={isAnon}
-          isJoined={joined.has(s.id)}
+          // Host tak perlu ditandai — dia jelas tahu itu mejanya sendiri.
+          isJoined={joined.has(s.id) && s.host_id !== viewerId}
         />
       ))}
     </div>
@@ -79,14 +87,9 @@ function TableCard({
   return (
     <Link
       href={href}
-      className={cn(
-        "block group rounded-xl border bg-card transition overflow-hidden",
-        // Meja yang DIIKUTI user ditonjolkan (border + tint) supaya langsung
-        // kebedain dari meja orang lain.
-        isJoined
-          ? "border-primary/50 bg-primary/[0.06] hover:border-primary/70"
-          : "border-border hover:border-primary/40 hover:bg-primary/[0.03]"
-      )}
+      // Background disamakan dgn kartu Booking Schedule (Card polos, tanpa
+      // tint) — penanda keikutsertaan cukup lewat badge "You're in".
+      className="block group rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/40 transition overflow-hidden"
     >
       <div className="p-4 flex items-start gap-3">
         {/* Avatar host — pola sama dgn kartu Booking Schedule */}
