@@ -38,6 +38,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { type InviteCandidate } from "@/lib/customer-actions";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
 import { previewMyVoucher } from "@/lib/membership-actions";
+import { VoucherPicker } from "@/components/session/VoucherPicker";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { AvatarViewer } from "@/components/network/AvatarViewer";
 import { formatIDR, getActionErrorMessage, cn } from "@/lib/utils";
@@ -160,7 +161,6 @@ export function OpenTableForm({
   // diundang — tak ada auto-join.
   const [invited, setInvited] = React.useState<InviteCandidate[]>([]);
   // Voucher benefit membership utk potongan DP (PRD Membership rev-3).
-  const [voucherInput, setVoucherInput] = React.useState("");
   const [voucherChecking, setVoucherChecking] = React.useState(false);
   const [voucher, setVoucher] = React.useState<{
     code: string;
@@ -272,8 +272,8 @@ export function OpenTableForm({
     (waktuMode === "reservation" &&
       reservationConfig.minDownPaymentPercent > 0);
 
-  async function applyVoucher() {
-    const code = voucherInput.trim().toUpperCase();
+  async function applyVoucher(codeRaw: string) {
+    const code = codeRaw.trim().toUpperCase();
     if (!code || dpAmount <= 0) return;
     setVoucherChecking(true);
     try {
@@ -685,49 +685,21 @@ export function OpenTableForm({
                   (optional — discount on your deposit)
                 </span>
               </label>
-              {voucher ? (
-                <div className="flex items-center justify-between rounded-md border border-primary/40 bg-primary/5 px-3 h-11 text-sm">
-                  <span className="font-mono text-primary truncate">
-                    {voucher.code}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVoucher(null);
-                      setVoucherInput("");
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground shrink-0"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={voucherInput}
-                    onChange={(e) =>
-                      setVoucherInput(
-                        e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")
-                      )
-                    }
-                    placeholder="e.g. SOHO-AB12-CD34"
-                    className="flex-1 h-11 px-3 rounded-md bg-input border border-border text-sm font-mono focus:outline-none focus:border-primary/60"
-                  />
-                  <button
-                    type="button"
-                    onClick={applyVoucher}
-                    disabled={voucherChecking || !voucherInput.trim()}
-                    className="h-11 px-4 rounded-md border border-border text-sm hover:border-primary/40 transition disabled:opacity-50"
-                  >
-                    {voucherChecking ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Apply"
-                    )}
-                  </button>
-                </div>
-              )}
+              <VoucherPicker
+                amount={dpAmount}
+                applied={
+                  voucher
+                    ? {
+                        code: voucher.code,
+                        name: voucher.name,
+                        discount: voucher.discount,
+                      }
+                    : null
+                }
+                checking={voucherChecking}
+                onPick={applyVoucher}
+                onClear={() => setVoucher(null)}
+              />
             </div>
           )}
 
