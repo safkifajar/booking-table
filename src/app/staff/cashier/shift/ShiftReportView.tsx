@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { formatIDR, cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select } from "@/components/ui/select";
 import type { ShiftSummary, ShiftTransaction } from "@/lib/cashier-actions";
+
+/** Filter metode pembayaran di list transaksi. */
+type MethodFilter = "all" | "cash" | "qris";
 
 interface Props {
   summary: ShiftSummary;
@@ -66,12 +70,18 @@ export function ShiftReportView({
     return qs ? `/staff/cashier/shift?${qs}` : "/staff/cashier/shift";
   }, [searchParams]);
 
-  /** Pencarian cepat di sisi klien (ID transaksi, meja, area, host, metode). */
+  /** Pencarian cepat + filter metode pembayaran (sisi klien). */
   const [search, setSearch] = React.useState("");
+  const [methodFilter, setMethodFilter] = React.useState<MethodFilter>("all");
   const q = search.trim().toLowerCase();
   const visibleTransactions = React.useMemo(() => {
-    if (!q) return transactions;
     return transactions.filter((t) => {
+      // Filter metode: transaksi cocok kalau SALAH SATU pembayarannya
+      // memakai metode itu (satu transaksi bisa campur cash + QRIS).
+      if (methodFilter !== "all" && !t.payment_methods.includes(methodFilter)) {
+        return false;
+      }
+      if (!q) return true;
       const id = t.session_id.slice(0, 8).toLowerCase();
       return (
         id.includes(q) ||
@@ -81,7 +91,7 @@ export function ShiftReportView({
         t.payment_methods.some((m) => m.toLowerCase().includes(q))
       );
     });
-  }, [transactions, q]);
+  }, [transactions, q, methodFilter]);
 
   type Preset = "today" | "yesterday" | "week";
 
@@ -212,21 +222,34 @@ export function ShiftReportView({
           label="Non-Cash"
           value={formatIDR(summary.noncash_revenue)}
         />
-      </div>
 
-      {/* Search — cari cepat di hasil periode ini */}
-      {transactions.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search transaction ID, table, host, or method…"
-            className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
-          />
-        </div>
-      )}
+        {/* Search + filter metode — IKUT STICKY bersama statistik. */}
+        {transactions.length > 0 && (
+          <div className="col-span-2 sm:col-span-4 flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search transaction ID, table, or host…"
+                className="w-full rounded-lg border border-border bg-muted/30 pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+            <Select
+              value={methodFilter}
+              onChange={(v) => setMethodFilter(v as MethodFilter)}
+              ariaLabel="Filter payment method"
+              className="shrink-0 w-32"
+              options={[
+                { value: "all", label: "All methods" },
+                { value: "cash", label: "Cash" },
+                { value: "qris", label: "QRIS" },
+              ]}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Transactions table */}
       {transactions.length === 0 ? (
