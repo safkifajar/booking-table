@@ -177,8 +177,7 @@ Production: simpan uploads di **luar project folder** supaya tidak ke-bundle
 saat `next build` dan persistent saat update deployment.
 
 ```bash
-sudo mkdir -p /var/lib/booking-table/uploads/avatars
-sudo mkdir -p /var/lib/booking-table/uploads/stories
+sudo mkdir -p /var/lib/booking-table/uploads/{avatars,stories,photos,banners,menu}
 sudo chown -R booking:booking /var/lib/booking-table
 ```
 
@@ -546,8 +545,8 @@ VAPID_SUBJECT=mailto:you@bookingsoho.com
 ### 11.4 Folder uploads persistent per-env
 
 ```bash
-sudo mkdir -p /var/lib/soho-prod/uploads/{avatars,stories,photos}
-sudo mkdir -p /var/lib/soho-staging/uploads/{avatars,stories,photos}
+sudo mkdir -p /var/lib/soho-prod/uploads/{avatars,stories,photos,banners,menu}
+sudo mkdir -p /var/lib/soho-staging/uploads/{avatars,stories,photos,banners,menu}
 sudo chown -R booking:booking /var/lib/soho-prod /var/lib/soho-staging
 ```
 
