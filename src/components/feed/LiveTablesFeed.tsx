@@ -2,15 +2,7 @@ import Link from "next/link";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { RelativeTime } from "@/components/ui/relative-time";
-import {
-  Users,
-  Crown,
-  Lock,
-  Sparkles,
-  ChevronRight,
-  MapPin,
-  Check,
-} from "lucide-react";
+import { Lock, Sparkles, ChevronRight, MapPin, Check } from "lucide-react";
 import { initials, cn } from "@/lib/utils";
 import type { ActiveSessionView } from "@/types/db";
 
@@ -97,24 +89,41 @@ function TableCard({
       )}
     >
       <div className="p-4 flex items-start gap-3">
-        <Avatar className="h-12 w-12 ring-2 ring-primary/20">
+        {/* Avatar host — pola sama dgn kartu Booking Schedule */}
+        <Avatar className="h-9 w-9 shrink-0">
           {session.host_avatar && (
             <AvatarImage src={session.host_avatar} alt={session.host_name} />
           )}
-          <AvatarFallback>{initials(session.host_name)}</AvatarFallback>
+          <AvatarFallback className="text-[10px]">
+            {initials(session.host_name)}
+          </AvatarFallback>
         </Avatar>
 
+        {/* Kiri: host → judul → badges → vibe (SUSUNAN SAMA dgn Booking
+            Schedule, supaya dua halaman konsisten). */}
         <div className="flex-1 min-w-0">
-          {/* Meta row */}
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <Badge variant="default" className="text-[10px] px-1.5">
-              {session.table_label}
-            </Badge>
-            {/* Visibility — samakan dgn kartu Booking Schedule. */}
+          <p className="text-sm truncate group-hover:text-primary transition">
+            {session.host_name}
+          </p>
+
+          {/* Judul meja (deskripsi) — italic seperti Booking Schedule. */}
+          {session.title && (
+            <p className="text-xs italic text-muted-foreground/90 truncate">
+              {session.title}
+            </p>
+          )}
+
+          {/* Sejak kapan meja berjalan (padanan jam booking). */}
+          <RelativeTime
+            date={session.started_at}
+            className="text-xs text-muted-foreground tabular-nums"
+          />
+
+          {/* Visibility + area + status khusus */}
+          <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               {visibilityLabel(session.visibility)}
             </Badge>
-            {/* Area + ikon lokasi — pola sama dgn Booking Schedule. */}
             <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/80">
               <MapPin className="h-3 w-3" />
               {session.area_name}
@@ -131,43 +140,9 @@ function TableCard({
             )}
           </div>
 
-          {/* Title */}
-          <h3 className="text-base font-semibold truncate group-hover:text-primary transition">
-            {session.title ?? "Open Table"}
-          </h3>
-
-          {/* Host + count */}
-          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-            <Crown className="h-3 w-3 text-primary/70" />
-            <span className="truncate">{session.host_name}</span>
-            <span>·</span>
-            <span className="inline-flex items-center gap-1 whitespace-nowrap">
-              <Users className="h-3 w-3" />
-              {session.member_count}/{session.table_capacity}
-            </span>
-            {/* Sisa kursi / Full — samakan dgn kartu Booking Schedule. */}
-            {session.table_capacity > 0 && (
-              <>
-                <span>·</span>
-                {session.table_capacity - session.member_count > 0 ? (
-                  <span className="whitespace-nowrap text-muted-foreground/80">
-                    {session.table_capacity - session.member_count} seats left
-                  </span>
-                ) : (
-                  <span className="whitespace-nowrap text-primary/80">Full</span>
-                )}
-              </>
-            )}
-            <span>·</span>
-            <RelativeTime
-              date={session.started_at}
-              className="text-xs whitespace-nowrap"
-            />
-          </div>
-
           {/* Vibe tags */}
           {session.vibe_tags && session.vibe_tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="mt-1 flex flex-wrap gap-1">
               {session.vibe_tags.slice(0, 4).map((v) => (
                 <span
                   key={v}
@@ -176,8 +151,29 @@ function TableCard({
                   {v}
                 </span>
               ))}
+              {session.vibe_tags.length > 4 && (
+                <span className="text-[10px] text-muted-foreground/60">
+                  +{session.vibe_tags.length - 4}
+                </span>
+              )}
             </div>
           )}
+        </div>
+
+        {/* Kanan: nomor meja → status → sisa kursi (IDENTIK Booking Schedule) */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <Badge variant="default" className="text-[10px] px-1.5">
+            {session.table_label}
+          </Badge>
+          <span className="text-[11px] text-emerald-400">In use</span>
+          {session.table_capacity > 0 &&
+            (session.table_capacity - session.member_count > 0 ? (
+              <span className="text-[10px] text-muted-foreground/80">
+                {session.table_capacity - session.member_count} seats left
+              </span>
+            ) : (
+              <span className="text-[10px] text-primary/80">Full</span>
+            ))}
         </div>
 
         <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0 mt-2" />

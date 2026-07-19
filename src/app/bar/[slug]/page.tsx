@@ -14,6 +14,7 @@ import {
 import { BarFloorView } from "./BarFloorView";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { getJoinedSessionIds } from "@/lib/queries";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
 import type { ActiveSessionView } from "@/types/db";
 
@@ -185,6 +186,14 @@ export default async function BarPage({ params }: PageProps) {
     redirect(`/onboarding?next=${encodeURIComponent(`/bar/${slug}`)}`);
   }
 
+  // Meja/booking mana yang DIIKUTI user → badge "You're in" di Booking Schedule.
+  const scheduleSessionIds = Object.values(reservationsByTable)
+    .flat()
+    .map((r) => r.id);
+  const joinedIds = profile
+    ? Array.from(await getJoinedSessionIds(profile.id, scheduleSessionIds))
+    : [];
+
   return (
     <>
       <BarFloorView
@@ -195,6 +204,7 @@ export default async function BarPage({ params }: PageProps) {
         slotIntervalMinutes={reservationConfig.slotIntervalMinutes}
         bookingWindowDays={reservationConfig.bookingWindowDays}
         userId={profile?.id ?? null}
+        joinedIds={joinedIds}
         menu={menu}
       />
       <HomeBottomNav
