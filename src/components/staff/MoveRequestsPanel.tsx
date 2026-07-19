@@ -3,7 +3,14 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { ArrowRightLeft, Check, X, Loader2, RotateCcw } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Check,
+  X,
+  Loader2,
+  RotateCcw,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import {
@@ -74,21 +81,23 @@ export function MoveRequestsPanel({
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
 
-  // Filter (pola referensi user): chip BULAN + dropdown TAHUN + status.
+  // Filter (pola referensi user): chip BULAN + TAHUN + status.
   // Patokan tanggal = created_at (kapan request dibuat).
-  const [month, setMonth] = React.useState<number | "all">("all");
-  const [year, setYear] = React.useState<number | "all">("all");
+  // Default: BULAN & TAHUN SEKARANG (arahan user) — bukan "all".
+  const now = React.useMemo(() => new Date(), []);
+  const [month, setMonth] = React.useState<number | "all">(now.getMonth());
+  const [year, setYear] = React.useState<number | "all">(now.getFullYear());
   const [status, setStatus] = React.useState("all");
 
-  /** Tahun yang benar-benar ADA di data (jangan tawarkan tahun kosong). */
+  /** Tahun yg ADA di data + tahun sekarang (supaya default selalu valid). */
   const years = React.useMemo(() => {
-    const set = new Set<number>();
+    const set = new Set<number>([now.getFullYear()]);
     for (const r of requests) {
       const d = new Date(r.created_at);
       if (!Number.isNaN(d.getTime())) set.add(d.getFullYear());
     }
     return Array.from(set).sort((a, b) => b - a);
-  }, [requests]);
+  }, [requests, now]);
 
   const filtered = React.useMemo(() => {
     return requests.filter((r) => {
@@ -102,10 +111,14 @@ export function MoveRequestsPanel({
     });
   }, [requests, status, month, year]);
 
-  const hasFilter = month !== "all" || year !== "all" || status !== "all";
+  // "Menyimpang dari default" = bukan bulan+tahun sekarang, atau status difilter.
+  const hasFilter =
+    month !== now.getMonth() ||
+    year !== now.getFullYear() ||
+    status !== "all";
   function resetFilter() {
-    setMonth("all");
-    setYear("all");
+    setMonth(now.getMonth());
+    setYear(now.getFullYear());
     setStatus("all");
   }
 
@@ -132,48 +145,48 @@ export function MoveRequestsPanel({
 
   return (
     <div className="space-y-3">
-      {/* Filter: chip bulan (scroll horizontal) + tahun + status */}
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-        <FilterChip
-          label="All"
-          active={month === "all"}
-          onClick={() => setMonth("all")}
-        />
-        {MONTH_LABELS.map((m, i) => (
+      {/* Filter: chip bulan SCROLL (kiri) — status & tahun FIX (kanan). */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           <FilterChip
-            key={m}
-            label={m}
-            active={month === i}
-            onClick={() => setMonth(i)}
+            label="All"
+            active={month === "all"}
+            onClick={() => setMonth("all")}
           />
-        ))}
-        <div className="shrink-0 flex items-center gap-1.5 ml-1">
-          <Select
-            value={String(status)}
-            onChange={setStatus}
-            options={STATUS_OPTIONS}
-            ariaLabel="Filter status"
-            className="w-32"
-          />
+          {MONTH_LABELS.map((m, i) => (
+            <FilterChip
+              key={m}
+              label={m}
+              active={month === i}
+              onClick={() => setMonth(i)}
+            />
+          ))}
+        </div>
+
+        {/* FIX (tak ikut scroll): status pakai IKON saja, tahun angka saja. */}
+        <div className="shrink-0 flex items-center gap-1.5">
+          <StatusFilterButton value={status} onChange={setStatus} />
           <Select
             value={String(year)}
             onChange={(v) => setYear(v === "all" ? "all" : Number(v))}
             options={[
-              { value: "all", label: "All years" },
+              { value: "all", label: "All" },
               ...years.map((y) => ({ value: String(y), label: String(y) })),
             ]}
             ariaLabel="Filter year"
-            className="w-24"
+            className="w-[86px]"
           />
         </div>
       </div>
 
-      {hasFilter && (
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>
-            {filtered.length} of {requests.length} request
-            {requests.length === 1 ? "" : "s"}
-          </span>
+      {/* Ringkasan selalu tampil: default kini SUDAH memfilter (bulan
+          berjalan), jadi user perlu tahu berapa yg tersaring. */}
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {filtered.length} of {requests.length} request
+          {requests.length === 1 ? "" : "s"}
+        </span>
+        {hasFilter && (
           <button
             type="button"
             onClick={resetFilter}
@@ -182,8 +195,8 @@ export function MoveRequestsPanel({
             <RotateCcw className="h-3 w-3" />
             Reset
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -235,6 +248,81 @@ export function MoveRequestsPanel({
           )}
         </div>
         ))
+      )}
+    </div>
+  );
+}
+
+/**
+ * Filter status berbentuk IKON saja (arahan user) — hemat ruang supaya
+ * kontrol tetap muat tanpa scroll. Klik → menu pilihan status; ikon menyala
+ * saat status difilter (bukan "all").
+ */
+function StatusFilterButton({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const active = value !== "all";
+
+  // Klik di luar → tutup.
+  React.useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const current =
+    STATUS_OPTIONS.find((o) => o.value === value)?.label ?? "All statuses";
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Filter status: ${current}`}
+        title={current}
+        aria-pressed={active}
+        className={cn(
+          "h-9 w-9 inline-flex items-center justify-center rounded-md border transition",
+          active
+            ? "border-primary/50 bg-primary/15 text-primary"
+            : "border-border bg-input text-muted-foreground hover:text-foreground"
+        )}
+      >
+        <SlidersHorizontal className="h-4 w-4" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-1 w-40 rounded-lg border border-border bg-card p-1 shadow-2xl">
+          {STATUS_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+              className={cn(
+                "w-full text-left rounded-md px-2.5 py-2 text-sm transition",
+                o.value === value
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "hover:bg-muted/60"
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
