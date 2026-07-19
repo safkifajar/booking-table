@@ -169,7 +169,7 @@ export function MoveRequestsPanel({
         <div className="flex items-center gap-2">
           <div
             ref={monthStripRef}
-            className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5"
+            className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar"
           >
             {MONTH_LABELS.map((m, i) => (
               <FilterChip
@@ -364,10 +364,12 @@ const FilterChip = React.forwardRef<
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "shrink-0 text-xs px-3 py-1.5 rounded-full border transition",
+        // Bentuk & tinggi DISAMAKAN dgn tombol status + Select tahun
+        // (rounded-md, h-11) supaya satu baris terlihat seragam.
+        "shrink-0 h-11 px-3.5 inline-flex items-center justify-center rounded-md border text-sm transition",
         active
           ? "border-primary/50 bg-primary/15 text-primary font-medium"
-          : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/60"
+          : "border-border bg-input text-muted-foreground hover:text-foreground"
       )}
     >
       {label}
