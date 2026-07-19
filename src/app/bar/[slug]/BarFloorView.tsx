@@ -12,6 +12,7 @@ import { SohoGlow } from "@/components/ui/soho-glow";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Check,
   Clock,
   Loader2,
   Map as MapIcon,
@@ -263,6 +264,8 @@ interface Props {
   userId?: string | null;
   /** Menu bar (per kategori + items) untuk tab Menu. */
   menu?: MenuCategoryTree[];
+  /** Session yang DIIKUTI user ini → ditandai "You're in" di jadwal. */
+  joinedIds?: string[];
 }
 
 export function BarFloorView({
@@ -272,6 +275,7 @@ export function BarFloorView({
   operatingHours,
   slotIntervalMinutes = 60,
   bookingWindowDays = 7,
+  joinedIds,
   userId = null,
   menu = [],
 }: Props) {
@@ -554,14 +558,18 @@ function BookingSchedule({
   bookingWindowDays = 7,
   activeDate,
   onDateChange,
+  joinedIds,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
   bookingWindowDays?: number;
   /** Tanggal terpilih (dikontrol parent supaya denah ikut). */
   activeDate: string;
   onDateChange: (gk: string) => void;
+  /** Session yang DIIKUTI user → badge "You're in". */
+  joinedIds?: string[];
 }) {
   const [nowMs] = React.useState(() => Date.now());
+  const joined = React.useMemo(() => new Set(joinedIds ?? []), [joinedIds]);
 
   // Kumpulkan semua booking lintas meja, kelompokkan per tanggal (groupKey).
   const byDate = React.useMemo(() => {
@@ -691,6 +699,12 @@ function BookingSchedule({
                         {r.area_name}
                       </span>
                     )}
+                    {/* Penanda user ikut di meja/booking ini. */}
+                    {joined.has(r.id) && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 border border-primary/40 px-1.5 py-0 text-[10px] font-medium text-primary">
+                        <Check className="h-3 w-3" /> You&apos;re in
+                      </span>
+                    )}
                   </div>
                   {/* Vibe meja — di bawah baris public/room. */}
                   {r.vibe_tags.length > 0 && (
@@ -741,7 +755,12 @@ function BookingSchedule({
               <Link
                 key={r.id}
                 href={`/session/${r.id}`}
-                className={cn(rowCls, "transition hover:bg-muted/40")}
+                className={cn(
+                  rowCls,
+                  "transition hover:bg-muted/40",
+                  // Booking yg DIIKUTI user ditonjolkan (selaras kartu Live now).
+                  joined.has(r.id) && "bg-primary/[0.06] hover:bg-primary/[0.1]"
+                )}
               >
                 {inner}
               </Link>
