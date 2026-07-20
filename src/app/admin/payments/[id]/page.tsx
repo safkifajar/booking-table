@@ -66,15 +66,15 @@ export default async function PaymentDetailPage({ params }: PageProps) {
 
         {/* Info pembayaran */}
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <Field label="Metode" value={p.method.toUpperCase()} />
+          <Field label="Method" value={p.method.toUpperCase()} />
           <Field label="Split" value={p.split_mode} />
-          <Field label="Pembayar" value={p.paid_by_name} />
+          <Field label="Payer" value={p.paid_by_name} />
           <Field
-            label="Ref eksternal"
+            label="External ref"
             value={p.external_ref ?? "—"}
             mono={!!p.external_ref}
           />
-          <Field label="Dibuat" value={fmtDateTime(p.created_at)} />
+          <Field label="Created" value={fmtDateTime(p.created_at)} />
           <Field
             label="Paid at"
             value={p.paid_at ? fmtDateTime(p.paid_at) : "Not paid yet"}

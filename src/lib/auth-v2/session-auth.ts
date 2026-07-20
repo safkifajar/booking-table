@@ -96,3 +96,39 @@ export async function assertHostOrActiveStaff(
     hostId: sess.hostId,
   };
 }
+
+/**
+ * Wajib STAFF aktif di bar sesi — host TIDAK cukup.
+ *
+ * Dipakai untuk aksi yang menyentuh milik ANGGOTA (mis. membatalkan order yang
+ * dimiliki anggota): host mengelola tagihan meja, tapi tak boleh membatalkan
+ * pesanan orang lain — apalagi tanpa sengaja lewat tombol "kembali". Staff tetap
+ * boleh karena merekalah yang menangani meja secara fisik.
+ */
+export async function assertActiveStaffOfSession(
+  sessionId: string,
+  profileId: string
+): Promise<{ staffRole: string; barId: string }> {
+  const [sess] = await db
+    .select({ barId: floorAreas.barId })
+    .from(sessions)
+    .innerJoin(tables, eq(tables.id, sessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(sessions.id, sessionId));
+  if (!sess) throw new Error("Session not found");
+
+  const [staff] = await db
+    .select({ role: staffRoles.role })
+    .from(staffRoles)
+    .where(
+      and(
+        eq(staffRoles.profileId, profileId),
+        eq(staffRoles.barId, sess.barId),
+        eq(staffRoles.isActive, true)
+      )
+    );
+  if (!staff) {
+    throw new Error("Only the person who placed this order can cancel it");
+  }
+  return { staffRole: staff.role, barId: sess.barId };
+}

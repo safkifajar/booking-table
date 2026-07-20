@@ -15,7 +15,7 @@ export default async function AdminSettingsPage() {
           </div>
           <h1 className="text-2xl font-semibold">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Atur jam operasional dan konfigurasi reservasi untuk {bar.name}.
+            Set operating hours and reservation config for {bar.name}.
           </p>
         </div>
 

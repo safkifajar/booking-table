@@ -67,7 +67,7 @@ export function TopItemsList({
               <div className="text-right shrink-0">
                 {isUnsold ? (
                   <span className="text-[10px] text-muted-foreground italic">
-                    belum terjual
+                    not sold yet
                   </span>
                 ) : (
                   <>

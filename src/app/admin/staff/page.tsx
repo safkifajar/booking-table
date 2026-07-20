@@ -19,9 +19,9 @@ export default async function AdminStaffPage() {
       <div>
         <h1 className="text-2xl font-bold">Manage Staff</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Assign role staff ke user. User harus sudah daftar dulu di aplikasi
-          (signup pakai email) sebelum bisa di-assign. Role yang tersedia:
-          waiter, cashier, manager, admin.
+          Assign staff roles to users. A user must sign up in the app (via
+          email) before they can be assigned. Available roles: waiter, cashier,
+          manager, admin.
         </p>
       </div>
 

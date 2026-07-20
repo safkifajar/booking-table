@@ -186,10 +186,19 @@ interface SessionViewProps {
   cashierDetail: CashierSessionDetail | null;
   /** Config pajak & service charge bar (untuk hitung total tagihan). */
   chargeConfig: ChargeConfig;
+  /** Tab awal dari ?tab= (mis. kembali dari detail order → "bill"). */
+  initialTab?: string;
 }
 
 export function SessionView(props: SessionViewProps) {
-  const [tab, setTab] = React.useState<Tab>("vibe");
+  // Tab awal bisa ditentukan lewat ?tab= — dipakai saat kembali dari halaman
+  // detail order supaya user mendarat lagi di tab Bill (asalnya dari list order
+  // di sana), bukan terlempar ke Vibe.
+  const [tab, setTab] = React.useState<Tab>(
+    props.initialTab === "bill" || props.initialTab === "menu"
+      ? props.initialTab
+      : "vibe"
+  );
   // Cart menu diangkat ke sini supaya TAK hilang saat pindah tab (MenuTab
   // unmount saat tab lain aktif).
   const [menuCart, setMenuCart] = React.useState<Record<string, number>>({});
@@ -249,13 +258,26 @@ export function SessionView(props: SessionViewProps) {
   // meja (biar tahu meja pesan apa) TANPA nominal & tanpa aksi. Nominal + nama
   // pembayar/pemesan sudah di-redaksi di server (page.tsx) utk peran ini.
   const viewOnly = !canInteract;
-  // Tambah order = HANYA host (atau staff atas nama meja). Anggota non-host tak
-  // bisa memesan — mereka minta host menambahkan. (PRD Order Control FR1/FR3.)
-  const canOrder = props.isHost || isStaff;
-  // Multi-order: ada order BELUM LUNAS (unpaid atau masih ada sisa/DP) → tak
-  // boleh buat order baru. Order 'closed' diabaikan.
+  // Tambah order = host, staff (atas nama meja), ATAU anggota biasa. Anggota
+  // non-host memesan untuk DIRINYA SENDIRI: ordernya terpisah & wajib dia bayar
+  // langsung (tanpa split). Host tetap seperti sebelumnya (order meja + split).
+  const canOrder = canInteract;
+  // Multi-order: ada order BELUM LUNAS milik LINGKUP INI → tak boleh buat order
+  // baru. Lingkupnya harus sama dgn guard server & unique index DB: host/staff
+  // dibatasi order MEJA (owner null), anggota dibatasi ordernya SENDIRI. Tanpa
+  // pemisahan ini, order host memblokir anggota (dan sebaliknya).
+  const myMemberId = props.myMemberId ?? null;
+  const isTableScope = props.isHost || isStaff;
   const hasUnpaidOrder = props.orders.some(
-    (o) => o.status !== "closed" && o.outstanding > 0
+    (o) =>
+      o.status !== "closed" &&
+      // Order batal tak pernah menghalangi pemesanan berikutnya (eksplisit —
+      // outstanding-nya memang 0, tapi jangan bergantung pada itu).
+      o.status !== "cancelled" &&
+      o.outstanding > 0 &&
+      (isTableScope
+        ? o.owner_member_id === null
+        : o.owner_member_id === myMemberId)
   );
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
@@ -290,10 +312,13 @@ export function SessionView(props: SessionViewProps) {
   // single-order lama: page.tsx cuma mengirim item+payment SATU order sesi,
   // jadi footer menampilkan "PAID Rp 0 / Rp 199.000" padahal meja punya
   // beberapa order dgn total & pembayaran lain. props.orders (SessionOrderSummary)
-  // sudah berisi total/outstanding per order (dan mengecualikan order cancelled),
-  // sumber yang sama dgn list order di tab Bill → angkanya konsisten.
-  const billTotal = props.orders.reduce((acc, o) => acc + o.total, 0);
-  const remaining = props.orders.reduce((acc, o) => acc + o.outstanding, 0);
+  // sudah berisi total/outstanding per order, sumber yang sama dgn list order
+  // di tab Bill → angkanya konsisten.
+  // Order 'cancelled' IKUT di props.orders (biar tampil di list sbg riwayat),
+  // tapi WAJIB dikecualikan dari perhitungan tagihan — pesanan batal bukan utang.
+  const billable = props.orders.filter((o) => o.status !== "cancelled");
+  const billTotal = billable.reduce((acc, o) => acc + o.total, 0);
+  const remaining = billable.reduce((acc, o) => acc + o.outstanding, 0);
   const totalPaid = Math.max(0, billTotal - remaining);
   const isLunas = billTotal > 0 && remaining === 0;
 
@@ -1384,6 +1409,13 @@ function OrderList({
                 {o.itemCount} item{o.itemCount > 1 ? "s" : ""} ·{" "}
                 {fmtTxTime(o.paidAt ?? o.createdAt)}
               </div>
+              {/* Siapa yang memesan — view-only tak melihat nama (di-redaksi
+                  server jadi null). */}
+              {o.ordered_by && (
+                <div className="text-[11px] text-muted-foreground/80 truncate">
+                  by {o.ordered_by}
+                </div>
+              )}
             </div>
             {!hideAmount && (
               <div className="text-right shrink-0">
@@ -1411,13 +1443,24 @@ function OrderList({
  * kalau sisa 0. Closed = sesi ditutup.
  */
 function OrderStatusBadge({ status, outstanding }: { status: string; outstanding: number }) {
+  // 'cancelled' HARUS dicek lebih dulu: outstanding-nya 0, jadi tanpa cek ini
+  // order batal salah tampil sebagai "Paid".
+  const isCancelled = status === "cancelled";
   const isClosed = status === "closed";
-  const isPaid = !isClosed && outstanding <= 0;
-  const label = isClosed ? "Closed" : isPaid ? "Paid" : "Unpaid";
+  const isPaid = !isCancelled && !isClosed && outstanding <= 0;
+  const label = isCancelled
+    ? "Cancelled"
+    : isClosed
+      ? "Closed"
+      : isPaid
+        ? "Paid"
+        : "Unpaid";
   return (
     <Badge
-      variant={isPaid ? "success" : isClosed ? "secondary" : "warning"}
-      className="text-[10px]"
+      variant={
+        isCancelled ? "outline" : isPaid ? "success" : isClosed ? "secondary" : "warning"
+      }
+      className={cn("text-[10px]", isCancelled && "text-muted-foreground")}
     >
       {label}
     </Badge>
@@ -1759,7 +1802,17 @@ function SessionFooter({
       await closeSession(sessionId);
       // sukses → redirect (rate/dashboard); biarkan tetap loading.
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed"));
+      // Fallback berguna: di production Next.js menyensor pesan server action
+      // jadi teks generik "An error occurred in the Server Components render…"
+      // yang tak berarti bagi user. Penyebab paling mungkin di sini adalah
+      // tagihan belum lunas (mis. pembayaran masuk tepat bersamaan), jadi
+      // sampaikan itu alih-alih meneruskan teks generiknya.
+      const msg = getActionErrorMessage(err, "Failed");
+      toast.error(
+        msg.includes("Server Components render")
+          ? "Settle all payments before closing the table."
+          : msg
+      );
       setActing(false);
     }
   }
@@ -1808,11 +1861,18 @@ function SessionFooter({
               variant="outline"
               size="sm"
               onClick={handleClose}
-              // Staff: hanya boleh tutup kalau lunas (sama spt guard sebelumnya).
-              disabled={acting || (isStaff && !isLunas)}
+              // Belum lunas → tombol dimatikan, untuk STAFF maupun HOST.
+              // Server memang menolak host menutup meja yg masih punya order
+              // unpaid / sisa tagihan, tapi di production build pesan error
+              // server action DISENSOR Next.js jadi teks generik "An error
+              // occurred in the Server Components render…" — user tak tahu apa
+              // yang salah. Jadi cegah di sini, dgn alasan yang jelas.
+              disabled={acting || !isLunas}
               title={
-                isStaff && !isLunas
-                  ? "Table not fully paid — direct the guest to the cashier"
+                !isLunas
+                  ? isStaff
+                    ? "Table not fully paid — direct the guest to the cashier"
+                    : "Settle all payments before closing the table"
                   : undefined
               }
             >
@@ -1821,7 +1881,7 @@ function SessionFooter({
               ) : (
                 <Lock className="h-4 w-4" />
               )}
-              Close table{isStaff && !isLunas ? " (not paid)" : ""}
+              Close table{!isLunas ? " (not paid)" : ""}
             </Button>
           ) : (
             <Button

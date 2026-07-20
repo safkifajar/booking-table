@@ -22,8 +22,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       <div>
         <h1 className="text-2xl font-bold">Manage Customer</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Data customer yang sudah terdaftar. Bisa tambah, edit, atau hapus
-          akun. Staff dikelola terpisah di Manage Staff.
+          Registered customer accounts. You can add, edit, or delete them.
+          Staff are managed separately in Manage Staff.
         </p>
       </div>
 

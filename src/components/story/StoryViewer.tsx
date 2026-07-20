@@ -364,7 +364,7 @@ export function StoryViewer({
             type="button"
             onClick={() => goToProfile(currentUserId)}
             className="flex items-center gap-2 min-w-0 pointer-events-auto rounded-full pr-2 hover:bg-white/10 transition"
-            aria-label={`Lihat profil ${creator?.displayName ?? "user"}`}
+            aria-label={`View ${creator?.displayName ?? "user"}'s profile`}
           >
             <Avatar className="h-8 w-8 ring-2 ring-white/20 shrink-0">
               {creator?.avatarUrl && (

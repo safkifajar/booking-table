@@ -16,6 +16,7 @@ import {
   getUserRatingsBatch,
   promoteSessionIfDue,
   expireDpIfOverdue,
+  expireUnpaidMemberOrders,
 } from "@/lib/queries";
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
@@ -26,7 +27,7 @@ import { SessionView } from "./SessionView";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; tab?: string }>;
 }
 
 /** Path internal aman utk back (cegah open-redirect): harus "/x", bukan "//x". */
@@ -38,7 +39,7 @@ function safeInternalPath(p: string | undefined): string | null {
 
 export default async function SessionPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, tab } = await searchParams;
   const profile = await getCurrentProfile();
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
@@ -297,6 +298,13 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // Config pajak & service charge bar (untuk hitung total tagihan).
   const chargeConfig = await getChargeConfig(sessionRow.bar_id);
 
+  // Lazy expiry (tanpa cron): order milik anggota yang tak kunjung dibayar
+  // dibatalkan dulu — aturan "wajib langsung bayar". Harus SEBELUM
+  // getSessionOrders supaya statusnya sudah 'cancelled' saat list dirender
+  // (order batal tetap tampil di tab Bill sbg riwayat, tapi tak dihitung
+  // sebagai tagihan).
+  await expireUnpaidMemberOrders(id);
+
   // Multi-order: daftar order utk tab Bill (list order).
   const sessionOrdersRaw = await getSessionOrders(id);
 
@@ -311,11 +319,15 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         subtotal: 0,
         total: 0,
         outstanding: 0,
+        // Nama pemesan ikut di-redaksi — orang luar meja tak boleh tahu siapa
+        // memesan apa (konsisten dgn redaksi added_by di detail order).
+        ordered_by: null,
       }))
     : sessionOrdersRaw;
 
   return (
     <SessionView
+      initialTab={tab}
       orders={sessionOrders}
       session={{
         id: sessionRow.id,

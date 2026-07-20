@@ -15,8 +15,8 @@ export default async function AdminPromptsPage() {
           </div>
           <h1 className="text-2xl font-semibold">Prompts</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Kelola daftar pertanyaan ice-breaker yang bisa dijawab customer di
-            profil &amp; onboarding.
+            Manage the ice-breaker questions customers can answer in their
+            profile &amp; onboarding.
           </p>
         </div>
 

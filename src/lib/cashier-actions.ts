@@ -1232,16 +1232,25 @@ export async function cashierConfirmPendingPayment(input: {
       : 0;
 
   if (data.method === "cash") {
-    // Catat uang diterima + kembalian di splitMeta (utk struk) sebelum settle.
-    if (data.cashReceived != null) {
-      const meta0 = (payment.splitMeta as Record<string, unknown> | null) ?? {};
-      await db
-        .update(payments)
-        .set({
-          splitMeta: { ...meta0, cashReceived: data.cashReceived, change },
-        })
-        .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
-    }
+    // Catat uang diterima + kembalian di splitMeta (utk struk) sebelum settle,
+    // SEKALIGUS lepas flag payAtCashier — pembayarannya sudah dikonfirmasi,
+    // jadi metodenya kini benar-benar 'cash'. Tanpa ini label di detail order
+    // menempel "PAY AT CASHIER" selamanya walau barisnya sudah Paid (cabang
+    // QRIS sudah melepasnya; cabang cash terlewat).
+    // WAJIB tanpa syarat cashReceived — dulu update ini hanya jalan kalau
+    // nominal tunai diisi, sehingga konfirmasi tanpa nominal meninggalkan flag.
+    const meta0 = (payment.splitMeta as Record<string, unknown> | null) ?? {};
+    const { payAtCashier: _dropped, ...restMeta } = meta0;
+    void _dropped;
+    await db
+      .update(payments)
+      .set({
+        splitMeta:
+          data.cashReceived != null
+            ? { ...restMeta, cashReceived: data.cashReceived, change }
+            : restMeta,
+      })
+      .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
     await cashierMarkPaymentPaid(payment.id);
     return {
       status: "paid",
@@ -1589,6 +1598,29 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
   if (!row) throw new Error("Session not found");
   if (row.bar_id !== ctx.barId) throw new Error("Invalid bar access");
   if (row.status === "closed") throw new Error("Table is already closed");
+
+  // Order yang masih 'unpaid' saat meja ditutup (mis. order pribadi anggota yg
+  // tak jadi dibayar): void itemnya & matikan pembayaran pending-nya. Tanpa ini
+  // itemnya tetap terhitung sebagai tagihan hantu, dan QRIS-nya masih hidup di
+  // gateway — kalau anggota terlanjur bayar, uangnya masuk ke order tertutup
+  // tanpa item. (Pola sama dgn closeSession sisi host.)
+  const unpaidOrders = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, sessionId), eq(orders.status, "unpaid")));
+  if (unpaidOrders.length > 0) {
+    const ids = unpaidOrders.map((o) => o.id);
+    await db
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(inArray(orderItems.orderId, ids));
+    await db
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(
+        and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
+      );
+  }
 
   const now = new Date();
   await Promise.all([

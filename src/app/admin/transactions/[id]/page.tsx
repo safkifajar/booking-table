@@ -383,11 +383,25 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                   <div className="text-right shrink-0">
                     <div className="tabular-nums font-semibold">
                       {formatIDR(p.amount)}
-                      {p.status !== "paid" && (
-                        <span className="ml-1 text-[10px] font-normal text-amber-400">
-                          ({paymentDisplayStatus(p.status, p.expires_at)})
-                        </span>
-                      )}
+                      {p.status !== "paid" &&
+                        (() => {
+                          // Amber = butuh perhatian (masih ditunggu). 'cancelled'
+                          // sudah selesai urusannya → netral, jangan disamakan
+                          // dengan pending.
+                          const label = paymentDisplayStatus(p.status, p.expires_at);
+                          const isCancelled = label === "cancelled";
+                          return (
+                            <span
+                              className={
+                                isCancelled
+                                  ? "ml-1 text-[10px] font-normal text-muted-foreground print:text-black/50"
+                                  : "ml-1 text-[10px] font-normal text-amber-400"
+                              }
+                            >
+                              ({label})
+                            </span>
+                          );
+                        })()}
                     </div>
                     {showBreakdown && (
                       <div className="text-[10px] text-muted-foreground print:text-black/50 tabular-nums">

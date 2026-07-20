@@ -10,7 +10,7 @@
  * Phase 5 cleanup nanti baru migrate types ke camelCase kalau diputuskan.
  */
 
-import { eq, and, inArray, asc, sql, lte, gt, ne, or, desc } from "drizzle-orm";
+import { eq, and, inArray, asc, sql, lt, lte, gt, ne, or, desc, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   areFriends,
@@ -294,7 +294,16 @@ export async function getOutstandingMap(
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    // Order 'cancelled' TAK PERNAH jadi tagihan. Pertahanan berlapis: item
+    // order batal semestinya sudah di-void, tapi kalau ada satu jalur yg lupa
+    // (pernah terjadi), tanpa filter ini hasilnya tagihan hantu yg bikin meja
+    // tak bisa ditutup. Agregat staff sudah punya penjagaan serupa.
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        ne(orders.status, "cancelled")
+      )
+    )
     .groupBy(orders.sessionId, floorAreas.barId);
 
   const paidRows = await db
@@ -738,6 +747,90 @@ export async function hasUnpaidDp(sessionId: string): Promise<boolean> {
     )
     .limit(1);
   return !!dp;
+}
+
+/**
+ * Batas hidup order milik ANGGOTA yang belum dibayar. Aturan "wajib langsung
+ * bayar": kalau QRIS-nya kedaluwarsa / ditinggal, ordernya dibatalkan supaya
+ * meja bersih & anggota bisa memesan lagi. Diberi kelonggaran di atas masa
+ * hidup QRIS (5 menit) supaya pembayaran yang lambat ter-settle tak terpotong.
+ */
+const MEMBER_ORDER_GRACE_MINUTES = 15;
+
+/**
+ * Batalkan order milik ANGGOTA yang tak kunjung dibayar (lazy, tanpa cron —
+ * dipanggil saat halaman sesi dibuka).
+ *
+ * TIDAK PERNAH membatalkan:
+ * - order MEJA (owner NULL) — itu tagihan host, ditangani alur overdue biasa;
+ * - order yang SUDAH ada uang masuk (pembayaran lunas apa pun, termasuk
+ *   sebagian) — uang selalu lebih penting; biar kasir yang menyelesaikan;
+ * - order yang masih punya QRIS pending BELUM kedaluwarsa — masih ditunggu.
+ *
+ * Item order masih 'draft' (belum masuk dapur), jadi pembatalan tak
+ * meninggalkan pesanan yang terlanjur dimasak.
+ */
+export async function expireUnpaidMemberOrders(
+  sessionId: string
+): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - MEMBER_ORDER_GRACE_MINUTES * 60 * 1000
+  );
+  const stale = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(orders.status, "unpaid"),
+        isNotNull(orders.ownerMemberId),
+        // Pakai lt() (bukan sql``) supaya Drizzle mengikat Date sesuai tipe
+        // kolom timestamptz. Di sql`` mentah, Date ikut sebagai string JS
+        // ("Mon Jul 20 2026 …") dan Postgres menolaknya.
+        lt(orders.createdAt, cutoff),
+        // Belum ada uang masuk sama sekali.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${payments}
+          WHERE ${payments.orderId} = ${orders.id}
+            AND ${payments.status} = 'paid'
+        )`,
+        // Tak ada QRIS pending yang masih hidup (belum lewat expiresAt).
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${payments}
+          WHERE ${payments.orderId} = ${orders.id}
+            AND ${payments.status} = 'pending'
+            AND COALESCE((${payments.splitMeta} ->> 'expiresAt')::timestamptz, 'infinity') > now()
+        )`
+      )
+    );
+  if (stale.length === 0) return 0;
+
+  const ids = stale.map((o) => o.id);
+  await db.transaction(async (tx) => {
+    // Matikan QRIS pending yg sudah kedaluwarsa (kalau ada) supaya tak ada
+    // baris menggantung di riwayat pembayaran.
+    await tx
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(
+        and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
+      );
+    // Void semua itemnya — WAJIB, sama seperti cancelUnpaidOrder. Tanpa ini
+    // item tetap 'draft' dan getOutstandingMap (yg hanya menyaring item void,
+    // bukan status order) tetap menghitungnya: meja punya TAGIHAN HANTU,
+    // tak bisa ditutup, dan host dianggap berutang atas pesanan yg dibatalkan.
+    await tx
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(inArray(orderItems.orderId, ids));
+    await tx
+      .update(orders)
+      .set({ status: "cancelled", closedAt: new Date() })
+      // Kondisional: jangan batalkan kalau statusnya sudah berubah di sela ini
+      // (mis. pembayaran masuk tepat saat kita jalan).
+      .where(and(inArray(orders.id, ids), eq(orders.status, "unpaid")));
+  });
+  return ids.length;
 }
 
 export async function expireFinishedSessions(barId: string): Promise<number> {
