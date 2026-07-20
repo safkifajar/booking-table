@@ -3628,6 +3628,7 @@ export async function cancelPayment(
       id: payments.id,
       status: payments.status,
       splitMeta: payments.splitMeta,
+      paidByMemberId: payments.paidByMemberId,
       sessionId: orders.sessionId,
       sessionStatus: tableSessions.status,
       dpPaidAt: tableSessions.dpPaidAt,
@@ -3645,7 +3646,12 @@ export async function cancelPayment(
   if (row.status === "paid")
     return { status: "paid", bookingCancelled: false };
 
-  // Otorisasi: member joined sesi ATAU staff aktif di bar.
+  // Otorisasi: PEMILIK pembayaran (paid_by_member_id) ATAU host meja ATAU staff
+  // aktif di bar. Dulu "member joined mana pun" — terlalu longgar: anggota lain
+  // bisa membatalkan QRIS milik orang, dan itu kehilangan data yg tak terbalik.
+  // Host tetap boleh (dia penanggung jawab tagihan meja).
+  // Catatan: checkPaymentStatus SENGAJA tetap longgar (semua anggota boleh cek
+  // status) — hanya AKSI merusak yang diperketat di sini.
   const [asMember] = await db
     .select({ id: sessionMembers.id })
     .from(sessionMembers)
@@ -3656,7 +3662,10 @@ export async function cancelPayment(
         eq(sessionMembers.status, "joined")
       )
     );
-  let allowed = !!asMember;
+  let allowed =
+    !!asMember &&
+    (asMember.id === row.paidByMemberId ||
+      (await isSessionHost(row.sessionId, profile.id)));
   if (!allowed) {
     const [staff] = await db
       .select({ id: staffRoles.id })

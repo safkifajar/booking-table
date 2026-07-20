@@ -36,6 +36,15 @@ export async function POST(req: NextRequest) {
   const resultCode = params.get("resultCode") ?? "";
   const signature = params.get("signature") ?? "";
 
+  // Jejak MASUK — tanpa ini jalur sukses senyap total, sehingga "callback tak
+  // pernah datang" tak bisa dibedakan dari "callback datang & lancar". Itu yg
+  // bikin diagnosa 2026-07-20 berputar lama. Jangan log signature/apiKey.
+  console.log("[duitku/callback] masuk", {
+    merchantOrderId,
+    resultCode,
+    amount,
+  });
+
   // 1. Verifikasi signature — tolak kalau tak valid (cegah spoofing).
   const valid = verifyDuitkuCallback({
     merchantCode,
@@ -44,8 +53,13 @@ export async function POST(req: NextRequest) {
     signature,
   });
   if (!valid) {
+    // Bedakan sebabnya — "apiKey kosong" dan "merchantCode beda" bergejala
+    // sama (callback masuk tapi diabaikan senyap) tapi perbaikannya beda.
     console.error("[duitku/callback] signature tidak valid", {
       merchantOrderId,
+      apiKeyKosong: !process.env.DUITKU_API_KEY,
+      merchantCodeMasuk: merchantCode,
+      merchantCodeEnv: process.env.DUITKU_MERCHANT_CODE ?? "(tak diset)",
     });
     // Balas 200 supaya Duitku berhenti retry (tapi jangan proses).
     return new NextResponse("Invalid signature", { status: 200 });
@@ -63,9 +77,15 @@ export async function POST(req: NextRequest) {
   if (resultCode === "00" && merchantOrderId) {
     try {
       const paid = await markPaymentPaidBySystem(merchantOrderId);
-      if (!paid) {
+      if (paid) {
+        console.log("[duitku/callback] payment lunas", { merchantOrderId });
+      } else {
         const activated = await activateMembershipTx(merchantOrderId);
-        if (!activated) {
+        if (activated) {
+          console.log("[duitku/callback] membership aktif", {
+            merchantOrderId,
+          });
+        } else {
           // Bukan payment, bukan membership pending (atau sudah diproses).
           // Bukan error — jangan minta Duitku retry.
           console.warn("[duitku/callback] tak ada baris pending untuk", {
