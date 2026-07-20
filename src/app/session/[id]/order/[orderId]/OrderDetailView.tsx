@@ -3,11 +3,17 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft, QrCode, RefreshCw, UtensilsCrossed } from "lucide-react";
+import {
+  ArrowLeft,
+  Banknote,
+  QrCode,
+  RefreshCw,
+  UtensilsCrossed,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatIDR, getActionErrorMessage } from "@/lib/utils";
+import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
@@ -813,37 +819,70 @@ function CashierConfirmBox({
   onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
 }) {
   const [method, setMethod] = React.useState<"cash" | "qris">("cash");
-  const [cashReceived, setCashReceived] = React.useState("");
+  // Prefill nominal tagihan — kasus paling sering: tamu membayar uang pas.
+  // Kasir tinggal menekan "Accept cash" tanpa mengetik apa pun.
+  const [cashReceived, setCashReceived] = React.useState(String(amount));
+  // Tagihan bisa berubah setelah komponen ter-mount (mis. pembayaran lain
+  // masuk). useState hanya memakai nilai awal, jadi prefill harus disegarkan —
+  // kalau tidak, kasir melihat nominal basi.
+  React.useEffect(() => {
+    setCashReceived(String(amount));
+  }, [amount]);
   const received = parseInt(cashReceived || "0", 10) || 0;
   const change = method === "cash" ? Math.max(0, received - amount) : 0;
+  const shortfall = method === "cash" ? Math.max(0, amount - received) : 0;
   const cashValid = method !== "cash" || received >= amount;
+  const isExact = received === amount;
+
+  /**
+   * Pecahan cepat: pembulatan ke atas ke kelipatan yang lazim dipakai tamu
+   * (50rb / 100rb). Hanya tampil kalau nilainya di ATAS tagihan — kalau uang
+   * pas sudah kelipatan itu, tombolnya tak berguna.
+   */
+  const quickCash = React.useMemo(() => {
+    const steps = [50_000, 100_000];
+    const out: number[] = [];
+    for (const s of steps) {
+      const v = Math.ceil(amount / s) * s;
+      if (v > amount && !out.includes(v)) out.push(v);
+    }
+    return out.slice(0, 2);
+  }, [amount]);
 
   return (
-    <Card className="p-3 space-y-2.5 border-amber-500/30 bg-amber-500/[0.04]">
-      <div className="text-xs font-semibold text-amber-400">
-        Confirm payment (cashier)
-      </div>
-
-      {/* Pembayar — terkunci ke pemilih pay-at-cashier */}
-      <div className="flex justify-between text-xs">
-        <span className="text-muted-foreground">Payer</span>
-        <span className="font-medium">{payerName}</span>
+    <Card className="p-4 space-y-4 border-amber-500/30 bg-amber-500/[0.04]">
+      {/* Nominal tagihan = fokus utama; itu yg pertama dicari kasir. */}
+      <div className="text-center">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Amount due
+        </p>
+        <p className="text-3xl font-semibold text-primary tabular-nums mt-0.5">
+          {formatIDR(amount)}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          from <span className="text-foreground">{payerName}</span>
+        </p>
       </div>
 
       {/* Metode */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {(["cash", "qris"] as const).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMethod(m)}
-            className={
-              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
-              (method === m
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-lg border h-11 text-sm font-medium transition",
+              method === m
                 ? "border-primary bg-primary/10 text-primary"
-                : "border-border hover:border-primary/40")
-            }
+                : "border-border hover:border-primary/40"
+            )}
           >
+            {m === "qris" ? (
+              <QrCode className="h-4 w-4" />
+            ) : (
+              <Banknote className="h-4 w-4" />
+            )}
             {m === "qris" ? "QRIS" : "Cash"}
           </button>
         ))}
@@ -851,34 +890,80 @@ function CashierConfirmBox({
 
       {/* Uang tunai + kembalian */}
       {method === "cash" && (
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Cash received</label>
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-muted-foreground">
+              Cash received
+            </label>
+            {/* Uang pas — sekali klik, tanpa mengetik. */}
+            <button
+              type="button"
+              onClick={() => setCashReceived(String(amount))}
+              disabled={isExact}
+              className={cn(
+                "text-[11px] rounded-full border px-2.5 py-1 transition",
+                isExact
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              )}
+            >
+              {isExact ? "Exact amount ✓" : "Exact amount"}
+            </button>
+          </div>
+
           <input
             inputMode="numeric"
             value={cashReceived}
             onChange={(e) =>
               setCashReceived(e.target.value.replace(/[^0-9]/g, ""))
             }
+            onFocus={(e) => e.currentTarget.select()}
             placeholder={String(amount)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
+            className={cn(
+              "w-full rounded-lg border bg-background px-3 h-12 text-lg font-semibold tabular-nums transition",
+              shortfall > 0
+                ? "border-destructive/60 text-destructive"
+                : "border-border"
+            )}
           />
-          {received > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Change</span>
-              <span className="text-emerald-400 tabular-nums">
-                {formatIDR(change)}
-              </span>
+
+          {/* Pecahan yang lazim diserahkan tamu. */}
+          {quickCash.length > 0 && (
+            <div className="flex gap-2">
+              {quickCash.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setCashReceived(String(v))}
+                  className={cn(
+                    "flex-1 rounded-md border h-9 text-xs tabular-nums transition",
+                    received === v
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  {formatIDR(v)}
+                </button>
+              ))}
             </div>
           )}
+
+          {/* Kembalian / kurang bayar — selalu terlihat, bukan hanya saat >0. */}
+          <div className="flex justify-between items-center text-sm rounded-lg bg-background/60 px-3 py-2">
+            <span className="text-muted-foreground">
+              {shortfall > 0 ? "Still short" : "Change"}
+            </span>
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                shortfall > 0 ? "text-destructive" : "text-emerald-400"
+              )}
+            >
+              {formatIDR(shortfall > 0 ? shortfall : change)}
+            </span>
+          </div>
         </div>
       )}
-
-      <div className="flex justify-between text-sm pt-1 border-t border-border">
-        <span className="text-muted-foreground">Amount due</span>
-        <span className="font-semibold text-primary tabular-nums">
-          {formatIDR(amount)}
-        </span>
-      </div>
 
       <Button
         variant="gold"
@@ -892,7 +977,7 @@ function CashierConfirmBox({
         {busy
           ? "Processing…"
           : method === "cash"
-            ? "Accept cash"
+            ? `Accept ${formatIDR(received || amount)}`
             : "Generate QRIS"}
       </Button>
     </Card>
