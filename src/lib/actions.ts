@@ -2074,13 +2074,11 @@ export async function getSessionOrders(
     .leftJoin(ownerMember, eq(ownerMember.id, orders.ownerMemberId))
     .leftJoin(ownerProfile, eq(ownerProfile.id, ownerMember.profileId))
     .leftJoin(hostProfile, eq(hostProfile.id, tableSessions.hostId))
-    // Order 'cancelled' (dibatalkan customer) tak ditampilkan di list order.
-    .where(
-      and(
-        eq(orders.sessionId, sessionId),
-        ne(orders.status, "cancelled")
-      )
-    )
+    // Order 'cancelled' IKUT ditampilkan di list (tab Bill) — riwayat meja
+    // jangan bolong: anggota/host perlu tahu ada pesanan yang batal (mis.
+    // kedaluwarsa karena tak dibayar), bukan pesanan itu hilang tanpa jejak.
+    // Badge statusnya yang membedakan; nominalnya tak masuk tagihan.
+    .where(eq(orders.sessionId, sessionId))
     .groupBy(
       orders.id,
       floorAreas.barId,

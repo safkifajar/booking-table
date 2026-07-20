@@ -300,7 +300,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
 
   // Lazy expiry (tanpa cron): order milik anggota yang tak kunjung dibayar
   // dibatalkan dulu — aturan "wajib langsung bayar". Harus SEBELUM
-  // getSessionOrders supaya order basi tak ikut tampil di tab Bill.
+  // getSessionOrders supaya statusnya sudah 'cancelled' saat list dirender
+  // (order batal tetap tampil di tab Bill sbg riwayat, tapi tak dihitung
+  // sebagai tagihan).
   await expireUnpaidMemberOrders(id);
 
   // Multi-order: daftar order utk tab Bill (list order).

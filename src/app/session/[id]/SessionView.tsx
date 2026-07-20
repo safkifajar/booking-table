@@ -262,6 +262,9 @@ export function SessionView(props: SessionViewProps) {
   const hasUnpaidOrder = props.orders.some(
     (o) =>
       o.status !== "closed" &&
+      // Order batal tak pernah menghalangi pemesanan berikutnya (eksplisit —
+      // outstanding-nya memang 0, tapi jangan bergantung pada itu).
+      o.status !== "cancelled" &&
       o.outstanding > 0 &&
       (isTableScope
         ? o.owner_member_id === null
@@ -300,10 +303,13 @@ export function SessionView(props: SessionViewProps) {
   // single-order lama: page.tsx cuma mengirim item+payment SATU order sesi,
   // jadi footer menampilkan "PAID Rp 0 / Rp 199.000" padahal meja punya
   // beberapa order dgn total & pembayaran lain. props.orders (SessionOrderSummary)
-  // sudah berisi total/outstanding per order (dan mengecualikan order cancelled),
-  // sumber yang sama dgn list order di tab Bill → angkanya konsisten.
-  const billTotal = props.orders.reduce((acc, o) => acc + o.total, 0);
-  const remaining = props.orders.reduce((acc, o) => acc + o.outstanding, 0);
+  // sudah berisi total/outstanding per order, sumber yang sama dgn list order
+  // di tab Bill → angkanya konsisten.
+  // Order 'cancelled' IKUT di props.orders (biar tampil di list sbg riwayat),
+  // tapi WAJIB dikecualikan dari perhitungan tagihan — pesanan batal bukan utang.
+  const billable = props.orders.filter((o) => o.status !== "cancelled");
+  const billTotal = billable.reduce((acc, o) => acc + o.total, 0);
+  const remaining = billable.reduce((acc, o) => acc + o.outstanding, 0);
   const totalPaid = Math.max(0, billTotal - remaining);
   const isLunas = billTotal > 0 && remaining === 0;
 
@@ -1428,13 +1434,24 @@ function OrderList({
  * kalau sisa 0. Closed = sesi ditutup.
  */
 function OrderStatusBadge({ status, outstanding }: { status: string; outstanding: number }) {
+  // 'cancelled' HARUS dicek lebih dulu: outstanding-nya 0, jadi tanpa cek ini
+  // order batal salah tampil sebagai "Paid".
+  const isCancelled = status === "cancelled";
   const isClosed = status === "closed";
-  const isPaid = !isClosed && outstanding <= 0;
-  const label = isClosed ? "Closed" : isPaid ? "Paid" : "Unpaid";
+  const isPaid = !isCancelled && !isClosed && outstanding <= 0;
+  const label = isCancelled
+    ? "Cancelled"
+    : isClosed
+      ? "Closed"
+      : isPaid
+        ? "Paid"
+        : "Unpaid";
   return (
     <Badge
-      variant={isPaid ? "success" : isClosed ? "secondary" : "warning"}
-      className="text-[10px]"
+      variant={
+        isCancelled ? "outline" : isPaid ? "success" : isClosed ? "secondary" : "warning"
+      }
+      className={cn("text-[10px]", isCancelled && "text-muted-foreground")}
     >
       {label}
     </Badge>
