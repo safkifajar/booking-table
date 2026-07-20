@@ -149,9 +149,14 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                   <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
                     #{payId(p.id)}
                   </span>
-                  {/* Payer */}
-                  <div className="min-w-0 font-medium truncate text-sm">
-                    {p.paid_by_name}
+                  {/* Payer + untuk order siapa (order meja vs order pribadi) */}
+                  <div className="min-w-0 text-sm">
+                    <span className="font-medium truncate block">
+                      {p.paid_by_name}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {p.order_owner_member_id ? "Own order" : "Table bill"}
+                    </span>
                   </div>
                   {/* Table / Room — kolom sendiri */}
                   <div className="min-w-0 text-[13px]">
@@ -202,6 +207,9 @@ export function PaymentsList({ payments }: { payments: AdminPayment[] }) {
                       </p>
                       <p className="text-[11px] text-muted-foreground truncate">
                         Table {p.table_label} · {p.area_name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {p.order_owner_member_id ? "Own order" : "Table bill"}
                       </p>
                     </div>
                     <span className="font-mono text-[10px] text-muted-foreground shrink-0">

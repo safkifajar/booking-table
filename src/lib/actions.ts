@@ -1705,6 +1705,17 @@ export async function closeSession(sessionId: string) {
       .update(orderItems)
       .set({ status: "void" })
       .where(inArray(orderItems.orderId, ids));
+    // Matikan juga QRIS/pay-at-cashier yang masih pending di order itu.
+    // Tanpa ini: item sudah di-void & order ditutup, tapi QRIS anggota masih
+    // hidup di sisi gateway. Kalau dia terlanjur bayar, uangnya masuk ke order
+    // tertutup tanpa item — pelanggan membayar dan tak menerima apa pun.
+    // (cancelUnpaidOrder sudah melakukan ini; force-close melewatkannya.)
+    await db
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(
+        and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
+      );
   }
 
   // Tentukan outstanding saat tutup. Kalau masih nunggak → status 'overdue'
@@ -1825,11 +1836,23 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
     }
   }
 
-  // 2. Find open order
+  // 2. Find open order — HARUS order MEJA (owner NULL). Sejak anggota bisa
+  //    punya ordernya sendiri, tanpa filter ini item bisa nyasar ke order
+  //    pribadi anggota (dia yang tertagih, atau item masuk dapur tanpa tagihan
+  //    kalau ordernya sudah lunas). Urutkan supaya pilihannya deterministik.
   const [order] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")));
+    .where(
+      and(
+        eq(orders.sessionId, data.sessionId),
+        ne(orders.status, "closed"),
+        ne(orders.status, "cancelled"),
+        isNull(orders.ownerMemberId)
+      )
+    )
+    .orderBy(desc(orders.createdAt))
+    .limit(1);
   if (!order) throw new Error("No open order for this session");
 
   // 3. Menu item snapshot
@@ -2574,10 +2597,19 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     order = byId;
     if (!order) throw new Error("Order not found for this table");
   } else {
+    // Fallback tanpa orderId → HARUS order MEJA. Order terbaru di sesi bisa
+    // saja milik anggota; tanpa filter ini host membayar/menyplit order orang.
     const [openOrder] = await db
       .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
-      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
+      .where(
+        and(
+          eq(orders.sessionId, data.sessionId),
+          ne(orders.status, "closed"),
+          ne(orders.status, "cancelled"),
+          isNull(orders.ownerMemberId)
+        )
+      )
       .orderBy(desc(orders.createdAt))
       .limit(1);
     order = openOrder;
@@ -2588,7 +2620,14 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       const [anyOrder] = await db
         .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
         .from(orders)
-        .where(eq(orders.sessionId, data.sessionId))
+        // Tetap order MEJA — fallback terakhir pun tak boleh menyasar order
+        // pribadi anggota.
+        .where(
+          and(
+            eq(orders.sessionId, data.sessionId),
+            isNull(orders.ownerMemberId)
+          )
+        )
         .orderBy(desc(orders.createdAt))
         .limit(1);
       order = anyOrder;
@@ -2924,15 +2963,31 @@ export async function createSplitBatch(
     order = byId;
     if (!order) throw new Error("Order not found for this table");
   } else {
+    // Fallback tanpa orderId → HARUS order MEJA. Order terbaru di sesi bisa
+    // saja milik anggota; tanpa filter ini host membayar/menyplit order orang.
     const [openOrder] = await db
       .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
-      .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
+      .where(
+        and(
+          eq(orders.sessionId, data.sessionId),
+          ne(orders.status, "closed"),
+          ne(orders.status, "cancelled"),
+          isNull(orders.ownerMemberId)
+        )
+      )
       .orderBy(desc(orders.createdAt))
       .limit(1);
     order = openOrder;
   }
   if (!order) throw new Error("No open order for this session");
+
+  // Order milik ANGGOTA tak boleh di-split — dia wajib membayarnya sendiri,
+  // penuh. Tanpa penjagaan ini host bisa membagi pesanan pribadi anggota ke
+  // seluruh meja, persis kebalikan dari aturan fitur ini.
+  if (order.ownerMemberId) {
+    throw new Error("A member's own order can't be split — they pay it in full");
+  }
 
   // 3. Bill: subtotal (non-void) + charge → total; remaining = total − paid.
   const [subRow] = await db

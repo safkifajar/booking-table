@@ -1590,6 +1590,29 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
   if (row.bar_id !== ctx.barId) throw new Error("Invalid bar access");
   if (row.status === "closed") throw new Error("Table is already closed");
 
+  // Order yang masih 'unpaid' saat meja ditutup (mis. order pribadi anggota yg
+  // tak jadi dibayar): void itemnya & matikan pembayaran pending-nya. Tanpa ini
+  // itemnya tetap terhitung sebagai tagihan hantu, dan QRIS-nya masih hidup di
+  // gateway — kalau anggota terlanjur bayar, uangnya masuk ke order tertutup
+  // tanpa item. (Pola sama dgn closeSession sisi host.)
+  const unpaidOrders = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.sessionId, sessionId), eq(orders.status, "unpaid")));
+  if (unpaidOrders.length > 0) {
+    const ids = unpaidOrders.map((o) => o.id);
+    await db
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(inArray(orderItems.orderId, ids));
+    await db
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(
+        and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
+      );
+  }
+
   const now = new Date();
   await Promise.all([
     db

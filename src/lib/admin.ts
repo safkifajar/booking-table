@@ -429,6 +429,11 @@ export interface AdminPayment {
   /** Kadaluarsa QR (dari split_meta). Utk tampilkan 'cancelled' bila pending expired. */
   expires_at: string | null;
   paid_by_name: string;
+  /**
+   * Pemilik ORDER yang dibayar. NULL = order MEJA (tagihan bersama, dipegang
+   * host); terisi = order pribadi seorang anggota yang membayar sendiri.
+   */
+  order_owner_member_id: string | null;
   table_label: string;
   area_name: string;
 }
@@ -456,6 +461,11 @@ export async function getPayments(
       split_meta: payments.splitMeta,
       at: atExpr,
       paid_by_name: profiles.displayName,
+      // Untuk ORDER siapa pembayaran ini. NULL = order MEJA (tagihan bersama);
+      // terisi = order pribadi seorang anggota. Sejak anggota bisa memesan &
+      // membayar sendiri, satu meja bisa punya beberapa pemilik order — tanpa
+      // ini admin tak bisa membedakannya.
+      order_owner_member_id: orders.ownerMemberId,
       table_label: tables.label,
       area_name: floorAreas.name,
     })
@@ -490,6 +500,7 @@ export async function getPayments(
       at: r.at instanceof Date ? r.at.toISOString() : String(r.at),
       expires_at: meta.expiresAt ?? null,
       paid_by_name: r.paid_by_name,
+      order_owner_member_id: r.order_owner_member_id,
       table_label: r.table_label,
       area_name: r.area_name,
     };

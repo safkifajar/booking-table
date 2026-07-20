@@ -294,7 +294,16 @@ export async function getOutstandingMap(
       orderItems,
       and(eq(orderItems.orderId, orders.id), ne(orderItems.status, "void"))
     )
-    .where(inArray(orders.sessionId, sessionIds))
+    // Order 'cancelled' TAK PERNAH jadi tagihan. Pertahanan berlapis: item
+    // order batal semestinya sudah di-void, tapi kalau ada satu jalur yg lupa
+    // (pernah terjadi), tanpa filter ini hasilnya tagihan hantu yg bikin meja
+    // tak bisa ditutup. Agregat staff sudah punya penjagaan serupa.
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        ne(orders.status, "cancelled")
+      )
+    )
     .groupBy(orders.sessionId, floorAreas.barId);
 
   const paidRows = await db
@@ -806,6 +815,14 @@ export async function expireUnpaidMemberOrders(
       .where(
         and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
       );
+    // Void semua itemnya — WAJIB, sama seperti cancelUnpaidOrder. Tanpa ini
+    // item tetap 'draft' dan getOutstandingMap (yg hanya menyaring item void,
+    // bukan status order) tetap menghitungnya: meja punya TAGIHAN HANTU,
+    // tak bisa ditutup, dan host dianggap berutang atas pesanan yg dibatalkan.
+    await tx
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(inArray(orderItems.orderId, ids));
     await tx
       .update(orders)
       .set({ status: "cancelled", closedAt: new Date() })
