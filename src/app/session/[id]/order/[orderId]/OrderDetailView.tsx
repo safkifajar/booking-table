@@ -51,7 +51,9 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // Back handler: kalau order MASIH UNPAID & belum ada pembayaran lunas, klik
   // "kembali" = konfirmasi batal. Jika ya → order + pembayaran pending dibatalkan.
   // Order yg sudah paid/closed → back biasa tanpa konfirmasi.
-  const backHref = `/session/${detail.sessionId}`;
+  // Kembali ke tab Bill — user datang dari list order di sana, jadi jangan
+  // dilempar balik ke tab Vibe.
+  const backHref = `/session/${detail.sessionId}?tab=bill`;
   // Siapa boleh membatalkan lewat tombol "kembali":
   // - Order MEJA (owner NULL)  → host/staff. Itu tagihan meja.
   // - Order milik ANGGOTA      → HANYA pemiliknya. Host membuka detail order
@@ -302,13 +304,19 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     (p) => p.status === "pending" && p.pay_at_cashier
   );
 
+  // 'cancelled' HARUS dicek paling awal: outstanding order batal = 0, jadi tanpa
+  // ini ia salah tampil "Paid" — persis kebalikan kenyataannya.
+  const isCancelledOrder = detail.status === "cancelled";
   const isClosedOrder = detail.status === "closed";
-  const isFullyPaid = !isClosedOrder && detail.outstanding <= 0;
-  const statusLabel = isClosedOrder
-    ? "Closed"
-    : isFullyPaid
-      ? "Paid"
-      : "Unpaid";
+  const isFullyPaid =
+    !isCancelledOrder && !isClosedOrder && detail.outstanding <= 0;
+  const statusLabel = isCancelledOrder
+    ? "Cancelled"
+    : isClosedOrder
+      ? "Closed"
+      : isFullyPaid
+        ? "Paid"
+        : "Unpaid";
 
   return (
     <main className="min-h-dvh bg-background">
@@ -332,7 +340,11 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
             <span className="font-mono text-sm">#{detail.id.slice(0, 8).toUpperCase()}</span>
             <Badge
               variant={
-                isFullyPaid ? "success" : isClosedOrder ? "secondary" : "warning"
+                isFullyPaid
+                  ? "success"
+                  : isCancelledOrder || isClosedOrder
+                    ? "secondary"
+                    : "warning"
               }
               className="text-[10px]"
             >
@@ -508,7 +520,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           </Badge>
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          {p.pay_at_cashier ? "PAY AT CASHIER" : p.method.toUpperCase()} · {fmtTime(p.paid_at ?? p.created_at)}
+                          {/* "PAY AT CASHIER" hanya relevan selagi MENUNGGU
+                              konfirmasi. Begitu lunas, yang perlu diketahui
+                              adalah metode yang BENAR-BENAR dipakai (QRIS/cash)
+                              — juga menutup baris lama yg flag-nya terlanjur
+                              menempel sebelum perbaikan di cashier-actions. */}
+                          {p.pay_at_cashier && p.status === "pending"
+                            ? "PAY AT CASHIER"
+                            : p.method.toUpperCase()}{" "}
+                          · {fmtTime(p.paid_at ?? p.created_at)}
                         </div>
                       </div>
                       <div className="text-right shrink-0">

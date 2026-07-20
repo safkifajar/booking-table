@@ -27,7 +27,7 @@ import { SessionView } from "./SessionView";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; tab?: string }>;
 }
 
 /** Path internal aman utk back (cegah open-redirect): harus "/x", bukan "//x". */
@@ -39,7 +39,7 @@ function safeInternalPath(p: string | undefined): string | null {
 
 export default async function SessionPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, tab } = await searchParams;
   const profile = await getCurrentProfile();
   if (!profile) {
     redirect(`/auth?next=${encodeURIComponent(`/session/${id}`)}`);
@@ -327,6 +327,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
 
   return (
     <SessionView
+      initialTab={tab}
       orders={sessionOrders}
       session={{
         id: sessionRow.id,

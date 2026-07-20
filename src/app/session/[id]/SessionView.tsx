@@ -186,10 +186,19 @@ interface SessionViewProps {
   cashierDetail: CashierSessionDetail | null;
   /** Config pajak & service charge bar (untuk hitung total tagihan). */
   chargeConfig: ChargeConfig;
+  /** Tab awal dari ?tab= (mis. kembali dari detail order → "bill"). */
+  initialTab?: string;
 }
 
 export function SessionView(props: SessionViewProps) {
-  const [tab, setTab] = React.useState<Tab>("vibe");
+  // Tab awal bisa ditentukan lewat ?tab= — dipakai saat kembali dari halaman
+  // detail order supaya user mendarat lagi di tab Bill (asalnya dari list order
+  // di sana), bukan terlempar ke Vibe.
+  const [tab, setTab] = React.useState<Tab>(
+    props.initialTab === "bill" || props.initialTab === "menu"
+      ? props.initialTab
+      : "vibe"
+  );
   // Cart menu diangkat ke sini supaya TAK hilang saat pindah tab (MenuTab
   // unmount saat tab lain aktif).
   const [menuCart, setMenuCart] = React.useState<Record<string, number>>({});

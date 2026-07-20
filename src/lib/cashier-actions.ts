@@ -1232,16 +1232,25 @@ export async function cashierConfirmPendingPayment(input: {
       : 0;
 
   if (data.method === "cash") {
-    // Catat uang diterima + kembalian di splitMeta (utk struk) sebelum settle.
-    if (data.cashReceived != null) {
-      const meta0 = (payment.splitMeta as Record<string, unknown> | null) ?? {};
-      await db
-        .update(payments)
-        .set({
-          splitMeta: { ...meta0, cashReceived: data.cashReceived, change },
-        })
-        .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
-    }
+    // Catat uang diterima + kembalian di splitMeta (utk struk) sebelum settle,
+    // SEKALIGUS lepas flag payAtCashier — pembayarannya sudah dikonfirmasi,
+    // jadi metodenya kini benar-benar 'cash'. Tanpa ini label di detail order
+    // menempel "PAY AT CASHIER" selamanya walau barisnya sudah Paid (cabang
+    // QRIS sudah melepasnya; cabang cash terlewat).
+    // WAJIB tanpa syarat cashReceived — dulu update ini hanya jalan kalau
+    // nominal tunai diisi, sehingga konfirmasi tanpa nominal meninggalkan flag.
+    const meta0 = (payment.splitMeta as Record<string, unknown> | null) ?? {};
+    const { payAtCashier: _dropped, ...restMeta } = meta0;
+    void _dropped;
+    await db
+      .update(payments)
+      .set({
+        splitMeta:
+          data.cashReceived != null
+            ? { ...restMeta, cashReceived: data.cashReceived, change }
+            : restMeta,
+      })
+      .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
     await cashierMarkPaymentPaid(payment.id);
     return {
       status: "paid",
