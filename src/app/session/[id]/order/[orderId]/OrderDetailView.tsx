@@ -52,11 +52,18 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // "kembali" = konfirmasi batal. Jika ya → order + pembayaran pending dibatalkan.
   // Order yg sudah paid/closed → back biasa tanpa konfirmasi.
   const backHref = `/session/${detail.sessionId}`;
-  // HANYA host (atau staff) yang boleh membatalkan order — order itu milik meja,
-  // bukan milik anggota yang kebetulan membukanya. Anggota biasa & penonton
-  // (viewOnly) cukup kembali tanpa konfirmasi apa pun.
+  // Siapa boleh membatalkan lewat tombol "kembali":
+  // - Order MEJA (owner NULL)  → host/staff. Itu tagihan meja.
+  // - Order milik ANGGOTA      → HANYA pemiliknya. Host membuka detail order
+  //   anggota lalu menekan "kembali" TIDAK BOLEH memunculkan konfirmasi —
+  //   kalau dikonfirmasi, host malah membatalkan pesanan orang lain.
+  // Penonton (viewOnly) & anggota lain cukup kembali tanpa konfirmasi apa pun.
   const canCancel =
-    (detail.isHost || detail.isStaff) &&
+    (detail.isOwnOrder
+      ? true // pemilik order anggota
+      : detail.isMemberOrder
+        ? false // order milik anggota LAIN — host/staff sekalipun tak lewat sini
+        : detail.isHost || detail.isStaff) &&
     !detail.viewOnly &&
     detail.status === "unpaid" &&
     detail.paid === 0;

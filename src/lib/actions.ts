@@ -33,7 +33,11 @@ import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
-import { isSessionHost, assertHostOrActiveStaff } from "@/lib/auth-v2/session-auth";
+import {
+  isSessionHost,
+  assertHostOrActiveStaff,
+  assertActiveStaffOfSession,
+} from "@/lib/auth-v2/session-auth";
 import {
   formatIDR,
   isDbConstraintError,
@@ -2181,6 +2185,8 @@ export interface OrderDetail {
   isOwnOrder: boolean;
   /** Nama pemesan: pemilik order (anggota), atau host utk order MEJA. */
   ordered_by: string | null;
+  /** Order ini milik seorang ANGGOTA (bukan order meja) — siapa pun pemiliknya. */
+  isMemberOrder: boolean;
 }
 
 /**
@@ -2354,6 +2360,7 @@ export async function getOrderDetail(
       (isCashier ? outstanding > 0 : uncovered > 0),
     /** Order ini milik si penonton (anggota memesan sendiri) → bayar penuh, tanpa split. */
     isOwnOrder,
+    isMemberOrder: order.ownerMemberId !== null,
     // Nama pemesan: pemilik order (anggota) atau host utk order MEJA.
     // Di-redaksi utk view-only, sama seperti added_by per item.
     ordered_by: isViewOnly
@@ -3822,6 +3829,7 @@ export async function cancelUnpaidOrder(
     .select({
       id: orders.id,
       status: orders.status,
+      ownerMemberId: orders.ownerMemberId,
       sessionId: orders.sessionId,
       sessionStatus: tableSessions.status,
       dpPaidAt: tableSessions.dpPaidAt,
@@ -3839,10 +3847,31 @@ export async function cancelUnpaidOrder(
     return { status: "cancelled" }; // sudah batal → no-op
   }
 
-  // Otorisasi: HANYA host meja atau staff aktif di bar. Order milik MEJA — anggota
-  // biasa (yang cuma bayar bagiannya) tak boleh membatalkan order orang sekejap.
-  // (Dulu: "member joined ATAU staff" — terlalu longgar.)
-  await assertHostOrActiveStaff(row.sessionId, profile.id);
+  // Otorisasi:
+  // - Order MEJA (owner NULL) → host meja atau staff aktif. Itu tagihan meja;
+  //   anggota biasa tak boleh membatalkan order orang.
+  // - Order milik ANGGOTA     → HANYA pemiliknya (staff tetap boleh, mereka
+  //   yang menangani meja secara fisik). HOST TIDAK — dia membuka detail order
+  //   anggota lalu menekan "kembali" bisa tanpa sengaja membatalkan pesanan
+  //   orang lain.
+  if (row.ownerMemberId) {
+    const [me] = await db
+      .select({ id: sessionMembers.id })
+      .from(sessionMembers)
+      .where(
+        and(
+          eq(sessionMembers.sessionId, row.sessionId),
+          eq(sessionMembers.profileId, profile.id),
+          eq(sessionMembers.status, "joined")
+        )
+      );
+    if (!me || me.id !== row.ownerMemberId) {
+      // Bukan pemilik → boleh hanya kalau staff aktif di bar.
+      await assertActiveStaffOfSession(row.sessionId, profile.id);
+    }
+  } else {
+    await assertHostOrActiveStaff(row.sessionId, profile.id);
+  }
 
   // ANTI MONEY-LOSS: sebelum membatalkan, cek ke gateway apakah ada pembayaran
   // pending yg SEBENARNYA sudah lunas (dibayar di bank tapi belum ke-refleksi
