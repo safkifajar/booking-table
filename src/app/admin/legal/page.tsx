@@ -15,7 +15,7 @@ export default async function AdminLegalPage() {
           </div>
           <h1 className="text-2xl font-semibold">Privacy Policy & Term n Condition</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Kelola dokumen legal yang tampil di halaman publik /privacy & /terms.
+            Manage the legal documents shown on the public /privacy & /terms pages.
           </p>
         </div>
 

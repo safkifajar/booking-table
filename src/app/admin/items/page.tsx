@@ -45,7 +45,7 @@ export default async function ItemsPage({ searchParams }: PageProps) {
               Item Performance
             </h2>
             <p className="text-xs text-muted-foreground">
-              {soldCount} dari {allItems.length} item terjual ·{" "}
+              {soldCount} of {allItems.length} items sold ·{" "}
               {formatIDR(summary.total_revenue)} total revenue
             </p>
           </div>
@@ -65,9 +65,9 @@ export default async function ItemsPage({ searchParams }: PageProps) {
               "Rank",
               "Item name",
               "Category",
-              "Qty Terjual",
+              "Qty Sold",
               "Revenue",
-              "Transaksi",
+              "Transactions",
               "Avg Price",
             ]}
           />

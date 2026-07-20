@@ -674,7 +674,7 @@ function MoveOrderModal({
           </div>
           {!enough && (
             <p className="text-[11px] text-amber-400">
-              Kurang {formatIDR(shortfall)} untuk capai minimum spend.
+              {formatIDR(shortfall)} short of the minimum spend.
             </p>
           )}
 

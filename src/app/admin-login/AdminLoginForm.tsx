@@ -73,7 +73,7 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
         <div>
           <CardTitle className="text-2xl">Admin Panel</CardTitle>
           <CardDescription className="mt-1">
-            Login dengan akun staff SOHO Social House
+            Sign in with your SOHO Social House staff account
           </CardDescription>
         </div>
       </CardHeader>
@@ -147,7 +147,7 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
             ) : (
               <>
                 <Lock className="h-4 w-4" />
-                Login ke Admin Panel
+                Sign in to Admin Panel
               </>
             )}
           </Button>

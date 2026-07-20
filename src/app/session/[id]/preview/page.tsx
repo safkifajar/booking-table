@@ -242,7 +242,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
                 </div>
                 <h2 className="text-xl font-semibold">{host.display_name}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Buka <RelativeTime date={session.started_at} />
+                  Opened <RelativeTime date={session.started_at} />
                 </p>
               </div>
               <VisibilityBadge visibility={session.visibility} />
@@ -292,7 +292,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
         <Card>
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Yang ada di meja
+              Who&apos;s at the table
             </h3>
             <div className="space-y-3">
               {memberList.map((m) => {
@@ -381,7 +381,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
                 ))}
               </div>
               <p className="text-[10px] text-muted-foreground mt-3 italic">
-                Berikan kamu gambaran vibe-nya. Total tagihan tidak ditampilkan untuk
+                Gives you a feel for the vibe. Bill total is hidden in
                 preview.
               </p>
             </CardContent>

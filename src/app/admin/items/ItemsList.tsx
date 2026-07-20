@@ -169,7 +169,7 @@ function ItemsListWithRank({
   if (items.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground py-8 border border-dashed border-border rounded-md">
-        Tidak ada item yang cocok.
+        No matching items.
       </div>
     );
   }
@@ -224,7 +224,7 @@ function ItemsListWithRank({
               <div className="text-right shrink-0">
                 {isUnsold ? (
                   <span className="text-[10px] text-muted-foreground italic">
-                    belum terjual
+                    not sold yet
                   </span>
                 ) : (
                   <>

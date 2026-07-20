@@ -19,7 +19,7 @@ export function SalesChart({ data }: { data: DataPoint[] }) {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-        Tidak ada data di periode ini.
+        No data for this period.
       </div>
     );
   }
@@ -101,7 +101,7 @@ export function SalesChart({ data }: { data: DataPoint[] }) {
           </div>
         ) : (
           <div className="text-[10px] text-muted-foreground text-center">
-            Hover bar untuk detail · Max: {formatIDRShort(maxValue)}
+            Hover bar for detail · Max: {formatIDRShort(maxValue)}
           </div>
         )}
       </div>

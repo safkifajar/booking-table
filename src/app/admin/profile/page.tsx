@@ -24,7 +24,7 @@ export default async function AdminProfilePage() {
       <div>
         <h1 className="text-2xl font-bold">My Profile</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Kelola foto, info pribadi, dan password akun kamu.
+          Manage your photo, personal info, and account password.
         </p>
       </div>
 
@@ -52,7 +52,7 @@ export default async function AdminProfilePage() {
             <div>
               <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
                 <Sparkles className="h-3 w-3 text-primary/70" />
-                Hobi & minat
+                Hobbies & interests
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {profile.hobbies.map((h) => (

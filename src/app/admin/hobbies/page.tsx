@@ -14,12 +14,12 @@ export default async function AdminHobbiesPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-5">
           <div className="text-xs uppercase tracking-widest text-primary/70 mb-1">
-            Konten
+            Content
           </div>
-          <h1 className="text-2xl font-semibold">Hobi &amp; Minat</h1>
+          <h1 className="text-2xl font-semibold">Hobbies &amp; Interests</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Kelola pilihan hobi & minat yang bisa dipilih customer di profil &
-            onboarding.
+            Manage the hobbies & interests customers can pick in their profile
+            & onboarding.
           </p>
         </div>
 
