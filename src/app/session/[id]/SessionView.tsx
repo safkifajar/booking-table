@@ -1802,7 +1802,17 @@ function SessionFooter({
       await closeSession(sessionId);
       // sukses → redirect (rate/dashboard); biarkan tetap loading.
     } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed"));
+      // Fallback berguna: di production Next.js menyensor pesan server action
+      // jadi teks generik "An error occurred in the Server Components render…"
+      // yang tak berarti bagi user. Penyebab paling mungkin di sini adalah
+      // tagihan belum lunas (mis. pembayaran masuk tepat bersamaan), jadi
+      // sampaikan itu alih-alih meneruskan teks generiknya.
+      const msg = getActionErrorMessage(err, "Failed");
+      toast.error(
+        msg.includes("Server Components render")
+          ? "Settle all payments before closing the table."
+          : msg
+      );
       setActing(false);
     }
   }
@@ -1851,11 +1861,18 @@ function SessionFooter({
               variant="outline"
               size="sm"
               onClick={handleClose}
-              // Staff: hanya boleh tutup kalau lunas (sama spt guard sebelumnya).
-              disabled={acting || (isStaff && !isLunas)}
+              // Belum lunas → tombol dimatikan, untuk STAFF maupun HOST.
+              // Server memang menolak host menutup meja yg masih punya order
+              // unpaid / sisa tagihan, tapi di production build pesan error
+              // server action DISENSOR Next.js jadi teks generik "An error
+              // occurred in the Server Components render…" — user tak tahu apa
+              // yang salah. Jadi cegah di sini, dgn alasan yang jelas.
+              disabled={acting || !isLunas}
               title={
-                isStaff && !isLunas
-                  ? "Table not fully paid — direct the guest to the cashier"
+                !isLunas
+                  ? isStaff
+                    ? "Table not fully paid — direct the guest to the cashier"
+                    : "Settle all payments before closing the table"
                   : undefined
               }
             >
@@ -1864,7 +1881,7 @@ function SessionFooter({
               ) : (
                 <Lock className="h-4 w-4" />
               )}
-              Close table{isStaff && !isLunas ? " (not paid)" : ""}
+              Close table{!isLunas ? " (not paid)" : ""}
             </Button>
           ) : (
             <Button
