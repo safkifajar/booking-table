@@ -10,7 +10,7 @@
  * Phase 5 cleanup nanti baru migrate types ke camelCase kalau diputuskan.
  */
 
-import { eq, and, inArray, asc, sql, lte, gt, ne, or, desc } from "drizzle-orm";
+import { eq, and, inArray, asc, sql, lt, lte, gt, ne, or, desc, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   areFriends,
@@ -774,8 +774,11 @@ export async function expireUnpaidMemberOrders(
       and(
         eq(orders.sessionId, sessionId),
         eq(orders.status, "unpaid"),
-        sql`${orders.ownerMemberId} IS NOT NULL`,
-        sql`${orders.createdAt} < ${cutoff}`,
+        isNotNull(orders.ownerMemberId),
+        // Pakai lt() (bukan sql``) supaya Drizzle mengikat Date sesuai tipe
+        // kolom timestamptz. Di sql`` mentah, Date ikut sebagai string JS
+        // ("Mon Jul 20 2026 …") dan Postgres menolaknya.
+        lt(orders.createdAt, cutoff),
         // Belum ada uang masuk sama sekali.
         sql`NOT EXISTS (
           SELECT 1 FROM ${payments}
