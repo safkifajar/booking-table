@@ -249,13 +249,23 @@ export function SessionView(props: SessionViewProps) {
   // meja (biar tahu meja pesan apa) TANPA nominal & tanpa aksi. Nominal + nama
   // pembayar/pemesan sudah di-redaksi di server (page.tsx) utk peran ini.
   const viewOnly = !canInteract;
-  // Tambah order = HANYA host (atau staff atas nama meja). Anggota non-host tak
-  // bisa memesan — mereka minta host menambahkan. (PRD Order Control FR1/FR3.)
-  const canOrder = props.isHost || isStaff;
-  // Multi-order: ada order BELUM LUNAS (unpaid atau masih ada sisa/DP) → tak
-  // boleh buat order baru. Order 'closed' diabaikan.
+  // Tambah order = host, staff (atas nama meja), ATAU anggota biasa. Anggota
+  // non-host memesan untuk DIRINYA SENDIRI: ordernya terpisah & wajib dia bayar
+  // langsung (tanpa split). Host tetap seperti sebelumnya (order meja + split).
+  const canOrder = canInteract;
+  // Multi-order: ada order BELUM LUNAS milik LINGKUP INI → tak boleh buat order
+  // baru. Lingkupnya harus sama dgn guard server & unique index DB: host/staff
+  // dibatasi order MEJA (owner null), anggota dibatasi ordernya SENDIRI. Tanpa
+  // pemisahan ini, order host memblokir anggota (dan sebaliknya).
+  const myMemberId = props.myMemberId ?? null;
+  const isTableScope = props.isHost || isStaff;
   const hasUnpaidOrder = props.orders.some(
-    (o) => o.status !== "closed" && o.outstanding > 0
+    (o) =>
+      o.status !== "closed" &&
+      o.outstanding > 0 &&
+      (isTableScope
+        ? o.owner_member_id === null
+        : o.owner_member_id === myMemberId)
   );
   // Sesi sudah ditutup (lunas=closed / belum lunas=overdue). Saat ended: tak ada
   // lagi ajak/undang/tutup/minta-gabung — meja sudah selesai.
@@ -1384,6 +1394,13 @@ function OrderList({
                 {o.itemCount} item{o.itemCount > 1 ? "s" : ""} ·{" "}
                 {fmtTxTime(o.paidAt ?? o.createdAt)}
               </div>
+              {/* Siapa yang memesan — view-only tak melihat nama (di-redaksi
+                  server jadi null). */}
+              {o.ordered_by && (
+                <div className="text-[11px] text-muted-foreground/80 truncate">
+                  by {o.ordered_by}
+                </div>
+              )}
             </div>
             {!hideAmount && (
               <div className="text-right shrink-0">

@@ -37,16 +37,34 @@ export const orders = pgTable(
       .notNull()
       .references(() => tableSessions.id, { onDelete: "cascade" }),
     status: orderStatusEnum("status").notNull().default("unpaid"),
+    /**
+     * Pemilik order — anggota yang memesan untuk DIRINYA SENDIRI (bayar
+     * langsung, tanpa split). NULL = order MEJA (dibuat host/staff): itulah
+     * perilaku lama, dan host tetap punya split equally & treat di sana.
+     * Sengaja nullable: order lama semua NULL, dan itu kondisi yang SAH.
+     */
+    ownerMemberId: uuid("owner_member_id").references(
+      () => sessionMembers.id,
+      { onDelete: "set null" }
+    ),
     /** Kapan order lunas & "masuk" ke dapur/staff. NULL = belum lunas. */
     paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [
-    // Maks 1 order 'unpaid' per sesi (Q1) — harus lunas dulu baru buat order baru.
+    // Maks 1 order 'unpaid' MEJA per sesi (Q1) — host harus lunas dulu baru
+    // bisa buat order meja baru. Hanya berlaku utk order meja (owner NULL);
+    // order milik anggota dibatasi index di bawah, supaya beberapa anggota
+    // bisa punya order unpaid BERSAMAAN tanpa saling menghalangi.
     uniqueIndex("uq_unpaid_order_per_session")
       .on(t.sessionId)
-      .where(sql`status = 'unpaid'`),
+      .where(sql`status = 'unpaid' AND owner_member_id IS NULL`),
+    // Maks 1 order 'unpaid' per ANGGOTA — dia wajib melunasi ordernya sendiri
+    // sebelum memesan lagi (aturan "wajib langsung bayar").
+    uniqueIndex("uq_unpaid_order_per_member")
+      .on(t.ownerMemberId)
+      .where(sql`status = 'unpaid' AND owner_member_id IS NOT NULL`),
     index("idx_orders_session").on(t.sessionId),
   ]
 );

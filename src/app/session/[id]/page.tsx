@@ -16,6 +16,7 @@ import {
   getUserRatingsBatch,
   promoteSessionIfDue,
   expireDpIfOverdue,
+  expireUnpaidMemberOrders,
 } from "@/lib/queries";
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { getMyPendingMove } from "@/lib/move-approval-actions";
@@ -297,6 +298,11 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // Config pajak & service charge bar (untuk hitung total tagihan).
   const chargeConfig = await getChargeConfig(sessionRow.bar_id);
 
+  // Lazy expiry (tanpa cron): order milik anggota yang tak kunjung dibayar
+  // dibatalkan dulu — aturan "wajib langsung bayar". Harus SEBELUM
+  // getSessionOrders supaya order basi tak ikut tampil di tab Bill.
+  await expireUnpaidMemberOrders(id);
+
   // Multi-order: daftar order utk tab Bill (list order).
   const sessionOrdersRaw = await getSessionOrders(id);
 
@@ -311,6 +317,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         subtotal: 0,
         total: 0,
         outstanding: 0,
+        // Nama pemesan ikut di-redaksi — orang luar meja tak boleh tahu siapa
+        // memesan apa (konsisten dgn redaksi added_by di detail order).
+        ordered_by: null,
       }))
     : sessionOrdersRaw;
 

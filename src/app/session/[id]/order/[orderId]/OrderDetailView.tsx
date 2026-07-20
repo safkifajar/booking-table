@@ -335,6 +335,16 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           <div className="text-xs text-muted-foreground mt-1">
             {fmtTime(detail.paidAt ?? detail.createdAt)}
           </div>
+          {/* Siapa yang memesan. Null utk view-only (di-redaksi server). */}
+          {detail.ordered_by && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Ordered by{" "}
+              <span className="text-foreground">{detail.ordered_by}</span>
+              {detail.isOwnOrder && (
+                <span className="text-primary"> · you pay this order</span>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Items */}
@@ -586,7 +596,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           // Basis hitungan = SISA (outstanding), bukan total → bagi rata setelah
           // DP jadi benar (sisa ÷ anggota).
           remaining={detail.outstanding}
-          payFullOnly={detail.isStaff && !detail.isHost}
+          // Bayar PENUH tanpa split untuk: staff non-host, DAN anggota yang
+          // memesan sendiri (order miliknya — split equally/treat hanya milik
+          // host di order MEJA).
+          payFullOnly={
+            (detail.isStaff && !detail.isHost) ||
+            (detail.isOwnOrder && !detail.isHost)
+          }
           onClose={() => setPaySheet(false)}
           onSingle={handleSingle}
           onBatch={handleBatch}

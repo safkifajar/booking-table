@@ -740,6 +740,79 @@ export async function hasUnpaidDp(sessionId: string): Promise<boolean> {
   return !!dp;
 }
 
+/**
+ * Batas hidup order milik ANGGOTA yang belum dibayar. Aturan "wajib langsung
+ * bayar": kalau QRIS-nya kedaluwarsa / ditinggal, ordernya dibatalkan supaya
+ * meja bersih & anggota bisa memesan lagi. Diberi kelonggaran di atas masa
+ * hidup QRIS (5 menit) supaya pembayaran yang lambat ter-settle tak terpotong.
+ */
+const MEMBER_ORDER_GRACE_MINUTES = 15;
+
+/**
+ * Batalkan order milik ANGGOTA yang tak kunjung dibayar (lazy, tanpa cron —
+ * dipanggil saat halaman sesi dibuka).
+ *
+ * TIDAK PERNAH membatalkan:
+ * - order MEJA (owner NULL) — itu tagihan host, ditangani alur overdue biasa;
+ * - order yang SUDAH ada uang masuk (pembayaran lunas apa pun, termasuk
+ *   sebagian) — uang selalu lebih penting; biar kasir yang menyelesaikan;
+ * - order yang masih punya QRIS pending BELUM kedaluwarsa — masih ditunggu.
+ *
+ * Item order masih 'draft' (belum masuk dapur), jadi pembatalan tak
+ * meninggalkan pesanan yang terlanjur dimasak.
+ */
+export async function expireUnpaidMemberOrders(
+  sessionId: string
+): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - MEMBER_ORDER_GRACE_MINUTES * 60 * 1000
+  );
+  const stale = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(orders.status, "unpaid"),
+        sql`${orders.ownerMemberId} IS NOT NULL`,
+        sql`${orders.createdAt} < ${cutoff}`,
+        // Belum ada uang masuk sama sekali.
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${payments}
+          WHERE ${payments.orderId} = ${orders.id}
+            AND ${payments.status} = 'paid'
+        )`,
+        // Tak ada QRIS pending yang masih hidup (belum lewat expiresAt).
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${payments}
+          WHERE ${payments.orderId} = ${orders.id}
+            AND ${payments.status} = 'pending'
+            AND COALESCE((${payments.splitMeta} ->> 'expiresAt')::timestamptz, 'infinity') > now()
+        )`
+      )
+    );
+  if (stale.length === 0) return 0;
+
+  const ids = stale.map((o) => o.id);
+  await db.transaction(async (tx) => {
+    // Matikan QRIS pending yg sudah kedaluwarsa (kalau ada) supaya tak ada
+    // baris menggantung di riwayat pembayaran.
+    await tx
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(
+        and(inArray(payments.orderId, ids), eq(payments.status, "pending"))
+      );
+    await tx
+      .update(orders)
+      .set({ status: "cancelled", closedAt: new Date() })
+      // Kondisional: jangan batalkan kalau statusnya sudah berubah di sela ini
+      // (mis. pembayaran masuk tepat saat kita jalan).
+      .where(and(inArray(orders.id, ids), eq(orders.status, "unpaid")));
+  });
+  return ids.length;
+}
+
 export async function expireFinishedSessions(barId: string): Promise<number> {
   const now = new Date();
   const walkinCutoff = new Date(now.getTime() - WALKIN_MAX_HOURS * 60 * 60 * 1000);

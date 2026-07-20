@@ -18,7 +18,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, ne, notInArray, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, sql, desc } from "drizzle-orm";
+import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
@@ -1887,6 +1888,12 @@ export async function createOrder(
   // 1. Auth + tentukan member atribusi.
   let memberId: string;
   let inputByStaffId: string | null = null;
+  /**
+   * Pemilik order. NULL = order MEJA (host/staff) — perilaku lama, host tetap
+   * punya split equally & treat. Terisi = order milik anggota: dia bayar penuh
+   * sendiri, tanpa split.
+   */
+  let ownerMemberId: string | null = null;
   if (data.onBehalfOfMemberId) {
     const [staff] = await db
       .select({ role: staffRoles.role })
@@ -1907,9 +1914,6 @@ export async function createOrder(
     memberId = targetMember.id;
     inputByStaffId = profile.id;
   } else {
-    if (!(await isSessionHost(data.sessionId, profile.id))) {
-      throw new Error("Only the table host can add orders");
-    }
     const [member] = await db
       .select({ id: sessionMembers.id })
       .from(sessionMembers)
@@ -1922,18 +1926,32 @@ export async function createOrder(
       );
     if (!member) throw new Error("You're not a member of this table");
     memberId = member.id;
+    // Anggota non-host boleh memesan, TAPI ordernya MILIK DIA: dia wajib
+    // membayarnya sendiri (penuh, tanpa split). Host tetap seperti sebelumnya
+    // — ordernya = order MEJA (owner NULL) dgn split equally & treat.
+    if (!(await isSessionHost(data.sessionId, profile.id))) {
+      ownerMemberId = member.id;
+    }
   }
 
   // 2. Guard: tak boleh buat order baru kalau masih ada order BELUM LUNAS
   //    (unpaid ATAU order yg masih punya sisa/DP, outstanding > 0). Order closed
   //    diabaikan. (Revisi Q1: "belum lunas" mencakup sisa DP, bukan cuma unpaid.)
+  //
+  //    LINGKUP: hanya order dgn PEMILIK yang sama — persis mencerminkan dua
+  //    unique index di DB. Order meja (owner NULL) dan order tiap anggota
+  //    berdiri sendiri: order host tak boleh memblokir anggota, dan order
+  //    anggota tak boleh memblokir meja atau anggota lain.
   const activeOrders = await db
     .select({ id: orders.id, status: orders.status })
     .from(orders)
     .where(
       and(
         eq(orders.sessionId, data.sessionId),
-        notInArray(orders.status, ["closed", "cancelled"])
+        notInArray(orders.status, ["closed", "cancelled"]),
+        ownerMemberId
+          ? eq(orders.ownerMemberId, ownerMemberId)
+          : isNull(orders.ownerMemberId)
       )
     );
   for (const o of activeOrders) {
@@ -1979,7 +1997,7 @@ export async function createOrder(
   const orderId = await db.transaction(async (tx) => {
     const [newOrder] = await tx
       .insert(orders)
-      .values({ sessionId: data.sessionId, status: "unpaid" })
+      .values({ sessionId: data.sessionId, status: "unpaid", ownerMemberId })
       .returning({ id: orders.id });
     await tx.insert(orderItems).values(
       data.items.map((it) => ({
@@ -2009,6 +2027,10 @@ export interface SessionOrderSummary {
   subtotal: number;
   total: number;
   outstanding: number;
+  /** NULL = order MEJA (host/staff). Terisi = order milik seorang anggota. */
+  owner_member_id: string | null;
+  /** Nama pemesan: pemilik order, atau host utk order meja. */
+  ordered_by: string | null;
 }
 
 /**
@@ -2020,22 +2042,34 @@ export async function getSessionOrders(
   sessionId: string
 ): Promise<SessionOrderSummary[]> {
   await requireProfile();
+  // Alias: nama pemesan bisa datang dari dua jalur berbeda (pemilik order utk
+  // order anggota, host meja utk order meja) — keduanya menyentuh `profiles`,
+  // jadi wajib di-alias supaya tak bentrok.
+  const ownerMember = aliasedTable(sessionMembers, "owner_member");
+  const ownerProfile = aliasedTable(profiles, "owner_profile");
+  const hostProfile = aliasedTable(profiles, "host_profile");
   const rows = await db
     .select({
       id: orders.id,
       status: orders.status,
+      ownerMemberId: orders.ownerMemberId,
       createdAt: orders.createdAt,
       paidAt: orders.paidAt,
       barId: floorAreas.barId,
       itemCount: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.status} <> 'void' THEN ${orderItems.quantity} ELSE 0 END), 0)::int`,
       subtotal: sql<number>`COALESCE(SUM(CASE WHEN ${orderItems.status} <> 'void' THEN ${orderItems.quantity} * ${orderItems.unitPrice} ELSE 0 END), 0)::int`,
       paid: sql<number>`0`,
+      // Nama pemesan: pemilik order (anggota), atau host meja utk order MEJA.
+      orderedBy: sql<string | null>`COALESCE(owner_profile.display_name, host_profile.display_name)`,
     })
     .from(orders)
     .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .leftJoin(ownerMember, eq(ownerMember.id, orders.ownerMemberId))
+    .leftJoin(ownerProfile, eq(ownerProfile.id, ownerMember.profileId))
+    .leftJoin(hostProfile, eq(hostProfile.id, tableSessions.hostId))
     // Order 'cancelled' (dibatalkan customer) tak ditampilkan di list order.
     .where(
       and(
@@ -2043,7 +2077,12 @@ export async function getSessionOrders(
         ne(orders.status, "cancelled")
       )
     )
-    .groupBy(orders.id, floorAreas.barId)
+    .groupBy(
+      orders.id,
+      floorAreas.barId,
+      ownerProfile.displayName,
+      hostProfile.displayName
+    )
     .orderBy(desc(orders.createdAt));
 
   // Paid per order.
@@ -2074,6 +2113,8 @@ export async function getSessionOrders(
       subtotal: bill.subtotal,
       total: bill.total,
       outstanding: Math.max(0, bill.total - paid),
+      owner_member_id: r.ownerMemberId,
+      ordered_by: r.orderedBy,
     };
   });
 }
@@ -2132,6 +2173,14 @@ export interface OrderDetail {
   /** Anggota joined (utk split di PaymentSheet). */
   membersCount: number;
   myMemberId: string | null;
+  /**
+   * Order ini milik si penonton (anggota memesan untuk dirinya sendiri).
+   * true → bayar PENUH tanpa split (split equally & treat hanya utk order meja
+   * yang dipegang host).
+   */
+  isOwnOrder: boolean;
+  /** Nama pemesan: pemilik order (anggota), atau host utk order MEJA. */
+  ordered_by: string | null;
 }
 
 /**
@@ -2149,6 +2198,7 @@ export async function getOrderDetail(
     .select({
       id: orders.id,
       status: orders.status,
+      ownerMemberId: orders.ownerMemberId,
       createdAt: orders.createdAt,
       paidAt: orders.paidAt,
       hostId: tableSessions.hostId,
@@ -2189,11 +2239,18 @@ export async function getOrderDetail(
 
   // Anggota joined (utk kasir pilih payer saat terima cash).
   const memberRows = await db
-    .select({ id: sessionMembers.id, name: profiles.displayName })
+    .select({
+      id: sessionMembers.id,
+      profileId: sessionMembers.profileId,
+      name: profiles.displayName,
+    })
     .from(sessionMembers)
     .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined")))
     .orderBy(sessionMembers.joinedAt);
+  // Nama host meja — dipakai sbg pemesan utk order MEJA (owner NULL).
+  const hostName =
+    memberRows.find((m) => m.profileId === order.hostId)?.name ?? null;
 
   // Items.
   const itemRows = await db
@@ -2250,6 +2307,10 @@ export async function getOrderDetail(
   // DI-REDAKSI di server (privasi sosial: siapa bayar berapa). Order 'cancelled'
   // tak perlu penanganan khusus di sini — memang tampil sbg detail biasa.
   const isViewOnly = !isHost && !isStaff && myMemberId === null;
+  // Order milik si penonton sendiri (dia anggota yang memesan untuk dirinya).
+  // Order MEJA (ownerMemberId NULL) tak pernah "milik" siapa pun.
+  const isOwnOrder =
+    order.ownerMemberId !== null && order.ownerMemberId === myMemberId;
 
   // Sisa yang BENAR-BENAR belum tertutup = outstanding − Σ(QRIS pending yg masih
   // hidup). Saat split sudah di-generate & sebagian anggota belum bayar, sisa itu
@@ -2286,7 +2347,20 @@ export async function getOrderDetail(
     isCashier,
     // Kasir TETAP boleh menerima pembayaran (mis. tamu bayar tunai di meja kasir
     // walau QRIS-nya masih hidup) — ia punya kontrol & bisa membatalkan QRIS.
-    canPay: (isHost || isStaff) && (isCashier ? outstanding > 0 : uncovered > 0),
+    // Pemilik order (anggota yang memesan sendiri) juga boleh membayar — tapi
+    // hanya ordernya sendiri, dan penuh tanpa split (lihat isOwnOrder di UI).
+    canPay:
+      (isHost || isStaff || (isOwnOrder && myMemberId !== null)) &&
+      (isCashier ? outstanding > 0 : uncovered > 0),
+    /** Order ini milik si penonton (anggota memesan sendiri) → bayar penuh, tanpa split. */
+    isOwnOrder,
+    // Nama pemesan: pemilik order (anggota) atau host utk order MEJA.
+    // Di-redaksi utk view-only, sama seperti added_by per item.
+    ordered_by: isViewOnly
+      ? null
+      : (order.ownerMemberId
+          ? memberRows.find((m) => m.id === order.ownerMemberId)?.name
+          : hostName) ?? null,
     viewOnly: isViewOnly,
     members: isViewOnly ? [] : memberRows.map((m) => ({ id: m.id, name: m.name })),
     items: itemRows.map((i) => ({
@@ -2437,12 +2511,14 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       )
     );
 
-  // Host-only payment: kalau pemanggil adalah member TAPI bukan host meja →
-  // tolak. Hanya host (atau staff, cabang di bawah) yang boleh membuat
-  // pembayaran/QRIS. (PRD Host-Only Payment FR1/FR2.)
-  if (member && !(await isSessionHost(data.sessionId, profile.id))) {
-    throw new Error("Only the table host can create payments");
-  }
+  // Siapa boleh bayar apa:
+  // - Order MEJA (owner NULL)  → hanya HOST (atau staff, cabang di bawah).
+  //   Di sinilah split equally & treat hidup — tak berubah dari sebelumnya.
+  // - Order milik ANGGOTA      → hanya PEMILIKNYA (atau host/staff sbg
+  //   penanggung jawab meja). Dia bayar penuh ordernya sendiri, tanpa split.
+  // (Pengecekan sesungguhnya dilakukan SETELAH order di-resolve di langkah 2 —
+  // orderId opsional, jadi pemiliknya belum bisa diketahui di titik ini.)
+  const callerIsHost = await isSessionHost(data.sessionId, profile.id);
 
   // Payer bukan member → boleh kalau STAFF aktif di bar sesi (waiter terima
   // pembayaran atas nama meja). Pembayaran diatribusikan ke HOST member.
@@ -2484,17 +2560,17 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
 
   // 2. Order untuk dibayar. Multi-order: kalau orderId diberi → pakai order itu
   // (dicek milik sesi). Kalau tidak → fallback lama (order non-closed sesi).
-  let order: { id: string } | undefined;
+  let order: { id: string; ownerMemberId: string | null } | undefined;
   if (data.orderId) {
     const [byId] = await db
-      .select({ id: orders.id })
+      .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
       .where(and(eq(orders.id, data.orderId), eq(orders.sessionId, data.sessionId)));
     order = byId;
     if (!order) throw new Error("Order not found for this table");
   } else {
     const [openOrder] = await db
-      .select({ id: orders.id })
+      .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
       .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
       .orderBy(desc(orders.createdAt))
@@ -2505,7 +2581,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
         (await getOutstandingMap([data.sessionId])).get(data.sessionId) ?? 0;
       if (outstanding <= 0) throw new Error("The bill is already paid");
       const [anyOrder] = await db
-        .select({ id: orders.id })
+        .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
         .from(orders)
         .where(eq(orders.sessionId, data.sessionId))
         .orderBy(desc(orders.createdAt))
@@ -2514,6 +2590,16 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     }
   }
   if (!order) throw new Error("Order not found");
+
+  // 2b. Siapa boleh bayar apa (baru bisa dicek di sini — orderId opsional, jadi
+  //     pemilik order belum diketahui saat auth di langkah 1):
+  //     - Order MEJA (owner NULL) → hanya HOST/staff. Di sinilah split equally
+  //       & treat hidup; tak berubah dari sebelumnya.
+  //     - Order milik ANGGOTA     → hanya PEMILIKNYA (host/staff tetap boleh
+  //       sbg penanggung jawab meja). Bayar penuh, tanpa split.
+  if (member && !callerIsHost && order.ownerMemberId !== member.id) {
+    throw new Error("Only the table host can create payments");
+  }
 
   // 2c. ANTI LEBIH BAYAR: sisa tagihan yang masih "kosong" = outstanding −
   //     Σ(QRIS pending yang masih hidup). Saat split sudah di-generate & anggota
@@ -2824,17 +2910,17 @@ export async function createSplitBatch(
 
   // 2. Order yang di-split. Multi-order: pakai orderId kalau diberi (dicek milik
   // sesi); else fallback ke order aktif terbaru.
-  let order: { id: string } | undefined;
+  let order: { id: string; ownerMemberId: string | null } | undefined;
   if (data.orderId) {
     const [byId] = await db
-      .select({ id: orders.id })
+      .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
       .where(and(eq(orders.id, data.orderId), eq(orders.sessionId, data.sessionId)));
     order = byId;
     if (!order) throw new Error("Order not found for this table");
   } else {
     const [openOrder] = await db
-      .select({ id: orders.id })
+      .select({ id: orders.id, ownerMemberId: orders.ownerMemberId })
       .from(orders)
       .where(and(eq(orders.sessionId, data.sessionId), ne(orders.status, "closed")))
       .orderBy(desc(orders.createdAt))
