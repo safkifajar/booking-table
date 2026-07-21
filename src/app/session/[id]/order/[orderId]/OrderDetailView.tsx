@@ -60,18 +60,21 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // Kembali ke tab Bill — user datang dari list order di sana, jadi jangan
   // dilempar balik ke tab Vibe.
   const backHref = `/session/${detail.sessionId}?tab=bill`;
-  // Siapa boleh membatalkan lewat tombol "kembali":
-  // - Order MEJA (owner NULL)  → host/staff. Itu tagihan meja.
-  // - Order milik ANGGOTA      → HANYA pemiliknya. Host membuka detail order
-  //   anggota lalu menekan "kembali" TIDAK BOLEH memunculkan konfirmasi —
-  //   kalau dikonfirmasi, host malah membatalkan pesanan orang lain.
-  // Penonton (viewOnly) & anggota lain cukup kembali tanpa konfirmasi apa pun.
+  // Popup batal saat menekan "kembali" HANYA untuk pemilik tagihan yang
+  // customer, tak pernah untuk STAFF:
+  // - Order MEJA (owner NULL)  → HOST saja. Kasir/waiter membuka halaman ini
+  //   untuk MENERIMA PEMBAYARAN, bukan membatalkan — popup di tombol kembali
+  //   jadi jebakan (salah pilih "Cancel order" = pesanan tamu hilang).
+  //   Pembatalan yang memang disengaja oleh staff lewat force-close, bukan sini.
+  // - Order milik ANGGOTA      → HANYA pemiliknya.
+  // Penonton (viewOnly) & anggota lain cukup kembali tanpa konfirmasi.
   const canCancel =
+    !detail.isStaff &&
     (detail.isOwnOrder
       ? true // pemilik order anggota
       : detail.isMemberOrder
-        ? false // order milik anggota LAIN — host/staff sekalipun tak lewat sini
-        : detail.isHost || detail.isStaff) &&
+        ? false // order milik anggota LAIN
+        : detail.isHost) &&
     !detail.viewOnly &&
     detail.status === "unpaid" &&
     detail.paid === 0;
