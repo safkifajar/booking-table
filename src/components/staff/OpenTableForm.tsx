@@ -504,6 +504,9 @@ export function OpenTableForm({
               cart={cart}
               onCartChange={setCart}
               saveLabel="Done"
+              // "Done" cuma menutup overlay — cart JANGAN dikosongkan; masih
+              // dipakai untuk pilih metode bayar + submit di form utama.
+              clearOnSave={false}
               onSave={async () => {
                 setMenuOpen(false);
               }}

@@ -38,6 +38,7 @@ export function StaffMenuGrid({
   onCartChange,
   saveLabel = "Save order",
   hideSaveButton = false,
+  clearOnSave = true,
 }: {
   menu: MenuPickerCategory[];
   onSave: (cart: CartLine[]) => Promise<void>;
@@ -50,6 +51,10 @@ export function StaffMenuGrid({
   /** Sembunyikan tombol simpan bawaan — parent yang submit (mis. walk-in
    *  yang butuh pilih metode bayar dulu). Total tetap tampil. */
   hideSaveButton?: boolean;
+  /** Kosongkan keranjang setelah onSave. Default true (waiter: order sudah
+   *  terkirim ke server). Walk-in pakai false — "Done" cuma menutup overlay,
+   *  cart harus tetap ada untuk dibayar. */
+  clearOnSave?: boolean;
 }) {
   const [query, setQuery] = React.useState("");
   const [internalCart, setInternalCart] = React.useState<
@@ -196,7 +201,7 @@ export function StaffMenuGrid({
     setSaving(true);
     try {
       await onSave(cartLines);
-      setCart({}); // kosongkan keranjang setelah tersimpan
+      if (clearOnSave) setCart({}); // kosongkan keranjang setelah tersimpan
       setCartOpen(false);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save order"));
