@@ -13,7 +13,6 @@ import { getCurrentProfile } from "@/lib/auth-v2/current";
 import {
   expireFinishedSessions,
   promoteDueReservations,
-  getFloorMapForBar,
 } from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
@@ -67,7 +66,6 @@ export default async function CashierPage() {
     sessions,
     bookings,
     availableTables,
-    floorMap,
     reservationData,
     moveRequests,
     closedSessions,
@@ -75,7 +73,6 @@ export default async function CashierPage() {
     getActiveSessionsForCashier(),
     getBookingsForCashier(),
     getAvailableTablesForWaiter(),
-    getFloorMapForBar(ctx.barId),
     getReservationDataForWaiter(),
     getMoveRequests(),
     getClosedSessionsForCashier(),
@@ -111,7 +108,6 @@ export default async function CashierPage() {
           sessions={sessions}
           bookings={bookings}
           availableTables={availableTables}
-          floorMap={floorMap}
           reservationData={reservationData}
           moveRequests={moveRequests}
           closedSessions={closedSessions}

@@ -35,9 +35,6 @@ import {
   type WaiterReservationData,
   type WaiterBookingItem,
 } from "@/lib/waiter-actions";
-import { OpenTableModal } from "@/components/staff/OpenTableModal";
-import type { FloorMapTable } from "@/components/floor/FloorMap";
-import type { FloorArea } from "@/types/db";
 import {
   MoveRequestsPanel,
   countPending,
@@ -57,7 +54,6 @@ interface Props {
   initialServed: WaiterServedItem[];
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
-  floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
   initialBookings: WaiterBookingItem[];
   closedSessions: WaiterSessionItem[];
@@ -98,7 +94,6 @@ export function WaiterDashboard({
   initialServed,
   initialSessions,
   initialAvailableTables,
-  floorMap,
   reservationData,
   initialBookings,
   closedSessions,
@@ -121,7 +116,6 @@ export function WaiterDashboard({
   const [tab, setTab] = React.useState<Tab>(initialTab);
   const [optimistic, setOptimistic] = React.useState<Set<string>>(new Set());
   const [joiningSession, setJoiningSession] = React.useState<string | null>(null);
-  const [openTableModal, setOpenTableModal] = React.useState(false);
 
   // Beep saat ada order 'sent' baru masuk (queue bertambah). Toggle sound
   // dihapus — bunyi notifikasi selalu aktif.
@@ -214,21 +208,16 @@ export function WaiterDashboard({
         active={tab}
         onChange={(k) => setTab(k as Tab)}
         topSlot={
-          <Button
-            type="button"
-            variant="gold"
-            size="lg"
-            className="w-full"
-            onClick={() => setOpenTableModal(true)}
-            disabled={initialAvailableTables.length === 0}
-          >
-            <UserPlus className="h-4 w-4" />
-            Open Table
-            {initialAvailableTables.length > 0 && (
-              <span className="ml-1 text-xs opacity-70">
-                ({initialAvailableTables.length} tables free)
-              </span>
-            )}
+          <Button asChild variant="gold" size="lg" className="w-full">
+            <Link href="/staff/open-table?from=waiter">
+              <UserPlus className="h-4 w-4" />
+              Open Table
+              {initialAvailableTables.length > 0 && (
+                <span className="ml-1 text-xs opacity-70">
+                  ({initialAvailableTables.length} tables free)
+                </span>
+              )}
+            </Link>
           </Button>
         }
         tabs={[
@@ -307,13 +296,6 @@ export function WaiterDashboard({
         )}
       </div>
 
-      {openTableModal && (
-        <OpenTableModal
-          floorMap={floorMap}
-          reservationData={reservationData}
-          onClose={() => setOpenTableModal(false)}
-        />
-      )}
     </div>
   );
 }
