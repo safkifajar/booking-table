@@ -4,6 +4,8 @@ import {
 } from "@/lib/waiter-actions";
 import {
   getFloorMapForBar,
+  getMenuByBar,
+  flattenMenuTree,
   expireFinishedSessions,
   promoteDueReservations,
 } from "@/lib/queries";
@@ -35,15 +37,35 @@ export default async function StaffOpenTablePage({ searchParams }: PageProps) {
   await expireFinishedSessions(ctx.barId);
   await promoteDueReservations(ctx.barId);
 
-  const [floorMap, reservationData] = await Promise.all([
+  const [floorMap, reservationData, menuTree] = await Promise.all([
     getFloorMapForBar(ctx.barId),
     getReservationDataForWaiter(),
+    getMenuByBar(ctx.barId),
   ]);
+  const menu = flattenMenuTree(menuTree).map((c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    parent_name: c.parent_name,
+    items: c.items
+      .filter((i) => i.is_available)
+      .map((i) => ({
+        id: i.id,
+        name: i.name,
+        description: i.description,
+        price: i.price,
+        image_url: i.image_url,
+        tags: i.tags,
+        is_available: i.is_available,
+        prep_minutes: i.prep_minutes,
+      })),
+  }));
 
   return (
     <OpenTableForm
       floorMap={floorMap}
       reservationData={reservationData}
+      menu={menu}
       backHref={backHref}
     />
   );

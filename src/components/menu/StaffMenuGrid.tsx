@@ -37,6 +37,7 @@ export function StaffMenuGrid({
   cart: controlledCart,
   onCartChange,
   saveLabel = "Save order",
+  hideSaveButton = false,
 }: {
   menu: MenuPickerCategory[];
   onSave: (cart: CartLine[]) => Promise<void>;
@@ -46,6 +47,9 @@ export function StaffMenuGrid({
   onCartChange?: (next: Record<string, number>) => void;
   /** Label tombol simpan. Default "Save order"; staff pakai "Pay". */
   saveLabel?: string;
+  /** Sembunyikan tombol simpan bawaan — parent yang submit (mis. walk-in
+   *  yang butuh pilih metode bayar dulu). Total tetap tampil. */
+  hideSaveButton?: boolean;
 }) {
   const [query, setQuery] = React.useState("");
   const [internalCart, setInternalCart] = React.useState<
@@ -486,19 +490,21 @@ export function StaffMenuGrid({
                   {formatIDR(totalPrice)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ShoppingCart className="h-4 w-4" />
-                )}
-                {saveLabel}
-              </button>
+              {!hideSaveButton && (
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="h-4 w-4" />
+                  )}
+                  {saveLabel}
+                </button>
+              )}
             </div>
           </div>
         </div>

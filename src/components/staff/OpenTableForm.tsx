@@ -8,12 +8,15 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
 import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
+import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
+import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
+import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import type { FloorArea } from "@/types/db";
 import {
   staffOpenTableForCustomer,
   type WaiterReservationData,
 } from "@/lib/waiter-actions";
-import { cn, getActionErrorMessage } from "@/lib/utils";
+import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 
 /**
  * Halaman "Open Table for Guest" (staff, walk-in). Pilih meja lewat DENAH LANTAI
@@ -25,10 +28,13 @@ import { cn, getActionErrorMessage } from "@/lib/utils";
 export function OpenTableForm({
   floorMap,
   reservationData,
+  menu,
   backHref,
 }: {
   floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
+  /** Menu bar untuk pilih pesanan awal (wajib — tamu bayar dulu). */
+  menu: MenuPickerCategory[];
   /** Ke mana tombol "Back" mengarah (dashboard asal: waiter/cashier). */
   backHref: string;
 }) {
@@ -40,6 +46,35 @@ export function OpenTableForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [slotStart, setSlotStart] = React.useState("");
   const [slotEnd, setSlotEnd] = React.useState("");
+  // Cart pesanan awal (wajib) + metode bayar di muka.
+  const [cart, setCart] = React.useState<Record<string, number>>({});
+  const [payMethod, setPayMethod] = React.useState<"qris" | "cash">("qris");
+  // QR yang sedang ditampilkan setelah submit (QRIS).
+  const [qr, setQr] = React.useState<{
+    paymentId: string;
+    qrString: string;
+    amount: number;
+    sessionId: string;
+  } | null>(null);
+
+  // Lookup harga item + hitung total (untuk tampilan; server tetap otoritatif).
+  const itemPrice = React.useMemo(() => {
+    const m = new Map<string, number>();
+    for (const cat of menu) for (const it of cat.items) m.set(it.id, it.price);
+    return m;
+  }, [menu]);
+  const cartLines = React.useMemo(
+    () =>
+      Object.entries(cart)
+        .filter(([, q]) => q > 0)
+        .map(([menuItemId, quantity]) => ({ menuItemId, quantity })),
+    [cart]
+  );
+  const cartCount = cartLines.reduce((s, l) => s + l.quantity, 0);
+  const cartSubtotal = cartLines.reduce(
+    (s, l) => s + (itemPrice.get(l.menuItemId) ?? 0) * l.quantity,
+    0
+  );
 
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     floorMap[0]?.area.slug ?? ""
@@ -95,6 +130,7 @@ export function OpenTableForm({
     !submitting &&
     selectedTableId !== null &&
     validNamesCount > 0 &&
+    cartLines.length > 0 &&
     (!reservationEnabled || !!slotStart);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -104,23 +140,42 @@ export function OpenTableForm({
       toast.error("Select a booking time first");
       return;
     }
+    if (cartLines.length === 0) {
+      toast.error("Add at least one menu item first");
+      return;
+    }
     setSubmitting(true);
     try {
-      await staffOpenTableForCustomer(
-        selectedTableId,
+      const result = await staffOpenTableForCustomer({
+        tableId: selectedTableId,
         guestNames,
-        slotStart || null,
-        slotStart ? effectiveEnd : null
-      );
-      // Redirect ke /session/[id] ditangani server action.
+        reservationAt: slotStart || null,
+        reservationEndAt: slotStart ? effectiveEnd : null,
+        items: cartLines,
+        payMethod,
+      });
+      // Bayar di kasir → arahkan ke layar tunggu konfirmasi (countdown 10 mnt).
+      if ("awaitCashier" in result) {
+        router.push(`/booking/${result.sessionId}/pay`);
+        return;
+      }
+      // QRIS pending → tampilkan QR; meja terbuka begitu dibayar.
+      if ("qris" in result) {
+        setQr({
+          paymentId: result.qris.paymentId,
+          qrString: result.qris.qrString,
+          amount: cartSubtotal,
+          sessionId: result.sessionId,
+        });
+        setSubmitting(false);
+        return;
+      }
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
       if (raw.includes("NEXT_REDIRECT")) throw err;
       const message = getActionErrorMessage(err, "Failed to open table");
       toast.error(message);
       setSubmitting(false);
-      // Slot keburu dibooking orang lain (race) → kembali ke dashboard supaya
-      // staff bisa mulai lagi dgn data meja/jam terkini.
       if (message.toLowerCase().includes("booked")) {
         router.push(backHref);
       }
@@ -307,6 +362,59 @@ export function OpenTableForm({
           )}
         </div>
 
+        {/* 4. Pesanan awal (WAJIB — tamu bayar dulu) */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+            4. Order &amp; pay{" "}
+            <span className="text-primary font-normal">(required)</span>
+          </label>
+          {menu.length === 0 ? (
+            <Card className="p-4 text-center border-dashed">
+              <p className="text-[11px] text-muted-foreground">
+                No menu set up yet.
+              </p>
+            </Card>
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <StaffMenuGrid
+                menu={menu}
+                cart={cart}
+                onCartChange={setCart}
+                hideSaveButton
+                onSave={async () => {
+                  /* Submit lewat tombol footer — butuh metode bayar dulu. */
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* 5. Metode bayar */}
+        {cartCount > 0 && (
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+              5. Payment method
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["qris", "cash"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPayMethod(m)}
+                  className={cn(
+                    "rounded-lg border h-11 text-sm font-medium transition",
+                    payMethod === m
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  )}
+                >
+                  {m === "qris" ? "QRIS now" : "Pay at cashier"}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Footer aksi */}
         <div className="sticky bottom-0 -mx-4 px-4 py-4 bg-background border-t border-border">
           <Button
@@ -319,17 +427,37 @@ export function OpenTableForm({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Opening table...
+                Processing…
               </>
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                Open Table &amp; Start Ordering
+                {cartSubtotal > 0
+                  ? `${payMethod === "qris" ? "Pay" : "Confirm at cashier"} · ${formatIDR(cartSubtotal)}`
+                  : "Add items to continue"}
               </>
             )}
           </Button>
+          <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
+            Table opens once payment is received. Service charge added at
+            checkout.
+          </p>
         </div>
       </form>
+
+      {/* QRIS: tampil setelah submit. Lunas → meja terbuka, ke halaman sesi. */}
+      {qr && (
+        <QrisPaymentDialog
+          paymentId={qr.paymentId}
+          qrString={qr.qrString}
+          amount={qr.amount}
+          onPaid={() => {
+            toast.success("Payment received — table opened");
+            router.push(`/session/${qr.sessionId}`);
+          }}
+          onClose={() => setQr(null)}
+        />
+      )}
     </div>
   );
 }
