@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { UserPlus } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
 import { OpenTableModal } from "@/components/staff/OpenTableModal";
+import type { FloorMapTable } from "@/components/floor/FloorMap";
+import type { FloorArea } from "@/types/db";
 import type {
   CashierSessionItem,
   CashierBookingItem,
@@ -48,6 +50,7 @@ interface Props {
   sessions: CashierSessionItem[];
   bookings: CashierBookingItem[];
   availableTables: AvailableTable[];
+  floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
   moveRequests: MoveRequestRow[];
   closedSessions: CashierSessionItem[];
@@ -101,6 +104,7 @@ export function CashierSessionList({
   sessions,
   bookings,
   availableTables,
+  floorMap,
   reservationData,
   moveRequests,
   closedSessions,
@@ -356,7 +360,7 @@ export function CashierSessionList({
 
       {openTableModal && (
         <OpenTableModal
-          tables={availableTables}
+          floorMap={floorMap}
           reservationData={reservationData}
           onClose={() => setOpenTableModal(false)}
         />

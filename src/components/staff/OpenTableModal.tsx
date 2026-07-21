@@ -6,26 +6,35 @@ import { UserPlus, Plus, X, Users, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
+import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
+import type { FloorArea } from "@/types/db";
 import {
   staffOpenTableForCustomer,
-  type AvailableTable,
   type WaiterReservationData,
 } from "@/lib/waiter-actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 
 /**
  * Modal "Buka Meja untuk Tamu" (staff). Dipakai waiter & kasir.
- * Pilih meja kosong + jam booking (SlotRangePicker) + nama tamu.
+ * Pilih meja lewat DENAH LANTAI (sama seperti tampilan customer) + jam booking
+ * (SlotRangePicker) + nama tamu.
  */
 export function OpenTableModal({
-  tables,
+  floorMap,
   reservationData,
   onClose,
 }: {
-  tables: AvailableTable[];
+  /** Denah lantai per area (koordinat + status) — sumber pilih meja. */
+  floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
   onClose: () => void;
 }) {
+  // Area denah yang sedang ditampilkan (tab). Default area pertama.
+  const [activeAreaSlug, setActiveAreaSlug] = React.useState(
+    floorMap[0]?.area.slug ?? ""
+  );
+  const activeArea =
+    floorMap.find((a) => a.area.slug === activeAreaSlug) ?? floorMap[0] ?? null;
   const [guestNames, setGuestNames] = React.useState<string[]>([""]);
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
     null
@@ -37,22 +46,16 @@ export function OpenTableModal({
 
   const reservationEnabled = reservationData.enabled && reservationData.slots.length > 0;
 
-  const selectedTable = React.useMemo(
-    () => tables.find((t) => t.id === selectedTableId) ?? null,
-    [tables, selectedTableId]
-  );
-  const capacity = selectedTable?.capacity ?? 8;
-
-  // Group tables by area
-  const groupedTables = React.useMemo(() => {
-    const map = new Map<string, AvailableTable[]>();
-    for (const t of tables) {
-      const list = map.get(t.area_name) ?? [];
-      list.push(t);
-      map.set(t.area_name, list);
+  // Meja terpilih diambil dari DENAH (punya koordinat + capacity), bukan lagi
+  // dari daftar AvailableTable.
+  const selectedTable = React.useMemo(() => {
+    for (const { tables: ts } of floorMap) {
+      const hit = ts.find((t) => t.id === selectedTableId);
+      if (hit) return hit;
     }
-    return Array.from(map.entries());
-  }, [tables]);
+    return null;
+  }, [floorMap, selectedTableId]);
+  const capacity = selectedTable?.capacity ?? 8;
 
   // Trim guest list kalau pilih meja dengan capacity lebih kecil
   React.useEffect(() => {
@@ -89,7 +92,6 @@ export function OpenTableModal({
     !submitting &&
     selectedTableId !== null &&
     validNamesCount > 0 &&
-    tables.length > 0 &&
     // Wajib pilih jam KALAU reservasi aktif; kalau bar matikan reservasi → walk-in.
     (!reservationEnabled || !!slotStart);
 
@@ -162,44 +164,66 @@ export function OpenTableModal({
               <label className="text-xs font-medium text-muted-foreground block mb-1.5">
                 1. Select an empty table
               </label>
-              {tables.length === 0 ? (
+              {!activeArea ? (
                 <Card className="p-6 text-center border-dashed">
                   <p className="text-xs text-muted-foreground">
-                    All tables are in use. Close one first.
+                    No floor plan set up yet.
                   </p>
                 </Card>
               ) : (
-                <div className="space-y-3">
-                  {groupedTables.map(([area, ts]) => (
-                    <div key={area}>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                        {area}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {ts.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setSelectedTableId(t.id)}
-                            className={cn(
-                              "p-2 rounded-md border text-center transition",
-                              selectedTableId === t.id
-                                ? "border-primary bg-primary/15 text-primary"
-                                : "border-border bg-muted/30 hover:border-primary/50"
-                            )}
-                          >
-                            <div className="text-xs font-semibold">
-                              {t.label}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground flex items-center justify-center gap-0.5 mt-0.5">
-                              <Users className="h-2.5 w-2.5" />
-                              {t.capacity}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                <div className="space-y-2">
+                  {/* Tab area — kalau bar punya lebih dari satu area. */}
+                  {floorMap.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1">
+                      {floorMap.map(({ area }) => (
+                        <button
+                          key={area.slug}
+                          type="button"
+                          onClick={() => setActiveAreaSlug(area.slug)}
+                          className={cn(
+                            "shrink-0 rounded-full border px-3 h-8 text-xs transition",
+                            area.slug === activeAreaSlug
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border text-muted-foreground hover:border-primary/40"
+                          )}
+                        >
+                          {area.name}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  )}
+
+                  {/* Denah lantai — sama seperti yang dilihat customer. Meja
+                      merah = sedang dipakai; tetap bisa dipilih (server yang
+                      validasi akhir). */}
+                  <div className="rounded-lg border border-border overflow-hidden bg-background">
+                    <FloorMap
+                      key={activeArea.area.slug}
+                      canvasWidth={activeArea.area.canvas_width}
+                      canvasHeight={activeArea.area.canvas_height}
+                      tables={activeArea.tables}
+                      selectedTableId={selectedTableId}
+                      onSelectTable={(t) => setSelectedTableId(t.id)}
+                    />
+                  </div>
+
+                  {/* Ringkasan meja terpilih — di denah label kecil, jadi
+                      pertegas di sini. */}
+                  {selectedTable ? (
+                    <div className="flex items-center justify-between rounded-md bg-primary/10 border border-primary/30 px-3 py-2 text-sm">
+                      <span className="font-medium text-primary">
+                        Table {selectedTable.label}
+                      </span>
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {selectedTable.capacity} seats
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground text-center py-1">
+                      Tap a table on the map to select it.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -36,6 +36,8 @@ import {
   type WaiterBookingItem,
 } from "@/lib/waiter-actions";
 import { OpenTableModal } from "@/components/staff/OpenTableModal";
+import type { FloorMapTable } from "@/components/floor/FloorMap";
+import type { FloorArea } from "@/types/db";
 import {
   MoveRequestsPanel,
   countPending,
@@ -55,6 +57,7 @@ interface Props {
   initialServed: WaiterServedItem[];
   initialSessions: WaiterSessionItem[];
   initialAvailableTables: AvailableTable[];
+  floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
   initialBookings: WaiterBookingItem[];
   closedSessions: WaiterSessionItem[];
@@ -95,6 +98,7 @@ export function WaiterDashboard({
   initialServed,
   initialSessions,
   initialAvailableTables,
+  floorMap,
   reservationData,
   initialBookings,
   closedSessions,
@@ -305,7 +309,7 @@ export function WaiterDashboard({
 
       {openTableModal && (
         <OpenTableModal
-          tables={initialAvailableTables}
+          floorMap={floorMap}
           reservationData={reservationData}
           onClose={() => setOpenTableModal(false)}
         />

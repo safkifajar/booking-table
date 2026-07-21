@@ -93,6 +93,39 @@ export async function getFloorAreas(barId: string): Promise<FloorArea[]> {
   }));
 }
 
+/**
+ * Denah lantai lengkap satu bar untuk komponen FloorMap: tiap area beserta
+ * mejanya (dgn koordinat) + active_session (open/locked = sedang dipakai).
+ * Dipakai halaman customer (via bar/[slug]) DAN pemilih meja walk-in staff,
+ * supaya dua tempat memakai bentuk data yang sama persis.
+ *
+ * active_session di sini = KONDISI SEKARANG saja (open/locked). Reservasi
+ * (future booking) TIDAK mewarnai meja — sama seperti perilaku denah customer.
+ */
+export async function getFloorMapForBar(barId: string): Promise<
+  Array<{ area: FloorArea; tables: (BarTable & { active_session: ActiveSessionView | null })[] }>
+> {
+  const areas = await getFloorAreas(barId);
+  return Promise.all(
+    areas.map(async (area) => {
+      const [tables, sessions] = await Promise.all([
+        getTablesByArea(area.id),
+        getActiveSessionsForArea(area.id),
+      ]);
+      const tablesWithSession = tables.map((t) => {
+        const active =
+          sessions.find(
+            (s) =>
+              s.table_id === t.id &&
+              (s.status === "open" || s.status === "locked")
+          ) ?? null;
+        return { ...t, active_session: active };
+      });
+      return { area, tables: tablesWithSession };
+    })
+  );
+}
+
 export async function getTablesByArea(areaId: string): Promise<BarTable[]> {
   const rows = await db.query.tables.findMany({
     // Customer: hanya meja aktif & sudah publish (bukan draft).

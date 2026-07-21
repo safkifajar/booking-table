@@ -17,6 +17,7 @@ import { getMoveRequests } from "@/lib/move-approval-actions";
 import {
   expireFinishedSessions,
   promoteDueReservations,
+  getFloorMapForBar,
 } from "@/lib/queries";
 import { StaffProfileButton } from "@/components/staff/StaffProfileButton";
 import { WaiterDashboard } from "./WaiterDashboard";
@@ -49,6 +50,7 @@ export default async function StaffWaiterPage() {
     servedItems,
     sessions,
     availableTables,
+    floorMap,
     reservationData,
     bookings,
     moveRequests,
@@ -64,6 +66,7 @@ export default async function StaffWaiterPage() {
     getServedItemsForWaiter(),
     getActiveSessionsForWaiter(),
     getAvailableTablesForWaiter(),
+    getFloorMapForBar(ctx.barId),
     getReservationDataForWaiter(),
     getBookingsForWaiter(),
     getMoveRequests(),
@@ -100,6 +103,7 @@ export default async function StaffWaiterPage() {
             initialServed={servedItems}
             initialSessions={sessions}
             initialAvailableTables={availableTables}
+            floorMap={floorMap}
             reservationData={reservationData}
             initialBookings={bookings}
             moveRequests={moveRequests}
