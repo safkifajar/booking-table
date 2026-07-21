@@ -3,7 +3,15 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X, Users, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  X,
+  Users,
+  Loader2,
+  UtensilsCrossed,
+  ChevronRight,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SlotRangePicker } from "@/components/reservation/SlotRangePicker";
@@ -48,6 +56,7 @@ export function OpenTableForm({
   const [slotEnd, setSlotEnd] = React.useState("");
   // Cart pesanan awal (wajib) + metode bayar di muka.
   const [cart, setCart] = React.useState<Record<string, number>>({});
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const [payMethod, setPayMethod] = React.useState<"qris" | "cash">("qris");
   // QR yang sedang ditampilkan setelah submit (QRIS).
   const [qr, setQr] = React.useState<{
@@ -374,18 +383,40 @@ export function OpenTableForm({
                 No menu set up yet.
               </p>
             </Card>
+          ) : cartCount === 0 ? (
+            // Tombol pemicu — pilih menu di HALAMAN/modal penuh sendiri (pola
+            // customer), bukan grid tertanam yang scroll-nya bentrok di form.
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="w-full flex items-center justify-between gap-2 p-3 rounded-md border border-dashed border-border hover:border-primary/50 transition text-sm text-muted-foreground"
+            >
+              <span className="flex items-center gap-2">
+                <UtensilsCrossed className="h-4 w-4" />
+                Pick menu items
+              </span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
           ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <StaffMenuGrid
-                menu={menu}
-                cart={cart}
-                onCartChange={setCart}
-                hideSaveButton
-                onSave={async () => {
-                  /* Submit lewat tombol footer — butuh metode bayar dulu. */
-                }}
-              />
-            </div>
+            // Sudah ada isi → ringkasan + tombol ubah.
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="w-full rounded-md border border-primary/30 bg-primary/5 p-3 text-left transition hover:border-primary/50"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-primary">
+                  {cartCount} item{cartCount > 1 ? "s" : ""}
+                </span>
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  {formatIDR(cartSubtotal)}
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Tap to edit the order
+              </p>
+            </button>
           )}
         </div>
 
@@ -444,6 +475,39 @@ export function OpenTableForm({
           </p>
         </div>
       </form>
+
+      {/* Pemilih menu — overlay penuh, scroll sendiri (StaffMenuGrid memang
+          dirancang penuh-layar; di dalam form ia bentrok). Tombol "Done"
+          menutup; cart controlled sudah tersimpan. */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <UtensilsCrossed className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Pick menu items</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMenuOpen(false)}
+              className="h-8 w-8 rounded-md text-muted-foreground hover:bg-muted flex items-center justify-center"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <StaffMenuGrid
+              menu={menu}
+              cart={cart}
+              onCartChange={setCart}
+              saveLabel="Done"
+              onSave={async () => {
+                setMenuOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* QRIS: tampil setelah submit. Lunas → meja terbuka, ke halaman sesi. */}
       {qr && (
