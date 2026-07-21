@@ -175,7 +175,13 @@ export function OpenTableForm({
         items: cartLines,
         payMethod,
       });
-      // Bayar di kasir → arahkan ke layar tunggu konfirmasi (countdown 10 mnt).
+      // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
+      if ("paid" in result) {
+        toast.success("Payment received — table opened");
+        router.push(`/session/${result.sessionId}`);
+        return;
+      }
+      // Bayar di kasir (waiter yang buka) → layar tunggu konfirmasi (10 mnt).
       if ("awaitCashier" in result) {
         router.push(`/booking/${result.sessionId}/pay`);
         return;

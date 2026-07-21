@@ -35,7 +35,8 @@ import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems, menuCategories } from "@/lib/db/schema/menu";
-import { requirePermission } from "@/lib/auth-v2/permissions";
+import { requirePermission, can } from "@/lib/auth-v2/permissions";
+import { cashierMarkPaymentPaid } from "@/lib/cashier-actions";
 import { sortUnpaidFirst } from "@/lib/session-sort";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
@@ -878,11 +879,15 @@ export interface StaffOpenTableInput {
  * Hasil buka meja walk-in. Meja BELUM benar-benar terbuka sampai pembayaran
  * lunas — memakai ulang mesin DP customer:
  * - qrisPending → tampilkan QR, meja terbuka begitu QR dibayar.
- * - awaitCashier → arahkan ke layar bayar-di-kasir.
+ * - awaitCashier → arahkan ke layar bayar-di-kasir (dibuka oleh WAITER: dia tak
+ *   boleh terima uang, jadi tamu bayar ke kasir lain).
+ * - paid → cash langsung lunas (dibuka oleh KASIR/manager/admin sendiri — dia
+ *   terima uang di tempat, tak perlu antre ke dirinya). Meja langsung terbuka.
  */
 export type StaffOpenTableResult =
   | { ok: true; sessionId: string; qris: { paymentId: string; qrString: string } }
-  | { ok: true; sessionId: string; awaitCashier: true };
+  | { ok: true; sessionId: string; awaitCashier: true }
+  | { ok: true; sessionId: string; paid: true };
 
 export async function staffOpenTableForCustomer(
   input: StaffOpenTableInput
@@ -1128,8 +1133,29 @@ export async function staffOpenTableForCustomer(
 
   // Proses pembayaran di muka. Pola sama dengan DP customer (openTable).
   if (payMethod === "cash") {
-    // Bayar di kasir: TANPA gateway. 'pending' + batas 10 menit; lewat itu
-    // expireDpIfOverdue membatalkan booking & mejanya bebas lagi.
+    // Kasir/manager/admin yang buka meja SENDIRI → dia yang terima uang di
+    // tempat. Tak masuk akal mengarahkannya ke layar "bayar ke kasir" (dirinya
+    // sendiri). Langsung tandai lunas → meja terbuka & pesanan masuk dapur.
+    // cashierMarkPaymentPaid mengecek ulang izin receive_payment (aman kalau
+    // suatu saat role berubah) & menjalankan semua hook (dp_paid_at, settle,
+    // split, notif).
+    if (can(ctx.role, "receive_payment")) {
+      await db
+        .update(payments)
+        .set({
+          externalRef: `cashier_${paymentId}`,
+          splitMeta: { isDownPayment: true, dpFull: true },
+        })
+        .where(eq(payments.id, paymentId));
+      await cashierMarkPaymentPaid(paymentId);
+      revalidatePath("/staff/waiter");
+      revalidatePath("/staff/cashier");
+      return { ok: true, sessionId, paid: true };
+    }
+
+    // WAITER yang buka: dia tak boleh terima uang → tamu bayar ke kasir.
+    // 'pending' + batas 10 menit; lewat itu expireDpIfOverdue membatalkan
+    // booking & mejanya bebas lagi.
     await db
       .update(payments)
       .set({
