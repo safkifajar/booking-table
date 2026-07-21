@@ -495,7 +495,10 @@ export function OpenTableForm({
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="flex-1 min-h-0">
+          {/* px-4 sm:px-6: StaffMenuGrid mengharapkan parent berpadding —
+              search & kartu ikut padding, sedang bar cart bawah pakai -mx untuk
+              "bleed" balik ke tepi. Tanpa ini konten mepet dinding. */}
+          <div className="flex-1 min-h-0 px-4 sm:px-6 pt-4">
             <StaffMenuGrid
               menu={menu}
               cart={cart}
