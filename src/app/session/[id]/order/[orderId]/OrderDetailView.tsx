@@ -3,11 +3,17 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { ArrowLeft, QrCode, RefreshCw, UtensilsCrossed } from "lucide-react";
+import {
+  ArrowLeft,
+  Banknote,
+  QrCode,
+  RefreshCw,
+  UtensilsCrossed,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatIDR, getActionErrorMessage } from "@/lib/utils";
+import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
@@ -54,18 +60,21 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // Kembali ke tab Bill — user datang dari list order di sana, jadi jangan
   // dilempar balik ke tab Vibe.
   const backHref = `/session/${detail.sessionId}?tab=bill`;
-  // Siapa boleh membatalkan lewat tombol "kembali":
-  // - Order MEJA (owner NULL)  → host/staff. Itu tagihan meja.
-  // - Order milik ANGGOTA      → HANYA pemiliknya. Host membuka detail order
-  //   anggota lalu menekan "kembali" TIDAK BOLEH memunculkan konfirmasi —
-  //   kalau dikonfirmasi, host malah membatalkan pesanan orang lain.
-  // Penonton (viewOnly) & anggota lain cukup kembali tanpa konfirmasi apa pun.
+  // Popup batal saat menekan "kembali" HANYA untuk pemilik tagihan yang
+  // customer, tak pernah untuk STAFF:
+  // - Order MEJA (owner NULL)  → HOST saja. Kasir/waiter membuka halaman ini
+  //   untuk MENERIMA PEMBAYARAN, bukan membatalkan — popup di tombol kembali
+  //   jadi jebakan (salah pilih "Cancel order" = pesanan tamu hilang).
+  //   Pembatalan yang memang disengaja oleh staff lewat force-close, bukan sini.
+  // - Order milik ANGGOTA      → HANYA pemiliknya.
+  // Penonton (viewOnly) & anggota lain cukup kembali tanpa konfirmasi.
   const canCancel =
+    !detail.isStaff &&
     (detail.isOwnOrder
       ? true // pemilik order anggota
       : detail.isMemberOrder
-        ? false // order milik anggota LAIN — host/staff sekalipun tak lewat sini
-        : detail.isHost || detail.isStaff) &&
+        ? false // order milik anggota LAIN
+        : detail.isHost) &&
     !detail.viewOnly &&
     detail.status === "unpaid" &&
     detail.paid === 0;
@@ -664,6 +673,197 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
 }
 
 /**
+ * Panel tunai kasir BERSAMA — satu tampilan untuk dua alur:
+ * - CashierPayBox (buat pembayaran baru): payer bisa dipilih (slot `payer`).
+ * - CashierConfirmBox (konfirmasi pending pay-at-cashier): payer terkunci.
+ *
+ * Menangani: Amount due, toggle metode, Cash received + prefill amount due +
+ * "Exact amount" + pecahan cepat (50rb/100rb) + kembalian/kurang bayar. Submit
+ * didelegasikan ke `onSubmit(method, cashReceived?)`. Dulu dua alur ini punya
+ * UI cash terpisah → hanya salah satu yang dapat fitur exact/quick → divergen.
+ */
+function CashierCashPanel({
+  amount,
+  payer,
+  defaultMethod,
+  busy,
+  submitting,
+  onSubmit,
+}: {
+  amount: number;
+  /** Slot pembayar: dropdown (buat baru) atau nama terkunci (konfirmasi). */
+  payer: React.ReactNode;
+  defaultMethod: "cash" | "qris";
+  busy: boolean;
+  /** Teks tombol saat proses (default "Processing…"). */
+  submitting?: string;
+  onSubmit: (method: "cash" | "qris", cashReceived?: number) => void;
+}) {
+  const [method, setMethod] = React.useState<"cash" | "qris">(defaultMethod);
+  // Prefill nominal tagihan — kasus paling sering: tamu membayar uang pas.
+  const [cashReceived, setCashReceived] = React.useState(String(amount));
+  // Tagihan bisa berubah setelah mount (mis. pembayaran lain masuk) → segarkan
+  // prefill. Pola "adjust state on prop change during render" (tanpa useEffect,
+  // menghindari cascading render): saat `amount` beda dari nilai basis prefill
+  // terakhir, reset input & catat basis baru — semua di fase render.
+  const [prefillBase, setPrefillBase] = React.useState(amount);
+  if (prefillBase !== amount) {
+    setPrefillBase(amount);
+    setCashReceived(String(amount));
+  }
+  const received = parseInt(cashReceived || "0", 10) || 0;
+  const change = method === "cash" ? Math.max(0, received - amount) : 0;
+  const shortfall = method === "cash" ? Math.max(0, amount - received) : 0;
+  const cashValid = method !== "cash" || received >= amount;
+  const isExact = received === amount;
+
+  // Pecahan cepat: pembulatan ke atas ke kelipatan lazim (50rb/100rb). Hanya
+  // tampil kalau di ATAS tagihan — kalau uang pas sudah kelipatan itu, tak guna.
+  const quickCash = React.useMemo(() => {
+    const steps = [50_000, 100_000];
+    const out: number[] = [];
+    for (const s of steps) {
+      const v = Math.ceil(amount / s) * s;
+      if (v > amount && !out.includes(v)) out.push(v);
+    }
+    return out.slice(0, 2);
+  }, [amount]);
+
+  return (
+    <div className="space-y-4">
+      {/* Nominal tagihan = fokus utama; itu yg pertama dicari kasir. */}
+      <div className="text-center">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Amount due
+        </p>
+        <p className="text-3xl font-semibold text-primary tabular-nums mt-0.5">
+          {formatIDR(amount)}
+        </p>
+      </div>
+
+      {payer}
+
+      {/* Metode */}
+      <div className="grid grid-cols-2 gap-2">
+        {(["cash", "qris"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-lg border h-11 text-sm font-medium transition",
+              method === m
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border hover:border-primary/40"
+            )}
+          >
+            {m === "qris" ? (
+              <QrCode className="h-4 w-4" />
+            ) : (
+              <Banknote className="h-4 w-4" />
+            )}
+            {m === "qris" ? "QRIS" : "Cash"}
+          </button>
+        ))}
+      </div>
+
+      {/* Uang tunai + kembalian */}
+      {method === "cash" && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-muted-foreground">
+              Cash received
+            </label>
+            {/* Uang pas — sekali klik, tanpa mengetik. */}
+            <button
+              type="button"
+              onClick={() => setCashReceived(String(amount))}
+              disabled={isExact}
+              className={cn(
+                "text-[11px] rounded-full border px-2.5 py-1 transition",
+                isExact
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              )}
+            >
+              {isExact ? "Exact amount ✓" : "Exact amount"}
+            </button>
+          </div>
+
+          <input
+            inputMode="numeric"
+            value={cashReceived}
+            onChange={(e) =>
+              setCashReceived(e.target.value.replace(/[^0-9]/g, ""))
+            }
+            onFocus={(e) => e.currentTarget.select()}
+            placeholder={String(amount)}
+            className={cn(
+              "w-full rounded-lg border bg-background px-3 h-12 text-lg font-semibold tabular-nums transition",
+              shortfall > 0
+                ? "border-destructive/60 text-destructive"
+                : "border-border"
+            )}
+          />
+
+          {/* Pecahan yang lazim diserahkan tamu. */}
+          {quickCash.length > 0 && (
+            <div className="flex gap-2">
+              {quickCash.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setCashReceived(String(v))}
+                  className={cn(
+                    "flex-1 rounded-md border h-9 text-xs tabular-nums transition",
+                    received === v
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  {formatIDR(v)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Kembalian / kurang bayar — selalu terlihat, bukan hanya saat >0. */}
+          <div className="flex justify-between items-center text-sm rounded-lg bg-background/60 px-3 py-2">
+            <span className="text-muted-foreground">
+              {shortfall > 0 ? "Still short" : "Change"}
+            </span>
+            <span
+              className={cn(
+                "font-semibold tabular-nums",
+                shortfall > 0 ? "text-destructive" : "text-emerald-400"
+              )}
+            >
+              {formatIDR(shortfall > 0 ? shortfall : change)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <Button
+        variant="gold"
+        size="lg"
+        className="w-full"
+        disabled={busy || !cashValid}
+        onClick={() =>
+          onSubmit(method, method === "cash" ? received : undefined)
+        }
+      >
+        {busy
+          ? (submitting ?? "Processing…")
+          : method === "cash"
+            ? `Accept ${formatIDR(received || amount)}`
+            : "Generate QRIS"}
+      </Button>
+    </div>
+  );
+}
+
+/**
  * Box kasir di halaman detail order: pilih payer + metode (QRIS/Cash). Cash →
  * input diterima + kembalian. Accept → cashierCreatePayment (QRIS mock/duitku
  * auto-handle; cash langsung paid). (PRD Multi-Order — fitur kasir di detail.)
@@ -678,16 +878,11 @@ function CashierPayBox({
   onDone: () => void;
 }) {
   const [payerId, setPayerId] = React.useState(detail.members[0]?.id ?? "");
-  const [method, setMethod] = React.useState<"qris" | "cash">("qris");
-  const [cashReceived, setCashReceived] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
   const amount = detail.outstanding;
-  const received = parseInt(cashReceived || "0", 10) || 0;
-  const change = method === "cash" ? Math.max(0, received - amount) : 0;
-  const cashValid = method !== "cash" || received >= amount;
 
-  async function accept() {
+  async function accept(method: "cash" | "qris", received?: number) {
     if (!payerId) {
       toast.error("Select a payer");
       return;
@@ -710,10 +905,10 @@ function CashierPayBox({
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
       } else {
+        const change =
+          method === "cash" && received ? Math.max(0, received - amount) : 0;
         toast.success(
-          method === "cash" && change > 0
-            ? `Paid — change ${formatIDR(change)}`
-            : "Payment received"
+          change > 0 ? `Paid — change ${formatIDR(change)}` : "Payment received"
         );
       }
       onDone();
@@ -725,72 +920,30 @@ function CashierPayBox({
   }
 
   return (
-    <Card className="p-4 space-y-3">
+    <Card className="p-4 space-y-4">
       <div className="text-sm font-semibold">Accept payment (cashier)</div>
-
-      {/* Payer */}
-      <div>
-        <label className="text-xs text-muted-foreground">Payer</label>
-        <select
-          value={payerId}
-          onChange={(e) => setPayerId(e.target.value)}
-          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        >
-          {detail.members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Method */}
-      <div className="flex gap-2">
-        {(["qris", "cash"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMethod(m)}
-            className={
-              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
-              (method === m ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/40")
-            }
-          >
-            {m === "qris" ? "QRIS" : "Cash"}
-          </button>
-        ))}
-      </div>
-
-      {/* Cash received + change */}
-      {method === "cash" && (
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Cash received</label>
-          <input
-            inputMode="numeric"
-            value={cashReceived}
-            onChange={(e) => setCashReceived(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder={String(amount)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
-          />
-          {received > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Change</span>
-              <span className={change >= 0 ? "text-emerald-400 tabular-nums" : "text-red-400 tabular-nums"}>
-                {formatIDR(change)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-between text-sm pt-1 border-t border-border">
-        <span className="text-muted-foreground">Amount due</span>
-        <span className="font-semibold text-primary tabular-nums">{formatIDR(amount)}</span>
-      </div>
-
-      <Button variant="gold" size="lg" className="w-full" disabled={loading || !cashValid} onClick={accept}>
-        {loading ? "Processing…" : method === "cash" ? "Accept cash" : "Generate QRIS"}
-      </Button>
+      <CashierCashPanel
+        amount={amount}
+        defaultMethod="qris"
+        busy={loading}
+        onSubmit={accept}
+        payer={
+          <div>
+            <label className="text-xs text-muted-foreground">Payer</label>
+            <select
+              value={payerId}
+              onChange={(e) => setPayerId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              {detail.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
     </Card>
   );
 }
@@ -812,89 +965,20 @@ function CashierConfirmBox({
   busy: boolean;
   onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
 }) {
-  const [method, setMethod] = React.useState<"cash" | "qris">("cash");
-  const [cashReceived, setCashReceived] = React.useState("");
-  const received = parseInt(cashReceived || "0", 10) || 0;
-  const change = method === "cash" ? Math.max(0, received - amount) : 0;
-  const cashValid = method !== "cash" || received >= amount;
-
   return (
-    <Card className="p-3 space-y-2.5 border-amber-500/30 bg-amber-500/[0.04]">
-      <div className="text-xs font-semibold text-amber-400">
-        Confirm payment (cashier)
-      </div>
-
-      {/* Pembayar — terkunci ke pemilih pay-at-cashier */}
-      <div className="flex justify-between text-xs">
-        <span className="text-muted-foreground">Payer</span>
-        <span className="font-medium">{payerName}</span>
-      </div>
-
-      {/* Metode */}
-      <div className="flex gap-2">
-        {(["cash", "qris"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMethod(m)}
-            className={
-              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
-              (method === m
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border hover:border-primary/40")
-            }
-          >
-            {m === "qris" ? "QRIS" : "Cash"}
-          </button>
-        ))}
-      </div>
-
-      {/* Uang tunai + kembalian */}
-      {method === "cash" && (
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Cash received</label>
-          <input
-            inputMode="numeric"
-            value={cashReceived}
-            onChange={(e) =>
-              setCashReceived(e.target.value.replace(/[^0-9]/g, ""))
-            }
-            placeholder={String(amount)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
-          />
-          {received > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Change</span>
-              <span className="text-emerald-400 tabular-nums">
-                {formatIDR(change)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-between text-sm pt-1 border-t border-border">
-        <span className="text-muted-foreground">Amount due</span>
-        <span className="font-semibold text-primary tabular-nums">
-          {formatIDR(amount)}
-        </span>
-      </div>
-
-      <Button
-        variant="gold"
-        size="lg"
-        className="w-full"
-        disabled={busy || !cashValid}
-        onClick={() =>
-          onConfirm(method, method === "cash" ? received : undefined)
+    <Card className="p-4 border-amber-500/30 bg-amber-500/[0.04]">
+      <CashierCashPanel
+        amount={amount}
+        defaultMethod="cash"
+        busy={busy}
+        onSubmit={onConfirm}
+        // Payer terkunci ke baris pending — hanya ditampilkan, tak bisa diganti.
+        payer={
+          <p className="text-center text-xs text-muted-foreground -mt-2">
+            from <span className="text-foreground">{payerName}</span>
+          </p>
         }
-      >
-        {busy
-          ? "Processing…"
-          : method === "cash"
-            ? "Accept cash"
-            : "Generate QRIS"}
-      </Button>
+      />
     </Card>
   );
 }

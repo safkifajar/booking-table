@@ -2547,6 +2547,12 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   // (Pengecekan sesungguhnya dilakukan SETELAH order di-resolve di langkah 2 —
   // orderId opsional, jadi pemiliknya belum bisa diketahui di titik ini.)
   const callerIsHost = await isSessionHost(data.sessionId, profile.id);
+  // Staff (waiter/kasir) yang membayar atas nama meja: bukan member sendiri,
+  // pembayaran diatribusikan ke host. Guard "siapa boleh bayar apa" (2b) TIDAK
+  // berlaku untuk mereka — mereka penanggung jawab meja, boleh bayar order meja
+  // maupun order anggota. Tanpa flag ini, `member` sudah di-reassign ke host di
+  // bawah dan guard 2b keliru memblokir (member truthy, bukan host, owner NULL).
+  let callerIsStaffSubstitute = false;
 
   // Payer bukan member → boleh kalau STAFF aktif di bar sesi (waiter terima
   // pembayaran atas nama meja). Pembayaran diatribusikan ke HOST member.
@@ -2584,6 +2590,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       );
     if (!hostMember) throw new Error("Table host not found");
     member = hostMember;
+    callerIsStaffSubstitute = true;
   }
 
   // 2. Order untuk dibayar. Multi-order: kalau orderId diberi → pakai order itu
@@ -2641,7 +2648,12 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   //       & treat hidup; tak berubah dari sebelumnya.
   //     - Order milik ANGGOTA     → hanya PEMILIKNYA (host/staff tetap boleh
   //       sbg penanggung jawab meja). Bayar penuh, tanpa split.
-  if (member && !callerIsHost && order.ownerMemberId !== member.id) {
+  if (
+    member &&
+    !callerIsHost &&
+    !callerIsStaffSubstitute &&
+    order.ownerMemberId !== member.id
+  ) {
     throw new Error("Only the table host can create payments");
   }
 

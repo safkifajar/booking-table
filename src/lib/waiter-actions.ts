@@ -34,12 +34,23 @@ import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
-import { menuItems } from "@/lib/db/schema/menu";
-import { requirePermission } from "@/lib/auth-v2/permissions";
+import { menuItems, menuCategories } from "@/lib/db/schema/menu";
+import { requirePermission, can } from "@/lib/auth-v2/permissions";
+import { cashierMarkPaymentPaid } from "@/lib/cashier-actions";
 import { sortUnpaidFirst } from "@/lib/session-sort";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { isDbConstraintError } from "@/lib/utils";
+import { getPaymentGateway } from "@/lib/payments/gateway";
+import { getChargeConfig } from "@/lib/settings-actions";
+import { computeBillTotals } from "@/lib/settings-constants";
+import { notifyCashiersPayAtCashier } from "@/lib/payment-notify";
+import {
+  settleOrderIfPaid,
+  settleOverdueIfPaid,
+  DP_TIMEOUT_SECONDS,
+  PAY_AT_CASHIER_TIMEOUT_SECONDS,
+} from "@/lib/queries";
 import {
   DEFAULT_OPERATING_HOURS,
   DEFAULT_RESERVATION_CONFIG,
@@ -853,16 +864,43 @@ export async function getReservationDataForWaiter(): Promise<WaiterReservationDa
  * @param guestNames - List nama tamu. Index 0 = nama utama (jadi guest profile).
  *                     Length max = table.capacity.
  */
+export interface StaffOpenTableInput {
+  tableId: string;
+  guestNames: string[];
+  reservationAt?: string | null;
+  reservationEndAt?: string | null;
+  /** Item pesanan awal — WAJIB minimal 1. Tamu harus pesan & bayar dulu. */
+  items: { menuItemId: string; quantity: number; notes?: string }[];
+  /** Metode bayar di muka: 'qris' (QR) atau 'cash' (bayar di kasir). */
+  payMethod: "qris" | "cash";
+}
+
+/**
+ * Hasil buka meja walk-in. Meja BELUM benar-benar terbuka sampai pembayaran
+ * lunas — memakai ulang mesin DP customer:
+ * - qrisPending → tampilkan QR, meja terbuka begitu QR dibayar.
+ * - awaitCashier → arahkan ke layar bayar-di-kasir (dibuka oleh WAITER: dia tak
+ *   boleh terima uang, jadi tamu bayar ke kasir lain).
+ * - paid → cash langsung lunas (dibuka oleh KASIR/manager/admin sendiri — dia
+ *   terima uang di tempat, tak perlu antre ke dirinya). Meja langsung terbuka.
+ */
+export type StaffOpenTableResult =
+  | { ok: true; sessionId: string; qris: { paymentId: string; qrString: string } }
+  | { ok: true; sessionId: string; awaitCashier: true }
+  | { ok: true; sessionId: string; paid: true };
+
 export async function staffOpenTableForCustomer(
-  tableId: string,
-  guestNames: string[],
-  reservationAt?: string | null,
-  reservationEndAt?: string | null
-): Promise<void> {
+  input: StaffOpenTableInput
+): Promise<StaffOpenTableResult> {
   const ctx = await requirePermission(
     "open_table_for_customer",
     "/staff/waiter"
   );
+  const { tableId, guestNames, reservationAt, reservationEndAt, items, payMethod } =
+    input;
+  if (!items || items.length === 0) {
+    throw new Error("Add at least one menu item — payment is required to open the table");
+  }
 
   // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
   const resAt = reservationAt ? new Date(reservationAt) : null;
@@ -907,9 +945,41 @@ export async function staffOpenTableForCustomer(
 
   const mainGuest = cleanNames[0];
 
+  // Snapshot harga menu (tolak item tak tersedia). Total = subtotal + charge;
+  // tamu bayar PENUH di muka (dpFull).
+  const menuIds = [...new Set(items.map((i) => i.menuItemId))];
+  const menuRows = await db
+    .select({
+      id: menuItems.id,
+      price: menuItems.price,
+      is_available: menuItems.isAvailable,
+      barId: menuCategories.barId,
+    })
+    .from(menuItems)
+    .innerJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+    .where(inArray(menuItems.id, menuIds));
+  const menuMap = new Map(menuRows.map((m) => [m.id, m]));
+  for (const it of items) {
+    const m = menuMap.get(it.menuItemId);
+    if (!m) throw new Error("Menu item not found");
+    if (m.barId !== ctx.barId) throw new Error("Invalid menu item");
+    if (!m.is_available) throw new Error("A selected menu item is currently unavailable");
+    if (it.quantity < 1 || it.quantity > 20) throw new Error("Invalid quantity");
+  }
+  const subtotal = items.reduce(
+    (s, it) => s + (menuMap.get(it.menuItemId)!.price ?? 0) * it.quantity,
+    0
+  );
+  const charge = await getChargeConfig(ctx.barId);
+  const bill = computeBillTotals(subtotal, charge);
+  const payAmount = bill.total;
+  if (payAmount <= 0) throw new Error("Order total must be greater than zero");
+
   let sessionId: string;
+  let orderId: string;
+  let paymentId: string;
   try {
-    sessionId = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // 1. Create guest user (fake email, no password — can't login)
       const guestToken = crypto.randomBytes(8).toString("hex");
       const guestEmail = `guest-${guestToken}@walkin.soho`;
@@ -939,8 +1009,12 @@ export async function staffOpenTableForCustomer(
         .values({
           tableId,
           hostId: newProfile.id, // Guest = host (yang punya bill)
-          // Reservasi (jam ke depan) → "reserved"; walk-in → "open".
-          status: isReservation ? "reserved" : "open",
+          // Wajib bayar dulu: meja BELUM benar-benar terbuka. Mulai "reserved"
+          // (menunggu bayar) baik walk-in maupun booking — dp_paid_at masih
+          // NULL. settleOrderIfPaid + promoteDueReservations mempromosikannya
+          // ke "open" setelah lunas; expireDpIfOverdue membatalkan kalau tak
+          // dibayar (QRIS 60 dtk / bayar-di-kasir 10 mnt) → meja bebas lagi.
+          status: "reserved",
           visibility: "invite_only",
           title: mainGuest,
           maxGuests: table.capacity,
@@ -955,12 +1029,15 @@ export async function staffOpenTableForCustomer(
       // Waiter TIDAK jadi member meja — dia hanya operator (audit trail di
       // opened_by_staff_id). Saat input order, item akan di-attribute ke
       // member meja (guest), dengan input_by_staff_id = waiter untuk audit.
-      await tx.insert(sessionMembers).values({
-        sessionId: newSession.id,
-        profileId: newProfile.id,
-        role: "host",
-        status: "joined",
-      });
+      const [hostMember] = await tx
+        .insert(sessionMembers)
+        .values({
+          sessionId: newSession.id,
+          profileId: newProfile.id,
+          role: "host",
+          status: "joined",
+        })
+        .returning({ id: sessionMembers.id });
 
       // Kalau ada tamu tambahan (cleanNames[1..]), bikin guest profile untuk
       // tiap tamu juga supaya semua tamu tampak di member list.
@@ -993,16 +1070,51 @@ export async function staffOpenTableForCustomer(
         }
       }
 
-      // Walk-in dibuka staff untuk tamu yang sudah duduk → order langsung 'paid'
-      // (masuk dapur; staff proses pembayaran di kasir). Multi-order model.
-      await tx.insert(orders).values({
-        sessionId: newSession.id,
-        status: "paid",
-        paidAt: new Date(),
-      });
+      // Order awal: 'unpaid' + item 'draft' (BELUM masuk dapur). Baru "masuk"
+      // (paid + item 'sent') setelah pembayaran lunas — via settleOrderIfPaid.
+      const [newOrder] = await tx
+        .insert(orders)
+        .values({ sessionId: newSession.id, status: "unpaid", paidAt: null })
+        .returning({ id: orders.id });
 
-      return newSession.id;
+      await tx.insert(orderItems).values(
+        items.map((it) => ({
+          orderId: newOrder.id,
+          menuItemId: it.menuItemId,
+          addedByMemberId: hostMember.id,
+          inputByStaffId: ctx.profileId, // audit: staff yang input
+          quantity: it.quantity,
+          unitPrice: menuMap.get(it.menuItemId)!.price,
+          notes: it.notes ?? null,
+          status: "draft" as const,
+        }))
+      );
+
+      // Pembayaran di muka PENUH (dpFull) — tamu bayar seluruh tagihan sebelum
+      // meja terbuka. 'pending' sampai QRIS dibayar / kasir konfirmasi.
+      const [newPayment] = await tx
+        .insert(payments)
+        .values({
+          orderId: newOrder.id,
+          paidByMemberId: hostMember.id,
+          amount: payAmount,
+          method: payMethod,
+          status: "pending",
+          splitMode: "custom",
+          splitMeta: { isDownPayment: true, dpFull: true },
+          paidAt: null,
+        })
+        .returning({ id: payments.id });
+
+      return {
+        sessionId: newSession.id,
+        orderId: newOrder.id,
+        paymentId: newPayment.id,
+      };
     });
+    sessionId = result.sessionId;
+    orderId = result.orderId;
+    paymentId = result.paymentId;
   } catch (err) {
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
       throw new Error("This table already has an active session");
@@ -1017,13 +1129,123 @@ export async function staffOpenTableForCustomer(
     throw new Error(message || "Failed to open table");
   }
 
-  await notify(channels.session(sessionId), { type: "session.opened" });
-  await notify(channels.staff(ctx.barId), { type: "session.opened" });
-  await notify(channels.bar(ctx.barId), { type: "session.opened" });
+  void orderId; // dipakai lewat settleOrderIfPaid via jalur pembayaran
 
-  revalidatePath("/staff/waiter");
-  revalidatePath("/staff/cashier");
-  redirect(`/session/${sessionId}`);
+  // Proses pembayaran di muka. Pola sama dengan DP customer (openTable).
+  if (payMethod === "cash") {
+    // Kasir/manager/admin yang buka meja SENDIRI → dia yang terima uang di
+    // tempat. Tak masuk akal mengarahkannya ke layar "bayar ke kasir" (dirinya
+    // sendiri). Langsung tandai lunas → meja terbuka & pesanan masuk dapur.
+    // cashierMarkPaymentPaid mengecek ulang izin receive_payment (aman kalau
+    // suatu saat role berubah) & menjalankan semua hook (dp_paid_at, settle,
+    // split, notif).
+    if (can(ctx.role, "receive_payment")) {
+      await db
+        .update(payments)
+        .set({
+          externalRef: `cashier_${paymentId}`,
+          splitMeta: { isDownPayment: true, dpFull: true },
+        })
+        .where(eq(payments.id, paymentId));
+      await cashierMarkPaymentPaid(paymentId);
+      revalidatePath("/staff/waiter");
+      revalidatePath("/staff/cashier");
+      return { ok: true, sessionId, paid: true };
+    }
+
+    // WAITER yang buka: dia tak boleh terima uang → tamu bayar ke kasir.
+    // 'pending' + batas 10 menit; lewat itu expireDpIfOverdue membatalkan
+    // booking & mejanya bebas lagi.
+    await db
+      .update(payments)
+      .set({
+        externalRef: `cashier_${paymentId}`,
+        splitMeta: {
+          isDownPayment: true,
+          dpFull: true,
+          payAtCashier: true,
+          expiresAt: new Date(
+            Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
+          ).toISOString(),
+        },
+      })
+      .where(eq(payments.id, paymentId));
+    await notifyCashiersPayAtCashier({ paymentId, isDownPayment: true });
+    await notify(channels.staff(ctx.barId), { type: "session.opened" });
+    revalidatePath("/staff/waiter");
+    revalidatePath("/staff/cashier");
+    return { ok: true, sessionId, awaitCashier: true };
+  }
+
+  // QRIS: charge gateway. Kalau gagal, batalkan sesi (tak ada meja
+  // "menggantung" tanpa cara bayar) lalu lempar error.
+  try {
+    const gateway = getPaymentGateway();
+    const chargeResult = await gateway.createCharge({
+      paymentId,
+      amount: payAmount,
+      method: "qris",
+      payerName: mainGuest,
+      description: `Walk-in table ${table.id.slice(0, 8)}`,
+    });
+    await db
+      .update(payments)
+      .set({
+        externalRef: chargeResult.externalRef,
+        status: chargeResult.status,
+        paidAt: chargeResult.status === "paid" ? new Date() : null,
+        splitMeta: {
+          isDownPayment: true,
+          dpFull: true,
+          qrString: chargeResult.qrString ?? null,
+          redirectUrl: chargeResult.redirectUrl ?? null,
+          expiresAt: new Date(
+            Date.now() + DP_TIMEOUT_SECONDS * 1000
+          ).toISOString(),
+          merchantOrderId: chargeResult.merchantOrderId ?? paymentId,
+        },
+      })
+      .where(eq(payments.id, paymentId));
+
+    if (chargeResult.status === "paid") {
+      // Langsung lunas (mis. mock) → meja terbuka sekarang.
+      await db
+        .update(tableSessions)
+        .set({ dpPaidAt: new Date() })
+        .where(eq(tableSessions.id, sessionId));
+      await settleOrderIfPaid(orderId);
+      await settleOverdueIfPaid(sessionId);
+      await notify(channels.staff(ctx.barId), { type: "session.opened" });
+      revalidatePath("/staff/waiter");
+      revalidatePath("/staff/cashier");
+      redirect(`/session/${sessionId}`);
+    }
+
+    if (!chargeResult.qrString) {
+      throw new Error("Payment gateway did not return a QR");
+    }
+    await notify(channels.staff(ctx.barId), { type: "session.opened" });
+    revalidatePath("/staff/waiter");
+    revalidatePath("/staff/cashier");
+    return {
+      ok: true,
+      sessionId,
+      qris: { paymentId, qrString: chargeResult.qrString },
+    };
+  } catch (err) {
+    // NEXT_REDIRECT dari cabang paid → lempar ulang.
+    if (err instanceof Error && err.message.includes("NEXT_REDIRECT")) throw err;
+    // Gateway gagal → batalkan sesi supaya meja tak menggantung tanpa cara bayar.
+    await db
+      .update(tableSessions)
+      .set({ status: "cancelled", closedAt: new Date() })
+      .where(eq(tableSessions.id, sessionId))
+      .catch(() => {});
+    console.error("[staffOpenTable] QRIS charge failed:", err);
+    throw new Error(
+      "Payment gateway is unavailable right now — please try again or use pay-at-cashier."
+    );
+  }
 }
 
 // ============================================================

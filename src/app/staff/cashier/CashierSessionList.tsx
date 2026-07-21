@@ -22,7 +22,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { UserPlus } from "lucide-react";
 import { formatIDR, initials, cn } from "@/lib/utils";
-import { OpenTableModal } from "@/components/staff/OpenTableModal";
 import type {
   CashierSessionItem,
   CashierBookingItem,
@@ -108,7 +107,6 @@ export function CashierSessionList({
 }: Props) {
   const router = useRouter();
   const [tab, setTab] = React.useState<Tab>("active");
-  const [openTableModal, setOpenTableModal] = React.useState(false);
 
   // Filter tab "Meja Aktif" (default rentang bulan berjalan)
   const [filter, setFilter] = React.useState<SessionFilterState>(() => ({
@@ -236,21 +234,16 @@ export function CashierSessionList({
         active={tab}
         onChange={(k) => setTab(k as Tab)}
         topSlot={
-          <Button
-            type="button"
-            variant="gold"
-            size="lg"
-            className="w-full"
-            onClick={() => setOpenTableModal(true)}
-            disabled={availableTables.length === 0}
-          >
-            <UserPlus className="h-4 w-4" />
-            Open Table
-            {availableTables.length > 0 && (
-              <span className="ml-1 text-xs opacity-70">
-                ({availableTables.length} tables free)
-              </span>
-            )}
+          <Button asChild variant="gold" size="lg" className="w-full">
+            <Link href="/staff/open-table?from=cashier">
+              <UserPlus className="h-4 w-4" />
+              Open Table
+              {availableTables.length > 0 && (
+                <span className="ml-1 text-xs opacity-70">
+                  ({availableTables.length} tables free)
+                </span>
+              )}
+            </Link>
           </Button>
         }
         tabs={[
@@ -354,13 +347,6 @@ export function CashierSessionList({
       )}
       </div>{/* /scroll container */}
 
-      {openTableModal && (
-        <OpenTableModal
-          tables={availableTables}
-          reservationData={reservationData}
-          onClose={() => setOpenTableModal(false)}
-        />
-      )}
     </div>
   );
 }

@@ -115,6 +115,8 @@ export default authMiddleware(async (req) => {
     // - /session/* — customer session UI (staff pakai untuk "Bantu Pesan" + "Buka Meja")
     // - /bar/* — venue page (staff balik dari session bisa landing di sini)
     // - /open-table — form buka/booking meja (kasir buka meja utk customer)
+    // - /booking/*  — layar tunggu bayar DP walk-in (staff pilih Cash → ke
+    //   /booking/[id]/pay). Halaman customer, bukan /admin/* → jangan di-rewrite.
     // - /onboarding — guest yg dibuatkan kasir belum onboarded → redirect ke sini
     // - /auth — kalau session guest perlu login/daftar
     // - /api/* — API routes
@@ -126,6 +128,7 @@ export default authMiddleware(async (req) => {
       path.startsWith("/session") ||
       path.startsWith("/bar") ||
       path.startsWith("/open-table") ||
+      path.startsWith("/booking") ||
       path.startsWith("/onboarding") ||
       path.startsWith("/auth") ||
       // Bell notif ada di dashboard staff (kasir/waiter) yg dibuka dari
