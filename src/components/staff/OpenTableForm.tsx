@@ -19,6 +19,7 @@ import { FloorMap, type FloorMapTable } from "@/components/floor/FloorMap";
 import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import type { MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
+import { computeBillTotals, type ChargeConfig } from "@/lib/settings-constants";
 import type { FloorArea } from "@/types/db";
 import {
   staffOpenTableForCustomer,
@@ -37,12 +38,16 @@ export function OpenTableForm({
   floorMap,
   reservationData,
   menu,
+  chargeConfig,
   backHref,
 }: {
   floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
   /** Menu bar untuk pilih pesanan awal (wajib — tamu bayar dulu). */
   menu: MenuPickerCategory[];
+  /** Config tax & service — untuk ringkasan tagihan (sama seperti customer).
+   *  Server tetap otoritatif; ini hanya tampilan. */
+  chargeConfig: ChargeConfig;
   /** Ke mana tombol "Back" mengarah (dashboard asal: waiter/cashier). */
   backHref: string;
 }) {
@@ -66,10 +71,11 @@ export function OpenTableForm({
     sessionId: string;
   } | null>(null);
 
-  // Lookup harga item + hitung total (untuk tampilan; server tetap otoritatif).
-  const itemPrice = React.useMemo(() => {
-    const m = new Map<string, number>();
-    for (const cat of menu) for (const it of cat.items) m.set(it.id, it.price);
+  // Lookup nama+harga item + hitung total (untuk tampilan; server otoritatif).
+  const itemLookup = React.useMemo(() => {
+    const m = new Map<string, { name: string; price: number }>();
+    for (const cat of menu)
+      for (const it of cat.items) m.set(it.id, { name: it.name, price: it.price });
     return m;
   }, [menu]);
   const cartLines = React.useMemo(
@@ -81,8 +87,14 @@ export function OpenTableForm({
   );
   const cartCount = cartLines.reduce((s, l) => s + l.quantity, 0);
   const cartSubtotal = cartLines.reduce(
-    (s, l) => s + (itemPrice.get(l.menuItemId) ?? 0) * l.quantity,
+    (s, l) => s + (itemLookup.get(l.menuItemId)?.price ?? 0) * l.quantity,
     0
+  );
+  // Tagihan: subtotal + tax & service. computeBillTotals SAMA dgn server, jadi
+  // angka tombol = angka yang di-charge (dulu tombol pakai subtotal → beda).
+  const bill = React.useMemo(
+    () => computeBillTotals(cartSubtotal, chargeConfig),
+    [cartSubtotal, chargeConfig]
   );
 
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
@@ -173,7 +185,7 @@ export function OpenTableForm({
         setQr({
           paymentId: result.qris.paymentId,
           qrString: result.qris.qrString,
-          amount: cartSubtotal,
+          amount: bill.total,
           sessionId: result.sessionId,
         });
         setSubmitting(false);
@@ -398,25 +410,70 @@ export function OpenTableForm({
               <ChevronRight className="h-4 w-4" />
             </button>
           ) : (
-            // Sudah ada isi → ringkasan + tombol ubah.
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              className="w-full rounded-md border border-primary/30 bg-primary/5 p-3 text-left transition hover:border-primary/50"
-            >
+            // Sudah ada isi → daftar item + tombol ubah (pola customer).
+            <div className="rounded-md border border-border overflow-hidden">
+              <div className="divide-y divide-border">
+                {cartLines.map((l) => {
+                  const item = itemLookup.get(l.menuItemId);
+                  if (!item) return null;
+                  return (
+                    <div
+                      key={l.menuItemId}
+                      className="flex items-center justify-between gap-2 p-2.5 text-sm"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="text-primary font-medium mr-1">
+                          {l.quantity}×
+                        </span>
+                        <span className="truncate">{item.name}</span>
+                      </div>
+                      <span className="tabular-nums text-muted-foreground shrink-0">
+                        {formatIDR(item.price * l.quantity)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                className="w-full p-2.5 text-xs font-medium text-primary hover:bg-primary/5 transition border-t border-border flex items-center justify-center gap-1"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Edit / add order
+              </button>
+            </div>
+          )}
+
+          {/* Ringkasan tagihan — sama seperti customer. Tax & service ikut
+              dibayar di muka, jadi ditampilkan. Server otoritatif. */}
+          {cartCount > 0 && (
+            <div className="mt-3 rounded-md bg-muted/40 border border-border p-3 space-y-1.5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-primary">
-                  {cartCount} item{cartCount > 1 ? "s" : ""}
-                </span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  {formatIDR(cartSubtotal)}
-                  <ChevronRight className="h-3.5 w-3.5" />
+                <span className="text-muted-foreground">Order total</span>
+                <span className="font-semibold tabular-nums">
+                  {formatIDR(bill.subtotal)}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Tap to edit the order
-              </p>
-            </button>
+              {bill.charge > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    {bill.chargeLabel} ({bill.chargePercent}%)
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {formatIDR(bill.charge)}
+                  </span>
+                </div>
+              )}
+              {bill.charge > 0 && (
+                <div className="flex items-center justify-between border-t border-border pt-1.5">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatIDR(bill.total)}
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -463,8 +520,8 @@ export function OpenTableForm({
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                {cartSubtotal > 0
-                  ? `${payMethod === "qris" ? "Pay" : "Charge cash"} · ${formatIDR(cartSubtotal)}`
+                {bill.total > 0
+                  ? `${payMethod === "qris" ? "Pay" : "Charge cash"} · ${formatIDR(bill.total)}`
                   : "Pick menu items to continue"}
               </>
             )}

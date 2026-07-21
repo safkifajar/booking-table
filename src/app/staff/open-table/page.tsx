@@ -1,4 +1,5 @@
 import { requireAnyRole } from "@/lib/auth-v2/permissions";
+import { getChargeConfig } from "@/lib/settings-actions";
 import {
   getReservationDataForWaiter,
 } from "@/lib/waiter-actions";
@@ -37,10 +38,11 @@ export default async function StaffOpenTablePage({ searchParams }: PageProps) {
   await expireFinishedSessions(ctx.barId);
   await promoteDueReservations(ctx.barId);
 
-  const [floorMap, reservationData, menuTree] = await Promise.all([
+  const [floorMap, reservationData, menuTree, chargeConfig] = await Promise.all([
     getFloorMapForBar(ctx.barId),
     getReservationDataForWaiter(),
     getMenuByBar(ctx.barId),
+    getChargeConfig(ctx.barId),
   ]);
   const menu = flattenMenuTree(menuTree).map((c) => ({
     id: c.id,
@@ -66,6 +68,7 @@ export default async function StaffOpenTablePage({ searchParams }: PageProps) {
       floorMap={floorMap}
       reservationData={reservationData}
       menu={menu}
+      chargeConfig={chargeConfig}
       backHref={backHref}
     />
   );
