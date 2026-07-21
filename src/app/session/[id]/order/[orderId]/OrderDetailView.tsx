@@ -673,175 +673,52 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
 }
 
 /**
- * Box kasir di halaman detail order: pilih payer + metode (QRIS/Cash). Cash →
- * input diterima + kembalian. Accept → cashierCreatePayment (QRIS mock/duitku
- * auto-handle; cash langsung paid). (PRD Multi-Order — fitur kasir di detail.)
+ * Panel tunai kasir BERSAMA — satu tampilan untuk dua alur:
+ * - CashierPayBox (buat pembayaran baru): payer bisa dipilih (slot `payer`).
+ * - CashierConfirmBox (konfirmasi pending pay-at-cashier): payer terkunci.
+ *
+ * Menangani: Amount due, toggle metode, Cash received + prefill amount due +
+ * "Exact amount" + pecahan cepat (50rb/100rb) + kembalian/kurang bayar. Submit
+ * didelegasikan ke `onSubmit(method, cashReceived?)`. Dulu dua alur ini punya
+ * UI cash terpisah → hanya salah satu yang dapat fitur exact/quick → divergen.
  */
-function CashierPayBox({
-  detail,
-  onQr,
-  onDone,
-}: {
-  detail: OrderDetail;
-  onQr: (qr: { paymentId: string; qrString: string; amount: number; expirySeconds?: number }) => void;
-  onDone: () => void;
-}) {
-  const [payerId, setPayerId] = React.useState(detail.members[0]?.id ?? "");
-  const [method, setMethod] = React.useState<"qris" | "cash">("qris");
-  const [cashReceived, setCashReceived] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-
-  const amount = detail.outstanding;
-  const received = parseInt(cashReceived || "0", 10) || 0;
-  const change = method === "cash" ? Math.max(0, received - amount) : 0;
-  const cashValid = method !== "cash" || received >= amount;
-
-  async function accept() {
-    if (!payerId) {
-      toast.error("Select a payer");
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await cashierCreatePayment({
-        sessionId: detail.sessionId,
-        orderId: detail.id,
-        payerMemberId: payerId,
-        amount,
-        method,
-        cashReceived: method === "cash" ? received : undefined,
-      });
-      if (result.qrString && result.status === "pending") {
-        onQr({
-          paymentId: result.paymentId,
-          qrString: result.qrString,
-          amount,
-          expirySeconds: toExpirySeconds(result.expiresAt),
-        });
-      } else {
-        toast.success(
-          method === "cash" && change > 0
-            ? `Paid — change ${formatIDR(change)}`
-            : "Payment received"
-        );
-      }
-      onDone();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to accept payment"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Card className="p-4 space-y-3">
-      <div className="text-sm font-semibold">Accept payment (cashier)</div>
-
-      {/* Payer */}
-      <div>
-        <label className="text-xs text-muted-foreground">Payer</label>
-        <select
-          value={payerId}
-          onChange={(e) => setPayerId(e.target.value)}
-          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        >
-          {detail.members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Method */}
-      <div className="flex gap-2">
-        {(["qris", "cash"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMethod(m)}
-            className={
-              "flex-1 rounded-md border px-3 py-2 text-sm transition " +
-              (method === m ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/40")
-            }
-          >
-            {m === "qris" ? "QRIS" : "Cash"}
-          </button>
-        ))}
-      </div>
-
-      {/* Cash received + change */}
-      {method === "cash" && (
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Cash received</label>
-          <input
-            inputMode="numeric"
-            value={cashReceived}
-            onChange={(e) => setCashReceived(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder={String(amount)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
-          />
-          {received > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Change</span>
-              <span className={change >= 0 ? "text-emerald-400 tabular-nums" : "text-red-400 tabular-nums"}>
-                {formatIDR(change)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex justify-between text-sm pt-1 border-t border-border">
-        <span className="text-muted-foreground">Amount due</span>
-        <span className="font-semibold text-primary tabular-nums">{formatIDR(amount)}</span>
-      </div>
-
-      <Button variant="gold" size="lg" className="w-full" disabled={loading || !cashValid} onClick={accept}>
-        {loading ? "Processing…" : method === "cash" ? "Accept cash" : "Generate QRIS"}
-      </Button>
-    </Card>
-  );
-}
-
-/**
- * Form konfirmasi pembayaran "Pay at cashier" (kasir). Sama seperti
- * CashierPayBox — pilih metode + uang tunai + kembalian — TAPI nominal &
- * pembayar TERKUNCI ke baris pending yang dikonfirmasi (bukan bikin pembayaran
- * baru). Submit → cashierConfirmPendingPayment.
- */
-function CashierConfirmBox({
-  payerName,
+function CashierCashPanel({
   amount,
+  payer,
+  defaultMethod,
   busy,
-  onConfirm,
+  submitting,
+  onSubmit,
 }: {
-  payerName: string;
   amount: number;
+  /** Slot pembayar: dropdown (buat baru) atau nama terkunci (konfirmasi). */
+  payer: React.ReactNode;
+  defaultMethod: "cash" | "qris";
   busy: boolean;
-  onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
+  /** Teks tombol saat proses (default "Processing…"). */
+  submitting?: string;
+  onSubmit: (method: "cash" | "qris", cashReceived?: number) => void;
 }) {
-  const [method, setMethod] = React.useState<"cash" | "qris">("cash");
+  const [method, setMethod] = React.useState<"cash" | "qris">(defaultMethod);
   // Prefill nominal tagihan — kasus paling sering: tamu membayar uang pas.
-  // Kasir tinggal menekan "Accept cash" tanpa mengetik apa pun.
   const [cashReceived, setCashReceived] = React.useState(String(amount));
-  // Tagihan bisa berubah setelah komponen ter-mount (mis. pembayaran lain
-  // masuk). useState hanya memakai nilai awal, jadi prefill harus disegarkan —
-  // kalau tidak, kasir melihat nominal basi.
-  React.useEffect(() => {
+  // Tagihan bisa berubah setelah mount (mis. pembayaran lain masuk) → segarkan
+  // prefill. Pola "adjust state on prop change during render" (tanpa useEffect,
+  // menghindari cascading render): saat `amount` beda dari nilai basis prefill
+  // terakhir, reset input & catat basis baru — semua di fase render.
+  const [prefillBase, setPrefillBase] = React.useState(amount);
+  if (prefillBase !== amount) {
+    setPrefillBase(amount);
     setCashReceived(String(amount));
-  }, [amount]);
+  }
   const received = parseInt(cashReceived || "0", 10) || 0;
   const change = method === "cash" ? Math.max(0, received - amount) : 0;
   const shortfall = method === "cash" ? Math.max(0, amount - received) : 0;
   const cashValid = method !== "cash" || received >= amount;
   const isExact = received === amount;
 
-  /**
-   * Pecahan cepat: pembulatan ke atas ke kelipatan yang lazim dipakai tamu
-   * (50rb / 100rb). Hanya tampil kalau nilainya di ATAS tagihan — kalau uang
-   * pas sudah kelipatan itu, tombolnya tak berguna.
-   */
+  // Pecahan cepat: pembulatan ke atas ke kelipatan lazim (50rb/100rb). Hanya
+  // tampil kalau di ATAS tagihan — kalau uang pas sudah kelipatan itu, tak guna.
   const quickCash = React.useMemo(() => {
     const steps = [50_000, 100_000];
     const out: number[] = [];
@@ -853,7 +730,7 @@ function CashierConfirmBox({
   }, [amount]);
 
   return (
-    <Card className="p-4 space-y-4 border-amber-500/30 bg-amber-500/[0.04]">
+    <div className="space-y-4">
       {/* Nominal tagihan = fokus utama; itu yg pertama dicari kasir. */}
       <div className="text-center">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -862,10 +739,9 @@ function CashierConfirmBox({
         <p className="text-3xl font-semibold text-primary tabular-nums mt-0.5">
           {formatIDR(amount)}
         </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          from <span className="text-foreground">{payerName}</span>
-        </p>
       </div>
+
+      {payer}
 
       {/* Metode */}
       <div className="grid grid-cols-2 gap-2">
@@ -974,15 +850,135 @@ function CashierConfirmBox({
         className="w-full"
         disabled={busy || !cashValid}
         onClick={() =>
-          onConfirm(method, method === "cash" ? received : undefined)
+          onSubmit(method, method === "cash" ? received : undefined)
         }
       >
         {busy
-          ? "Processing…"
+          ? (submitting ?? "Processing…")
           : method === "cash"
             ? `Accept ${formatIDR(received || amount)}`
             : "Generate QRIS"}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Box kasir di halaman detail order: pilih payer + metode (QRIS/Cash). Cash →
+ * input diterima + kembalian. Accept → cashierCreatePayment (QRIS mock/duitku
+ * auto-handle; cash langsung paid). (PRD Multi-Order — fitur kasir di detail.)
+ */
+function CashierPayBox({
+  detail,
+  onQr,
+  onDone,
+}: {
+  detail: OrderDetail;
+  onQr: (qr: { paymentId: string; qrString: string; amount: number; expirySeconds?: number }) => void;
+  onDone: () => void;
+}) {
+  const [payerId, setPayerId] = React.useState(detail.members[0]?.id ?? "");
+  const [loading, setLoading] = React.useState(false);
+
+  const amount = detail.outstanding;
+
+  async function accept(method: "cash" | "qris", received?: number) {
+    if (!payerId) {
+      toast.error("Select a payer");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await cashierCreatePayment({
+        sessionId: detail.sessionId,
+        orderId: detail.id,
+        payerMemberId: payerId,
+        amount,
+        method,
+        cashReceived: method === "cash" ? received : undefined,
+      });
+      if (result.qrString && result.status === "pending") {
+        onQr({
+          paymentId: result.paymentId,
+          qrString: result.qrString,
+          amount,
+          expirySeconds: toExpirySeconds(result.expiresAt),
+        });
+      } else {
+        const change =
+          method === "cash" && received ? Math.max(0, received - amount) : 0;
+        toast.success(
+          change > 0 ? `Paid — change ${formatIDR(change)}` : "Payment received"
+        );
+      }
+      onDone();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to accept payment"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="text-sm font-semibold">Accept payment (cashier)</div>
+      <CashierCashPanel
+        amount={amount}
+        defaultMethod="qris"
+        busy={loading}
+        onSubmit={accept}
+        payer={
+          <div>
+            <label className="text-xs text-muted-foreground">Payer</label>
+            <select
+              value={payerId}
+              onChange={(e) => setPayerId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            >
+              {detail.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
+    </Card>
+  );
+}
+
+/**
+ * Form konfirmasi pembayaran "Pay at cashier" (kasir). Sama seperti
+ * CashierPayBox — pilih metode + uang tunai + kembalian — TAPI nominal &
+ * pembayar TERKUNCI ke baris pending yang dikonfirmasi (bukan bikin pembayaran
+ * baru). Submit → cashierConfirmPendingPayment.
+ */
+function CashierConfirmBox({
+  payerName,
+  amount,
+  busy,
+  onConfirm,
+}: {
+  payerName: string;
+  amount: number;
+  busy: boolean;
+  onConfirm: (method: "cash" | "qris", cashReceived?: number) => void;
+}) {
+  return (
+    <Card className="p-4 border-amber-500/30 bg-amber-500/[0.04]">
+      <CashierCashPanel
+        amount={amount}
+        defaultMethod="cash"
+        busy={busy}
+        onSubmit={onConfirm}
+        // Payer terkunci ke baris pending — hanya ditampilkan, tak bisa diganti.
+        payer={
+          <p className="text-center text-xs text-muted-foreground -mt-2">
+            from <span className="text-foreground">{payerName}</span>
+          </p>
+        }
+      />
     </Card>
   );
 }
