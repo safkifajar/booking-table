@@ -439,7 +439,7 @@ export function OpenTableForm({
                       : "border-border text-muted-foreground hover:border-primary/40"
                   )}
                 >
-                  {m === "qris" ? "QRIS now" : "Pay at cashier"}
+                  {m === "qris" ? "QRIS now" : "Cash"}
                 </button>
               ))}
             </div>
@@ -464,8 +464,8 @@ export function OpenTableForm({
               <>
                 <Plus className="h-4 w-4" />
                 {cartSubtotal > 0
-                  ? `${payMethod === "qris" ? "Pay" : "Confirm at cashier"} · ${formatIDR(cartSubtotal)}`
-                  : "Add items to continue"}
+                  ? `${payMethod === "qris" ? "Pay" : "Charge cash"} · ${formatIDR(cartSubtotal)}`
+                  : "Pick menu items to continue"}
               </>
             )}
           </Button>
