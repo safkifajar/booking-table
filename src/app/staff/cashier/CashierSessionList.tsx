@@ -542,7 +542,14 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
 
   return (
     <Link
-      href={`/session/${session.session_id}?from=/staff/cashier`}
+      // Ada order menunggu konfirmasi pay-at-cashier → langsung ke ORDER DETAIL
+      // (tempat CashierConfirmBox) supaya kasir cepat konfirmasi; selain itu ke
+      // halaman sesi biasa.
+      href={
+        session.cash_pending_order_id
+          ? `/session/${session.session_id}/order/${session.cash_pending_order_id}?from=/staff/cashier`
+          : `/session/${session.session_id}?from=/staff/cashier`
+      }
       className="block group"
     >
       <Card

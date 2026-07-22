@@ -691,8 +691,11 @@ export async function getViewerPayAtCashierDp(
   );
 }
 
-/** Booking milik user yang DP-nya menunggu bayar di kasir (untuk banner home). */
+/** Pembayaran "pay at cashier" milik user yang menunggu konfirmasi (banner home).
+ *  kind 'dp' = DP booking (→ /booking/[id]/pay); 'order' = order meja aktif
+ *  (→ /session/[id]/order/[orderId]/pay). */
 export interface PendingCashierBooking {
+  kind: "dp" | "order";
   session_id: string;
   order_id: string;
   table_label: string;
@@ -732,9 +735,39 @@ export async function getPendingCashierBookingsForProfile(
       )
     )
     .orderBy(desc(tableSessions.reservationAt));
-  return rows.map((r) => {
+
+  // Query kedua: ORDER MEJA AKTIF (non-DP) yg dibayar user (sbg PEMBAYAR, bukan
+  // harus host) via pay-at-cashier & masih pending. paidByMemberId → member →
+  // profile. Sesi 'open'/'locked'.
+  const orderRows = await db
+    .select({
+      session_id: tableSessions.id,
+      order_id: orders.id,
+      table_label: tables.label,
+      amount: payments.amount,
+      split_meta: payments.splitMeta,
+      created_at: payments.createdAt,
+    })
+    .from(payments)
+    .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      and(
+        eq(sessionMembers.profileId, profileId),
+        inArray(tableSessions.status, ["open", "locked"]),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS NOT TRUE`
+      )
+    )
+    .orderBy(desc(payments.createdAt));
+
+  const dpItems: PendingCashierBooking[] = rows.map((r) => {
     const meta = (r.split_meta ?? {}) as { expiresAt?: string | null };
     return {
+      kind: "dp" as const,
       session_id: r.session_id,
       order_id: r.order_id,
       table_label: r.table_label,
@@ -745,6 +778,19 @@ export async function getPendingCashierBookingsForProfile(
       expires_at: meta.expiresAt ?? null,
     };
   });
+  const orderPayItems: PendingCashierBooking[] = orderRows.map((r) => {
+    const meta = (r.split_meta ?? {}) as { expiresAt?: string | null };
+    return {
+      kind: "order" as const,
+      session_id: r.session_id,
+      order_id: r.order_id,
+      table_label: r.table_label,
+      amount: r.amount,
+      reservation_at: null,
+      expires_at: meta.expiresAt ?? null,
+    };
+  });
+  return [...dpItems, ...orderPayItems];
 }
 
 /**
@@ -818,6 +864,79 @@ export async function expireDpIfOverdue(sessionId: string): Promise<boolean> {
   // Notif gagal ke host/pembayar/staff (best-effort, tak blokir sweep).
   await notifyPaymentEvent(dp.id, "cancelled");
   return true;
+}
+
+/**
+ * Lazy-expire pembayaran "pay at cashier" untuk ORDER MEJA AKTIF (bukan DP
+ * booking) yang lewat batas (splitMeta.expiresAt, 10 menit). Beda dari booking:
+ * MEJA TIDAK dibebaskan — tamu masih duduk. Yang dibatalkan HANYA order/pembayaran
+ * itu:
+ *  - payment pending pay-at-cashier (isDownPayment != true) yg expiresAt < now
+ *    → status 'failed'.
+ *  - kalau ordernya masih 'unpaid' (prepaid, belum ada uang masuk) → void item +
+ *    order 'cancelled' (sama pola expireUnpaidMemberOrders). Kalau order sudah
+ *    'paid' (bayar sisa bill) → item TAK disentuh, cukup gagalkan pembayarannya.
+ * Dipanggil lazy saat load: dashboard kasir, halaman order, home.
+ * Return jumlah payment yang di-expire.
+ */
+export async function expireOverduePayAtCashierOrders(
+  barId: string
+): Promise<number> {
+  // Payment pending pay-at-cashier NON-DP di sesi 'open'/'locked' bar ini yg
+  // sudah lewat expiresAt.
+  const overdue = await db
+    .select({ paymentId: payments.id, orderId: orders.id })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        inArray(tableSessions.status, ["open", "locked"]),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS NOT TRUE`,
+        sql`(${payments.splitMeta} ->> 'expiresAt')::timestamptz < now()`
+      )
+    );
+  if (overdue.length === 0) return 0;
+
+  const payIds = overdue.map((o) => o.paymentId);
+  const orderIds = Array.from(new Set(overdue.map((o) => o.orderId)));
+  let expired = 0;
+  await db.transaction(async (tx) => {
+    // Gagalkan pembayaran (kondisional: jangan timpa kalau keburu paid/failed).
+    const failed = await tx
+      .update(payments)
+      .set({ status: "failed", paidAt: null })
+      .where(and(inArray(payments.id, payIds), eq(payments.status, "pending")))
+      .returning({ id: payments.id });
+    expired = failed.length;
+    if (expired === 0) return;
+    // Order yang masih 'unpaid' (prepaid, belum masuk dapur) → void item +
+    // cancel. Order 'paid' (bayar sisa bill) tak disentuh — itemnya sah.
+    await tx
+      .update(orderItems)
+      .set({ status: "void" })
+      .where(
+        and(
+          inArray(orderItems.orderId, orderIds),
+          eq(orderItems.status, "draft")
+        )
+      );
+    await tx
+      .update(orders)
+      .set({ status: "cancelled", closedAt: new Date() })
+      .where(and(inArray(orders.id, orderIds), eq(orders.status, "unpaid")));
+  });
+  // Lepas voucher yg menempel + notif gagal (best-effort, di luar tx).
+  for (const p of payIds) {
+    await releaseVoucherForPayment(p).catch(() => {});
+    await notifyPaymentEvent(p, "cancelled").catch(() => {});
+  }
+  return expired;
 }
 
 /**

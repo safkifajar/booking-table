@@ -59,6 +59,7 @@ import {
   settleOverdueIfPaid,
   settleOrderIfPaid,
   expireOverdueDpBookings,
+  expireOverduePayAtCashierOrders,
 } from "@/lib/queries";
 import { sendBookingInvites } from "@/lib/actions";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
@@ -97,12 +98,21 @@ export interface CashierSessionItem {
   guest_names: string[];
   /** Jumlah payment "Pay at cashier" yang menunggu konfirmasi kasir. */
   cash_pending_count: number;
+  /** Order pertama yg menunggu konfirmasi pay-at-cashier → deep-link ke order
+   *  detail (kasir langsung ke layar konfirmasi). Null kalau tak ada. */
+  cash_pending_order_id: string | null;
 }
 
 export async function getActiveSessionsForCashier(): Promise<
   CashierSessionItem[]
 > {
   const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  // Lazy-expire order pay-at-cashier yang lewat 10 mnt (order dibatalkan, meja
+  // tetap open) sebelum menampilkan daftar — biar badge & angka akurat.
+  await expireOverduePayAtCashierOrders(ctx.barId).catch((e) =>
+    console.error("[cashier] expire pay-at-cashier order sweep:", e)
+  );
 
   // Active sessions di bar (open/locked) — include walk-in metadata
   const sessionRows = await db
@@ -203,10 +213,12 @@ export async function getActiveSessionsForCashier(): Promise<
 
   // Payment "Pay at cashier" pending per session — customer menunggu
   // konfirmasi di kasir (order belum masuk dapur sampai dikonfirmasi).
+  // Ambil per-baris (bukan cuma count) supaya bisa deep-link ke order detail
+  // order yang menunggu (kasir langsung ke layar konfirmasi).
   const cashPendingRows = await db
     .select({
       session_id: orders.sessionId,
-      count: sql<number>`COUNT(*)::int`,
+      order_id: orders.id,
     })
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
@@ -218,10 +230,16 @@ export async function getActiveSessionsForCashier(): Promise<
         notInArray(orders.status, ["cancelled"])
       )
     )
-    .groupBy(orders.sessionId);
-  const cashPendingMap = new Map(
-    cashPendingRows.map((r) => [r.session_id, Number(r.count)])
-  );
+    .orderBy(asc(payments.createdAt));
+  const cashPendingMap = new Map<string, number>();
+  // Order pertama yang menunggu per sesi → target deep-link.
+  const cashPendingOrderMap = new Map<string, string>();
+  for (const r of cashPendingRows) {
+    cashPendingMap.set(r.session_id, (cashPendingMap.get(r.session_id) ?? 0) + 1);
+    if (!cashPendingOrderMap.has(r.session_id)) {
+      cashPendingOrderMap.set(r.session_id, r.order_id);
+    }
+  }
 
   // Batch lookup nama staff yang buka session walk-in (unique IDs)
   const staffIds = Array.from(
@@ -273,6 +291,7 @@ export async function getActiveSessionsForCashier(): Promise<
         : null,
       guest_names: s.guest_names ?? [],
       cash_pending_count: cashPendingMap.get(s.id) ?? 0,
+      cash_pending_order_id: cashPendingOrderMap.get(s.id) ?? null,
     };
   });
 
@@ -424,6 +443,7 @@ export async function getClosedSessionsForCashier(): Promise<
         : null,
       guest_names: s.guest_names ?? [],
       cash_pending_count: 0,
+      cash_pending_order_id: null,
     };
   });
 

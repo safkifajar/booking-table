@@ -156,9 +156,10 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
       } else if (method === "cash" && result.status === "pending") {
-        toast.success(
-          "Payment created — confirm & pay at the cashier desk. Your order is sent to the kitchen once confirmed."
-        );
+        // Pay at cashier → halaman tunggu khusus (countdown 10 mnt), sama pola
+        // booking DP. Tak stay di detail dgn toast.
+        router.push(`/session/${detail.sessionId}/order/${detail.id}/pay`);
+        return;
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
