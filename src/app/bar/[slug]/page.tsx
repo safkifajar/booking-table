@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { and, eq, gte, lte } from "drizzle-orm";
-import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, expireOverdueDpBookings, getMenuByBar } from "@/lib/queries";
+import { getBarBySlug, getFloorAreas, getTablesByArea, getActiveSessionsForArea, promoteDueReservations, expireFinishedSessions, expireOverdueDpBookings, getMenuByBar, getViewerPayAtCashierDp } from "@/lib/queries";
 import { db } from "@/lib/db/client";
 import { bars, tables, floorAreas } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
@@ -193,6 +193,23 @@ export default async function BarPage({ params }: PageProps) {
   const joinedIds = profile
     ? Array.from(await getJoinedSessionIds(profile.id, scheduleSessionIds))
     : [];
+
+  // DP "pay at cashier" pending milik VIEWER → arahan "segera ke kasir" +
+  // countdown di kartu Booking Schedule miliknya. Hanya booking milik user.
+  if (profile && scheduleSessionIds.length > 0) {
+    const dpMap = await getViewerPayAtCashierDp(
+      scheduleSessionIds,
+      profile.id
+    );
+    if (dpMap.size > 0) {
+      for (const list of Object.values(reservationsByTable)) {
+        for (const r of list) {
+          const dp = dpMap.get(r.id);
+          if (dp) r.dp_pending_cashier = dp;
+        }
+      }
+    }
+  }
 
   return (
     <>

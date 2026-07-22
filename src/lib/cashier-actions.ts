@@ -23,6 +23,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lt,
   ne,
   notInArray,
@@ -59,6 +60,7 @@ import {
   settleOrderIfPaid,
   expireOverdueDpBookings,
 } from "@/lib/queries";
+import { sendBookingInvites } from "@/lib/actions";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
@@ -446,6 +448,8 @@ export interface CashierBookingItem {
   /** DP pending "Pay at cashier" — customer menunggu konfirmasi di kasir. */
   dp_pending_cashier: {
     payment_id: string;
+    /** Order pemilik DP — untuk link langsung ke order detail (konfirmasi cepat). */
+    order_id: string;
     amount: number;
     expires_at: string | null;
   } | null;
@@ -515,6 +519,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
   const dpRows = await db
     .select({
       session_id: orders.sessionId,
+      order_id: orders.id,
       payment_id: payments.id,
       amount: payments.amount,
       split_meta: payments.splitMeta,
@@ -536,6 +541,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
         d.session_id,
         {
           payment_id: d.payment_id,
+          order_id: d.order_id,
           amount: d.amount,
           expires_at: meta.expiresAt ?? null,
         },
@@ -1373,10 +1379,23 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
   // dipromote saat waktunya).
   const meta = (payment.splitMeta as { isDownPayment?: boolean } | null) ?? {};
   if (meta.isDownPayment) {
-    await db
+    // Guard transisi null→terisi → undangan booking hanya sekali (baru dikirim
+    // ke user diundang setelah DP lunas, bukan saat booking dibuat).
+    const dpSet = await db
       .update(tableSessions)
       .set({ dpPaidAt: new Date() })
-      .where(eq(tableSessions.id, payment.sessionId));
+      .where(
+        and(
+          eq(tableSessions.id, payment.sessionId),
+          isNull(tableSessions.dpPaidAt)
+        )
+      )
+      .returning({ id: tableSessions.id });
+    if (dpSet.length > 0) {
+      await sendBookingInvites(payment.sessionId).catch((e) =>
+        console.error("[invite] cashierMarkPaymentPaid:", e)
+      );
+    }
   }
 
   // Prepaid hook: order 'unpaid' yang kini terbayar → MASUK dapur
@@ -1488,10 +1507,23 @@ export async function markPaymentPaidBySystem(
   const meta =
     (payment.splitMeta as { isDownPayment?: boolean } | null) ?? {};
   if (meta.isDownPayment) {
-    await db
+    // Guard transisi null→terisi → undangan booking hanya sekali (webhook bisa
+    // dipanggil berkali-kali; undangan baru dikirim setelah DP lunas).
+    const dpSet = await db
       .update(tableSessions)
       .set({ dpPaidAt: new Date() })
-      .where(eq(tableSessions.id, payment.sessionId));
+      .where(
+        and(
+          eq(tableSessions.id, payment.sessionId),
+          isNull(tableSessions.dpPaidAt)
+        )
+      )
+      .returning({ id: tableSessions.id });
+    if (dpSet.length > 0) {
+      await sendBookingInvites(payment.sessionId).catch((e) =>
+        console.error("[invite] markPaymentPaidBySystem:", e)
+      );
+    }
   }
 
   // Voucher membership yang menempel → tandai used + baris diskon (idempotent).

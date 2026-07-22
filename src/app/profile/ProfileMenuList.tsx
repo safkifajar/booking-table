@@ -20,6 +20,7 @@ import {
   Users,
   Ban,
   Crown,
+  MailOpen,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
@@ -48,6 +49,7 @@ export function ProfileMenuList({
   email,
   isPrivate,
   membership,
+  pendingInviteCount = 0,
 }: {
   avatarUrl: string | null;
   displayName: string;
@@ -56,6 +58,8 @@ export function ProfileMenuList({
   isPrivate: boolean;
   /** Level membership EFEKTIF (PRD Membership M12). */
   membership: { key: "basic" | "premium" | "vip"; name: string; expiresAt: string | null };
+  /** Jumlah undangan meja yang menunggu keputusan → lencana di menu. */
+  pendingInviteCount?: number;
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -210,6 +214,13 @@ export function ProfileMenuList({
             icon={<Users className="h-5 w-5" />}
             label="Friends"
             description="Your friends & pending requests"
+          />
+          <MenuItem
+            href="/profile/invites"
+            icon={<MailOpen className="h-5 w-5" />}
+            label="Table Invites"
+            description="Invites to tables — who invited you & when"
+            badge={pendingInviteCount}
           />
           <MenuItem
             href="/profile/blocked"
@@ -408,6 +419,7 @@ function MenuItem({
   iconBox,
   label,
   description,
+  badge,
 }: {
   href: string;
   /** Ikon di dalam kotak default (bg primary). */
@@ -416,6 +428,8 @@ function MenuItem({
   iconBox?: React.ReactNode;
   label: string;
   description?: string;
+  /** Angka lencana (mis. undangan pending). 0/undefined → tak tampil. */
+  badge?: number;
 }) {
   return (
     <Link
@@ -435,6 +449,11 @@ function MenuItem({
           </span>
         )}
       </span>
+      {!!badge && badge > 0 && (
+        <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[11px] font-semibold flex items-center justify-center tabular-nums">
+          {badge}
+        </span>
+      )}
       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0" />
     </Link>
   );

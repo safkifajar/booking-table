@@ -652,6 +652,102 @@ export const DP_TIMEOUT_SECONDS = 60;
 export const PAY_AT_CASHIER_TIMEOUT_SECONDS = 10 * 60;
 
 /**
+ * DP "pay at cashier" yang masih pending untuk sesi-sesi tertentu yang HOST-nya
+ * = profileId (viewer). Dipakai menampilkan arahan "segera ke kasir" + countdown
+ * di Booking Schedule / Home — hanya untuk booking milik user sendiri.
+ * Return Map<sessionId, { order_id, expires_at }>. Kosong kalau tak ada.
+ */
+export async function getViewerPayAtCashierDp(
+  sessionIds: string[],
+  profileId: string
+): Promise<Map<string, { order_id: string; expires_at: string | null }>> {
+  if (sessionIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      session_id: orders.sessionId,
+      order_id: orders.id,
+      split_meta: payments.splitMeta,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .where(
+      and(
+        inArray(orders.sessionId, sessionIds),
+        eq(tableSessions.hostId, profileId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`
+      )
+    );
+  return new Map(
+    rows.map((r) => {
+      const meta = (r.split_meta ?? {}) as { expiresAt?: string | null };
+      return [
+        r.session_id,
+        { order_id: r.order_id, expires_at: meta.expiresAt ?? null },
+      ];
+    })
+  );
+}
+
+/** Booking milik user yang DP-nya menunggu bayar di kasir (untuk banner home). */
+export interface PendingCashierBooking {
+  session_id: string;
+  order_id: string;
+  table_label: string;
+  amount: number;
+  reservation_at: string | null;
+  expires_at: string | null;
+}
+
+/**
+ * Booking milik profileId (sebagai host) yang status 'reserved' dengan DP
+ * "pay at cashier" masih pending — untuk banner "segera ke kasir" di home.
+ * Terbaru dulu. Kosong kalau tak ada.
+ */
+export async function getPendingCashierBookingsForProfile(
+  profileId: string
+): Promise<PendingCashierBooking[]> {
+  const rows = await db
+    .select({
+      session_id: tableSessions.id,
+      order_id: orders.id,
+      table_label: tables.label,
+      amount: payments.amount,
+      reservation_at: tableSessions.reservationAt,
+      split_meta: payments.splitMeta,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .where(
+      and(
+        eq(tableSessions.hostId, profileId),
+        eq(tableSessions.status, "reserved"),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`
+      )
+    )
+    .orderBy(desc(tableSessions.reservationAt));
+  return rows.map((r) => {
+    const meta = (r.split_meta ?? {}) as { expiresAt?: string | null };
+    return {
+      session_id: r.session_id,
+      order_id: r.order_id,
+      table_label: r.table_label,
+      amount: r.amount,
+      reservation_at: r.reservation_at
+        ? r.reservation_at.toISOString()
+        : null,
+      expires_at: meta.expiresAt ?? null,
+    };
+  });
+}
+
+/**
  * Batalkan booking yang DP-nya tak dibayar dalam batas waktunya.
  * Batas per payment: splitMeta.expiresAt kalau ada (QRIS gateway / pay-at-
  * cashier 10 menit), fallback created_at + DP_TIMEOUT_SECONDS.

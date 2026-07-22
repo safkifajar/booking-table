@@ -102,6 +102,17 @@ function CashierWaitView({
     return () => clearInterval(t);
   }, [router]);
 
+  // Tombol kembali (HP/browser) → arahkan ke DENAH booking, bukan history.back()
+  // (yang bisa mendarat balik di form/step sebelumnya). Booking TIDAK dibatalkan
+  // di sini — server sweep (expireDpIfOverdue) membebaskan meja saat timeout.
+  // Dorong satu entri history dulu supaya event popstate pertama tertangkap.
+  React.useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+    const onPop = () => router.replace(`/bar/${barSlug}`);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [router, barSlug]);
+
   // Waktu habis → batalkan (idempoten; kalau ternyata sudah paid → ke session).
   React.useEffect(() => {
     if (left > 0 || expiredHandled.current) return;

@@ -16,6 +16,7 @@ import {
   sessionVisibilityEnum,
   memberRoleEnum,
   memberStatusEnum,
+  inviteStatusEnum,
 } from "./_enums";
 
 /**
@@ -124,12 +125,66 @@ export const sessionMembers = pgTable(
 );
 
 /**
+ * Arsip undangan meja (migration 0062) — append-only, TERPISAH dari
+ * session_members. Dicatat saat undangan benar-benar DIKIRIM (booking: setelah
+ * DP lunas; meja aktif: saat host undang). Sumber untuk halaman /profile/invites
+ * (record siapa mengundang & kapan + status). session_members tak disentuh:
+ * accept/decline yg ada hanya MENAMBAH update status di sini.
+ *
+ * Satu baris per (session, invitee). Undang-ulang orang yg sama ke sesi sama →
+ * ON CONFLICT DO UPDATE reset ke pending (jangan INSERT polos).
+ */
+export const sessionInvites = pgTable(
+  "session_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => tableSessions.id, { onDelete: "cascade" }),
+    inviterId: uuid("inviter_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    inviteeId: uuid("invitee_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    status: inviteStatusEnum("status").notNull().default("pending"),
+    invitedAt: timestamp("invited_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    respondedAt: timestamp("responded_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => [
+    unique("uq_session_invites_session_invitee").on(t.sessionId, t.inviteeId),
+    index("idx_session_invites_invitee").on(t.inviteeId),
+    index("idx_session_invites_session").on(t.sessionId),
+  ]
+);
+
+/**
  * Relations
  */
 export const tableSessionsRelations = relations(tableSessions, ({ one, many }) => ({
   table: one(tables, { fields: [tableSessions.tableId], references: [tables.id] }),
   host: one(profiles, { fields: [tableSessions.hostId], references: [profiles.id] }),
   members: many(sessionMembers),
+}));
+
+export const sessionInvitesRelations = relations(sessionInvites, ({ one }) => ({
+  session: one(tableSessions, {
+    fields: [sessionInvites.sessionId],
+    references: [tableSessions.id],
+  }),
+  inviter: one(profiles, {
+    fields: [sessionInvites.inviterId],
+    references: [profiles.id],
+  }),
+  invitee: one(profiles, {
+    fields: [sessionInvites.inviteeId],
+    references: [profiles.id],
+  }),
 }));
 
 export const sessionMembersRelations = relations(sessionMembers, ({ one }) => ({

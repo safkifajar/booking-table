@@ -35,6 +35,7 @@ import {
   countPending,
 } from "@/components/staff/MoveRequestsPanel";
 import { StaffBottomNav } from "@/components/staff/StaffBottomNav";
+import { PayAtCashierCountdown } from "@/components/session/PayAtCashierCountdown";
 import {
   SessionListFilters,
   filterSessions,
@@ -353,6 +354,7 @@ export function CashierSessionList({
 
 // Daftar reservasi terjadwal (status reserved) + filter tanggal.
 function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
+  const router = useRouter();
   const [dateFilter, setDateFilter] = React.useState<string>("all");
 
   const dateKey = (b: CashierBookingItem) => {
@@ -415,11 +417,12 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
           {filtered.map((b) => (
             <Link
               key={b.session_id}
-              // DP menunggu konfirmasi kasir → langsung ke panel pembayaran
-              // kasir (tombol mark-paid); selain itu ke halaman sesi biasa.
+              // DP menunggu konfirmasi kasir → langsung ke ORDER DETAIL (tempat
+              // CashierConfirmBox berada) supaya kasir cepat konfirmasi. Selain
+              // itu ke halaman sesi biasa (tab Table/Menu/Bill/Pay).
               href={
                 b.dp_pending_cashier
-                  ? `/staff/cashier/${b.session_id}`
+                  ? `/session/${b.session_id}/order/${b.dp_pending_cashier.order_id}?from=/staff/cashier`
                   : `/session/${b.session_id}?from=/staff/cashier`
               }
             >
@@ -468,10 +471,22 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
                 {b.dp_pending_cashier && (
                   <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-xs text-amber-400">
                     <Banknote className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-medium truncate">
+                    <span className="font-medium truncate flex-1">
                       DP {formatIDR(b.dp_pending_cashier.amount)} — waiting
-                      payment at cashier
+                      payment
                     </span>
+                    {/* Sisa waktu konfirmasi. Habis → refresh (server sudah
+                        membatalkan booking via sweep → kartu hilang). */}
+                    <PayAtCashierCountdown
+                      expiresAt={b.dp_pending_cashier.expires_at}
+                      onExpire={() => router.refresh()}
+                    >
+                      {(mmss) => (
+                        <span className="shrink-0 tabular-nums font-semibold rounded bg-amber-500/20 px-1.5 py-0.5">
+                          {mmss}
+                        </span>
+                      )}
+                    </PayAtCashierCountdown>
                   </div>
                 )}
               </Card>

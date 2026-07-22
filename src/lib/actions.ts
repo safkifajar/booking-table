@@ -18,13 +18,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, isNull, ne, notInArray, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, ne, notInArray, sql, desc } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
   tableSessions,
   sessionMembers,
+  sessionInvites,
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { menuItems } from "@/lib/db/schema/menu";
@@ -749,35 +750,16 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   await notifySessionAndStaff(sessionId);
   revalidatePath("/bar/[slug]", "page");
 
-  // 10. Notif in-app + email ke user yg diundang (best-effort).
-  if (invitees.length > 0) {
-    const link = `/session/${sessionId}`;
-    const tableLabel = tableRow.label ?? "table";
-    await Promise.allSettled(
-      invitees.map(async (u) => {
-        await createNotification({
-          profileId: u.id,
-          type: "table_invite",
-          title: `${profile.displayName} invited you to table ${tableLabel}`,
-          body: `Open to accept the invite to table ${tableLabel}.`,
-          link,
-        });
-        const tpl = tableInviteEmail({
-          email: u.email,
-          inviterName: profile.displayName,
-          tableLabel,
-          barName: tableRow.bar_name ?? "SOHO",
-          link,
-          mode: "invited",
-        });
-        await sendEmail({
-          to: u.email,
-          subject: `Invite to table ${tableLabel}`,
-          html: tpl.html,
-          text: tpl.text,
-        });
-      })
-    );
+  // 10. Undangan ke user yg diundang — HANYA kalau tak menunggu pembayaran DP.
+  //     Booking dgn DP pending (QRIS belum dibayar / pay-at-cashier belum
+  //     dikonfirmasi) JANGAN kirim undangan dulu: booking bisa batal / timeout.
+  //     Untuk kasus itu, undangan dikirim di titik settle DP (checkPaymentStatus,
+  //     cashierMarkPaymentPaid, markPaymentPaidBySystem, staffOpenTableForCustomer)
+  //     lewat sendBookingInvites — hanya saat DP benar-benar lunas.
+  //     Kirim sekarang kalau: walk-in / tanpa DP / DP sudah paid seketika.
+  const dpStillPending = dpAwaitCashier || !!dpQris;
+  if (invitees.length > 0 && !dpStillPending) {
+    await sendBookingInvites(sessionId);
   }
 
   void dpStatus; // unused warning suppress
@@ -800,6 +782,147 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
   // Walk-in / tanpa DP / DP sudah paid → langsung ke session view.
   redirect(`/session/${sessionId}`);
+}
+
+/**
+ * Catat/segarkan arsip undangan (session_invites) — record untuk /profile/invites.
+ * Upsert per (session, invitee): undang-ulang orang yang sama ke sesi ini
+ * → reset ke 'pending' + invited_at baru + responded_at null (mengikuti pola
+ * friend_requests yang dipakai-ulang per pasangan). Dipanggil saat undangan
+ * BENAR-BENAR dikirim (booking: setelah DP lunas; meja aktif: saat host undang).
+ */
+async function recordSessionInvites(
+  sessionId: string,
+  invites: { inviterId: string; inviteeId: string }[]
+): Promise<void> {
+  if (invites.length === 0) return;
+  await db
+    .insert(sessionInvites)
+    .values(
+      invites.map((i) => ({
+        sessionId,
+        inviterId: i.inviterId,
+        inviteeId: i.inviteeId,
+        status: "pending" as const,
+      }))
+    )
+    .onConflictDoUpdate({
+      target: [sessionInvites.sessionId, sessionInvites.inviteeId],
+      set: {
+        inviterId: sql`excluded.inviter_id`,
+        status: sql`'pending'::invite_status`,
+        invitedAt: sql`now()`,
+        respondedAt: sql`NULL`,
+      },
+    });
+}
+
+/**
+ * Tandai arsip undangan sudah direspon (accepted/declined) atau dibatalkan
+ * (cancelled) — untuk record /profile/invites. Best-effort; hanya menyentuh
+ * baris yang masih 'pending' supaya tak menimpa status final.
+ */
+async function markSessionInviteResponded(
+  sessionId: string,
+  inviteeId: string,
+  status: "accepted" | "declined" | "cancelled"
+): Promise<void> {
+  await db
+    .update(sessionInvites)
+    .set({ status, respondedAt: new Date() })
+    .where(
+      and(
+        eq(sessionInvites.sessionId, sessionId),
+        eq(sessionInvites.inviteeId, inviteeId),
+        eq(sessionInvites.status, "pending")
+      )
+    );
+}
+
+/**
+ * Kirim undangan (notif in-app + email) ke SEMUA member 'pending' berundang
+ * (invitedBy not null) di sebuah sesi — self-contained (baca data dari DB via
+ * sessionId, tak butuh state in-memory).
+ *
+ * Dipakai untuk booking yang butuh DP: undangan hanya dikirim SETELAH DP lunas,
+ * bukan saat booking dibuat (yang mungkin belum dibayar / batal). Idempotensi
+ * dijamin PEMANGGIL — dipanggil hanya pada transisi dp_paid_at null→terisi
+ * (sekali seumur booking), jadi tak perlu penanda per-member.
+ *
+ * Best-effort: kegagalan notif/email tak boleh menggagalkan alur pembayaran.
+ */
+export async function sendBookingInvites(sessionId: string): Promise<void> {
+  // Host (pengundang) + meja + bar untuk isi teks undangan.
+  const [meta] = await db
+    .select({
+      hostName: profiles.displayName,
+      tableLabel: tables.label,
+      barName: bars.name,
+    })
+    .from(tableSessions)
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!meta) return;
+
+  // Member yang diundang & masih pending (belum accept/decline) + email +
+  // pengundang (untuk arsip).
+  const invited = await db
+    .select({
+      profileId: sessionMembers.profileId,
+      email: users.email,
+      invitedBy: sessionMembers.invitedBy,
+    })
+    .from(sessionMembers)
+    .innerJoin(users, eq(users.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending"),
+        isNotNull(sessionMembers.invitedBy)
+      )
+    );
+  if (invited.length === 0) return;
+
+  // Arsip undangan (record /profile/invites). Upsert: undang-ulang orang yg sama
+  // ke sesi ini reset ke pending. invitedAt = sekarang (waktu undangan benar-2
+  // dikirim = setelah DP lunas), respondedAt di-null-kan.
+  await recordSessionInvites(
+    sessionId,
+    invited
+      .filter((u) => u.invitedBy)
+      .map((u) => ({ inviterId: u.invitedBy as string, inviteeId: u.profileId }))
+  ).catch((e) => console.error("[invite] archive booking:", e));
+
+  const link = `/session/${sessionId}`;
+  const tableLabel = meta.tableLabel ?? "table";
+  await Promise.allSettled(
+    invited.map(async (u) => {
+      await createNotification({
+        profileId: u.profileId,
+        type: "table_invite",
+        title: `${meta.hostName} invited you to table ${tableLabel}`,
+        body: `Open to accept the invite to table ${tableLabel}.`,
+        link,
+      });
+      const tpl = tableInviteEmail({
+        email: u.email,
+        inviterName: meta.hostName,
+        tableLabel,
+        barName: meta.barName ?? "SOHO",
+        link,
+        mode: "invited",
+      });
+      await sendEmail({
+        to: u.email,
+        subject: `Invite to table ${tableLabel}`,
+        html: tpl.html,
+        text: tpl.text,
+      });
+    })
+  );
 }
 
 // ============================================================
@@ -1203,6 +1326,11 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     .set({ status: "joined", joinedAt: new Date() })
     .where(eq(sessionMembers.id, member.id));
 
+  // Arsip: tandai undangan diterima (record /profile/invites).
+  await markSessionInviteResponded(sessionId, profile.id, "accepted").catch(
+    (e) => console.error("[invite] archive accept:", e)
+  );
+
   // Notif ke pengundang bahwa undangan diterima. Pengundang = invited_by
   // (fallback host kalau null, mestinya selalu terisi untuk invite).
   await createNotification({
@@ -1253,6 +1381,12 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
         eq(sessionMembers.status, "pending")
       )
     );
+
+  // Arsip: tandai undangan ditolak (record /profile/invites). Row session_members
+  // di-hard-delete (perilaku lama tak diubah), tapi arsip menyimpan record-nya.
+  await markSessionInviteResponded(sessionId, profile.id, "declined").catch(
+    (e) => console.error("[invite] archive decline:", e)
+  );
 
   // Notif ke pengundang bahwa undangan ditolak (counterpart invite_accepted).
   if (info) {
@@ -1429,6 +1563,13 @@ export async function inviteUsersToSession(
       });
   }
 
+  // 4b. Arsip undangan (record /profile/invites) — undangan meja aktif dikirim
+  //     langsung, jadi dicatat di sini.
+  await recordSessionInvites(
+    sessionId,
+    targets.map((u) => ({ inviterId: profile.id, inviteeId: u.id }))
+  ).catch((e) => console.error("[invite] archive active:", e));
+
   // 5. Notif in-app + email (best-effort).
   const link = `/session/${sessionId}`;
   const tableLabel = row.table_label ?? "table";
@@ -1509,6 +1650,13 @@ export async function cancelInvite(memberId: string, sessionId: string) {
       )
     );
 
+  // Arsip: tandai undangan dibatalkan host (record /profile/invites).
+  await markSessionInviteResponded(
+    sessionId,
+    info.memberProfileId,
+    "cancelled"
+  ).catch((e) => console.error("[invite] archive cancel:", e));
+
   // Beri tahu user yg dibatalkan: notif undangan lamanya jadi "dibatalkan"
   // (tombol Terima/Tolak hilang) + unread lagi.
   await markInviteCancelled(
@@ -1519,6 +1667,106 @@ export async function cancelInvite(memberId: string, sessionId: string) {
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
+}
+
+/** Satu baris undangan meja yang diterima user (untuk /profile/invites). */
+export interface MyInviteItem {
+  session_id: string;
+  status: "pending" | "accepted" | "declined" | "cancelled";
+  invited_at: string;
+  responded_at: string | null;
+  inviter_name: string;
+  inviter_avatar: string | null;
+  table_label: string;
+  area_name: string;
+  session_status: string;
+  reservation_at: string | null;
+  /** true kalau baris session_members pending-nya masih ada (bisa di-accept). */
+  can_respond: boolean;
+}
+
+/**
+ * Undangan meja yang DITERIMA user (invitee = dia) dari arsip session_invites —
+ * untuk halaman /profile/invites. Terbaru dulu. `can_respond` true hanya kalau
+ * status masih 'pending' DAN baris session_members pending-nya masih ada
+ * (undangan bisa jadi sudah expired/booking batal → arsip pending tapi member
+ * hilang → tak bisa di-accept lagi).
+ */
+export async function getMyInvites(): Promise<MyInviteItem[]> {
+  const profile = await requireProfile();
+  const inviter = aliasedTable(profiles, "inviter_profile");
+
+  const rows = await db
+    .select({
+      session_id: sessionInvites.sessionId,
+      status: sessionInvites.status,
+      invited_at: sessionInvites.invitedAt,
+      responded_at: sessionInvites.respondedAt,
+      inviter_name: inviter.displayName,
+      inviter_avatar: inviter.avatarUrl,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      session_status: tableSessions.status,
+      reservation_at: tableSessions.reservationAt,
+      member_status: sessionMembers.status,
+    })
+    .from(sessionInvites)
+    .innerJoin(inviter, eq(inviter.id, sessionInvites.inviterId))
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionInvites.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    // LEFT: baris member pending bisa saja sudah hilang (declined/expired).
+    .leftJoin(
+      sessionMembers,
+      and(
+        eq(sessionMembers.sessionId, sessionInvites.sessionId),
+        eq(sessionMembers.profileId, sessionInvites.inviteeId),
+        eq(sessionMembers.status, "pending")
+      )
+    )
+    .where(eq(sessionInvites.inviteeId, profile.id))
+    .orderBy(desc(sessionInvites.invitedAt));
+
+  return rows.map((r) => ({
+    session_id: r.session_id,
+    status: r.status,
+    invited_at: r.invited_at.toISOString(),
+    responded_at: r.responded_at ? r.responded_at.toISOString() : null,
+    inviter_name: r.inviter_name,
+    inviter_avatar: r.inviter_avatar,
+    table_label: r.table_label,
+    area_name: r.area_name,
+    session_status: r.session_status,
+    reservation_at: r.reservation_at ? r.reservation_at.toISOString() : null,
+    // Bisa direspon hanya kalau arsip masih pending & member pending-nya ada.
+    can_respond: r.status === "pending" && r.member_status === "pending",
+  }));
+}
+
+/**
+ * Jumlah undangan meja yang masih MENUNGGU keputusan user (untuk lencana menu).
+ * Actionable = arsip pending DAN baris member pending-nya masih ada.
+ */
+export async function getMyPendingInviteCount(): Promise<number> {
+  const profile = await requireProfile();
+  const [row] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(sessionInvites)
+    .innerJoin(
+      sessionMembers,
+      and(
+        eq(sessionMembers.sessionId, sessionInvites.sessionId),
+        eq(sessionMembers.profileId, sessionInvites.inviteeId),
+        eq(sessionMembers.status, "pending")
+      )
+    )
+    .where(
+      and(
+        eq(sessionInvites.inviteeId, profile.id),
+        eq(sessionInvites.status, "pending")
+      )
+    );
+  return Number(row?.count ?? 0);
 }
 
 /**
@@ -3716,10 +3964,23 @@ export async function checkPaymentStatus(
     // dibatalkan oleh timeout).
     const meta = (row.splitMeta as { isDownPayment?: boolean } | null) ?? {};
     if (meta.isDownPayment) {
-      await db
+      // Guard transisi null→terisi (returning) → undangan hanya sekali. Booking
+      // dgn undangan: user diundang baru dinotifikasi SETELAH DP lunas.
+      const dpSet = await db
         .update(tableSessions)
         .set({ dpPaidAt: new Date() })
-        .where(eq(tableSessions.id, row.sessionId));
+        .where(
+          and(
+            eq(tableSessions.id, row.sessionId),
+            isNull(tableSessions.dpPaidAt)
+          )
+        )
+        .returning({ id: tableSessions.id });
+      if (dpSet.length > 0) {
+        await sendBookingInvites(row.sessionId).catch((e) =>
+          console.error("[invite] checkPaymentStatus:", e)
+        );
+      }
     }
     // Prepaid hook: order 'unpaid' + kini ada pembayaran lunas → order MASUK
     // (status 'paid' + item draft→sent). WAJIB sama seperti jalur webhook
