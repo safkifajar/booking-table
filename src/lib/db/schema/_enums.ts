@@ -66,6 +66,18 @@ export const friendRequestStatusEnum = pgEnum("friend_request_status", [
   "cancelled",
 ]);
 
+// Lifecycle undangan meja (arsip session_invites, migration 0062):
+// pending -> accepted (diterima) / declined (ditolak) / cancelled (dibatalkan
+// host). Tabel arsip append-only untuk halaman /profile/invites (record siapa
+// mengundang & kapan). Terpisah dari session_members supaya accept/decline yg
+// ada tak berubah perilakunya.
+export const inviteStatusEnum = pgEnum("invite_status", [
+  "pending",
+  "accepted",
+  "declined",
+  "cancelled",
+]);
+
 // Multi-order lifecycle (PRD Multi-Order Prepaid): unpaid → paid → closed.
 // Nilai lama (open/submitted/preparing/served) dipertahankan utk kompat data
 // existing & backfill; kode baru hanya memakai unpaid/paid/closed.

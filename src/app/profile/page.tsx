@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { ProfileMenuList } from "./ProfileMenuList";
 import { getMembershipStatus } from "@/lib/membership";
+import { getMyPendingInviteCount } from "@/lib/actions";
 import { SohoGlow } from "@/components/ui/soho-glow";
 
 /**
@@ -26,8 +27,11 @@ export default async function ProfilePage() {
   // Belum selesai onboarding → paksa ke wizard (mulai layar gender).
   if (!profile.onboarded) redirect("/onboarding");
 
-  // Badge level membership EFEKTIF (PRD Membership M12).
-  const membership = await getMembershipStatus(profile.id);
+  // Badge level membership EFEKTIF (PRD Membership M12) + jumlah undangan pending.
+  const [membership, pendingInviteCount] = await Promise.all([
+    getMembershipStatus(profile.id),
+    getMyPendingInviteCount(),
+  ]);
 
   return (
     <main className="relative flex-1 pb-12">
@@ -58,6 +62,7 @@ export default async function ProfilePage() {
             name: membership.name,
             expiresAt: membership.expires_at?.toISOString() ?? null,
           }}
+          pendingInviteCount={pendingInviteCount}
         />
       </div>
     </main>
