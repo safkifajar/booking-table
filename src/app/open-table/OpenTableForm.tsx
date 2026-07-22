@@ -30,8 +30,9 @@ import {
   ChevronUp,
   ChevronDown,
   Trash2,
+  QrCode,
+  Banknote,
 } from "lucide-react";
-import { Select } from "@/components/ui/select";
 import { openTable } from "@/lib/actions";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -590,15 +591,30 @@ export function OpenTableForm({
                         return (
                           <div
                             key={id}
-                            className="flex items-center justify-between gap-2 p-2.5 text-sm"
+                            className="flex items-center gap-2.5 p-2.5 text-sm"
                           >
-                            <div className="min-w-0 flex-1">
-                              <span className="text-primary font-medium mr-1">
+                            {/* Thumbnail foto menu (fallback ikon). */}
+                            <div className="h-9 w-9 shrink-0 rounded-md overflow-hidden bg-muted/40 flex items-center justify-center">
+                              {item.image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={item.image_url}
+                                  alt={item.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <UtensilsCrossed className="h-4 w-4 text-muted-foreground/40" />
+                              )}
+                            </div>
+                            {/* qty + nama: qty tetap, nama truncate. min-w-0 pada
+                                container flex WAJIB supaya truncate bekerja. */}
+                            <div className="flex min-w-0 flex-1 items-center gap-1">
+                              <span className="text-primary font-medium shrink-0">
                                 {qty}×
                               </span>
-                              <span className="truncate">{item.name}</span>
+                              <span className="min-w-0 truncate">{item.name}</span>
                             </div>
-                            <span className="tabular-nums text-muted-foreground shrink-0">
+                            <span className="tabular-nums text-muted-foreground shrink-0 pl-2">
                               {formatIDR(item.price * qty)}
                             </span>
                           </div>
@@ -709,15 +725,64 @@ export function OpenTableForm({
               <label className="block text-sm font-medium mb-2">
                 Deposit payment method
               </label>
-              <Select
-                value={dpMethod}
-                onChange={(v) => setDpMethod(v as "qris" | "cash")}
-                ariaLabel="Deposit payment method"
-                options={[
-                  { value: "qris", label: "QRIS" },
-                  { value: "cash", label: "Pay at cashier" },
-                ]}
-              />
+              {/* Daftar pilihan langsung tampil (radio) — hanya satu yang aktif. */}
+              <div
+                role="radiogroup"
+                aria-label="Deposit payment method"
+                className="space-y-2"
+              >
+                {(
+                  [
+                    { value: "qris", label: "QRIS", icon: <QrCode className="h-5 w-5" /> },
+                    { value: "cash", label: "Pay at cashier", icon: <Banknote className="h-5 w-5" /> },
+                  ] as const
+                ).map((opt) => {
+                  const active = dpMethod === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setDpMethod(opt.value)}
+                      className={cn(
+                        "w-full flex items-center gap-3 rounded-lg border px-3 py-3 text-left transition",
+                        active
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/40"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "shrink-0",
+                          active ? "text-primary" : "text-muted-foreground"
+                        )}
+                      >
+                        {opt.icon}
+                      </span>
+                      <span
+                        className={cn(
+                          "flex-1 text-sm font-medium",
+                          active ? "text-primary" : "text-foreground"
+                        )}
+                      >
+                        {opt.label}
+                      </span>
+                      {/* Indikator radio bulat, terisi saat aktif. */}
+                      <span
+                        className={cn(
+                          "h-5 w-5 shrink-0 rounded-full border flex items-center justify-center transition",
+                          active
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border"
+                        )}
+                      >
+                        {active && <Check className="h-3 w-3" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               {dpMethod === "cash" && (
                 <p className="mt-1.5 text-xs text-amber-400">
                   Confirm &amp; pay at the cashier desk within 10 minutes —
