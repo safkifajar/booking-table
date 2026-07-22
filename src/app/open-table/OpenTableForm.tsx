@@ -606,13 +606,15 @@ export function OpenTableForm({
                                 <UtensilsCrossed className="h-4 w-4 text-muted-foreground/40" />
                               )}
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <span className="text-primary font-medium mr-1">
+                            {/* qty + nama: qty tetap, nama truncate. min-w-0 pada
+                                container flex WAJIB supaya truncate bekerja. */}
+                            <div className="flex min-w-0 flex-1 items-center gap-1">
+                              <span className="text-primary font-medium shrink-0">
                                 {qty}×
                               </span>
-                              <span className="truncate">{item.name}</span>
+                              <span className="min-w-0 truncate">{item.name}</span>
                             </div>
-                            <span className="tabular-nums text-muted-foreground shrink-0">
+                            <span className="tabular-nums text-muted-foreground shrink-0 pl-2">
                               {formatIDR(item.price * qty)}
                             </span>
                           </div>
