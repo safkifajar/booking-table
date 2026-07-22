@@ -40,25 +40,34 @@ export function PendingCashierBanner({
         onExpire={() => router.refresh()}
       >
         {(mmss) => (
+          // Gaya solid-fill mengikuti MembershipBanner (blok gradasi + ikon
+          // kotak rounded kiri + pill CTA kontras kanan), TAPI warna amber —
+          // beda dari banner membership (gold/primary). Teks amber-950 utk
+          // kontras di atas isian terang.
           <Link
             href={`/booking/${b.session_id}/pay`}
-            className="flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-3 transition hover:bg-amber-500/[0.12]"
+            className="relative flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-amber-500 to-amber-400/80 p-3.5 shadow-lg shadow-amber-500/20 transition hover:shadow-amber-500/35 group"
           >
-            <span className="h-9 w-9 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-400">
-              <Banknote className="h-4 w-4" />
-            </span>
+            {/* Aksen dekoratif lembut di pojok kiri-atas. */}
+            <div className="pointer-events-none absolute -left-8 -top-12 h-24 w-24 rounded-full bg-white/15" />
+
+            <div className="h-10 w-10 rounded-xl bg-black/20 flex items-center justify-center shrink-0">
+              <Banknote className="h-5 w-5 text-amber-950" />
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-amber-300">
+              <p className="text-sm font-bold text-amber-950 truncate">
                 Pay at the cashier — table {b.table_label}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-amber-950/70 truncate">
                 DP {formatIDR(b.amount)} · pay to confirm your booking
               </p>
             </div>
-            <span className="shrink-0 tabular-nums font-semibold text-amber-400 rounded-md bg-amber-500/15 border border-amber-500/30 px-2 py-1 text-sm">
+            {/* Countdown = pill CTA kontras (putih) di kanan, seperti banner
+                membership — sekaligus menandai urgensi (sisa waktu). */}
+            <span className="relative z-10 shrink-0 inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-amber-700 shadow tabular-nums group-hover:scale-105 transition">
               {mmss}
+              <ChevronRight className="h-3.5 w-3.5" />
             </span>
-            <ChevronRight className="h-4 w-4 text-amber-400/70 shrink-0" />
           </Link>
         )}
       </PayAtCashierCountdown>
