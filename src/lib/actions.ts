@@ -2306,6 +2306,10 @@ export interface SessionOrderSummary {
   owner_member_id: string | null;
   /** Nama pemesan: pemilik order, atau host utk order meja. */
   ordered_by: string | null;
+  /** Batas waktu (ISO) pembayaran "pay at cashier" yg masih pending utk order
+   *  ini. Terisi → tampilkan badge "Pay at cashier" + countdown, klik order →
+   *  halaman /order/[id]/pay. NULL = tak ada pending pay-at-cashier. */
+  cashier_pending_expires_at: string | null;
 }
 
 /**
@@ -2370,6 +2374,29 @@ export async function getSessionOrders(
     .groupBy(payments.orderId);
   const paidMap = new Map(paidRows.map((r) => [r.orderId, Number(r.paid)]));
 
+  // Pending "pay at cashier" per order (non-DP) → expiresAt terdekat, utk badge
+  // + countdown di list & deep-link ke halaman bayar.
+  const cashierRows = await db
+    .select({
+      orderId: payments.orderId,
+      splitMeta: payments.splitMeta,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS NOT TRUE`
+      )
+    );
+  const cashierExpiryMap = new Map<string, string>();
+  for (const c of cashierRows) {
+    const meta = (c.splitMeta as { expiresAt?: string | null } | null) ?? {};
+    if (meta.expiresAt) cashierExpiryMap.set(c.orderId, meta.expiresAt);
+  }
+
   // Charge config (single-tenant: 1 bar).
   const barId = rows[0]?.barId;
   const charge = barId ? await getChargeConfig(barId) : null;
@@ -2388,6 +2415,7 @@ export async function getSessionOrders(
       outstanding: Math.max(0, bill.total - paid),
       owner_member_id: r.ownerMemberId,
       ordered_by: r.orderedBy,
+      cashier_pending_expires_at: cashierExpiryMap.get(r.id) ?? null,
     };
   });
 }
@@ -3073,6 +3101,9 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   //    payment tetap 'pending' sampai KASIR konfirmasi uang diterima
   //    (cashierMarkPaymentPaid). Selama pending, order tak masuk dapur.
   if (data.method === "cash") {
+    const cashierExpiresAt = new Date(
+      Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
+    ).toISOString();
     await db
       .update(payments)
       .set({
@@ -3083,6 +3114,10 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
             ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
             : {}),
           payAtCashier: true,
+          // Batas 10 menit (sama dgn DP booking) → sumber countdown di halaman
+          // bayar + banner, dan deadline untuk lazy-expire (order dibatalkan,
+          // MEJA tetap open). Dulu null → pending menggantung selamanya.
+          expiresAt: cashierExpiresAt,
         },
       })
       .where(eq(payments.id, newPayment.id));
@@ -3102,7 +3137,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
       externalRef: `cashier_${newPayment.id}`,
       qrString: null,
       redirectUrl: null,
-      expiresAt: null,
+      expiresAt: cashierExpiresAt,
     };
   }
 
@@ -3352,14 +3387,18 @@ export async function createSplitBatch(
       // "Pay at cashier": tanpa gateway — tiap share pending sampai anggota
       // datang ke kasir & kasir konfirmasi satu-satu.
       if (data.method === "cash") {
+        // Batas 10 mnt (sama dgn payShare cash) → sumber countdown + lazy-expire.
+        const batchExpiresAt = new Date(
+          Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
+        ).toISOString();
         await db
           .update(payments)
           .set({
             externalRef: `cashier_${pay.id}`,
-            splitMeta: { batchId, payAtCashier: true },
+            splitMeta: { batchId, payAtCashier: true, expiresAt: batchExpiresAt },
           })
           .where(eq(payments.id, pay.id));
-        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: null });
+        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: batchExpiresAt });
         continue;
       }
 

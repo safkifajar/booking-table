@@ -48,6 +48,7 @@ import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import { type MenuPickerCategory } from "@/components/menu/MenuPicker";
 import { StaffMenuGrid } from "@/components/menu/StaffMenuGrid";
 import { UserInvitePicker } from "@/components/session/UserInvitePicker";
+import { PayAtCashierCountdown } from "@/components/session/PayAtCashierCountdown";
 import { MoveTableButton } from "./MoveTableButton";
 import { StaffMoveTableButton } from "@/components/staff/StaffMoveTableButton";
 import type { CashierSessionDetail } from "@/lib/cashier-actions";
@@ -1387,6 +1388,7 @@ function OrderList({
   heading: string;
   hideAmount?: boolean;
 }) {
+  const router = useRouter();
   if (orders.length === 0) return null;
   return (
     <div>
@@ -1395,15 +1397,36 @@ function OrderList({
         {orders.map((o) => (
           <Link
             key={o.id}
-            href={`/session/${sessionId}/order/${o.id}`}
+            // Order menunggu bayar di kasir → langsung ke layar countdown; selain
+            // itu ke detail order biasa.
+            href={
+              o.cashier_pending_expires_at
+                ? `/session/${sessionId}/order/${o.id}/pay`
+                : `/session/${sessionId}/order/${o.id}`
+            }
             className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-3 transition hover:border-primary/40"
           >
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium font-mono">
                   #{o.id.slice(0, 8).toUpperCase()}
                 </span>
                 <OrderStatusBadge status={o.status} outstanding={o.outstanding} />
+                {/* Order pay-at-cashier pending → badge + countdown. Habis →
+                    refresh (server sweep membatalkan → badge hilang). */}
+                {o.cashier_pending_expires_at && (
+                  <PayAtCashierCountdown
+                    expiresAt={o.cashier_pending_expires_at}
+                    onExpire={() => router.refresh()}
+                  >
+                    {(mmss) => (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                        Pay at cashier
+                        <span className="tabular-nums font-semibold">{mmss}</span>
+                      </span>
+                    )}
+                  </PayAtCashierCountdown>
+                )}
               </div>
               <div className="text-[11px] text-muted-foreground mt-0.5">
                 {o.itemCount} item{o.itemCount > 1 ? "s" : ""} ·{" "}

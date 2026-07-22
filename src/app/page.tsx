@@ -17,6 +17,7 @@ import {
   getUnpaidSessionsForProfile,
   getPendingCashierBookingsForProfile,
   expireFinishedSessions,
+  expireOverduePayAtCashierOrders,
   promoteDueReservations,
   getJoinedSessionIds,
 } from "@/lib/queries";
@@ -63,6 +64,9 @@ export default async function HomePage() {
   // tetap muncul di "LIVE NOW" walau sudah berhari-hari.
   await expireFinishedSessions(bar.id);
   await promoteDueReservations(bar.id);
+  // Order pay-at-cashier yang lewat 10 mnt → batalkan (meja tetap open) supaya
+  // banner "segera ke kasir" & tagihan tak menggantung.
+  await expireOverduePayAtCashierOrders(bar.id).catch(() => {});
 
   // Fetch data feed (parallel)
   const [allSessions, banners, unpaidSessions, pendingCashierBookings] =

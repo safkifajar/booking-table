@@ -17,6 +17,7 @@ import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
+import { PayAtCashierCountdown } from "@/components/session/PayAtCashierCountdown";
 import {
   cashierCreatePayment,
   cashierConfirmPendingPayment,
@@ -156,9 +157,10 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
       } else if (method === "cash" && result.status === "pending") {
-        toast.success(
-          "Payment created — confirm & pay at the cashier desk. Your order is sent to the kitchen once confirmed."
-        );
+        // Pay at cashier → halaman tunggu khusus (countdown 10 mnt), sama pola
+        // booking DP. Tak stay di detail dgn toast.
+        router.push(`/session/${detail.sessionId}/order/${detail.id}/pay`);
+        return;
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -581,10 +583,24 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                           />
                         )}
                         {!detail.isCashier && (
-                          <p className="text-[11px] text-amber-400">
-                            Waiting for cashier confirmation — pay at the cashier
-                            desk to complete this payment.
-                          </p>
+                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5">
+                            <p className="text-[11px] text-amber-400 flex-1">
+                              Waiting for cashier confirmation — pay at the
+                              cashier desk to complete this payment.
+                            </p>
+                            {/* Countdown sisa waktu konfirmasi. Habis → refresh
+                                (server sweep membatalkan → baris jadi Cancelled). */}
+                            <PayAtCashierCountdown
+                              expiresAt={p.expires_at}
+                              onExpire={() => router.refresh()}
+                            >
+                              {(mmss) => (
+                                <span className="shrink-0 tabular-nums font-semibold text-amber-400 text-xs rounded bg-amber-500/20 px-1.5 py-0.5">
+                                  {mmss}
+                                </span>
+                              )}
+                            </PayAtCashierCountdown>
+                          </div>
                         )}
                         <div className="flex gap-1.5 flex-wrap">
                           {(p.paid_by_member_id === detail.myMemberId ||

@@ -33,6 +33,17 @@ export function PendingCashierBanner({
   const b = withExpiry[0];
   if (!b) return null;
 
+  // Link + teks sesuai jenis: DP booking → layar bayar booking; order meja aktif
+  // → layar bayar order.
+  const href =
+    b.kind === "dp"
+      ? `/booking/${b.session_id}/pay`
+      : `/session/${b.session_id}/order/${b.order_id}/pay`;
+  const subtext =
+    b.kind === "dp"
+      ? `DP ${formatIDR(b.amount)} · pay to confirm your booking`
+      : `${formatIDR(b.amount)} · pay to complete your order`;
+
   return (
     <div className="mx-4 sm:mx-6 mt-3">
       <PayAtCashierCountdown
@@ -45,7 +56,7 @@ export function PendingCashierBanner({
           // beda dari banner membership (gold/primary). Teks amber-950 utk
           // kontras di atas isian terang.
           <Link
-            href={`/booking/${b.session_id}/pay`}
+            href={href}
             className="relative flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-amber-500 to-amber-400/80 p-3.5 shadow-lg shadow-amber-500/20 transition hover:shadow-amber-500/35 group"
           >
             {/* Aksen dekoratif lembut di pojok kiri-atas. */}
@@ -58,9 +69,7 @@ export function PendingCashierBanner({
               <p className="text-sm font-bold text-amber-950 truncate">
                 Pay at the cashier — table {b.table_label}
               </p>
-              <p className="text-xs text-amber-950/70 truncate">
-                DP {formatIDR(b.amount)} · pay to confirm your booking
-              </p>
+              <p className="text-xs text-amber-950/70 truncate">{subtext}</p>
             </div>
             {/* Countdown = pill CTA kontras (putih) di kanan, seperti banner
                 membership — sekaligus menandai urgensi (sisa waktu). */}
