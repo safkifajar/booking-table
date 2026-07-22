@@ -15,12 +15,14 @@ import {
   getBarBySlug,
   getActiveSessionsByBar,
   getUnpaidSessionsForProfile,
+  getPendingCashierBookingsForProfile,
   expireFinishedSessions,
   promoteDueReservations,
   getJoinedSessionIds,
 } from "@/lib/queries";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
+import { PendingCashierBanner } from "@/components/PendingCashierBanner";
 import { MembershipBanner } from "@/components/MembershipBanner";
 
 // Selalu dinamis: expireFinishedSessions/promoteDueReservations jalan tiap
@@ -63,11 +65,15 @@ export default async function HomePage() {
   await promoteDueReservations(bar.id);
 
   // Fetch data feed (parallel)
-  const [allSessions, banners, unpaidSessions] = await Promise.all([
-    getActiveSessionsByBar(bar.id),
-    getActiveBanners(bar.id),
-    profile ? getUnpaidSessionsForProfile(profile.id) : Promise.resolve([]),
-  ]);
+  const [allSessions, banners, unpaidSessions, pendingCashierBookings] =
+    await Promise.all([
+      getActiveSessionsByBar(bar.id),
+      getActiveBanners(bar.id),
+      profile ? getUnpaidSessionsForProfile(profile.id) : Promise.resolve([]),
+      profile
+        ? getPendingCashierBookingsForProfile(profile.id)
+        : Promise.resolve([]),
+    ]);
 
   // "LIVE NOW" = meja yg BENAR-BENAR sedang dipakai sekarang → hanya open/locked.
   // Exclude 'reserved' (booking belum mulai) & 'overdue' (booking lewat-waktu yg
@@ -140,6 +146,12 @@ export default async function HomePage() {
         {/* Soft-banner aktifkan notifikasi (user login) — proaktif tanpa
             auto-prompt. Klik Aktifkan baru minta izin browser. */}
         {!isAnon && profile && <PushBanner />}
+
+        {/* Banner "segera ke kasir" — booking DP menunggu bayar di kasir +
+            countdown. Paling atas di antara banner: paling mendesak (batas 10 mnt). */}
+        {!isAnon && profile && (
+          <PendingCashierBanner bookings={pendingCashierBookings} />
+        )}
 
         {/* Banner tagihan belum lunas (user login) — overdue / closed-belum-lunas */}
         {!isAnon && profile && <UnpaidBanner sessions={unpaidSessions} />}

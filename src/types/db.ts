@@ -219,6 +219,13 @@ export interface ActiveSessionView {
   reservation_end_at: string | null;
   member_count: number;
   table_capacity: number;
+  /**
+   * DP "pay at cashier" milik VIEWER yang masih menunggu konfirmasi kasir.
+   * Hanya diisi untuk booking milik viewer sendiri (di Booking Schedule) —
+   * dipakai menampilkan arahan "segera ke kasir" + countdown. null/undefined
+   * = tak ada / bukan milik viewer.
+   */
+  dp_pending_cashier?: { order_id: string; expires_at: string | null } | null;
 }
 
 // Ratings

@@ -12,6 +12,7 @@ import { SohoGlow } from "@/components/ui/soho-glow";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Banknote,
   Check,
   Clock,
   Loader2,
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import { formatIDR, cn, initials } from "@/lib/utils";
 import { MenuList } from "@/components/menu/MenuList";
+import { PayAtCashierCountdown } from "@/components/session/PayAtCashierCountdown";
 import type {
   Bar,
   FloorArea,
@@ -573,6 +575,7 @@ function BookingSchedule({
   /** Profile id penonton — badge tak tampil di booking miliknya sendiri. */
   viewerId?: string | null;
 }) {
+  const router = useRouter();
   const [nowMs] = React.useState(() => Date.now());
   const joined = React.useMemo(() => new Set(joinedIds ?? []), [joinedIds]);
 
@@ -729,6 +732,27 @@ function BookingSchedule({
                         </span>
                       )}
                     </div>
+                  )}
+                  {/* DP pay-at-cashier milik viewer masih pending → arahan
+                      "segera ke kasir" + countdown. Habis → refresh (server
+                      sudah batalkan booking → baris ini hilang). */}
+                  {r.dp_pending_cashier?.expires_at && (
+                    <PayAtCashierCountdown
+                      expiresAt={r.dp_pending_cashier.expires_at}
+                      onExpire={() => router.refresh()}
+                    >
+                      {(mmss) => (
+                        <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-400">
+                          <Banknote className="h-3 w-3 shrink-0" />
+                          <span className="font-medium">
+                            Pay at the cashier to confirm
+                          </span>
+                          <span className="ml-auto tabular-nums font-semibold rounded bg-amber-500/20 px-1.5 py-0.5">
+                            {mmss}
+                          </span>
+                        </div>
+                      )}
+                    </PayAtCashierCountdown>
                   )}
                 </div>
                 {/* Kanan: nomor meja (atas) + status + sisa kursi (bawah) */}

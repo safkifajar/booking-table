@@ -446,6 +446,8 @@ export interface CashierBookingItem {
   /** DP pending "Pay at cashier" — customer menunggu konfirmasi di kasir. */
   dp_pending_cashier: {
     payment_id: string;
+    /** Order pemilik DP — untuk link langsung ke order detail (konfirmasi cepat). */
+    order_id: string;
     amount: number;
     expires_at: string | null;
   } | null;
@@ -515,6 +517,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
   const dpRows = await db
     .select({
       session_id: orders.sessionId,
+      order_id: orders.id,
       payment_id: payments.id,
       amount: payments.amount,
       split_meta: payments.splitMeta,
@@ -536,6 +539,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
         d.session_id,
         {
           payment_id: d.payment_id,
+          order_id: d.order_id,
           amount: d.amount,
           expires_at: meta.expiresAt ?? null,
         },
