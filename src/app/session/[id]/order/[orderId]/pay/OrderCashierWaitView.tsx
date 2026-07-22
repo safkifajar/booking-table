@@ -35,7 +35,10 @@ export function OrderCashierWaitView({
   const [left, setLeft] = React.useState(secondsLeft);
   const [cancelling, setCancelling] = React.useState(false);
   const expiredHandled = React.useRef(false);
-  const orderHref = `/session/${sessionId}/order/${orderId}`;
+  void orderId; // dipakai di route (params), tak untuk navigasi kembali
+  // Kembali/selesai → tab Bill sesi (daftar Orders), bukan detail order —
+  // pending tetap terlihat di sana & konsisten dgn tempat customer memulai.
+  const backHref = `/session/${sessionId}?tab=bill`;
 
   // Countdown lokal (server tetap otoritatif via expireOverduePayAtCashierOrders).
   React.useEffect(() => {
@@ -54,10 +57,10 @@ export function OrderCashierWaitView({
   // TIDAK dibatalkan di sini — sweep server yang mengurus timeout.
   React.useEffect(() => {
     window.history.pushState(null, "", window.location.href);
-    const onPop = () => router.replace(orderHref);
+    const onPop = () => router.replace(backHref);
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [router, orderHref]);
+  }, [router, backHref]);
 
   // Waktu habis → batalkan (idempoten; kalau ternyata sudah paid → ke detail).
   React.useEffect(() => {
@@ -67,27 +70,27 @@ export function OrderCashierWaitView({
       try {
         const res = await cancelPayment(paymentId);
         if (res.status === "paid") {
-          router.replace(orderHref);
+          router.replace(backHref);
           return;
         }
       } catch {
         // Server sweep tetap membereskan — lanjut redirect.
       }
       toast.error("Payment cancelled — cashier confirmation time ran out");
-      router.replace(orderHref);
+      router.replace(backHref);
     })();
-  }, [left, paymentId, orderHref, router]);
+  }, [left, paymentId, backHref, router]);
 
   async function handleCancel() {
     setCancelling(true);
     try {
       const res = await cancelPayment(paymentId);
       if (res.status === "paid") {
-        router.replace(orderHref);
+        router.replace(backHref);
         return;
       }
       toast.success("Payment cancelled");
-      router.replace(orderHref);
+      router.replace(backHref);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel"));
       setCancelling(false);
@@ -158,9 +161,9 @@ export function OrderCashierWaitView({
             variant="ghost"
             size="sm"
             className="w-full text-muted-foreground"
-            onClick={() => router.replace(orderHref)}
+            onClick={() => router.replace(backHref)}
           >
-            Back to order
+            Back to bill
           </Button>
         </div>
       </Card>

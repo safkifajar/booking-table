@@ -2306,6 +2306,10 @@ export interface SessionOrderSummary {
   owner_member_id: string | null;
   /** Nama pemesan: pemilik order, atau host utk order meja. */
   ordered_by: string | null;
+  /** Batas waktu (ISO) pembayaran "pay at cashier" yg masih pending utk order
+   *  ini. Terisi → tampilkan badge "Pay at cashier" + countdown, klik order →
+   *  halaman /order/[id]/pay. NULL = tak ada pending pay-at-cashier. */
+  cashier_pending_expires_at: string | null;
 }
 
 /**
@@ -2370,6 +2374,29 @@ export async function getSessionOrders(
     .groupBy(payments.orderId);
   const paidMap = new Map(paidRows.map((r) => [r.orderId, Number(r.paid)]));
 
+  // Pending "pay at cashier" per order (non-DP) → expiresAt terdekat, utk badge
+  // + countdown di list & deep-link ke halaman bayar.
+  const cashierRows = await db
+    .select({
+      orderId: payments.orderId,
+      splitMeta: payments.splitMeta,
+    })
+    .from(payments)
+    .innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(
+      and(
+        eq(orders.sessionId, sessionId),
+        eq(payments.status, "pending"),
+        sql`(${payments.splitMeta} ->> 'payAtCashier')::boolean IS TRUE`,
+        sql`(${payments.splitMeta} ->> 'isDownPayment')::boolean IS NOT TRUE`
+      )
+    );
+  const cashierExpiryMap = new Map<string, string>();
+  for (const c of cashierRows) {
+    const meta = (c.splitMeta as { expiresAt?: string | null } | null) ?? {};
+    if (meta.expiresAt) cashierExpiryMap.set(c.orderId, meta.expiresAt);
+  }
+
   // Charge config (single-tenant: 1 bar).
   const barId = rows[0]?.barId;
   const charge = barId ? await getChargeConfig(barId) : null;
@@ -2388,6 +2415,7 @@ export async function getSessionOrders(
       outstanding: Math.max(0, bill.total - paid),
       owner_member_id: r.ownerMemberId,
       ordered_by: r.orderedBy,
+      cashier_pending_expires_at: cashierExpiryMap.get(r.id) ?? null,
     };
   });
 }
