@@ -3,13 +3,6 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -414,8 +407,9 @@ export function OpenTableForm({
   }
 
   return (
-    <Card className="w-full max-w-lg">
-      <CardHeader className="space-y-3">
+    <div className="w-full max-w-lg">
+      {/* Header meja — di luar section-card, sebagai judul halaman form. */}
+      <div className="mb-4 space-y-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -431,17 +425,19 @@ export function OpenTableForm({
         </div>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-2xl">Table {table.label}</CardTitle>
-            <CardDescription className="mt-1">
+            <h1 className="text-2xl font-semibold">Table {table.label}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               {areaName} · {table.shape} · capacity {table.capacity}
               {table.min_spend > 0 && ` · min ${formatIDR(table.min_spend)}`}
-            </CardDescription>
+            </p>
           </div>
           <Badge variant="default">{table.label}</Badge>
         </div>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ── Section 1: The table (jadwal + identitas meja) ── */}
+        <FormSection title="The table" subtitle="When & what this table is about">
           {/* Pilih waktu reservasi: tanggal → jam mulai → jam selesai */}
           {reservationEnabled ? (
             <SlotRangePicker
@@ -462,44 +458,6 @@ export function OpenTableForm({
               Reservations are not available right now. Try again later or contact the bar.
             </div>
           )}
-
-          {/* Visibility */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Who can join?
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              <VisibilityOption
-                icon={<Globe className="h-4 w-4" />}
-                label="Public"
-                desc="Anyone"
-                active={visibility === "public"}
-                onClick={() => changeVisibility("public")}
-              />
-              <VisibilityOption
-                icon={<UserPlus className="h-4 w-4" />}
-                label="Friends"
-                desc="Friends only"
-                active={visibility === "friends"}
-                onClick={() => changeVisibility("friends")}
-              />
-              <VisibilityOption
-                icon={<Lock className="h-4 w-4" />}
-                label="Invite"
-                desc="Invite users"
-                active={visibility === "invite_only"}
-                onClick={() => changeVisibility("invite_only")}
-              />
-            </div>
-          </div>
-
-          {/* Undang orang — semua visibility, SEMUA perlu persetujuan yg
-              diundang. Meja "friends" hanya boleh mengundang teman. */}
-          <UserInvitePicker
-            visibility={visibility}
-            selected={invited}
-            onChange={setInvited}
-          />
 
           {/* Vibes */}
           <div>
@@ -549,7 +507,54 @@ export function OpenTableForm({
               {description.length}/80
             </p>
           </div>
+        </FormSection>
 
+        {/* ── Section 2: Who's coming (visibility + undangan) ── */}
+        <FormSection title="Who's coming" subtitle="Who can join & who you invite">
+          {/* Visibility */}
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Who can join?
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <VisibilityOption
+                icon={<Globe className="h-4 w-4" />}
+                label="Public"
+                desc="Anyone"
+                active={visibility === "public"}
+                onClick={() => changeVisibility("public")}
+              />
+              <VisibilityOption
+                icon={<UserPlus className="h-4 w-4" />}
+                label="Friends"
+                desc="Friends only"
+                active={visibility === "friends"}
+                onClick={() => changeVisibility("friends")}
+              />
+              <VisibilityOption
+                icon={<Lock className="h-4 w-4" />}
+                label="Invite"
+                desc="Invite users"
+                active={visibility === "invite_only"}
+                onClick={() => changeVisibility("invite_only")}
+              />
+            </div>
+          </div>
+
+          {/* Undang orang — semua visibility, SEMUA perlu persetujuan yg
+              diundang. Meja "friends" hanya boleh mengundang teman. */}
+          <UserInvitePicker
+            visibility={visibility}
+            selected={invited}
+            onChange={setInvited}
+          />
+        </FormSection>
+
+        {/* ── Section 3: Order & payment (pesanan + DP) ── */}
+        <FormSection
+          title="Order & payment"
+          subtitle="Your initial order and how you pay the deposit"
+        >
           {/* Order awal */}
           {menu.length > 0 && (
             <div>
@@ -791,9 +796,10 @@ export function OpenTableForm({
               )}
             </div>
           )}
+        </FormSection>
 
-          {/* Submit */}
-          <Button
+        {/* Submit — di luar section, aksi utama form. */}
+        <Button
             type="submit"
             variant="gold"
             size="lg"
@@ -828,7 +834,6 @@ export function OpenTableForm({
             </p>
           )}
         </form>
-      </CardContent>
 
       {menuModalOpen && (
         <MenuPickerModal
@@ -871,7 +876,34 @@ export function OpenTableForm({
           }}
         />
       )}
-    </Card>
+    </div>
+  );
+}
+
+/**
+ * Kartu section form — judul + subjudul + isi. Memisahkan form panjang jadi
+ * kelompok bertema (The table / Who's coming / Order & payment) supaya tak
+ * menumpuk jadi satu blok tanpa hierarki.
+ */
+function FormSection({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card/40 p-4 space-y-5">
+      <div>
+        <h2 className="text-base font-semibold">{title}</h2>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+        )}
+      </div>
+      {children}
+    </section>
   );
 }
 
