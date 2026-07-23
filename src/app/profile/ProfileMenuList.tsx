@@ -21,12 +21,10 @@ import {
   Ban,
   Crown,
   MailOpen,
-  Trash2,
 } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { waUrl } from "@/lib/contact";
 import { signOutAction } from "@/lib/auth-v2/actions";
-import { requestAccountDeletion } from "@/lib/account-deletion-actions";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 import {
   pushSupported,
@@ -65,10 +63,6 @@ export function ProfileMenuList({
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
-  // Pengajuan hapus akun — dialog dgn alasan WAJIB.
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [deleteReason, setDeleteReason] = React.useState("");
-  const [deleteSubmitting, setDeleteSubmitting] = React.useState(false);
 
   // Status notifikasi push di perangkat ini.
   const [pushState, setPushState] = React.useState<{
@@ -162,25 +156,6 @@ export function ProfileMenuList({
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to sign out"));
       setSigningOut(false);
-    }
-  }
-
-  async function handleRequestDeletion() {
-    if (deleteReason.trim().length < 3) return;
-    setDeleteSubmitting(true);
-    try {
-      await requestAccountDeletion({ reason: deleteReason.trim() });
-      toast.success(
-        "Deletion request sent. An admin will review it. Your account stays active until approved."
-      );
-      setDeleteOpen(false);
-      setDeleteReason("");
-    } catch (err) {
-      toast.error(
-        getActionErrorMessage(err, "Failed to submit deletion request")
-      );
-    } finally {
-      setDeleteSubmitting(false);
     }
   }
 
@@ -357,7 +332,7 @@ export function ProfileMenuList({
         </MenuGroup>
       </Section>
 
-      {/* Danger zone — logout + hapus akun */}
+      {/* Logout (kartu terpisah, danger). Hapus akun ada di Edit Account. */}
       <MenuGroup>
         <button
           type="button"
@@ -374,94 +349,7 @@ export function ProfileMenuList({
             </span>
           </span>
         </button>
-        <button
-          type="button"
-          onClick={() => setDeleteOpen(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 text-left border-t border-border hover:bg-red-500/5 transition"
-        >
-          <span className="h-9 w-9 rounded-full border border-red-500/30 flex items-center justify-center shrink-0 text-red-400">
-            <Trash2 className="h-5 w-5" />
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium text-red-400">
-              Request account deletion
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              An admin reviews it — your account is deactivated once approved
-            </span>
-          </span>
-        </button>
       </MenuGroup>
-
-      {/* Dialog pengajuan hapus akun — alasan WAJIB. */}
-      {deleteOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => !deleteSubmitting && setDeleteOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <span className="h-10 w-10 rounded-full border border-red-500/30 bg-red-500/10 flex items-center justify-center shrink-0 text-red-400">
-                <Trash2 className="h-5 w-5" />
-              </span>
-              <div>
-                <h3 className="text-base font-semibold">
-                  Request account deletion
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  This sends a request to the admin. Once approved, your account
-                  is deactivated and you can no longer sign in. Your past
-                  transactions are kept for records.
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1.5">
-                Reason <span className="text-red-400">*</span>
-              </label>
-              <textarea
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value.slice(0, 500))}
-                placeholder="Tell us why you want to delete your account…"
-                rows={3}
-                maxLength={500}
-                autoFocus
-                className="w-full rounded-md bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-primary/60 transition resize-none"
-              />
-              <p className="mt-1 text-right text-[11px] text-muted-foreground">
-                {deleteReason.length}/500
-              </p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setDeleteOpen(false)}
-                disabled={deleteSubmitting}
-                className="flex-1 rounded-md border border-border py-2.5 text-sm font-medium hover:bg-muted/50 transition disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleRequestDeletion}
-                disabled={deleteSubmitting || deleteReason.trim().length < 3}
-                className="flex-1 rounded-md bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
-              >
-                {deleteSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Submit request
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

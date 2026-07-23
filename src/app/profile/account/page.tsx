@@ -19,6 +19,7 @@ import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
 import { getHobbyGroups } from "@/lib/hobby-actions";
 import { Button } from "@/components/ui/button";
 import { ProfilePhotoCarousel } from "../ProfilePhotoCarousel";
+import { DeleteAccountSection } from "./DeleteAccountSection";
 import { educationLabel } from "@/lib/education";
 import { religionLabel } from "@/lib/religion";
 
@@ -233,6 +234,9 @@ export default async function ProfileAccountPage() {
             Member since {memberSince}
           </p>
         )}
+
+        {/* Danger zone — ajukan hapus akun (dipindah dari menu profil). */}
+        <DeleteAccountSection />
       </div>
     </main>
   );
