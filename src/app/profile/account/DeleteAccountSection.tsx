@@ -19,7 +19,12 @@ export function DeleteAccountSection() {
     if (reason.trim().length < 3) return;
     setSubmitting(true);
     try {
-      await requestAccountDeletion({ reason: reason.trim() });
+      const res = await requestAccountDeletion({ reason: reason.trim() });
+      if (!res.ok) {
+        // Guard (sesi aktif / sudah pending) → tampilkan pesannya utuh.
+        toast.error(res.error);
+        return;
+      }
       toast.success(
         "Deletion request sent. An admin will review it. Your account stays active until approved."
       );

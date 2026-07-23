@@ -28,9 +28,20 @@ const requestSchema = z.object({
  */
 export async function requestAccountDeletion(input: {
   reason: string;
-}): Promise<{ ok: true }> {
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const profile = await requireProfile();
-  const { reason } = requestSchema.parse(input);
+  // Guard yang bisa terjadi normal (sudah pending / masih ada sesi) dikembalikan
+  // sebagai { ok:false, error } — BUKAN throw — supaya pesannya sampai utuh ke
+  // customer (throw di server-action disensor jadi "Server Components render"
+  // di production build).
+  const parsed = requestSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid reason",
+    };
+  }
+  const { reason } = parsed.data;
 
   // Sudah ada pengajuan pending? → jangan dobel.
   const [existing] = await db
@@ -44,7 +55,7 @@ export async function requestAccountDeletion(input: {
     )
     .limit(1);
   if (existing) {
-    throw new Error("You already have a pending deletion request.");
+    return { ok: false, error: "You already have a pending deletion request." };
   }
 
   // Guard: sesi aktif (member joined di sesi belum selesai).
@@ -60,12 +71,13 @@ export async function requestAccountDeletion(input: {
       )
     );
   // Member 'joined' di sesi reserved/open/locked/overdue = masih terlibat meja
-  // (atau nunggak) → tahan pengajuan. (getOutstandingMap dipakai untuk pesan yg
-  // lebih spesifik bila perlu; di sini keberadaan sesi saja sudah cukup menahan.)
+  // (atau nunggak) → tahan pengajuan.
   if (activeSessions.length > 0) {
-    throw new Error(
-      "You have an active table or unpaid bill. Please finish or settle it before requesting account deletion."
-    );
+    return {
+      ok: false,
+      error:
+        "You have an active table or unpaid bill. Please finish or settle it before requesting account deletion.",
+    };
   }
 
   const [req] = await db
@@ -83,21 +95,26 @@ export async function requestAccountDeletion(input: {
         eq(staffRoles.isActive, true)
       )
     );
-  await Promise.allSettled(
-    admins.map((a) =>
-      createNotification({
-        profileId: a.profileId,
-        type: "general",
-        title: "Account deletion request",
-        body: `${profile.displayName} requested to delete their account.`,
-        link: "/admin/account-deletions",
-        refId: req.id,
-      })
-    )
-  );
+  // Notif admin — best-effort, TAK boleh menggagalkan pengajuan yang sudah
+  // tersimpan (catch menyeluruh, bukan cuma per-item).
+  try {
+    await Promise.allSettled(
+      admins.map((a) =>
+        createNotification({
+          profileId: a.profileId,
+          type: "general",
+          title: "Account deletion request",
+          body: `${profile.displayName} requested to delete their account.`,
+          link: "/admin/account-deletions",
+          refId: req.id,
+        })
+      )
+    );
+  } catch (e) {
+    console.error("[account-deletion] notify admins:", e);
+  }
 
   revalidatePath("/profile");
-  revalidatePath("/admin/account-deletions");
   return { ok: true };
 }
 
