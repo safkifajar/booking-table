@@ -22,6 +22,7 @@ import {
   Crown,
   Ticket,
   TicketCheck,
+  UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -175,6 +176,12 @@ const NAV: NavItem[] = [
         href: "/admin/users",
         label: "Manage Customer",
         icon: <UserCircle className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/account-deletions",
+        label: "Account Deletions",
+        icon: <UserX className="h-4 w-4" />,
       },
     ],
   },
