@@ -25,6 +25,7 @@ export * from "./hobbies";
 export * from "./prompts";
 export * from "./move-requests";
 export * from "./friends";
+export * from "./account-deletion";
 export * from "./membership";
 export * from "./membership-transactions";
 export * from "./revenue-split";

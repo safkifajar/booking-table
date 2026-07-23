@@ -332,7 +332,7 @@ export function ProfileMenuList({
         </MenuGroup>
       </Section>
 
-      {/* Logout (kartu terpisah, danger) */}
+      {/* Logout (kartu terpisah, danger). Hapus akun ada di Edit Account. */}
       <MenuGroup>
         <button
           type="button"

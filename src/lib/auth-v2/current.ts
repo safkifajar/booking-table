@@ -112,6 +112,12 @@ export async function getCurrentProfile(): Promise<Profile | null> {
     where: eq(profiles.id, user.id),
   });
   if (!row) return null;
+  // Akun dinonaktifkan (mis. pengajuan hapus akun di-approve admin) → perlakukan
+  // seperti TAK login. Session JWT yang masih hidup langsung terputus: page
+  // customer (requireProfile) redirect ke /auth, admin (requireAdmin) ke /login.
+  // Login baru sudah ditolak terpisah di credentials.ts. Satu titik ini menutup
+  // seluruh app karena hampir semua guard lewat getCurrentProfile.
+  if (!row.isActive) return null;
 
   return {
     id: row.id,
