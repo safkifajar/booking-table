@@ -52,7 +52,11 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
             filename={`payments-${range.preset}-${new Date().toISOString().split("T")[0]}.csv`}
             rows={payments.map((p) => ({
               id: p.id.slice(0, 8).toUpperCase(),
-              datetime: new Date(p.at).toLocaleString("en-US"),
+              datetime: new Date(p.at).toLocaleString("en-GB", {
+                dateStyle: "short",
+                timeStyle: "short",
+                hour12: false,
+              }),
               payer: p.paid_by_name,
               table: p.table_label,
               area: p.area_name,

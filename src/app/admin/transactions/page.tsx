@@ -55,7 +55,11 @@ export default async function TransactionsPage({ searchParams }: PageProps) {
             filename={`transactions-${range.preset}-${new Date().toISOString().split("T")[0]}.csv`}
             rows={transactions.map((t) => ({
               id: t.session_id.slice(0, 8).toUpperCase(),
-              date: new Date(t.closed_at ?? t.started_at).toLocaleString("en-US"),
+              date: new Date(t.closed_at ?? t.started_at).toLocaleString("en-GB", {
+                dateStyle: "short",
+                timeStyle: "short",
+                hour12: false,
+              }),
               table: t.table_label,
               area: t.area_name,
               host: t.host_name,

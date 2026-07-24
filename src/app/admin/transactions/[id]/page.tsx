@@ -112,13 +112,13 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           </div>
           <div>
             <div className="text-muted-foreground print:text-black/60 mb-1">Started</div>
-            <div>{startedAt.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</div>
+            <div>{startedAt.toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short", hour12: false })}</div>
           </div>
           <div>
             <div className="text-muted-foreground print:text-black/60 mb-1">Ended</div>
             <div>
               {closedAt
-                ? closedAt.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })
+                ? closedAt.toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short", hour12: false })
                 : "—"}
             </div>
           </div>
@@ -235,9 +235,10 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
                   className="flex items-center gap-2 text-sm flex-wrap"
                 >
                   <span className="tabular-nums text-xs text-muted-foreground">
-                    {new Date(mv.at).toLocaleString("en-US", {
+                    {new Date(mv.at).toLocaleString("en-GB", {
                       dateStyle: "medium",
                       timeStyle: "short",
+                      hour12: false,
                     })}
                   </span>
                   <span className="font-medium">

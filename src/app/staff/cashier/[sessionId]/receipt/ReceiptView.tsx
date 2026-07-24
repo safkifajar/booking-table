@@ -67,7 +67,14 @@ export function ReceiptView({ detail }: Props) {
           {detail.is_walk_in && detail.opened_by_staff_name && (
             <Row label="Opened by" value={detail.opened_by_staff_name} />
           )}
-          <Row label="Date" value={date.toLocaleString("en-US")} />
+          <Row
+            label="Date"
+            value={date.toLocaleString("en-GB", {
+              dateStyle: "medium",
+              timeStyle: "short",
+              hour12: false,
+            })}
+          />
           <Row label="Trx No." value={`#${detail.session_id.slice(0, 8).toUpperCase()}`} />
         </div>
 

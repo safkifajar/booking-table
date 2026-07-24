@@ -26,9 +26,11 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  // en-GB + hour12:false → jam 24 (hindari AM/PM).
+  return new Date(iso).toLocaleString("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
+    hour12: false,
   });
 }
 
