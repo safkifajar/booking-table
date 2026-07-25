@@ -15,17 +15,24 @@ import {
   CalendarClock,
   ArrowRightLeft,
   Banknote,
+  Utensils,
+  Loader2,
+  ChefHat,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { UserPlus } from "lucide-react";
-import { formatIDR, initials, cn } from "@/lib/utils";
+import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
+import { toast } from "sonner";
 import type {
   CashierSessionItem,
   CashierBookingItem,
+  CashierOrderQueue,
+  CashierOrderItem,
 } from "@/lib/cashier-actions";
+import { cashierMarkPreparing } from "@/lib/cashier-actions";
 import type {
   AvailableTable,
   WaiterReservationData,
@@ -51,10 +58,11 @@ interface Props {
   reservationData: WaiterReservationData;
   moveRequests: MoveRequestRow[];
   closedSessions: CashierSessionItem[];
+  orderQueue: CashierOrderQueue;
   barId: string;
 }
 
-type Tab = "active" | "bookings" | "moves" | "done";
+type Tab = "orders" | "active" | "bookings" | "moves" | "done";
 
 function fmtDate(iso: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -104,6 +112,7 @@ export function CashierSessionList({
   reservationData,
   moveRequests,
   closedSessions,
+  orderQueue,
   barId,
 }: Props) {
   const router = useRouter();
@@ -249,6 +258,15 @@ export function CashierSessionList({
         }
         tabs={[
           {
+            key: "orders",
+            label: "Orders",
+            // Badge = item aktif yg masih 'sent' (perlu diteruskan ke dapur).
+            icon: <Utensils className="h-5 w-5" />,
+            badge: orderQueue.active.filter((i) => i.status === "sent").length,
+            alert:
+              orderQueue.active.some((i) => i.status === "sent"),
+          },
+          {
             key: "active",
             label: "Active",
             icon: <Layers className="h-5 w-5" />,
@@ -279,6 +297,10 @@ export function CashierSessionList({
           stats+filter di atas benar2 diam. pb utk ruang footer Open Table+nav.
           -mx utk full-bleed scrollbar. */}
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6 pt-4 pb-[calc(13rem+env(safe-area-inset-bottom))] [&>*:not(:first-child)]:mt-4">
+
+      {tab === "orders" && (
+        <CashierOrdersTab queue={orderQueue} />
+      )}
 
       {tab === "active" && (
         <>
@@ -680,5 +702,200 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
         </div>
       </Card>
     </Link>
+  );
+}
+
+/** Grup item order per meja (session_id). Urutan meja mengikuti item pertama. */
+function groupByTable(items: CashierOrderItem[]) {
+  const map = new Map<string, { label: string; area: string; reservation_at: string | null; items: CashierOrderItem[] }>();
+  for (const it of items) {
+    let g = map.get(it.session_id);
+    if (!g) {
+      g = {
+        label: it.table_label,
+        area: it.area_name,
+        reservation_at: it.reservation_at,
+        items: [],
+      };
+      map.set(it.session_id, g);
+    }
+    g.items.push(it);
+  }
+  return Array.from(map.entries()).map(([session_id, g]) => ({ session_id, ...g }));
+}
+
+/**
+ * Tab Orders kasir — dua section:
+ *  - Active now: order di meja aktif → tombol "Mark as being prepared"
+ *    (kasir teruskan ke dapur; sent → preparing).
+ *  - Scheduled: order booking (jam belum tiba) → read-only, dapur belum buat.
+ * Per meja. Kasir TIDAK menandai served (itu tugas waiter).
+ */
+function CashierOrdersTab({ queue }: { queue: CashierOrderQueue }) {
+  const router = useRouter();
+  const [busy, setBusy] = React.useState<string | null>(null);
+
+  async function markPreparing(itemId: string) {
+    setBusy(itemId);
+    try {
+      await cashierMarkPreparing(itemId);
+      toast.success("Sent to the kitchen");
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to update order"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const activeTables = groupByTable(queue.active);
+  const scheduledTables = groupByTable(queue.scheduled);
+
+  if (queue.active.length === 0 && queue.scheduled.length === 0) {
+    return (
+      <Card className="p-12 text-center border-dashed">
+        <Utensils className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium mb-1">No orders right now</p>
+        <p className="text-xs text-muted-foreground">
+          Paid orders will appear here so you can forward them to the kitchen.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Active now — dapur buat sekarang */}
+      <div>
+        <h2 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2">
+          <ChefHat className="h-3.5 w-3.5" /> Active now — make these
+        </h2>
+        {activeTables.length === 0 ? (
+          <Card className="p-6 text-center border-dashed">
+            <p className="text-sm text-muted-foreground">
+              No active orders. New paid orders show up here.
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {activeTables.map((t) => (
+              <Card key={t.session_id} className="p-3">
+                <TableOrdersHeader label={t.label} area={t.area} />
+                <div className="mt-2 divide-y divide-border">
+                  {t.items.map((it) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center gap-2 py-2 text-sm"
+                    >
+                      <span className="text-primary font-medium tabular-nums shrink-0">
+                        {it.quantity}×
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">
+                        {it.menu_item_name}
+                        {it.notes && (
+                          <span className="ml-1 text-[11px] italic text-amber-300/90">
+                            · {it.notes}
+                          </span>
+                        )}
+                      </span>
+                      {it.status === "preparing" ? (
+                        <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-0.5 text-[11px] font-medium text-amber-400">
+                          <ChefHat className="h-3 w-3" /> In kitchen
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy === it.id}
+                          onClick={() => markPreparing(it.id)}
+                          className="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90 transition disabled:opacity-50"
+                        >
+                          {busy === it.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ChefHat className="h-3.5 w-3.5" />
+                          )}
+                          Send to kitchen
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Scheduled — booking, jam belum tiba, dapur BELUM buat */}
+      {scheduledTables.length > 0 && (
+        <div>
+          <h2 className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-2">
+            <Clock className="h-3.5 w-3.5" /> Scheduled — don&apos;t make yet
+          </h2>
+          <div className="space-y-3">
+            {scheduledTables.map((t) => (
+              <Card
+                key={t.session_id}
+                className="p-3 border-sky-500/20 bg-sky-500/[0.03]"
+              >
+                <TableOrdersHeader
+                  label={t.label}
+                  area={t.area}
+                  note={
+                    t.reservation_at
+                      ? `booking ${usageLabel({
+                          reservation_at: t.reservation_at,
+                          reservation_end_at: null,
+                          started_at: t.reservation_at,
+                        })}`
+                      : "scheduled"
+                  }
+                />
+                <div className="mt-2 divide-y divide-border">
+                  {t.items.map((it) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center gap-2 py-2 text-sm text-muted-foreground"
+                    >
+                      <span className="font-medium tabular-nums shrink-0">
+                        {it.quantity}×
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">
+                        {it.menu_item_name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-sky-400">
+                        for later
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TableOrdersHeader({
+  label,
+  area,
+  note,
+}: {
+  label: string;
+  area: string;
+  note?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Badge variant="default" className="text-[10px] px-1.5">
+        {label}
+      </Badge>
+      <span className="text-[11px] text-muted-foreground truncate">{area}</span>
+      {note && (
+        <span className="text-[11px] text-sky-400 truncate">· {note}</span>
+      )}
+    </div>
   );
 }

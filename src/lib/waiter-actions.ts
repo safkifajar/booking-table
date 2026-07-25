@@ -74,6 +74,10 @@ export interface WaiterQueueItem {
   quantity: number;
   notes: string | null;
   created_at: string;
+  /** 'sent' = baru masuk; 'preparing' = kasir sudah teruskan (dapur sedang
+   *  buat) → waiter tinggal tunggu & antar; 'served' = sudah diantar (tab
+   *  Served Today). */
+  status: "sent" | "preparing" | "served";
   menu_item_name: string;
   menu_item_image: string | null;
   added_by_name: string;
@@ -97,6 +101,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
       quantity: orderItems.quantity,
       notes: orderItems.notes,
       created_at: orderItems.createdAt,
+      status: orderItems.status,
       menu_item_name: menuItems.name,
       menu_item_image: menuItems.imageUrl,
       added_by_name: profiles.displayName,
@@ -120,7 +125,9 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
-        eq(orderItems.status, "sent"),
+        // 'preparing' ikut tampil — kasir sudah teruskan ke dapur; waiter beri
+        // penanda "sedang dibuat" lalu antar. FIFO tetap oldest-first.
+        inArray(orderItems.status, ["sent", "preparing"]),
         inArray(tableSessions.status, ["open", "locked", "overdue"])
       )
     )
@@ -131,6 +138,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
     quantity: r.quantity,
     notes: r.notes,
     created_at: r.created_at.toISOString(),
+    status: r.status as "sent" | "preparing",
     menu_item_name: r.menu_item_name,
     menu_item_image: r.menu_item_image,
     added_by_name: r.added_by_name,
@@ -202,6 +210,7 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
     quantity: r.quantity,
     notes: r.notes,
     created_at: r.created_at.toISOString(),
+    status: "served" as const,
     served_at: (r.served_at ?? r.created_at).toISOString(),
     menu_item_name: r.menu_item_name,
     menu_item_image: r.menu_item_image,

@@ -680,6 +680,12 @@ function QueueMenuRow({
             <span className="text-primary mr-1">{item.quantity}×</span>
           )}
           {item.menu_item_name}
+          {/* Kasir sudah meneruskan ke dapur → tinggal tunggu & antar. */}
+          {"status" in item && item.status === "preparing" && (
+            <span className="ml-2 inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 align-middle">
+              Being prepared
+            </span>
+          )}
         </h3>
         {item.notes && (
           <p className="text-xs text-amber-300/90 mt-0.5 italic">
