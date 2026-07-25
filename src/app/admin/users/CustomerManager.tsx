@@ -31,6 +31,7 @@ import { Pagination } from "@/components/admin/Pagination";
 import { initials, getActionErrorMessage, cn } from "@/lib/utils";
 import {
   createCustomer,
+  exportCustomers,
   type AdminCustomerRow,
   type CustomerStats,
 } from "@/lib/customer-actions";
@@ -70,6 +71,7 @@ export function CustomerManager({
 
   const [search, setSearch] = React.useState(query);
   const [editTarget, setEditTarget] = React.useState<EditTarget>(null);
+  const [exporting, setExporting] = React.useState(false);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -114,39 +116,87 @@ export function CustomerManager({
     pushParams({ q: search, page: 1 });
   }
 
-  function exportCsv() {
-    const header = [
-      "Name",
-      "Username",
-      "Email",
-      "WhatsApp number",
-      "Visits",
-      "Friends",
-      "Membership",
-      "Registered",
-    ];
-    const lines = initialRows.map((r) =>
-      [
-        r.name,
-        r.username ?? "",
-        r.email,
-        r.phone ?? "",
-        r.visit_count,
-        r.friend_count,
-        r.membership_name,
-        new Date(r.created_at).toLocaleDateString("en-US"),
-      ]
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    );
-    const csv = [header.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `customers-page${page}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /**
+   * Export CSV data diri LENGKAP (termasuk hobi & ketertarikan). Ambil SEMUA
+   * customer sesuai filter aktif (bukan cuma halaman ini) via server action.
+   */
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const rows = await exportCustomers(search, { status, membership });
+      const header = [
+        "Name",
+        "Username",
+        "Email",
+        "WhatsApp number",
+        "Gender",
+        "Interested in",
+        "Looking for",
+        "Birth date",
+        "Area",
+        "Education",
+        "Religion",
+        "Height (cm)",
+        "Hobbies & interests",
+        "Music preference",
+        "Favorite food",
+        "Favorite drink",
+        "Bio",
+        "Social link",
+        "Visits",
+        "Friends",
+        "Rating avg",
+        "Rating count",
+        "Membership",
+        "Status",
+        "Registered",
+      ];
+      const lines = rows.map((r) =>
+        [
+          r.name,
+          r.username ?? "",
+          r.email,
+          r.phone ?? "",
+          r.gender ?? "",
+          r.interested_in ?? "",
+          r.looking_for ?? "",
+          r.birth_date ?? "",
+          r.area ?? "",
+          r.education ?? "",
+          r.religion ?? "",
+          r.height_cm ?? "",
+          r.hobbies.join("; "),
+          r.music_pref ?? "",
+          r.fav_food ?? "",
+          r.fav_drink ?? "",
+          r.bio ?? "",
+          r.social_link ?? "",
+          r.visit_count,
+          r.friend_count,
+          r.rating_count > 0 ? r.rating_avg : "",
+          r.rating_count,
+          r.membership_name,
+          r.is_active ? "Active" : "Inactive",
+          new Date(r.created_at).toLocaleDateString("en-GB"),
+        ]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(",")
+      );
+      // BOM agar Excel membaca UTF-8 (emoji/aksen di hobi & bio tak rusak).
+      const csv = "﻿" + [header.join(","), ...lines].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(getActionErrorMessage(e, "Failed to export customers."));
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -256,8 +306,17 @@ export function CustomerManager({
           className="shrink-0 min-w-[130px]"
           ariaLabel="Filter status"
         />
-        <Button variant="outline" onClick={exportCsv} disabled={initialRows.length === 0}>
-          <Download className="h-4 w-4" /> Export
+        <Button
+          variant="outline"
+          onClick={exportCsv}
+          disabled={total === 0 || exporting}
+        >
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
+          {exporting ? "Exporting…" : "Export"}
         </Button>
         <Button variant="gold" onClick={() => setEditTarget({ mode: "create" })}>
           <UserPlus className="h-4 w-4" /> Add Customer
