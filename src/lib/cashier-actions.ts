@@ -1537,12 +1537,23 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
   if (!payment) throw new Error("Payment not found");
   if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
 
+  // Nama kasir yang memproses → dicatat di splitMeta (untuk payment history).
+  const [cashier] = await db
+    .select({ name: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, ctx.profileId));
+  const prevMeta = (payment.splitMeta as Record<string, unknown> | null) ?? {};
+
   // Transisi conditional pending→paid: kalau payment keburu expired/dibatalkan
   // (mis. DP pay-at-cashier lewat 10 menit → booking sudah cancelled), JANGAN
   // menghidupkan lagi — kasir dapat error yang jelas.
   const updated = await db
     .update(payments)
-    .set({ status: "paid", paidAt: new Date() })
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      splitMeta: { ...prevMeta, confirmedByName: cashier?.name ?? null },
+    })
     .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
     .returning({ id: payments.id });
   if (updated.length === 0) {
