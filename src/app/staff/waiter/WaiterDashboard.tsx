@@ -539,7 +539,7 @@ function QueueTableCard({
 
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold">
-            {items.length} order{items.length === 1 ? "" : "s"}
+            {new Set(items.map((i) => i.order_id)).size} order{new Set(items.map((i) => i.order_id)).size === 1 ? "" : "s"}
             <span className="text-muted-foreground font-normal">
               {" "}
               · {totalQty} item{totalQty === 1 ? "" : "s"}
@@ -645,7 +645,7 @@ function QueueDetailSheet({
               </span>
               <div className="min-w-0">
                 <div className="text-lg font-bold">
-                  {items.length} order{items.length === 1 ? "" : "s"}
+                  {new Set(items.map((i) => i.order_id)).size} order{new Set(items.map((i) => i.order_id)).size === 1 ? "" : "s"}
                   <span className="ml-1.5 text-sm font-normal text-muted-foreground">
                     {totalQty} item{totalQty === 1 ? "" : "s"}
                   </span>

@@ -765,6 +765,11 @@ function groupByTable(items: CashierOrderItem[]) {
   return Array.from(map.entries()).map(([session_id, g]) => ({ session_id, ...g }));
 }
 
+/** Jumlah ORDER unik (bukan item) dari daftar item — 1 order bisa punya banyak item. */
+function orderCount(items: CashierOrderItem[]): number {
+  return new Set(items.map((i) => i.order_id)).size;
+}
+
 /**
  * Tab Orders kasir — dua section:
  *  - Active now: order di meja aktif → tombol "Mark as being prepared"
@@ -947,7 +952,7 @@ function OrderTableCard({
 
         <div className="flex-1 min-w-0">
           <div className="text-base font-semibold">
-            {t.items.length} order{t.items.length === 1 ? "" : "s"}
+            {orderCount(t.items)} order{orderCount(t.items) === 1 ? "" : "s"}
             <span className="text-muted-foreground font-normal">
               {" "}
               · {totalQty} item{totalQty === 1 ? "" : "s"}
@@ -1067,7 +1072,7 @@ function OrderDetailSheet({
               </span>
               <div className="min-w-0">
                 <div className="text-lg font-bold">
-                  {t.items.length} order{t.items.length === 1 ? "" : "s"}
+                  {orderCount(t.items)} order{orderCount(t.items) === 1 ? "" : "s"}
                   <span className="ml-1.5 text-sm font-normal text-muted-foreground">
                     {totalQty} item{totalQty === 1 ? "" : "s"}
                   </span>

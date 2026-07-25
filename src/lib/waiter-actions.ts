@@ -71,6 +71,7 @@ import crypto from "node:crypto";
 
 export interface WaiterQueueItem {
   id: string;
+  order_id: string;
   quantity: number;
   notes: string | null;
   created_at: string;
@@ -98,6 +99,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
   const rows = await db
     .select({
       id: orderItems.id,
+      order_id: orderItems.orderId,
       quantity: orderItems.quantity,
       notes: orderItems.notes,
       created_at: orderItems.createdAt,
@@ -138,6 +140,7 @@ export async function getOrderQueueForWaiter(): Promise<WaiterQueueItem[]> {
     quantity: r.quantity,
     notes: r.notes,
     created_at: r.created_at.toISOString(),
+    order_id: r.order_id,
     status: r.status as "sent" | "preparing",
     menu_item_name: r.menu_item_name,
     menu_item_image: r.menu_item_image,
@@ -169,6 +172,7 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
   const rows = await db
     .select({
       id: orderItems.id,
+      order_id: orderItems.orderId,
       quantity: orderItems.quantity,
       notes: orderItems.notes,
       created_at: orderItems.createdAt,
@@ -210,6 +214,7 @@ export async function getServedItemsForWaiter(): Promise<WaiterServedItem[]> {
     quantity: r.quantity,
     notes: r.notes,
     created_at: r.created_at.toISOString(),
+    order_id: r.order_id,
     status: "served" as const,
     served_at: (r.served_at ?? r.created_at).toISOString(),
     menu_item_name: r.menu_item_name,
@@ -633,6 +638,7 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
   const [item] = await db
     .select({
       id: orderItems.id,
+      order_id: orderItems.orderId,
       session_id: tableSessions.id,
       bar_id: floorAreas.barId,
       current_status: orderItems.status,

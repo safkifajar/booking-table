@@ -597,6 +597,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
  *  (dapur sedang buat). */
 export interface CashierOrderItem {
   id: string;
+  order_id: string;
   quantity: number;
   notes: string | null;
   created_at: string;
@@ -634,6 +635,7 @@ export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
   const rows = await db
     .select({
       id: orderItems.id,
+      order_id: orderItems.orderId,
       quantity: orderItems.quantity,
       notes: orderItems.notes,
       created_at: orderItems.createdAt,
@@ -677,6 +679,7 @@ export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
   for (const r of rows) {
     const item: CashierOrderItem = {
       id: r.id,
+      order_id: r.order_id,
       quantity: r.quantity,
       notes: r.notes,
       created_at: r.created_at.toISOString(),

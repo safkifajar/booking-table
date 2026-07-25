@@ -34,6 +34,7 @@ import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
+import { can, type StaffRoleName } from "@/lib/auth-v2/permissions";
 import {
   isSessionHost,
   assertHostOrActiveStaff,
@@ -2526,7 +2527,10 @@ export async function getOrderDetail(
       )
     );
   const isStaff = !!staff;
-  const isCashier = staff?.role === "cashier";
+  // "isCashier" = boleh terima pembayaran (cashier/manager/admin) — bukan cuma
+  // role 'cashier'. Dulu manager/admin dianggap customer → melihat PaymentSheet
+  // & ke layar tunggu "pay at cashier", padahal mereka kasirnya.
+  const isCashier = can(staff?.role as StaffRoleName | undefined, "receive_payment");
 
   const [myMember] = await db
     .select({ id: sessionMembers.id })
