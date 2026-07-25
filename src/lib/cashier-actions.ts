@@ -603,6 +603,8 @@ export interface CashierOrderItem {
   status: "sent" | "preparing";
   menu_item_name: string;
   menu_item_image: string | null;
+  added_by_name: string;
+  added_by_avatar: string | null;
   session_id: string;
   session_title: string | null;
   table_label: string;
@@ -638,6 +640,8 @@ export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
       status: orderItems.status,
       menu_item_name: menuItems.name,
       menu_item_image: menuItems.imageUrl,
+      added_by_name: profiles.displayName,
+      added_by_avatar: profiles.avatarUrl,
       session_id: tableSessions.id,
       session_title: tableSessions.title,
       session_status: tableSessions.status,
@@ -651,6 +655,8 @@ export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, orderItems.addedByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         eq(floorAreas.barId, ctx.barId),
@@ -677,6 +683,8 @@ export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
       status: r.status as "sent" | "preparing",
       menu_item_name: r.menu_item_name,
       menu_item_image: r.menu_item_image,
+      added_by_name: r.added_by_name,
+      added_by_avatar: r.added_by_avatar,
       session_id: r.session_id,
       session_title: r.session_title,
       table_label: r.table_label,

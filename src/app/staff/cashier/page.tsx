@@ -89,6 +89,7 @@ export default async function CashierPage() {
             <StaffProfileButton
               displayName={profile.displayName}
               avatarUrl={profile.avatarUrl}
+              role={ctx.role}
             />
           )}
           <div className="flex-1" />

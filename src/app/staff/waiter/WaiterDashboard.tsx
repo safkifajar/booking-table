@@ -19,12 +19,13 @@ import {
   UserPlus,
   X,
   ChevronRight,
+  ShoppingBag,
+  Calendar,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { RelativeTime } from "@/components/ui/relative-time";
 import {
   waiterMarkServed,
   waiterJoinSession,
@@ -503,56 +504,55 @@ function QueueTableCard({
           : "border-emerald-500/20 bg-emerald-500/[0.03]"
       )}
     >
-      <div className="flex items-center gap-3">
+      {/* Baris meja + status (pola kartu kasir). */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <Badge variant="default" className="text-[10px] px-1.5">
+          {first.table_label}
+        </Badge>
+        <span className="text-[10px] text-muted-foreground truncate">
+          {first.area_name}
+        </span>
         {pending ? (
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 relative shrink-0">
-            <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[10px] text-amber-400">
+            <span className="inline-flex h-2 w-2 rounded-full bg-amber-400 relative">
+              <span className="absolute inset-0 rounded-full bg-amber-400 animate-ping opacity-75" />
+            </span>
+            {servedNow > 0 ? `${servedNow}/${items.length} served` : "to serve"}
           </span>
         ) : (
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-emerald-400">
+            <CheckCircle2 className="h-3 w-3" /> served
+          </span>
         )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Foto pemesan — BESAR (elemen utama kartu). */}
+        <Avatar className="h-14 w-14 shrink-0 border border-border">
+          {first.added_by_avatar && (
+            <AvatarImage src={first.added_by_avatar} alt={first.added_by_name} />
+          )}
+          <AvatarFallback className="text-base">
+            {initials(first.added_by_name)}
+          </AvatarFallback>
+        </Avatar>
+
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="default" className="text-[10px] px-1.5">
-              {first.table_label}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">
-              {first.area_name}
-            </span>
-            {first.session_title && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                · {first.session_title}
-              </span>
-            )}
-          </div>
-          <div className="text-sm font-semibold mt-0.5">
+          <div className="text-base font-semibold">
             {items.length} order{items.length === 1 ? "" : "s"}
             <span className="text-muted-foreground font-normal">
               {" "}
               · {totalQty} item{totalQty === 1 ? "" : "s"}
             </span>
-            {servedNow > 0 && (
-              <span className="ml-1.5 text-[11px] font-medium text-emerald-400">
-                ✓ {servedNow}/{items.length} served
-              </span>
-            )}
           </div>
-          <div className="text-[10px] text-muted-foreground flex items-center gap-0.5 mt-0.5">
-            <Clock className="h-2.5 w-2.5" />
-            {pending ? (
-              <>
-                oldest{" "}
-                <RelativeTime date={first.created_at} className="text-[10px]" />
-              </>
-            ) : (
-              <>
-                last served{" "}
-                <RelativeTime
-                  date={(items[0] as WaiterServedItem).served_at}
-                  className="text-[10px]"
-                />
-              </>
-            )}
+          <div className="text-sm text-foreground/90 truncate mt-0.5">
+            {first.added_by_name}
+          </div>
+          <div className="text-[11px] text-muted-foreground tabular-nums mt-0.5 flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {pending
+              ? `${fmtDate(first.created_at)} ${fmtTime(first.created_at)}`
+              : `served ${fmtDate((items[0] as WaiterServedItem).served_at)} ${fmtTime((items[0] as WaiterServedItem).served_at)}`}
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -595,30 +595,72 @@ function QueueDetailSheet({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
-        {/* Header sheet */}
+      <div className="relative w-full sm:max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[88vh] flex flex-col">
+        {/* Header: meja + status + close (pola kartu kasir) */}
         <div className="flex items-center justify-between gap-3 p-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <Badge variant="default" className="text-[10px] px-1.5 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-xs font-semibold text-primary shrink-0">
               {first.table_label}
-            </Badge>
-            <span className="text-xs text-muted-foreground truncate">
-              {first.area_name}
-              {first.session_title && ` · ${first.session_title}`}
             </span>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">
+                {first.area_name}
+              </div>
+              <div className="flex items-center gap-1 text-[11px]">
+                {kind === "served" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span className="text-emerald-400">Served today</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <span className="text-emerald-400">Active table</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="h-7 w-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground flex items-center justify-center shrink-0"
+            className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted transition"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
+        {/* Ringkasan: ikon + N orders/items + waktu */}
+        {(() => {
+          const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+          const earliest = items.reduce(
+            (min, i) => (i.created_at < min.created_at ? i : min),
+            items[0]
+          );
+          return (
+            <div className="flex items-center gap-3 p-4 border-b border-border shrink-0">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary shrink-0">
+                <ShoppingBag className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-lg font-bold">
+                  {items.length} order{items.length === 1 ? "" : "s"}
+                  <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                    {totalQty} item{totalQty === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                  <Clock className="h-3 w-3" />
+                  {fmtDate(earliest.created_at)} {fmtTime(earliest.created_at)}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Daftar menu — scroll internal */}
-        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-border/60">
+        <div className="flex-1 min-h-0 overflow-y-auto [overscroll-behavior:contain] p-3 space-y-2">
           {items.map((item) => (
             <QueueMenuRow
               key={item.id}
@@ -628,6 +670,12 @@ function QueueDetailSheet({
               optimistic={optimisticIds.has(item.id)}
             />
           ))}
+        </div>
+
+        {/* Footer: realtime hint */}
+        <div className="border-t border-border p-3 shrink-0 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          All orders are synced in real time
         </div>
       </div>
     </div>,
@@ -658,10 +706,13 @@ function QueueMenuRow({
     }
   }
 
+  const timeIso = served
+    ? ((item as WaiterServedItem).served_at ?? item.created_at)
+    : item.created_at;
   return (
-    <div className="px-4 py-3 flex items-center gap-3 transition">
-      {/* Foto menu — placeholder ikon kalau tak ada */}
-      <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/40 border border-border shrink-0 flex items-center justify-center">
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 p-2.5 transition">
+      {/* Foto menu — besar */}
+      <div className="h-14 w-14 rounded-lg overflow-hidden bg-muted/40 shrink-0 flex items-center justify-center">
         {item.menu_item_image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -675,10 +726,10 @@ function QueueMenuRow({
         )}
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-sm">
-          {item.quantity > 1 && (
-            <span className="text-primary mr-1">{item.quantity}×</span>
-          )}
+        <h3 className="font-semibold text-sm truncate">
+          <span className="text-primary tabular-nums mr-1">
+            {item.quantity}×
+          </span>
           {item.menu_item_name}
           {/* Kasir sudah meneruskan ke dapur → tinggal tunggu & antar. */}
           {"status" in item && item.status === "preparing" && (
@@ -688,29 +739,32 @@ function QueueMenuRow({
           )}
         </h3>
         {item.notes && (
-          <p className="text-xs text-amber-300/90 mt-0.5 italic">
+          <p className="text-[11px] text-amber-300/90 mt-0.5 italic truncate">
             note: {item.notes}
           </p>
         )}
-        <div className="flex items-center gap-1.5 mt-1 min-w-0">
-          <Avatar className="h-4 w-4">
+        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+          <Avatar className="h-4 w-4 shrink-0">
             {item.added_by_avatar && <AvatarImage src={item.added_by_avatar} />}
             <AvatarFallback className="text-[7px]">
               {initials(item.added_by_name)}
             </AvatarFallback>
           </Avatar>
-          <span className="text-[10px] text-muted-foreground truncate">
+          <span className="text-[11px] text-muted-foreground truncate">
             by {item.added_by_name}
           </span>
-          <span className="text-[10px] text-muted-foreground">·</span>
-          <RelativeTime
-            date={
-              served
-                ? ((item as WaiterServedItem).served_at ?? item.created_at)
-                : item.created_at
-            }
-            className="text-[10px] text-muted-foreground"
-          />
+        </div>
+        {/* Tanggal + jam (ikon kalender & jam) */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums mt-0.5">
+          <span className="inline-flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {fmtDate(timeIso)}
+          </span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {fmtTime(timeIso)}
+          </span>
         </div>
       </div>
       {served || optimistic ? (

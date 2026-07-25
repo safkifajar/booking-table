@@ -86,6 +86,7 @@ export default async function StaffWaiterPage() {
             <StaffProfileButton
               displayName={profile.displayName}
               avatarUrl={profile.avatarUrl}
+              role={ctx.role}
             />
           )}
           <div className="flex-1" />
