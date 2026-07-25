@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { bars } from "./venue";
+import { bannerCategoryEnum } from "./_enums";
 
 /**
  * Bar promo banner — admin-uploadable carousel di landing.
@@ -29,6 +30,8 @@ export const barBanners = pgTable(
       .notNull()
       .references(() => bars.id, { onDelete: "cascade" }),
     imageUrl: text("image_url").notNull(),
+    /** Kategori: promo (default) atau event → badge di banner customer. */
+    category: bannerCategoryEnum("category").notNull().default("promo"),
     title: text("title"),
     subtitle: text("subtitle"),
     /**

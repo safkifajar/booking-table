@@ -154,3 +154,6 @@ export const voucherDiscountTypeEnum = pgEnum("voucher_discount_type", [
   "percent",
   "fixed",
 ]);
+
+// Kategori banner promo (migration 0064): promo vs event. Wajib, default 'promo'.
+export const bannerCategoryEnum = pgEnum("banner_category", ["promo", "event"]);

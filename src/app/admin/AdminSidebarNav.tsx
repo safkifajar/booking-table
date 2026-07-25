@@ -88,7 +88,7 @@ const NAV: NavItem[] = [
       {
         type: "leaf",
         href: "/admin/banners",
-        label: "Promo Banners",
+        label: "Promo & Event",
         icon: <ImageIcon className="h-4 w-4" />,
       },
       {
