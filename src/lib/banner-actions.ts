@@ -28,6 +28,9 @@ export interface PublicBanner {
   subtitle: string | null;
   content: string | null;
   sortOrder: number;
+  /** Periode tayang (ISO). null = tanpa batas. */
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 /**
@@ -49,6 +52,8 @@ export async function getPublicBannerById(
       subtitle: barBanners.subtitle,
       content: barBanners.content,
       sortOrder: barBanners.sortOrder,
+      startsAt: barBanners.startsAt,
+      endsAt: barBanners.endsAt,
     })
     .from(barBanners)
     .where(
@@ -60,7 +65,12 @@ export async function getPublicBannerById(
       )
     )
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  return {
+    ...row,
+    startsAt: row.startsAt ? row.startsAt.toISOString() : null,
+    endsAt: row.endsAt ? row.endsAt.toISOString() : null,
+  };
 }
 
 export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
@@ -74,6 +84,8 @@ export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
       subtitle: barBanners.subtitle,
       content: barBanners.content,
       sortOrder: barBanners.sortOrder,
+      startsAt: barBanners.startsAt,
+      endsAt: barBanners.endsAt,
     })
     .from(barBanners)
     .where(
@@ -87,7 +99,11 @@ export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
       )
     )
     .orderBy(asc(barBanners.sortOrder), asc(barBanners.createdAt));
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    startsAt: r.startsAt ? r.startsAt.toISOString() : null,
+    endsAt: r.endsAt ? r.endsAt.toISOString() : null,
+  }));
 }
 
 // ============================================================

@@ -96,6 +96,7 @@ export function BannerManager({ barId, initialBanners }: Props) {
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3 font-medium w-16">Photo</th>
                   <th className="px-4 py-3 font-medium">Title & Description</th>
+                  <th className="px-4 py-3 font-medium w-24">Category</th>
                   <th className="px-4 py-3 font-medium w-24">Status</th>
                   <th className="px-4 py-3 font-medium w-44">Period</th>
                   <th className="px-4 py-3 font-medium w-40 text-right">Actions</th>
@@ -200,6 +201,21 @@ function BannerRow({
             {banner.subtitle}
           </div>
         )}
+      </td>
+
+      {/* Category */}
+      <td className="px-4 py-2.5 align-middle">
+        <Badge
+          variant="outline"
+          className={
+            "text-[10px] px-1.5 py-0.5 capitalize " +
+            (banner.category === "event"
+              ? "text-sky-400 border-sky-500/40"
+              : "text-primary border-primary/40")
+          }
+        >
+          {banner.category}
+        </Badge>
       </td>
 
       {/* Status */}
