@@ -116,7 +116,9 @@ export function CashierSessionList({
   barId,
 }: Props) {
   const router = useRouter();
-  const [tab, setTab] = React.useState<Tab>("active");
+  // Default tab = Orders (kasir langsung lihat pesanan yang perlu diteruskan
+  // ke dapur saat buka dashboard).
+  const [tab, setTab] = React.useState<Tab>("orders");
 
   // Filter tab "Meja Aktif" (default rentang bulan berjalan)
   const [filter, setFilter] = React.useState<SessionFilterState>(() => ({
