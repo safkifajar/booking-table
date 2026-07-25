@@ -9,7 +9,7 @@ export default async function AdminBannersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Promo Banners</h1>
+        <h1 className="text-2xl font-bold">Promo &amp; Event</h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
           Carousel banners shown on the home page. If an active date range is
           set, a banner only appears within that period — otherwise it stays

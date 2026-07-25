@@ -4,7 +4,9 @@ import { db } from "@/lib/db/client";
 import { payments, orders } from "@/lib/db/schema/orders";
 import { tableSessions } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
+import { can, type StaffRoleName } from "@/lib/auth-v2/permissions";
 import { expireOverduePayAtCashierOrders } from "@/lib/queries";
 import { OrderCashierWaitView } from "./OrderCashierWaitView";
 
@@ -52,6 +54,23 @@ export default async function OrderPayPage({ params }: PageProps) {
     .innerJoin(bars, eq(bars.id, floorAreas.barId))
     .where(and(eq(orders.id, orderId), eq(orders.sessionId, id)));
   if (!ctx) notFound();
+
+  // KASIR (cashier/manager/admin) TAK ke layar tunggu — dia kasirnya sendiri.
+  // Arahkan ke ORDER DETAIL (CashierConfirmBox) untuk konfirmasi langsung.
+  // Layar tunggu ini khusus CUSTOMER.
+  const [staff] = await db
+    .select({ role: staffRoles.role })
+    .from(staffRoles)
+    .where(
+      and(
+        eq(staffRoles.profileId, profile.id),
+        eq(staffRoles.barId, ctx.bar_id),
+        eq(staffRoles.isActive, true)
+      )
+    );
+  if (can(staff?.role as StaffRoleName | undefined, "receive_payment")) {
+    redirect(`/session/${id}/order/${orderId}?from=/staff/cashier`);
+  }
 
   // Sweep dulu (jaring pengaman selain countdown) — order basi dibatalkan.
   await expireOverduePayAtCashierOrders(ctx.bar_id).catch(() => {});

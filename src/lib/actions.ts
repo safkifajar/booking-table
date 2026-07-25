@@ -34,6 +34,7 @@ import { memberRatings, staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { requireProfile } from "@/lib/auth-v2/current";
+import { can, type StaffRoleName } from "@/lib/auth-v2/permissions";
 import {
   isSessionHost,
   assertHostOrActiveStaff,
@@ -2467,7 +2468,12 @@ export interface OrderDetail {
     created_at: string;
     paid_at: string | null;
     paid_by: string;
+    paid_by_avatar: string | null;
     paid_by_member_id: string;
+    /** true kalau pembayar adalah HOST meja → badge "host". */
+    paid_by_is_host: boolean;
+    /** Nama kasir yang memproses (pay-at-cashier). null = bukan/ belum. */
+    confirmed_by: string | null;
     qr_string: string | null;
     expires_at: string | null;
   }[];
@@ -2526,7 +2532,10 @@ export async function getOrderDetail(
       )
     );
   const isStaff = !!staff;
-  const isCashier = staff?.role === "cashier";
+  // "isCashier" = boleh terima pembayaran (cashier/manager/admin) — bukan cuma
+  // role 'cashier'. Dulu manager/admin dianggap customer → melihat PaymentSheet
+  // & ke layar tunggu "pay at cashier", padahal mereka kasirnya.
+  const isCashier = can(staff?.role as StaffRoleName | undefined, "receive_payment");
 
   const [myMember] = await db
     .select({ id: sessionMembers.id })
@@ -2585,6 +2594,8 @@ export async function getOrderDetail(
       paid_at: payments.paidAt,
       paid_by_member_id: payments.paidByMemberId,
       paid_by: profiles.displayName,
+      paid_by_avatar: profiles.avatarUrl,
+      paid_by_role: sessionMembers.role,
     })
     .from(payments)
     .innerJoin(sessionMembers, eq(sessionMembers.id, payments.paidByMemberId))
@@ -2681,7 +2692,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null; confirmedByName?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -2697,7 +2708,10 @@ export async function getOrderDetail(
             created_at: p.created_at.toISOString(),
             paid_at: p.paid_at ? p.paid_at.toISOString() : null,
             paid_by: p.paid_by,
+            paid_by_avatar: p.paid_by_avatar,
             paid_by_member_id: p.paid_by_member_id,
+            paid_by_is_host: p.paid_by_role === "host",
+            confirmed_by: meta.confirmedByName ?? null,
             qr_string: isMine || isStaff ? meta.qrString ?? null : null,
             expires_at: meta.expiresAt ?? null,
           };

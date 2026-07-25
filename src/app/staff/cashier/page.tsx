@@ -4,6 +4,7 @@ import {
   getActiveSessionsForCashier,
   getBookingsForCashier,
   getClosedSessionsForCashier,
+  getCashierOrderQueue,
 } from "@/lib/cashier-actions";
 import {
   getAvailableTablesForWaiter,
@@ -69,6 +70,7 @@ export default async function CashierPage() {
     reservationData,
     moveRequests,
     closedSessions,
+    orderQueue,
   ] = await Promise.all([
     getActiveSessionsForCashier(),
     getBookingsForCashier(),
@@ -76,6 +78,7 @@ export default async function CashierPage() {
     getReservationDataForWaiter(),
     getMoveRequests(),
     getClosedSessionsForCashier(),
+    getCashierOrderQueue(),
   ]);
 
   return (
@@ -86,6 +89,7 @@ export default async function CashierPage() {
             <StaffProfileButton
               displayName={profile.displayName}
               avatarUrl={profile.avatarUrl}
+              role={ctx.role}
             />
           )}
           <div className="flex-1" />
@@ -111,6 +115,7 @@ export default async function CashierPage() {
           reservationData={reservationData}
           moveRequests={moveRequests}
           closedSessions={closedSessions}
+          orderQueue={orderQueue}
           barId={ctx.barId}
         />
       </div>

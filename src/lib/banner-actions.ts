@@ -23,10 +23,14 @@ import { requireProfile } from "@/lib/auth-v2/current";
 export interface PublicBanner {
   id: string;
   imageUrl: string;
+  category: "promo" | "event";
   title: string | null;
   subtitle: string | null;
   content: string | null;
   sortOrder: number;
+  /** Periode tayang (ISO). null = tanpa batas. */
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 /**
@@ -43,10 +47,13 @@ export async function getPublicBannerById(
     .select({
       id: barBanners.id,
       imageUrl: barBanners.imageUrl,
+      category: barBanners.category,
       title: barBanners.title,
       subtitle: barBanners.subtitle,
       content: barBanners.content,
       sortOrder: barBanners.sortOrder,
+      startsAt: barBanners.startsAt,
+      endsAt: barBanners.endsAt,
     })
     .from(barBanners)
     .where(
@@ -58,7 +65,12 @@ export async function getPublicBannerById(
       )
     )
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  return {
+    ...row,
+    startsAt: row.startsAt ? row.startsAt.toISOString() : null,
+    endsAt: row.endsAt ? row.endsAt.toISOString() : null,
+  };
 }
 
 export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
@@ -67,10 +79,13 @@ export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
     .select({
       id: barBanners.id,
       imageUrl: barBanners.imageUrl,
+      category: barBanners.category,
       title: barBanners.title,
       subtitle: barBanners.subtitle,
       content: barBanners.content,
       sortOrder: barBanners.sortOrder,
+      startsAt: barBanners.startsAt,
+      endsAt: barBanners.endsAt,
     })
     .from(barBanners)
     .where(
@@ -84,7 +99,11 @@ export async function getActiveBanners(barId: string): Promise<PublicBanner[]> {
       )
     )
     .orderBy(asc(barBanners.sortOrder), asc(barBanners.createdAt));
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    startsAt: r.startsAt ? r.startsAt.toISOString() : null,
+    endsAt: r.endsAt ? r.endsAt.toISOString() : null,
+  }));
 }
 
 // ============================================================
@@ -117,6 +136,7 @@ async function requireAdminForBar(barId: string) {
 export interface AdminBanner {
   id: string;
   imageUrl: string;
+  category: "promo" | "event";
   title: string | null;
   subtitle: string | null;
   content: string | null;
@@ -136,6 +156,7 @@ export async function getAllBannersForAdmin(
     .select({
       id: barBanners.id,
       imageUrl: barBanners.imageUrl,
+      category: barBanners.category,
       title: barBanners.title,
       subtitle: barBanners.subtitle,
       content: barBanners.content,
@@ -172,6 +193,7 @@ function isHeicFile(file: File): boolean {
 
 const bannerMetaSchema = z.object({
   barId: z.string().uuid(),
+  category: z.enum(["promo", "event"]).default("promo"),
   title: z.string().max(80).optional().or(z.literal("")),
   subtitle: z.string().max(200).optional().or(z.literal("")),
   content: z.string().max(5000).optional().or(z.literal("")),
@@ -197,6 +219,7 @@ export async function createBanner(
   // Parse meta dari formData
   const meta = bannerMetaSchema.parse({
     barId: formData.get("barId"),
+    category: formData.get("category") || undefined,
     title: formData.get("title") || undefined,
     subtitle: formData.get("subtitle") || undefined,
     content: formData.get("content") || undefined,
@@ -251,6 +274,7 @@ export async function createBanner(
     .values({
       barId: meta.barId,
       imageUrl: "PENDING",
+      category: meta.category,
       title: meta.title?.trim() || null,
       subtitle: meta.subtitle?.trim() || null,
       content: meta.content?.trim() || null,
@@ -284,6 +308,7 @@ export async function createBanner(
 
 const updateMetaSchema = z.object({
   id: z.string().uuid(),
+  category: z.enum(["promo", "event"]).default("promo"),
   title: z.string().max(80).optional().or(z.literal("")),
   subtitle: z.string().max(200).optional().or(z.literal("")),
   content: z.string().max(5000).optional().or(z.literal("")),
@@ -316,6 +341,7 @@ export async function updateBanner(input: z.infer<typeof updateMetaSchema>) {
   await db
     .update(barBanners)
     .set({
+      category: data.category,
       title: data.title?.trim() || null,
       subtitle: data.subtitle?.trim() || null,
       content: data.content?.trim() || null,

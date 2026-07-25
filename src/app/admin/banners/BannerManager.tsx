@@ -96,6 +96,7 @@ export function BannerManager({ barId, initialBanners }: Props) {
                 <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3 font-medium w-16">Photo</th>
                   <th className="px-4 py-3 font-medium">Title & Description</th>
+                  <th className="px-4 py-3 font-medium w-24">Category</th>
                   <th className="px-4 py-3 font-medium w-24">Status</th>
                   <th className="px-4 py-3 font-medium w-44">Period</th>
                   <th className="px-4 py-3 font-medium w-40 text-right">Actions</th>
@@ -202,6 +203,21 @@ function BannerRow({
         )}
       </td>
 
+      {/* Category */}
+      <td className="px-4 py-2.5 align-middle">
+        <Badge
+          variant="outline"
+          className={
+            "text-[10px] px-1.5 py-0.5 capitalize " +
+            (banner.category === "event"
+              ? "text-sky-400 border-sky-500/40"
+              : "text-primary border-primary/40")
+          }
+        >
+          {banner.category}
+        </Badge>
+      </td>
+
       {/* Status */}
       <td className="px-4 py-2.5 align-middle">
         <Badge
@@ -270,6 +286,9 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
   const isEdit = mode === "edit";
   const effectiveBarId = isEdit ? undefined : barId;
 
+  const [category, setCategory] = React.useState<"promo" | "event">(
+    banner?.category ?? "promo"
+  );
   const [title, setTitle] = React.useState(banner?.title ?? "");
   const [subtitle, setSubtitle] = React.useState(banner?.subtitle ?? "");
   const [content, setContent] = React.useState(banner?.content ?? "");
@@ -339,6 +358,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         // Edit flow: update meta dulu, lalu replace image kalau ada file baru
         await updateBanner({
           id: banner.id,
+          category,
           title,
           subtitle,
           content,
@@ -358,6 +378,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         // Build updated banner shape buat callback
         onSaved({
           ...banner,
+          category,
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
           content: content.trim() || null,
@@ -375,6 +396,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         const fd = new FormData();
         fd.append("barId", effectiveBarId);
         fd.append("file", file);
+        fd.append("category", category);
         if (title.trim()) fd.append("title", title.trim());
         if (subtitle.trim()) fd.append("subtitle", subtitle.trim());
         if (content.trim()) fd.append("content", content.trim());
@@ -389,6 +411,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
         onSaved({
           id,
           imageUrl: previewUrl ?? "",
+          category,
           title: title.trim() || null,
           subtitle: subtitle.trim() || null,
           content: content.trim() || null,
@@ -472,6 +495,32 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
               <li>• Format: JPG, PNG, WebP, or HEIC</li>
               <li>• Maximum size 10 MB</li>
             </ul>
+          </div>
+
+          {/* Category — promo / event */}
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              Category
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["promo", "event"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  className={
+                    "h-11 rounded-md border text-sm font-medium capitalize transition " +
+                    (category === c
+                      ? c === "promo"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-sky-500 bg-sky-500/10 text-sky-400"
+                      : "border-border text-muted-foreground hover:border-primary/40")
+                  }
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Title */}

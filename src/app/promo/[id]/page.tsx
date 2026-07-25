@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Calendar } from "lucide-react";
 import { getPublicBannerById } from "@/lib/banner-actions";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,22 @@ export default async function PromoDetailPage({ params }: PageProps) {
   const banner = await getPublicBannerById(id);
   if (!banner) notFound();
 
+  const isEvent = banner.category === "event";
+  const kindLabel = isEvent ? "Event" : "Promo";
+  const fmtDate = (iso: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(iso));
+  const periodLabel = banner.startsAt
+    ? banner.endsAt
+      ? `${fmtDate(banner.startsAt)} – ${fmtDate(banner.endsAt)}`
+      : `from ${fmtDate(banner.startsAt)}`
+    : banner.endsAt
+      ? `until ${fmtDate(banner.endsAt)}`
+      : null;
+
   return (
     <main className="flex-1 pb-16">
       {/* Header */}
@@ -37,7 +53,7 @@ export default async function PromoDetailPage({ params }: PageProps) {
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-base font-semibold truncate">Promo</h1>
+          <h1 className="text-base font-semibold truncate">{kindLabel}</h1>
         </div>
       </header>
 
@@ -54,8 +70,26 @@ export default async function PromoDetailPage({ params }: PageProps) {
           />
         </div>
 
-        {/* Judul + subtitle */}
+        {/* Judul + kategori + subtitle + tanggal */}
         <div>
+          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+            <span
+              className={
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide " +
+                (isEvent
+                  ? "bg-sky-500/15 border border-sky-500/40 text-sky-400"
+                  : "bg-primary/15 border border-primary/40 text-primary")
+              }
+            >
+              {kindLabel}
+            </span>
+            {periodLabel && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                <Calendar className="h-3.5 w-3.5" />
+                {periodLabel}
+              </span>
+            )}
+          </div>
           {banner.title && (
             <h2 className="text-xl font-bold tracking-tight">{banner.title}</h2>
           )}

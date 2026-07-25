@@ -24,7 +24,11 @@ export function ExportCsvButton({ rows }: { rows: AdminMembershipTxRow[] }) {
     const lines = rows.map((r) =>
       [
         r.id.slice(0, 8).toUpperCase(),
-        new Date(r.created_at).toLocaleString("en-US"),
+        new Date(r.created_at).toLocaleString("en-GB", {
+          dateStyle: "short",
+          timeStyle: "short",
+          hour12: false,
+        }),
         r.customer_name,
         r.customer_email,
         r.level_name,

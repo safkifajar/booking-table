@@ -84,7 +84,7 @@ function DocEditor({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] text-muted-foreground">
           {doc.updated_at
-            ? `Last updated ${new Date(doc.updated_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`
+            ? `Last updated ${new Date(doc.updated_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", hour12: false })}`
             : "Never saved"}
         </p>
         <div className="flex items-center gap-2">

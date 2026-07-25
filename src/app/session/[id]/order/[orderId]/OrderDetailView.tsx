@@ -12,8 +12,9 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
+import { cn, formatIDR, getActionErrorMessage, initials } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentSheet } from "@/components/session/PaymentSheet";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
@@ -157,10 +158,14 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           expirySeconds: toExpirySeconds(result.expiresAt),
         });
       } else if (method === "cash" && result.status === "pending") {
-        // Pay at cashier → halaman tunggu khusus (countdown 10 mnt), sama pola
-        // booking DP. Tak stay di detail dgn toast.
-        router.push(`/session/${detail.sessionId}/order/${detail.id}/pay`);
-        return;
+        // Pay at cashier: CUSTOMER → halaman tunggu (countdown 10 mnt). KASIR
+        // (dirinya sendiri) → jangan ke layar tunggu; tetap di detail order &
+        // konfirmasi via CashierConfirmBox.
+        if (!detail.isCashier) {
+          router.push(`/session/${detail.sessionId}/order/${detail.id}/pay`);
+          return;
+        }
+        toast.success("Payment created — confirm it below to complete");
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -523,9 +528,23 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                 return (
                   <Card key={p.id} className="p-3">
                     <div className="flex items-center gap-3">
+                      {/* Foto pembayar */}
+                      <Avatar className="h-9 w-9 shrink-0">
+                        {p.paid_by_avatar && (
+                          <AvatarImage src={p.paid_by_avatar} alt={p.paid_by} />
+                        )}
+                        <AvatarFallback className="text-xs">
+                          {initials(p.paid_by)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-medium truncate">{p.paid_by}</span>
+                          {p.paid_by_is_host && (
+                            <Badge variant="outline" className="text-[9px] px-1 text-primary border-primary/40">
+                              host
+                            </Badge>
+                          )}
                           <Badge variant={p.is_down_payment ? "default" : "secondary"} className="text-[9px] px-1">
                             {p.is_down_payment ? "DP" : "Bill"}
                           </Badge>
@@ -541,6 +560,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                             : p.method.toUpperCase()}{" "}
                           · {fmtTime(p.paid_at ?? p.created_at)}
                         </div>
+                        {/* Kasir yang memproses (pay-at-cashier) */}
+                        {p.confirmed_by && p.status === "paid" && (
+                          <div className="text-[11px] text-muted-foreground/80">
+                            processed by{" "}
+                            <span className="text-foreground/90">
+                              {p.confirmed_by}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-sm font-semibold text-primary tabular-nums">{formatIDR(p.amount)}</div>
@@ -602,22 +630,24 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                             </PayAtCashierCountdown>
                           </div>
                         )}
-                        <div className="flex gap-1.5 flex-wrap">
-                          {(p.paid_by_member_id === detail.myMemberId ||
-                            detail.isHost ||
-                            detail.isStaff) && (
+                        {(p.paid_by_member_id === detail.myMemberId ||
+                          detail.isHost ||
+                          detail.isStaff) && (
+                          <div className="text-center">
+                            {/* Link-style (tanpa kotak) — samakan dgn layar
+                                pay-at-cashier. */}
                             <button
                               type="button"
                               disabled={cancellingId === p.id || confirmingId === p.id}
                               onClick={() => handleCancelCashierPayment(p.id)}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs font-medium hover:bg-muted transition disabled:opacity-50"
+                              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition disabled:opacity-50"
                             >
                               {cancellingId === p.id
                                 ? "Cancelling…"
                                 : "Cancel this payment"}
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     {canRegenerate && (

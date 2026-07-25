@@ -172,6 +172,18 @@ function BannerSlide({ banner }: { banner: PublicBanner }) {
         priority={banner.sortOrder === 0}
       />
 
+      {/* Badge kategori — Promo merah, Event biru. */}
+      <span
+        className={
+          "absolute top-3 left-3 z-10 inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm " +
+          (banner.category === "event"
+            ? "bg-sky-500/90 text-white"
+            : "bg-primary/90 text-primary-foreground")
+        }
+      >
+        {banner.category === "event" ? "Event" : "Promo"}
+      </span>
+
       {/* Overlay text */}
       {(banner.title || banner.subtitle) && (
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-4 sm:p-5">

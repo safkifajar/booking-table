@@ -28,13 +28,42 @@ export function PaymentMethodChart({ data }: { data: PaymentMethodSummary[] }) {
     );
   }
 
-  const total = data.reduce((sum, d) => sum + d.total_amount, 0);
+  // Metode yang dipakai produksi hanya: qris, cash, voucher. Sisanya (mock =
+  // QRIS via gateway tiruan; card/gopay/ovo tak dipakai) DIGABUNG ke qris —
+  // mock memang jalur QRIS. Agregasi di tampilan saja (data DB tak diubah);
+  // TOTAL tetap utuh. pct_share dihitung ulang atas grup baru.
+  const KEEP = new Set(["cash", "voucher"]);
+  const merged = new Map<string, { total_amount: number; payment_count: number }>();
+  for (const d of data) {
+    const key = KEEP.has(d.method) ? d.method : "qris"; // non-cash/voucher → qris
+    const g = merged.get(key) ?? { total_amount: 0, payment_count: 0 };
+    g.total_amount += d.total_amount;
+    g.payment_count += d.payment_count;
+    merged.set(key, g);
+  }
+  const total = Array.from(merged.values()).reduce(
+    (sum, g) => sum + g.total_amount,
+    0
+  );
+  // Urutan tampil: qris, cash, voucher.
+  const ORDER = ["qris", "cash", "voucher"];
+  const rows: PaymentMethodSummary[] = ORDER.filter((m) => merged.has(m)).map(
+    (m) => {
+      const g = merged.get(m)!;
+      return {
+        method: m as PaymentMethodSummary["method"],
+        total_amount: g.total_amount,
+        payment_count: g.payment_count,
+        pct_share: total > 0 ? Math.round((g.total_amount / total) * 1000) / 10 : 0,
+      };
+    }
+  );
 
   return (
     <div className="space-y-3">
       {/* Stacked bar */}
       <div className="h-3 rounded-full overflow-hidden flex bg-muted">
-        {data.map((d) => {
+        {rows.map((d) => {
           const color = METHOD_COLORS[d.method] ?? "#999";
           const widthPct = total > 0 ? (d.total_amount / total) * 100 : 0;
           return (
@@ -49,7 +78,7 @@ export function PaymentMethodChart({ data }: { data: PaymentMethodSummary[] }) {
 
       {/* Legend with values */}
       <div className="space-y-2">
-        {data.map((d) => {
+        {rows.map((d) => {
           const color = METHOD_COLORS[d.method] ?? "#999";
           const label = METHOD_LABELS[d.method] ?? d.method;
           return (

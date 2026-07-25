@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Loader2, X } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Banknote, Clock, Loader2, X, ArrowLeft } from "lucide-react";
 import { cancelPayment } from "@/lib/actions";
 import { formatIDR, getActionErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
@@ -102,71 +100,93 @@ export function OrderCashierWaitView({
 
   return (
     <div className="min-h-dvh bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm p-6 space-y-5 text-center">
-        <div className="mx-auto h-14 w-14 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
-          <Banknote className="h-7 w-7 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-lg font-bold">Pay at the cashier</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Go to the cashier desk{tableLabel ? (
-              <>
-                , mention table{" "}
-                <span className="font-semibold text-foreground">{tableLabel}</span>,
-              </>
-            ) : ""}{" "}
-            and pay to complete this order.
-          </p>
+      <div className="w-full max-w-md rounded-3xl border border-border bg-card/40 p-6 sm:p-8 text-center">
+        {/* Ikon dengan glow */}
+        <div className="relative mx-auto mb-6 h-24 w-24">
+          <div className="absolute inset-0 rounded-full bg-primary/20 blur-2xl" />
+          <div className="relative h-full w-full rounded-full border border-primary/40 bg-primary/[0.06] flex items-center justify-center shadow-[0_0_40px_-8px_hsl(var(--primary)/0.6)]">
+            <Banknote className="h-9 w-9 text-primary" />
+          </div>
         </div>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+        <h1 className="text-3xl font-bold tracking-tight">Pay at the cashier</h1>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+          Go to the cashier desk
+          {tableLabel ? (
+            <>
+              , mention table{" "}
+              <span className="font-semibold text-primary">{tableLabel}</span>,
+            </>
+          ) : (
+            ""
+          )}{" "}
+          and pay to complete this order.
+        </p>
+
+        {/* Amount — kartu merah */}
+        <div className="mt-6 rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/[0.08] to-transparent px-4 py-5">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             Amount to pay
           </p>
-          <p className="text-2xl font-bold text-gold-gradient tabular-nums">
+          <p className="text-4xl font-bold tabular-nums text-primary mt-1">
             {formatIDR(amount)}
           </p>
         </div>
 
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <p className="text-xs text-amber-400">Time left to confirm</p>
-          <p className="text-3xl font-bold tabular-nums text-amber-400 mt-0.5">
-            {mm}:{ss}
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            If time runs out, this order is cancelled. Your table stays open.
-          </p>
+        {/* Countdown — kartu amber besar + ikon jam */}
+        <div className="mt-4 rounded-2xl border border-amber-500/40 bg-gradient-to-b from-amber-500/[0.08] to-transparent px-4 py-5">
+          <div className="flex items-center gap-4">
+            <div className="relative h-16 w-16 shrink-0">
+              <div className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl" />
+              <div className="relative h-full w-full rounded-full border border-amber-500/40 flex items-center justify-center">
+                <Clock className="h-7 w-7 text-amber-400" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 text-center">
+              <p className="text-sm font-medium text-amber-400">
+                Time left to confirm
+              </p>
+              <p className="text-4xl font-bold tabular-nums text-amber-400 leading-tight">
+                {mm}:{ss}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                If time runs out, this order is cancelled. Your table stays open.
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        {/* Waiting */}
+        <div className="mt-4 rounded-xl border border-border bg-muted/20 px-4 py-3 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
           Waiting for cashier confirmation…
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={cancelling}
-            onClick={handleCancel}
-          >
-            {cancelling ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <X className="h-4 w-4" />
-            )}
-            Cancel this payment
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full text-muted-foreground"
-            onClick={() => router.replace(backHref)}
-          >
-            Back to bill
-          </Button>
-        </div>
-      </Card>
+        {/* Cancel — outline merah */}
+        <button
+          type="button"
+          disabled={cancelling}
+          onClick={handleCancel}
+          className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-primary/50 py-3.5 text-sm font-semibold text-foreground hover:bg-primary/10 transition disabled:opacity-50"
+        >
+          {cancelling ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <X className="h-4 w-4 text-primary" />
+          )}
+          Cancel this payment
+        </button>
+
+        {/* Back to bill */}
+        <button
+          type="button"
+          onClick={() => router.replace(backHref)}
+          className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 text-sm text-muted-foreground hover:text-foreground transition"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to bill
+        </button>
+      </div>
     </div>
   );
 }

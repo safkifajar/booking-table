@@ -13,9 +13,10 @@ import type { VoucherUsageRow } from "@/lib/membership-actions";
 type StatusFilter = "all" | "used" | "reserved";
 
 function fmt(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  return new Date(iso).toLocaleString("en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
+    hour12: false,
   });
 }
 

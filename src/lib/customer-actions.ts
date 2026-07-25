@@ -109,10 +109,19 @@ const PAGE_SIZE = 10;
 export async function listCustomers(
   searchRaw?: string,
   page = 1,
-  pageSize = PAGE_SIZE
+  pageSize = PAGE_SIZE,
+  filters?: {
+    status?: "all" | "active" | "inactive";
+    membership?: "all" | "basic" | "premium" | "vip";
+    /** Urut kolom Visits. default = terbaru daftar (createdAt desc). */
+    sort?: "default" | "visit_desc" | "visit_asc";
+  }
 ): Promise<ListCustomersResult> {
   await requireAdmin();
   const search = (searchRaw ?? "").trim();
+  const status = filters?.status ?? "all";
+  const membership = filters?.membership ?? "all";
+  const sort = filters?.sort ?? "default";
   // Clamp pageSize ke opsi valid (cegah abuse).
   const size = [10, 25, 50, 100].includes(pageSize) ? pageSize : PAGE_SIZE;
 
@@ -121,9 +130,20 @@ export async function listCustomers(
     .select({ id: staffRoles.profileId })
     .from(staffRoles);
 
+  // Filter membership EFEKTIF di SQL (replika effectiveLevelKey): level yg
+  // premium/vip TAPI sudah expired dihitung 'basic'. NULL expires_at = lifetime.
+  const membershipClause =
+    membership === "all"
+      ? undefined
+      : membership === "basic"
+        ? sql`(${profiles.membershipLevel} = 'basic' OR (${profiles.membershipExpiresAt} IS NOT NULL AND ${profiles.membershipExpiresAt} <= now()))`
+        : sql`(${profiles.membershipLevel} = ${membership} AND (${profiles.membershipExpiresAt} IS NULL OR ${profiles.membershipExpiresAt} > now()))`;
+
   const whereClause = and(
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
+    status === "all" ? undefined : eq(profiles.isActive, status === "active"),
+    membershipClause,
     search
       ? or(
           ilike(profiles.displayName, `%${search}%`),
@@ -194,7 +214,13 @@ export async function listCustomers(
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
       .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
       .where(whereClause)
-      .orderBy(desc(profiles.createdAt))
+      .orderBy(
+        sort === "visit_desc"
+          ? sql`COALESCE(${visitSq.c}, 0) DESC`
+          : sort === "visit_asc"
+            ? sql`COALESCE(${visitSq.c}, 0) ASC`
+            : desc(profiles.createdAt)
+      )
       .limit(size)
       .offset((Math.max(1, page) - 1) * size),
     db
@@ -242,6 +268,227 @@ export async function listCustomers(
     })),
     total: Number(totalRow[0]?.total ?? 0),
   };
+}
+
+export interface CustomerStats {
+  total: number;
+  active: number;
+  inactive: number;
+  basic: number;
+  premium: number;
+  vip: number;
+}
+
+/**
+ * Statistik ringkas customer (non-staff, non-guest): total, per-status, dan
+ * per-membership EFEKTIF (level yg expired dihitung basic). Satu query agregat
+ * — hitungan menyeluruh (bukan cuma halaman aktif).
+ */
+export async function getCustomerStats(): Promise<CustomerStats> {
+  await requireAdmin();
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  // Level efektif di SQL: premium/vip yg sudah lewat expires_at → basic.
+  const eff = sql<string>`CASE
+    WHEN ${profiles.membershipLevel} <> 'basic'
+      AND ${profiles.membershipExpiresAt} IS NOT NULL
+      AND ${profiles.membershipExpiresAt} <= now()
+    THEN 'basic' ELSE ${profiles.membershipLevel} END`;
+
+  const [row] = await db
+    .select({
+      total: count(),
+      active: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isActive})::int`,
+      inactive: sql<number>`COUNT(*) FILTER (WHERE NOT ${profiles.isActive})::int`,
+      basic: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'basic')::int`,
+      premium: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'premium')::int`,
+      vip: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'vip')::int`,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .where(
+      and(
+        sql`${users.id} NOT IN (${staffIds})`,
+        eq(profiles.isGuest, false)
+      )
+    );
+  return {
+    total: Number(row?.total ?? 0),
+    active: Number(row?.active ?? 0),
+    inactive: Number(row?.inactive ?? 0),
+    basic: Number(row?.basic ?? 0),
+    premium: Number(row?.premium ?? 0),
+    vip: Number(row?.vip ?? 0),
+  };
+}
+
+/**
+ * Baris export CSV — data diri LENGKAP per customer (termasuk hobi & minat).
+ * Berbeda dari AdminCustomerRow yang dipakai list (ringkas): di sini semua
+ * kolom biodata dibawa supaya export mencakup profil utuh.
+ */
+export interface ExportCustomerRow {
+  name: string;
+  username: string | null;
+  email: string;
+  phone: string | null;
+  gender: string | null;
+  interested_in: string | null;
+  looking_for: string | null;
+  birth_date: string | null;
+  area: string | null;
+  education: string | null;
+  religion: string | null;
+  height_cm: number | null;
+  hobbies: string[];
+  music_pref: string | null;
+  fav_food: string | null;
+  fav_drink: string | null;
+  bio: string | null;
+  social_link: string | null;
+  visit_count: number;
+  friend_count: number;
+  rating_avg: number;
+  rating_count: number;
+  membership_name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/**
+ * Export SEMUA customer (bukan cuma halaman aktif) sesuai filter yang sedang
+ * dipakai (search/status/membership). Membawa data diri lengkap termasuk
+ * hobi & ketertarikan untuk keperluan CSV. Urut: terbaru daftar dulu.
+ */
+export async function exportCustomers(
+  searchRaw?: string,
+  filters?: {
+    status?: "all" | "active" | "inactive";
+    membership?: "all" | "basic" | "premium" | "vip";
+  }
+): Promise<ExportCustomerRow[]> {
+  await requireAdmin();
+  const search = (searchRaw ?? "").trim();
+  const status = filters?.status ?? "all";
+  const membership = filters?.membership ?? "all";
+
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const membershipClause =
+    membership === "all"
+      ? undefined
+      : membership === "basic"
+        ? sql`(${profiles.membershipLevel} = 'basic' OR (${profiles.membershipExpiresAt} IS NOT NULL AND ${profiles.membershipExpiresAt} <= now()))`
+        : sql`(${profiles.membershipLevel} = ${membership} AND (${profiles.membershipExpiresAt} IS NULL OR ${profiles.membershipExpiresAt} > now()))`;
+
+  const whereClause = and(
+    sql`${users.id} NOT IN (${staffIds})`,
+    eq(profiles.isGuest, false),
+    status === "all" ? undefined : eq(profiles.isActive, status === "active"),
+    membershipClause,
+    search
+      ? or(
+          ilike(profiles.displayName, `%${search}%`),
+          ilike(users.email, `%${search}%`),
+          ilike(profiles.username, `%${search}%`)
+        )
+      : undefined
+  );
+
+  const visitSq = db
+    .select({
+      profileId: sessionMembers.profileId,
+      c: count(sessionMembers.id).as("c"),
+    })
+    .from(sessionMembers)
+    .groupBy(sessionMembers.profileId)
+    .as("visits");
+
+  const ratingSq = db
+    .select({
+      rateeId: memberRatings.rateeId,
+      avg: sql<number>`ROUND(AVG(${memberRatings.stars})::numeric, 1)`.as("avg"),
+      cnt: count(memberRatings.id).as("cnt"),
+    })
+    .from(memberRatings)
+    .groupBy(memberRatings.rateeId)
+    .as("ratings");
+
+  const rows = await db
+    .select({
+      name: profiles.displayName,
+      username: profiles.username,
+      email: users.email,
+      phone: profiles.phone,
+      gender: profiles.gender,
+      interested_in: profiles.interestedIn,
+      looking_for: profiles.lookingFor,
+      birth_date: profiles.birthDate,
+      area: profiles.area,
+      education: profiles.education,
+      religion: profiles.religion,
+      height_cm: profiles.heightCm,
+      hobbies: profiles.hobbies,
+      music_pref: profiles.musicPref,
+      fav_food: profiles.favFood,
+      fav_drink: profiles.favDrink,
+      bio: profiles.bio,
+      social_link: profiles.socialLink,
+      is_active: profiles.isActive,
+      created_at: profiles.createdAt,
+      membership_level: profiles.membershipLevel,
+      membership_expires_at: profiles.membershipExpiresAt,
+      visit_count: sql<number>`COALESCE(${visitSq.c}, 0)::int`,
+      rating_avg: sql<number>`COALESCE(${ratingSq.avg}, 0)`,
+      rating_count: sql<number>`COALESCE(${ratingSq.cnt}, 0)::int`,
+      friend_count: sql<number>`(
+        SELECT COUNT(*)::int FROM ${friendships} f
+        WHERE f.user_a_id = ${users.id} OR f.user_b_id = ${users.id}
+      )`,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .leftJoin(visitSq, eq(visitSq.profileId, users.id))
+    .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
+    .where(whereClause)
+    .orderBy(desc(profiles.createdAt));
+
+  // Nama tampilan level (editable admin).
+  const levelRows = await db
+    .select({ key: membershipLevels.key, name: membershipLevels.name })
+    .from(membershipLevels);
+  const levelNames = new Map(levelRows.map((l) => [l.key, l.name]));
+
+  return rows.map((r) => ({
+    name: r.name,
+    username: r.username,
+    email: r.email,
+    phone: r.phone,
+    gender: r.gender,
+    interested_in: r.interested_in,
+    looking_for: r.looking_for,
+    birth_date: r.birth_date,
+    area: r.area,
+    education: r.education,
+    religion: r.religion,
+    height_cm: r.height_cm,
+    hobbies: r.hobbies ?? [],
+    music_pref: r.music_pref,
+    fav_food: r.fav_food,
+    fav_drink: r.fav_drink,
+    bio: r.bio,
+    social_link: r.social_link,
+    visit_count: Number(r.visit_count),
+    friend_count: Number(r.friend_count),
+    rating_avg: Number(r.rating_avg),
+    rating_count: Number(r.rating_count),
+    membership_name:
+      levelNames.get(
+        effectiveLevelKey(r.membership_level, r.membership_expires_at)
+      ) ?? "Basic",
+    is_active: r.is_active,
+    created_at: r.created_at.toISOString(),
+  }));
 }
 
 // ============================================================

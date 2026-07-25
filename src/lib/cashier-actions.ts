@@ -589,6 +589,168 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
 }
 
 // ============================================================
+// ORDER QUEUE (KASIR) — kasir = jembatan ke dapur
+// ============================================================
+
+/** Satu item order untuk tab Orders kasir (per item, dikelompokkan per meja
+ *  di UI). status 'sent' = perlu diteruskan; 'preparing' = kasir sudah teruskan
+ *  (dapur sedang buat). */
+export interface CashierOrderItem {
+  id: string;
+  order_id: string;
+  quantity: number;
+  notes: string | null;
+  created_at: string;
+  status: "sent" | "preparing";
+  menu_item_name: string;
+  menu_item_image: string | null;
+  added_by_name: string;
+  added_by_avatar: string | null;
+  session_id: string;
+  session_title: string | null;
+  table_label: string;
+  area_name: string;
+  reservation_at: string | null;
+}
+
+/** Dua kelompok order untuk kasir: aktif (dapur buat sekarang) vs terjadwal
+ *  (booking, jam belum tiba → dapur belum boleh buat). */
+export interface CashierOrderQueue {
+  active: CashierOrderItem[];
+  scheduled: CashierOrderItem[];
+}
+
+/**
+ * Order (item sent/preparing) untuk tab Orders kasir. Dua kelompok berdasar
+ * STATUS SESI:
+ *  - active    = sesi open/locked/overdue → "buat sekarang" (kasir teruskan ke
+ *    dapur, bisa 'Tandai diproses').
+ *  - scheduled = sesi reserved (booking, jam belum tiba) → dapur BELUM boleh
+ *    buat; read-only (info saja).
+ * FIFO (oldest first). Izin receive_payment (kasir), BUKAN view_queue.
+ */
+export async function getCashierOrderQueue(): Promise<CashierOrderQueue> {
+  const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  const rows = await db
+    .select({
+      id: orderItems.id,
+      order_id: orderItems.orderId,
+      quantity: orderItems.quantity,
+      notes: orderItems.notes,
+      created_at: orderItems.createdAt,
+      status: orderItems.status,
+      menu_item_name: menuItems.name,
+      menu_item_image: menuItems.imageUrl,
+      added_by_name: profiles.displayName,
+      added_by_avatar: profiles.avatarUrl,
+      session_id: tableSessions.id,
+      session_title: tableSessions.title,
+      session_status: tableSessions.status,
+      table_label: tables.label,
+      area_name: floorAreas.name,
+      reservation_at: tableSessions.reservationAt,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+    .innerJoin(sessionMembers, eq(sessionMembers.id, orderItems.addedByMemberId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, ctx.barId),
+        inArray(orderItems.status, ["sent", "preparing"]),
+        // Aktif ATAU booking terjadwal — dikelompokkan di bawah.
+        inArray(tableSessions.status, [
+          "open",
+          "locked",
+          "overdue",
+          "reserved",
+        ])
+      )
+    )
+    .orderBy(asc(orderItems.createdAt));
+
+  const active: CashierOrderItem[] = [];
+  const scheduled: CashierOrderItem[] = [];
+  for (const r of rows) {
+    const item: CashierOrderItem = {
+      id: r.id,
+      order_id: r.order_id,
+      quantity: r.quantity,
+      notes: r.notes,
+      created_at: r.created_at.toISOString(),
+      status: r.status as "sent" | "preparing",
+      menu_item_name: r.menu_item_name,
+      menu_item_image: r.menu_item_image,
+      added_by_name: r.added_by_name,
+      added_by_avatar: r.added_by_avatar,
+      session_id: r.session_id,
+      session_title: r.session_title,
+      table_label: r.table_label,
+      area_name: r.area_name,
+      reservation_at: r.reservation_at
+        ? r.reservation_at.toISOString()
+        : null,
+    };
+    if (r.session_status === "reserved") scheduled.push(item);
+    else active.push(item);
+  }
+  return { active, scheduled };
+}
+
+/**
+ * Kasir menandai item "sedang diproses" (sudah diteruskan ke dapur): sent →
+ * preparing. Hanya untuk item di sesi AKTIF (open/locked/overdue) — order
+ * booking terjadwal belum boleh diproses. Idempotent. Izin receive_payment.
+ * Waiter tetap melihat item preparing (penanda "sedang dibuat") lalu menandai
+ * served saat sudah diantar.
+ */
+export async function cashierMarkPreparing(itemId: string): Promise<void> {
+  const ctx = await requirePermission("receive_payment", "/staff/cashier");
+
+  const [item] = await db
+    .select({
+      id: orderItems.id,
+      status: orderItems.status,
+      session_id: tableSessions.id,
+      session_status: tableSessions.status,
+      bar_id: floorAreas.barId,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .innerJoin(tableSessions, eq(tableSessions.id, orders.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(eq(orderItems.id, itemId));
+  if (!item) throw new Error("Order item not found");
+  if (item.bar_id !== ctx.barId) throw new Error("Invalid bar access");
+  if (item.status === "preparing" || item.status === "served") {
+    return; // idempotent (sudah diproses / diantar)
+  }
+  if (item.status !== "sent") {
+    throw new Error("This item can't be marked as being prepared");
+  }
+  if (!["open", "locked", "overdue"].includes(item.session_status)) {
+    // Booking terjadwal (reserved) belum boleh diproses.
+    throw new Error("This order is scheduled — the kitchen shouldn't start it yet");
+  }
+
+  await db
+    .update(orderItems)
+    .set({ status: "preparing" })
+    .where(and(eq(orderItems.id, itemId), eq(orderItems.status, "sent")));
+
+  // Kabari sesi + staff (waiter melihat penanda "sedang dibuat").
+  await notifyAll(item.session_id, ctx.barId, { type: "order.preparing" });
+  revalidatePath("/staff/cashier");
+  revalidatePath("/staff/waiter");
+}
+
+// ============================================================
 // SESSION DETAIL
 // ============================================================
 
@@ -1375,12 +1537,23 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
   if (!payment) throw new Error("Payment not found");
   if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
 
+  // Nama kasir yang memproses → dicatat di splitMeta (untuk payment history).
+  const [cashier] = await db
+    .select({ name: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, ctx.profileId));
+  const prevMeta = (payment.splitMeta as Record<string, unknown> | null) ?? {};
+
   // Transisi conditional pending→paid: kalau payment keburu expired/dibatalkan
   // (mis. DP pay-at-cashier lewat 10 menit → booking sudah cancelled), JANGAN
   // menghidupkan lagi — kasir dapat error yang jelas.
   const updated = await db
     .update(payments)
-    .set({ status: "paid", paidAt: new Date() })
+    .set({
+      status: "paid",
+      paidAt: new Date(),
+      splitMeta: { ...prevMeta, confirmedByName: cashier?.name ?? null },
+    })
     .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
     .returning({ id: payments.id });
   if (updated.length === 0) {
