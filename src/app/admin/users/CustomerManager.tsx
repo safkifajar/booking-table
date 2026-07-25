@@ -161,101 +161,139 @@ export function CustomerManager({
         </Button>
       </div>
 
-      {/* List */}
+      {/* Table */}
       {initialRows.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground border-dashed">
           {query ? `No customer matches "${query}".` : "No customers yet."}
         </Card>
       ) : (
-        <Card className="divide-y divide-border">
-          {initialRows.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 p-3 sm:p-4">
-              <Link
-                href={`/admin/users/${r.id}`}
-                className="flex items-center gap-3 flex-1 min-w-0 group"
-              >
-                <Avatar className="h-9 w-9 shrink-0">
-                  {r.avatar_url && (
-                    <AvatarImage src={r.avatar_url} alt={r.name} />
-                  )}
-                  <AvatarFallback className="text-xs">
-                    {initials(r.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium truncate group-hover:text-primary transition">
-                      {r.name}
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "text-[10px]",
-                        r.is_active
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                          : "bg-red-500/15 text-red-400 border-red-500/30"
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Customer</th>
+                  <th className="px-4 py-3 font-medium">Contact</th>
+                  <th className="px-4 py-3 font-medium w-24">Status</th>
+                  <th className="px-4 py-3 font-medium w-24">Visits</th>
+                  <th className="px-4 py-3 font-medium w-28">Membership</th>
+                  <th className="px-4 py-3 font-medium w-16 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {initialRows.map((r) => (
+                  <tr key={r.id} className="hover:bg-muted/20 transition">
+                    {/* Customer */}
+                    <td className="px-4 py-2.5 align-middle">
+                      <Link
+                        href={`/admin/users/${r.id}`}
+                        className="flex items-center gap-3 min-w-0 group"
+                      >
+                        <Avatar className="h-9 w-9 shrink-0">
+                          {r.avatar_url && (
+                            <AvatarImage src={r.avatar_url} alt={r.name} />
+                          )}
+                          <AvatarFallback className="text-xs">
+                            {initials(r.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium truncate group-hover:text-primary transition">
+                              {r.name}
+                            </span>
+                            {r.rating_count > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[11px] text-primary shrink-0">
+                                <Star className="h-3 w-3 fill-primary" />
+                                {r.rating_avg}
+                              </span>
+                            )}
+                          </div>
+                          {r.username && (
+                            <div className="text-xs text-muted-foreground truncate">
+                              @{r.username}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    </td>
+
+                    {/* Contact */}
+                    <td className="px-4 py-2.5 align-middle min-w-0">
+                      <div className="text-xs truncate">{r.email}</div>
+                      {r.phone && (
+                        <div className="text-xs text-muted-foreground truncate">
+                          {r.phone}
+                        </div>
                       )}
-                    >
-                      {r.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                    {r.rating_count > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-[11px] text-primary">
-                        <Star className="h-3 w-3 fill-primary" />
-                        {r.rating_avg}
-                        <span className="text-muted-foreground">
-                          ({r.rating_count})
-                        </span>
-                      </span>
-                    )}
-                    {r.visit_count > 0 && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {r.visit_count}× visits
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-4 py-2.5 align-middle">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-[10px]",
+                          r.is_active
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/15 text-red-400 border-red-500/30"
+                        )}
+                      >
+                        {r.is_active ? "Active" : "Inactive"}
                       </Badge>
-                    )}
-                    {r.friend_count > 0 && (
-                      <Badge variant="secondary" className="text-[10px] gap-1">
-                        <Users className="h-3 w-3" />
-                        {r.friend_count}
+                    </td>
+
+                    {/* Visits */}
+                    <td className="px-4 py-2.5 align-middle">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="tabular-nums">{r.visit_count}×</span>
+                        {r.friend_count > 0 && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Users className="h-3 w-3" />
+                            {r.friend_count}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Membership */}
+                    <td className="px-4 py-2.5 align-middle">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-[10px]",
+                          r.membership_key === "vip"
+                            ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                            : r.membership_key === "premium"
+                              ? "bg-primary/15 text-primary border-primary/30"
+                              : "bg-muted text-muted-foreground border-border"
+                        )}
+                      >
+                        {r.membership_name}
                       </Badge>
-                    )}
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "text-[10px]",
-                        r.membership_key === "vip"
-                          ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
-                          : r.membership_key === "premium"
-                            ? "bg-primary/15 text-primary border-primary/30"
-                            : "bg-muted text-muted-foreground border-border"
-                      )}
-                    >
-                      {r.membership_name}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {r.username ? `@${r.username} · ` : ""}
-                    {r.email}
-                    {r.phone ? ` · ${r.phone}` : ""}
-                  </p>
-                </div>
-              </Link>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete"
-                  disabled={deleting === r.id}
-                  onClick={() => handleDelete(r)}
-                >
-                  {deleting === r.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-4 w-4 text-red-400" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          ))}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-2.5 align-middle text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Delete"
+                        disabled={deleting === r.id}
+                        onClick={() => handleDelete(r)}
+                      >
+                        {deleting === r.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        )}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
