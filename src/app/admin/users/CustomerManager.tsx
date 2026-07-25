@@ -15,7 +15,6 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useConfirm } from "@/components/ConfirmDialog";
 import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { EDUCATION_OPTIONS } from "@/lib/education";
@@ -23,7 +22,6 @@ import { RELIGION_OPTIONS } from "@/lib/religion";
 import {
   Search,
   UserPlus,
-  Trash2,
   Download,
   Loader2,
   Star,
@@ -33,9 +31,12 @@ import { Pagination } from "@/components/admin/Pagination";
 import { initials, getActionErrorMessage, cn } from "@/lib/utils";
 import {
   createCustomer,
-  deleteCustomer,
   type AdminCustomerRow,
+  type CustomerStats,
 } from "@/lib/customer-actions";
+import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+
+type SortMode = "default" | "visit_desc" | "visit_asc";
 
 interface Props {
   initialRows: AdminCustomerRow[];
@@ -43,6 +44,10 @@ interface Props {
   page: number;
   pageSize: number;
   query: string;
+  status: "all" | "active" | "inactive";
+  membership: "all" | "basic" | "premium" | "vip";
+  sort: SortMode;
+  stats: CustomerStats;
 }
 
 /** Dialog hanya untuk TAMBAH customer. Edit dilakukan di halaman detail
@@ -55,53 +60,58 @@ export function CustomerManager({
   page,
   pageSize,
   query,
+  status,
+  membership,
+  sort,
+  stats,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const confirm = useConfirm();
 
   const [search, setSearch] = React.useState(query);
   const [editTarget, setEditTarget] = React.useState<EditTarget>(null);
-  const [deleting, setDeleting] = React.useState<string | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  function pushParams(next: { q?: string; page?: number; size?: number }) {
+  function pushParams(next: {
+    q?: string;
+    page?: number;
+    size?: number;
+    status?: string;
+    membership?: string;
+    sort?: string;
+  }) {
     const params = new URLSearchParams();
     const q = next.q ?? search;
     const p = next.page ?? page;
     const s = next.size ?? pageSize;
+    const st = next.status ?? status;
+    const mb = next.membership ?? membership;
+    const sr = next.sort ?? sort;
     if (q.trim()) params.set("q", q.trim());
     if (p > 1) params.set("page", String(p));
     if (s !== 10) params.set("size", String(s));
+    if (st !== "all") params.set("status", st);
+    if (mb !== "all") params.set("membership", mb);
+    if (sr !== "default") params.set("sort", sr);
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  // Toggle sort kolom Visits: default → desc → asc → default.
+  function toggleVisitSort() {
+    const nextSort: SortMode =
+      sort === "default"
+        ? "visit_desc"
+        : sort === "visit_desc"
+          ? "visit_asc"
+          : "default";
+    pushParams({ sort: nextSort, page: 1 });
   }
 
   function onSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     pushParams({ q: search, page: 1 });
-  }
-
-  async function handleDelete(row: AdminCustomerRow) {
-    const ok = await confirm({
-      title: `Delete ${row.name}?`,
-      description:
-        "This customer account will be permanently deleted. Only possible if they have no visit history.",
-      confirmText: "Delete",
-      variant: "danger",
-    });
-    if (!ok) return;
-    setDeleting(row.id);
-    try {
-      await deleteCustomer(row.id);
-      toast.success(`${row.name} deleted`);
-      router.refresh();
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to delete customer"));
-    } finally {
-      setDeleting(null);
-    }
   }
 
   function exportCsv() {
@@ -141,6 +151,75 @@ export function CustomerManager({
 
   return (
     <div className="space-y-4">
+      {/* Statistik ringkas — klik kartu = filter cepat. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <StatCard
+          label="Total"
+          value={stats.total}
+          active={status === "all" && membership === "all"}
+          onClick={() => pushParams({ status: "all", membership: "all", page: 1 })}
+        />
+        <StatCard
+          label="Active"
+          value={stats.active}
+          tone="emerald"
+          active={status === "active"}
+          onClick={() =>
+            pushParams({
+              status: status === "active" ? "all" : "active",
+              page: 1,
+            })
+          }
+        />
+        <StatCard
+          label="Inactive"
+          value={stats.inactive}
+          tone="red"
+          active={status === "inactive"}
+          onClick={() =>
+            pushParams({
+              status: status === "inactive" ? "all" : "inactive",
+              page: 1,
+            })
+          }
+        />
+        <StatCard
+          label="Basic"
+          value={stats.basic}
+          active={membership === "basic"}
+          onClick={() =>
+            pushParams({
+              membership: membership === "basic" ? "all" : "basic",
+              page: 1,
+            })
+          }
+        />
+        <StatCard
+          label="Premium"
+          value={stats.premium}
+          tone="primary"
+          active={membership === "premium"}
+          onClick={() =>
+            pushParams({
+              membership: membership === "premium" ? "all" : "premium",
+              page: 1,
+            })
+          }
+        />
+        <StatCard
+          label="VIP"
+          value={stats.vip}
+          tone="purple"
+          active={membership === "vip"}
+          onClick={() =>
+            pushParams({
+              membership: membership === "vip" ? "all" : "vip",
+              page: 1,
+            })
+          }
+        />
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <form onSubmit={onSearchSubmit} className="relative flex-1 min-w-[200px]">
@@ -153,6 +232,30 @@ export function CustomerManager({
             className="w-full h-10 pl-9 pr-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           />
         </form>
+        {/* Filter membership + status (server-side, seperti list transaksi). */}
+        <Select
+          value={membership}
+          onChange={(v) => pushParams({ membership: v, page: 1 })}
+          options={[
+            { value: "all", label: "All membership" },
+            { value: "basic", label: "Basic" },
+            { value: "premium", label: "Premium" },
+            { value: "vip", label: "VIP" },
+          ]}
+          className="shrink-0 min-w-[140px]"
+          ariaLabel="Filter membership"
+        />
+        <Select
+          value={status}
+          onChange={(v) => pushParams({ status: v, page: 1 })}
+          options={[
+            { value: "all", label: "All statuses" },
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+          ]}
+          className="shrink-0 min-w-[130px]"
+          ariaLabel="Filter status"
+        />
         <Button variant="outline" onClick={exportCsv} disabled={initialRows.length === 0}>
           <Download className="h-4 w-4" /> Export
         </Button>
@@ -175,9 +278,27 @@ export function CustomerManager({
                   <th className="px-4 py-3 font-medium">Customer</th>
                   <th className="px-4 py-3 font-medium">Contact</th>
                   <th className="px-4 py-3 font-medium w-24">Status</th>
-                  <th className="px-4 py-3 font-medium w-24">Visits</th>
+                  <th className="px-4 py-3 font-medium w-24">
+                    <button
+                      type="button"
+                      onClick={toggleVisitSort}
+                      className={
+                        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 -ml-1.5 transition hover:bg-muted/60 " +
+                        (sort !== "default" ? "text-primary" : "")
+                      }
+                      title="Sort by visits"
+                    >
+                      Visits
+                      {sort === "visit_desc" ? (
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      ) : sort === "visit_asc" ? (
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      ) : (
+                        <ArrowUpDown className="h-3.5 w-3.5 opacity-50" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-4 py-3 font-medium w-28">Membership</th>
-                  <th className="px-4 py-3 font-medium w-16 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -272,23 +393,6 @@ export function CustomerManager({
                         {r.membership_name}
                       </Badge>
                     </td>
-
-                    {/* Actions */}
-                    <td className="px-4 py-2.5 align-middle text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Delete"
-                        disabled={deleting === r.id}
-                        onClick={() => handleDelete(r)}
-                      >
-                        {deleting === r.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        )}
-                      </Button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -333,6 +437,55 @@ export function CustomerManager({
         />
       )}
     </div>
+  );
+}
+
+/** Kartu statistik ringkas — klik untuk filter cepat. */
+function StatCard({
+  label,
+  value,
+  tone = "muted",
+  active = false,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone?: "muted" | "emerald" | "red" | "primary" | "purple";
+  active?: boolean;
+  onClick: () => void;
+}) {
+  const toneRing: Record<string, string> = {
+    muted: "ring-border",
+    emerald: "ring-emerald-500/40",
+    red: "ring-red-500/40",
+    primary: "ring-primary/40",
+    purple: "ring-purple-500/40",
+  };
+  const toneText: Record<string, string> = {
+    muted: "text-foreground",
+    emerald: "text-emerald-500",
+    red: "text-red-500",
+    primary: "text-primary",
+    purple: "text-purple-500",
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "rounded-xl border bg-card px-3 py-2.5 text-left transition hover:bg-muted/40 " +
+        (active
+          ? `border-transparent ring-2 ${toneRing[tone]}`
+          : "border-border")
+      }
+    >
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className={"text-lg font-bold tabular-nums " + toneText[tone]}>
+        {value}
+      </div>
+    </button>
   );
 }
 

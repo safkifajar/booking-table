@@ -109,10 +109,19 @@ const PAGE_SIZE = 10;
 export async function listCustomers(
   searchRaw?: string,
   page = 1,
-  pageSize = PAGE_SIZE
+  pageSize = PAGE_SIZE,
+  filters?: {
+    status?: "all" | "active" | "inactive";
+    membership?: "all" | "basic" | "premium" | "vip";
+    /** Urut kolom Visits. default = terbaru daftar (createdAt desc). */
+    sort?: "default" | "visit_desc" | "visit_asc";
+  }
 ): Promise<ListCustomersResult> {
   await requireAdmin();
   const search = (searchRaw ?? "").trim();
+  const status = filters?.status ?? "all";
+  const membership = filters?.membership ?? "all";
+  const sort = filters?.sort ?? "default";
   // Clamp pageSize ke opsi valid (cegah abuse).
   const size = [10, 25, 50, 100].includes(pageSize) ? pageSize : PAGE_SIZE;
 
@@ -121,9 +130,20 @@ export async function listCustomers(
     .select({ id: staffRoles.profileId })
     .from(staffRoles);
 
+  // Filter membership EFEKTIF di SQL (replika effectiveLevelKey): level yg
+  // premium/vip TAPI sudah expired dihitung 'basic'. NULL expires_at = lifetime.
+  const membershipClause =
+    membership === "all"
+      ? undefined
+      : membership === "basic"
+        ? sql`(${profiles.membershipLevel} = 'basic' OR (${profiles.membershipExpiresAt} IS NOT NULL AND ${profiles.membershipExpiresAt} <= now()))`
+        : sql`(${profiles.membershipLevel} = ${membership} AND (${profiles.membershipExpiresAt} IS NULL OR ${profiles.membershipExpiresAt} > now()))`;
+
   const whereClause = and(
     sql`${users.id} NOT IN (${staffIds})`,
     eq(profiles.isGuest, false),
+    status === "all" ? undefined : eq(profiles.isActive, status === "active"),
+    membershipClause,
     search
       ? or(
           ilike(profiles.displayName, `%${search}%`),
@@ -194,7 +214,13 @@ export async function listCustomers(
       .leftJoin(visitSq, eq(visitSq.profileId, users.id))
       .leftJoin(ratingSq, eq(ratingSq.rateeId, users.id))
       .where(whereClause)
-      .orderBy(desc(profiles.createdAt))
+      .orderBy(
+        sort === "visit_desc"
+          ? sql`COALESCE(${visitSq.c}, 0) DESC`
+          : sort === "visit_asc"
+            ? sql`COALESCE(${visitSq.c}, 0) ASC`
+            : desc(profiles.createdAt)
+      )
       .limit(size)
       .offset((Math.max(1, page) - 1) * size),
     db
@@ -241,6 +267,58 @@ export async function listCustomers(
         ) ?? "Basic",
     })),
     total: Number(totalRow[0]?.total ?? 0),
+  };
+}
+
+export interface CustomerStats {
+  total: number;
+  active: number;
+  inactive: number;
+  basic: number;
+  premium: number;
+  vip: number;
+}
+
+/**
+ * Statistik ringkas customer (non-staff, non-guest): total, per-status, dan
+ * per-membership EFEKTIF (level yg expired dihitung basic). Satu query agregat
+ * — hitungan menyeluruh (bukan cuma halaman aktif).
+ */
+export async function getCustomerStats(): Promise<CustomerStats> {
+  await requireAdmin();
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  // Level efektif di SQL: premium/vip yg sudah lewat expires_at → basic.
+  const eff = sql<string>`CASE
+    WHEN ${profiles.membershipLevel} <> 'basic'
+      AND ${profiles.membershipExpiresAt} IS NOT NULL
+      AND ${profiles.membershipExpiresAt} <= now()
+    THEN 'basic' ELSE ${profiles.membershipLevel} END`;
+
+  const [row] = await db
+    .select({
+      total: count(),
+      active: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isActive})::int`,
+      inactive: sql<number>`COUNT(*) FILTER (WHERE NOT ${profiles.isActive})::int`,
+      basic: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'basic')::int`,
+      premium: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'premium')::int`,
+      vip: sql<number>`COUNT(*) FILTER (WHERE ${eff} = 'vip')::int`,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .where(
+      and(
+        sql`${users.id} NOT IN (${staffIds})`,
+        eq(profiles.isGuest, false)
+      )
+    );
+  return {
+    total: Number(row?.total ?? 0),
+    active: Number(row?.active ?? 0),
+    inactive: Number(row?.inactive ?? 0),
+    basic: Number(row?.basic ?? 0),
+    premium: Number(row?.premium ?? 0),
+    vip: Number(row?.vip ?? 0),
   };
 }
 
