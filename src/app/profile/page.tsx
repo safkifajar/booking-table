@@ -43,7 +43,7 @@ export default async function ProfilePage() {
       <SohoGlow />
       {/* Header — samakan dgn Home/Network/Booking: logo SOHO + nama halaman +
           bell notifikasi. */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2 shrink-0">
             <span className="inline-flex h-9 w-9 rounded-lg overflow-hidden border border-border shadow-md shrink-0">

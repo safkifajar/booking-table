@@ -131,7 +131,7 @@ export function NetworkView({
       {/* Judul + search + filter — DIAM (di luar area scroll feed). Feed
           scroll di kontainernya sendiri → kontrol ini tak bergerak sedikit
           pun (bukan sticky yg sempat geser saat mulai scroll). */}
-      <div className="border-b border-border bg-background/95 backdrop-blur-md">
+      <div className="bg-background/95 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 pb-3">
           {/* Search + Filter (judul 'Network' + logo ada di header atas) */}
           <div className="flex items-center gap-2">

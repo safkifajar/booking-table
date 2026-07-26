@@ -38,7 +38,7 @@ export async function StoryBarSection({ barSlug }: Props) {
   // "Your Story" bubble supaya bisa upload pertama.
 
   return (
-    <section className="max-w-6xl mx-auto px-4 sm:px-6 py-4 border-b border-border">
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
       <StoryBar
         barId={bar.id}
         viewerId={profile.id}
