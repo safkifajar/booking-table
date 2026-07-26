@@ -67,7 +67,7 @@ export function PendingCashierBanner({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-amber-950 truncate">
-                Pay at the cashier — table {b.table_label}
+                Pay at the cashier · table {b.table_label}
               </p>
               <p className="text-xs text-amber-950/70 truncate">{subtext}</p>
             </div>

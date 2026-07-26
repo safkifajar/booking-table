@@ -114,7 +114,7 @@ export async function adminSignInAction(formData: {
   } catch (err) {
     if (isRedirectError(err)) throw err;
     console.error("[adminSignInAction] unexpected:", err);
-    return { ok: false, error: "Login failed — please try again" };
+    return { ok: false, error: "Login failed. Please try again" };
   }
 }
 

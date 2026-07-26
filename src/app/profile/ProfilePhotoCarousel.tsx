@@ -139,7 +139,7 @@ export function ProfilePhotoCarousel({
           >
             <Image
               src={src}
-              alt={`${displayName} — photo`}
+              alt={`${displayName} photo`}
               fill
               sizes="(max-width: 640px) 100vw, 640px"
               className="object-cover"

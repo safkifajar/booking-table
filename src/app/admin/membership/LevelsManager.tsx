@@ -105,7 +105,7 @@ function LevelCard({ level }: { level: MembershipLevelRow }) {
       {isBasic ? (
         <div className="rounded-md bg-muted/40 border border-border p-3 text-xs text-muted-foreground flex items-center gap-2">
           <Lock className="h-3.5 w-3.5 shrink-0" />
-          Free tier — price locked at {formatIDR(0)}, not purchasable.
+          Free tier. Price locked at {formatIDR(0)}, not purchasable.
         </div>
       ) : (
         <>

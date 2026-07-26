@@ -71,8 +71,8 @@ export function ForgotForm() {
         </CardTitle>
         <CardDescription>
           {sent
-            ? `We've sent a magic link to ${email}. Click the link to sign in instantly — you can update your password after signing in.`
-            : "No worries. We'll send a magic link to your email — click it, sign in instantly, and set a new password if needed in Profile."}
+            ? `We've sent a magic link to ${email}. Click the link to sign in instantly. You can update your password after signing in.`
+            : "No worries. We'll send a magic link to your email. Click it, sign in instantly, and set a new password if needed in Profile."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -8,7 +8,7 @@
 export const dynamic = "force-static";
 
 export const metadata = {
-  title: "SOHO Social House — Coming Soon",
+  title: "SOHO Social House · Coming Soon",
   description: "We are preparing the best experience for you.",
 };
 

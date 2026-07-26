@@ -116,7 +116,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Booking time is over — can't move");
+    throw new Error("Booking time is over, can't move");
 
   const [inserted] = await db
     .insert(tableMoveRequests)
@@ -273,7 +273,7 @@ export async function requestMoveTableWithOrder(
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Booking time is over — can't move");
+    throw new Error("Booking time is over, can't move");
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.
   const tx = await db.transaction(async (tx) => {
@@ -612,7 +612,7 @@ export async function resolveMoveRequest(input: {
         });
       }
       throw new Error(
-        `Table ${toLabel} was taken — request auto-rejected.`
+        `Table ${toLabel} was taken. Request auto-rejected.`
       );
     }
     throw err;

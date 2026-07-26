@@ -51,7 +51,7 @@ export function LiveTablesFeed({
         </div>
         <p className="text-sm font-medium mb-1">No active tables yet</p>
         <p className="text-xs text-muted-foreground">
-          Be the first — open your own table and invite your friends.
+          Be the first. Open your own table and invite your friends.
         </p>
       </div>
     );

@@ -595,7 +595,7 @@ function PaymentModal({
         toast.success("Payment received");
         onSuccess();
       } else {
-        toast.info("Not paid yet — ask the customer to complete the scan");
+        toast.info("Not paid yet. Ask the customer to complete the scan");
       }
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to check status"));
@@ -1013,7 +1013,7 @@ function PaymentModal({
                   </div>
                 )}
                 <div className="text-[10px] text-muted-foreground italic">
-                  Waiting for payment — updates automatically once paid.
+                  Waiting for payment. Updates automatically once paid.
                 </div>
               </div>
 

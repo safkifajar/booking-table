@@ -644,7 +644,7 @@ function ChargeToggle({
       <div className="min-w-0">
         <div className="text-sm font-medium">{label}</div>
         <div className="text-xs text-muted-foreground">
-          {enabled ? "On — added to bills" : "Off — not charged"}
+          {enabled ? "On, added to bills" : "Off, not charged"}
         </div>
       </div>
       <button

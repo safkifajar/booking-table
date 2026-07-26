@@ -495,7 +495,7 @@ function HobbyFormModal({
             onChange={setCategory}
             options={
               categories.length === 0
-                ? [{ value: "", label: "— none yet —" }]
+                ? [{ value: "", label: "None yet" }]
                 : categories.map((c) => ({ value: c.name, label: c.name }))
             }
             ariaLabel="Category"

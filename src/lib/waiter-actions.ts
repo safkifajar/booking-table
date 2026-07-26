@@ -700,7 +700,7 @@ export async function waiterJoinSession(sessionId: string): Promise<void> {
   if (!row) throw new Error("Session not found");
   if (row.bar_id !== ctx.barId) throw new Error("Invalid bar access");
   if (row.status !== "open") {
-    throw new Error("Session is no longer open — cannot assist with ordering");
+    throw new Error("Session is no longer open, cannot assist with ordering");
   }
 
   // Waiter TIDAK insert sebagai member meja. Konsep: staff = operator, bukan
@@ -914,7 +914,7 @@ export async function staffOpenTableForCustomer(
   const { tableId, guestNames, reservationAt, reservationEndAt, items, payMethod } =
     input;
   if (!items || items.length === 0) {
-    throw new Error("Add at least one menu item — payment is required to open the table");
+    throw new Error("Add at least one menu item. Payment is required to open the table");
   }
 
   // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
@@ -1258,7 +1258,7 @@ export async function staffOpenTableForCustomer(
       .catch(() => {});
     console.error("[staffOpenTable] QRIS charge failed:", err);
     throw new Error(
-      "Payment gateway is unavailable right now — please try again or use pay-at-cashier."
+      "Payment gateway is unavailable right now. Please try again or use pay-at-cashier."
     );
   }
 }
@@ -1310,7 +1310,7 @@ export async function staffAddGuestToTable(
   }
   if (!session.openedByStaffId) {
     throw new Error(
-      "This session was opened by the customer — ask the customer to invite their friends"
+      "This session was opened by the customer. Ask the customer to invite their friends"
     );
   }
 

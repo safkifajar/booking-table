@@ -268,7 +268,7 @@ function AreaWorkspace({
     try {
       await flushDraft(); // pastikan draft terbaru tersimpan dulu
       await publishPositions(area.id);
-      toast.success("Positions published — customer view updated");
+      toast.success("Positions published. Customer view updated");
       setHasDraft(false);
       router.refresh();
     } catch (err) {

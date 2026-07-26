@@ -191,7 +191,7 @@ export async function deleteMembershipVoucher(
     return {
       ok: false,
       error:
-        "Members already received vouchers from this template — deactivate it instead of deleting",
+        "Members already received vouchers from this template. Deactivate it instead of deleting",
     };
   }
   await db
@@ -622,7 +622,7 @@ export async function purchaseMembership(input: {
       amount: preview.final_amount!,
       method: "qris",
       payerName: me.displayName,
-      description: `SOHO membership — ${preview.level_name}`,
+      description: `SOHO membership · ${preview.level_name}`,
     });
   } catch {
     await db
@@ -746,7 +746,7 @@ export async function activateMembershipTx(txId: string): Promise<boolean> {
         ? `Your membership is active until ${row.periodEnd.toLocaleDateString("en-US", { dateStyle: "long" })}.`
         : "Your membership is active for life.") +
       (voucherCount > 0
-        ? ` You received ${voucherCount} voucher${voucherCount === 1 ? "" : "s"} — check the Vouchers tab.`
+        ? ` You received ${voucherCount} voucher${voucherCount === 1 ? "" : "s"}. Check the Vouchers tab.`
         : ""),
     link: "/membership",
   });
@@ -1059,7 +1059,7 @@ export async function maybeSendExpiryReminder(): Promise<void> {
     profileId: me.id,
     type: "general",
     title: `Your ${level?.name ?? "membership"} expires in ${daysLeft <= 1 ? "1 day" : `${daysLeft} days`}`,
-    body: "Renew now — time is added to your current period, nothing is lost.",
+    body: "Renew now. Time is added to your current period, nothing is lost.",
     link: "/membership",
   });
 }

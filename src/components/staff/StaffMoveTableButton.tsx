@@ -84,7 +84,7 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
                 Only tables with enough capacity & free at the booking time. The
-                booking time stays the same — moves instantly without approval.
+                booking time stays the same, moves instantly without approval.
               </p>
               {loading ? (
                 <div className="py-10 text-center">

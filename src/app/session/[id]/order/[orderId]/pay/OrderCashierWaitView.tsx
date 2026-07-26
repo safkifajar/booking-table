@@ -74,7 +74,7 @@ export function OrderCashierWaitView({
       } catch {
         // Server sweep tetap membereskan — lanjut redirect.
       }
-      toast.error("Payment cancelled — cashier confirmation time ran out");
+      toast.error("Payment cancelled. Cashier confirmation time ran out");
       router.replace(backHref);
     })();
   }, [left, paymentId, backHref, router]);

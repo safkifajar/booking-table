@@ -180,7 +180,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   {isMultiDay
                     ? `${chartData.length} days · ${range.label.toLowerCase()}`
-                    : "Operating hours 16:00 — 03:00"}
+                    : "Operating hours 16:00–03:00"}
                 </p>
               </div>
             </div>

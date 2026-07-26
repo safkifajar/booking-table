@@ -185,7 +185,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
                 className="w-32"
               />
               <label
-                title="Remainder sink — absorbs leftovers & rounding"
+                title="Remainder sink · absorbs leftovers & rounding"
                 className="h-10 flex items-center gap-1.5 px-1.5 cursor-pointer select-none shrink-0"
               >
                 <input
@@ -347,7 +347,7 @@ export function SplitManager({ config }: { config: SplitConfigView }) {
         {overBudget && (
           <p className="text-xs text-red-400">
             Total {total.toFixed(3).replace(".", ",")}% exceeds the service
-            charge ({servicePct}%) — reduce a category first.
+            charge ({servicePct}%). Reduce a category first.
           </p>
         )}
 

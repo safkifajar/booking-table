@@ -180,5 +180,5 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
 function translateError(code: string): string {
   if (code === "credentials") return "Incorrect email or password";
   if (code === "no_access") return "You don't have admin access";
-  return "Sign-in failed — please try again";
+  return "Sign-in failed. Please try again";
 }

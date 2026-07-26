@@ -56,7 +56,7 @@ const ROLE_META: Record<
     label: "Admin",
     icon: <Shield className="h-3.5 w-3.5" />,
     color: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-    description: "Full access — manage menu, banners, staff, view all reports",
+    description: "Full access · manage menu, banners, staff, view all reports",
   },
   manager: {
     label: "Manager",
@@ -258,7 +258,7 @@ export function StaffManager({ barId, initialStaff }: Props) {
 
             if (!isNewUser) {
               toast.success(
-                `${newRow.displayName} already has an account — role assigned directly without email.`
+                `${newRow.displayName} already has an account. Role assigned directly without email.`
               );
               return;
             }
@@ -328,7 +328,7 @@ function InviteSuccessModal({
       toast.success("URL copied");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Failed to copy — copy manually from the field");
+      toast.error("Failed to copy. Copy manually from the field");
     }
   }
 

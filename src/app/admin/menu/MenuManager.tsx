@@ -1152,10 +1152,10 @@ function ItemFormModal({
             value={categoryId}
             onChange={setCategoryId}
             options={[
-              { value: "", label: "— Select category —" },
+              { value: "", label: "Select category" },
               ...subCategoryOptions,
             ]}
-            placeholder="— Select category —"
+            placeholder="Select category"
             ariaLabel="Category"
           />
           {subCategoryOptions.length === 0 && (
@@ -1597,8 +1597,8 @@ function ImportModal({
               )}
               <p className="text-[10px] text-muted-foreground mt-1">
                 {isItems
-                  ? ".csv / .xlsx / .zip — max 100MB"
-                  : ".csv / .xlsx — max 5MB"}
+                  ? ".csv / .xlsx / .zip · max 100MB"
+                  : ".csv / .xlsx · max 5MB"}
               </p>
             </div>
           </>

@@ -151,7 +151,7 @@ function titleFor(mode: Mode): string {
 function descFor(mode: Mode): string {
   if (mode === "signin") return "Sign in with your email & password.";
   if (mode === "signup") return "Sign up once, sign in anytime.";
-  if (mode === "magic") return "We'll send you a magic link — just click it.";
+  if (mode === "magic") return "We'll send you a magic link. Just click it.";
   return "Choose how to sign in to reserve a table or join tonight.";
 }
 

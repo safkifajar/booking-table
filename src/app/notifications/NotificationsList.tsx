@@ -105,7 +105,7 @@ export function NotificationsList({
     setBusyId(n.id);
     try {
       await acceptInvite({ sessionId: sid });
-      toast.success("Invitation accepted — you joined the table");
+      toast.success("Invitation accepted. You joined the table");
       router.push(n.link!);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to accept invitation"));

@@ -127,7 +127,7 @@ function CashierWaitView({
       } catch {
         // Server sweep (expireDpIfOverdue) tetap membereskan — lanjut redirect.
       }
-      toast.error("Booking cancelled — cashier confirmation time ran out");
+      toast.error("Booking cancelled. Cashier confirmation time ran out");
       router.replace(`/bar/${barSlug}`);
     })();
   }, [left, paymentId, sessionId, barSlug, router]);

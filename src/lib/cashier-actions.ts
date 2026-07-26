@@ -736,7 +736,7 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
   }
   if (!["open", "locked", "overdue"].includes(item.session_status)) {
     // Booking terjadwal (reserved) belum boleh diproses.
-    throw new Error("This order is scheduled — the kitchen shouldn't start it yet");
+    throw new Error("This order is scheduled, the kitchen shouldn't start it yet");
   }
 
   await db
@@ -1245,7 +1245,7 @@ export async function cashierCreatePayment(
     );
     if (!reserved) {
       await db.delete(payments).where(eq(payments.id, voucherPayment.id));
-      throw new Error("This voucher was just used — try another one");
+      throw new Error("This voucher was just used. Try another one");
     }
     await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
     await settleOrderIfPaid(order.id);
@@ -1297,7 +1297,7 @@ export async function cashierCreatePayment(
         .update(payments)
         .set({ status: "failed" })
         .where(eq(payments.id, newPayment.id));
-      throw new Error("This voucher was just used — try another one");
+      throw new Error("This voucher was just used. Try another one");
     }
   }
 
@@ -1481,7 +1481,7 @@ export async function cashierConfirmPendingPayment(input: {
     .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")))
     .returning({ id: payments.id });
   if (updated.length === 0) {
-    throw new Error("This payment just changed state — refresh and try again");
+    throw new Error("This payment just changed state. Refresh and try again");
   }
 
   if (cr.status === "paid") {

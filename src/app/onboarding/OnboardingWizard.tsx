@@ -391,19 +391,19 @@ async function handleFinish() {
                   : step2Screen === "photos"
                     ? "Show your face so people can recognize you at SOHO. At least 1 required."
                     : step2Screen === "prompts"
-                      ? "Give people something to break the ice with. Answer up to 5 — even one helps."
+                      ? "Give people something to break the ice with. Answer up to 5, even one helps."
                       : step2Screen === "interests"
                         ? `Pick up to ${MAX_INTERESTS} interests for your profile.`
                         : step2Screen === "education"
-                          ? "Optional — it just helps people get to know you."
+                          ? "Optional. It just helps people get to know you."
                           : step2Screen === "height"
-                            ? "Optional — just another little detail about you."
+                            ? "Optional. Just another little detail about you."
                             : step2Screen === "religion"
-                              ? "Optional — share it if you'd like, or skip."
+                              ? "Optional. Share it if you'd like, or skip."
                               : step2Screen === "address"
-                                ? "Just your area — it helps people find their crowd at SOHO."
+                                ? "Just your area. It helps people find their crowd at SOHO."
                                 : step2Screen === "social"
-                                  ? "Optional — let people connect with you off the floor."
+                                  ? "Optional. Let people connect with you off the floor."
                                   : "Fill in your personal details."}
       </p>
 

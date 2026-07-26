@@ -128,7 +128,7 @@ export async function deleteArea(areaId: string) {
       .limit(1);
     if (active) {
       throw new Error(
-        "A table in this area is in use/booked — can't delete the area."
+        "A table in this area is in use/booked, can't delete the area."
       );
     }
   }
@@ -252,7 +252,7 @@ export async function deleteTable(tableId: string) {
     .limit(1);
   if (active) {
     throw new Error(
-      "Table is in use/booked — can't delete. Wait until it's finished."
+      "Table is in use/booked, can't delete. Wait until it's finished."
     );
   }
 
