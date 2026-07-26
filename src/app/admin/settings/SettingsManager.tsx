@@ -353,31 +353,49 @@ function DayRow({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 p-2.5 rounded-md border transition",
+        "flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-3 py-2.5 transition sm:flex-nowrap",
         value.closed
-          ? "border-border bg-muted/30 opacity-60"
+          ? "border-border bg-muted/30"
           : "border-border bg-muted/10"
       )}
     >
-      <div className="w-16 text-sm font-medium shrink-0">{DAY_LABELS[day]}</div>
+      {/* Hari — lebar tetap agar semua label sejajar (termasuk "Wednesday"). */}
+      <div
+        className={cn(
+          "w-24 shrink-0 text-sm font-semibold",
+          value.closed && "text-muted-foreground"
+        )}
+      >
+        {DAY_LABELS[day]}
+      </div>
 
-      <label className="flex items-center gap-1.5 text-xs cursor-pointer shrink-0">
+      {/* Toggle Closed */}
+      <label className="flex w-24 shrink-0 cursor-pointer items-center gap-2 text-xs">
         <input
           type="checkbox"
           checked={value.closed}
           onChange={(e) => onChange({ closed: e.target.checked })}
-          className="h-3.5 w-3.5 accent-primary"
+          className="h-4 w-4 accent-primary"
         />
-        <span>Closed</span>
+        <span className={cn(value.closed && "font-medium text-foreground")}>
+          Closed
+        </span>
       </label>
 
-      <div className="flex items-center gap-1.5 flex-1 justify-end">
+      {/* Rentang jam — rata kanan, disembunyikan halus saat tutup */}
+      <div
+        className={cn(
+          "ml-auto flex items-center gap-2 transition",
+          value.closed && "pointer-events-none opacity-40"
+        )}
+      >
         <input
           type="time"
           value={value.open}
           onChange={(e) => onChange({ open: e.target.value })}
           disabled={value.closed}
-          className="h-9 px-2 bg-input border border-border rounded-md text-sm font-mono focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={`${DAY_LABELS[day]} open time`}
+          className="h-9 w-[7.5rem] rounded-md border border-border bg-input px-2 text-center text-sm font-mono tabular-nums focus:border-primary focus:outline-none disabled:cursor-not-allowed"
         />
         <span className="text-xs text-muted-foreground">—</span>
         <input
@@ -385,7 +403,8 @@ function DayRow({
           value={value.close}
           onChange={(e) => onChange({ close: e.target.value })}
           disabled={value.closed}
-          className="h-9 px-2 bg-input border border-border rounded-md text-sm font-mono focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={`${DAY_LABELS[day]} close time`}
+          className="h-9 w-[7.5rem] rounded-md border border-border bg-input px-2 text-center text-sm font-mono tabular-nums focus:border-primary focus:outline-none disabled:cursor-not-allowed"
         />
       </div>
     </div>

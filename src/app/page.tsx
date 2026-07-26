@@ -227,15 +227,16 @@ export default async function HomePage() {
             </Link>
           )}
 
-          {/* CTA: buka meja sendiri */}
+          {/* CTA: buka meja sendiri — tombol glowing merah (CTA utama) */}
           {!isAnon && (
             <div className="mt-4">
-              <Button asChild variant="outline" className="w-full" size="default">
-                <Link href={`/bar/${barSlug}`}>
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="text-xs">Open your own table</span>
-                </Link>
-              </Button>
+              <Link
+                href={`/bar/${barSlug}`}
+                className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-primary/60 bg-gradient-to-b from-primary/[0.12] to-primary/[0.04] py-3.5 text-sm font-semibold text-foreground shadow-[0_0_20px_-4px_rgba(225,29,42,0.5)] transition hover:border-primary hover:from-primary/20 hover:shadow-[0_0_28px_-2px_rgba(225,29,42,0.7)]"
+              >
+                <Plus className="h-4 w-4 text-primary transition group-hover:scale-110" />
+                <span>Open your own table</span>
+              </Link>
             </div>
           )}
         </section>
