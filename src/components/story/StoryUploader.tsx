@@ -7,6 +7,7 @@ import { X, Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createStory } from "@/lib/story-actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
+import { useMentionAutocomplete } from "./useMentionAutocomplete";
 
 interface Props {
   barId: string;
@@ -40,7 +41,13 @@ export function StoryUploader({ barId, onClose, onUploaded }: Props) {
   const [caption, setCaption] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const captionRef = React.useRef<HTMLTextAreaElement>(null);
   const autoOpenedRef = React.useRef(false);
+  const mention = useMentionAutocomplete({
+    value: caption,
+    setValue: (v) => setCaption(v.slice(0, MAX_CAPTION)),
+    inputRef: captionRef,
+  });
 
   // Auto-trigger file picker on first mount only.
   // Pakai ref flag karena React Strict Mode di dev mount 2x — tanpa flag
@@ -186,14 +193,20 @@ export function StoryUploader({ barId, onClose, onUploaded }: Props) {
                   {caption.length}/{MAX_CAPTION}
                 </span>
               </div>
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value.slice(0, MAX_CAPTION))}
-                placeholder="Write something..."
-                maxLength={MAX_CAPTION}
-                rows={2}
-                className="w-full px-3 py-2 rounded-md bg-white/10 border border-white/15 text-white placeholder:text-white/40 focus:outline-none focus:border-primary/60 transition text-sm resize-none"
-              />
+              <div className="relative">
+                <textarea
+                  ref={captionRef}
+                  value={caption}
+                  onChange={mention.onChange}
+                  onKeyUp={mention.onCaretMove}
+                  onClick={mention.onCaretMove}
+                  placeholder="Write something… use @ to mention"
+                  maxLength={MAX_CAPTION}
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-md bg-white/10 border border-white/15 text-white placeholder:text-white/40 focus:outline-none focus:border-primary/60 transition text-sm resize-none"
+                />
+                {mention.dropdown}
+              </div>
             </div>
 
             <button

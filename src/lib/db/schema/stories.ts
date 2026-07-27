@@ -6,11 +6,23 @@ import {
   primaryKey,
   index,
   check,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { profiles } from "./profiles";
 import { bars } from "./venue";
 import { tableSessions } from "./sessions";
+
+/** Jenis story: 'image' = foto (default lama), 'text' = teks di atas warna. */
+export const storyKindEnum = pgEnum("story_kind", ["image", "text"]);
+
+/** Gaya tipografi untuk story teks (mirip "Aa" WhatsApp). */
+export const storyTextStyleEnum = pgEnum("story_text_style", [
+  "classic",
+  "serif",
+  "mono",
+  "strong",
+]);
 
 /**
  * Story = foto sharing per user, expire 24 jam.
@@ -38,7 +50,16 @@ export const stories = pgTable(
       () => tableSessions.id,
       { onDelete: "set null" }
     ),
-    imageUrl: text("image_url").notNull(),
+    /** Jenis story. 'image' = pakai imageUrl; 'text' = pakai caption + bgColor. */
+    kind: storyKindEnum("kind").notNull().default("image"),
+    /** Nullable: story teks tak punya gambar. Wajib untuk kind='image'. */
+    imageUrl: text("image_url"),
+    /** Warna latar story teks (hex). Null untuk story foto. */
+    bgColor: text("bg_color"),
+    /** Gaya tipografi story teks. Null/'classic' = default. */
+    textStyle: storyTextStyleEnum("text_style").notNull().default("classic"),
+    /** Profil (teman) yang di-tag via @username di caption/teks. */
+    mentions: uuid("mentions").array().notNull().default([]),
     caption: text("caption"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })
@@ -47,6 +68,11 @@ export const stories = pgTable(
   },
   (t) => [
     check("ck_stories_caption_length", sql`char_length(${t.caption}) <= 280`),
+    // Konsistensi tipe: foto wajib punya imageUrl; teks wajib punya caption.
+    check(
+      "ck_stories_kind_payload",
+      sql`(${t.kind} = 'image' AND ${t.imageUrl} IS NOT NULL) OR (${t.kind} = 'text' AND ${t.caption} IS NOT NULL)`
+    ),
     index("idx_stories_bar_expires").on(t.barId, t.expiresAt),
     index("idx_stories_user").on(t.userId),
   ]
