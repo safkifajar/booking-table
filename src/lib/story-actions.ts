@@ -7,7 +7,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { stories, storyViews } from "@/lib/db/schema/stories";
@@ -30,6 +30,8 @@ import {
 } from "@/lib/membership";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { createNotification } from "@/lib/notifications";
+import { STORY_TEXT_BG_COLORS, STORY_TEXT_STYLES } from "@/lib/story-constants";
 
 // ============================================================
 // VALIDATION
@@ -52,6 +54,88 @@ function isHeicFile(file: File): boolean {
 
 const captionSchema = z.string().max(280, "Max 280 characters").optional();
 const barIdSchema = z.string().uuid();
+
+/**
+ * Cari session aktif yang sedang di-join user di bar tsb (untuk auto-tag).
+ * Dipakai bersama oleh createStory & createTextStory.
+ */
+async function findActiveSessionId(
+  profileId: string,
+  barId: string
+): Promise<string | null> {
+  const [row] = await db
+    .select({ session_id: tableSessions.id })
+    .from(sessionMembers)
+    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .where(
+      and(
+        eq(sessionMembers.profileId, profileId),
+        eq(sessionMembers.status, "joined"),
+        eq(floorAreas.barId, barId),
+        sql`${tableSessions.status} IN ('open', 'locked', 'overdue')`
+      )
+    )
+    .orderBy(desc(sessionMembers.joinedAt))
+    .limit(1);
+  return row?.session_id ?? null;
+}
+
+/** Ambil @username unik dari teks. Handle: 3-20 char [a-z0-9_], lowercase. */
+function parseMentionHandles(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out = new Set<string>();
+  const re = /@([a-z0-9_]{3,20})/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) out.add(m[1].toLowerCase());
+  return Array.from(out).slice(0, 20); // batas wajar
+}
+
+/**
+ * Resolve @username di teks → profil TEMAN (bukan diri, bukan blokir), lalu
+ * kirim notifikasi "menyebut kamu di story" ke tiap orang yg di-tag.
+ * Mengembalikan daftar profileId yang berhasil di-tag (untuk disimpan di row).
+ */
+async function resolveMentionsAndNotify(args: {
+  authorId: string;
+  authorName: string;
+  text: string | null | undefined;
+  storyId: string;
+}): Promise<string[]> {
+  const handles = parseMentionHandles(args.text);
+  if (handles.length === 0) return [];
+
+  // Resolve handle → profil.
+  const people = await db
+    .select({ id: profiles.id, username: profiles.username })
+    .from(profiles)
+    .where(inArray(profiles.username, handles));
+  if (people.length === 0) return [];
+
+  // Hanya TEMAN (exclude diri sendiri otomatis: diri bukan teman-dirinya).
+  const friendIds = await getFriendIdSet(args.authorId);
+  const taggedIds = people
+    .filter((p) => p.id !== args.authorId && friendIds.has(p.id))
+    .map((p) => p.id);
+  if (taggedIds.length === 0) return [];
+
+  // Kirim notifikasi (in-app + push otomatis) ke tiap yang di-tag.
+  await Promise.allSettled(
+    taggedIds.map((pid) =>
+      createNotification({
+        profileId: pid,
+        type: "story_mention",
+        title: `${args.authorName} mentioned you in a story`,
+        body: "Tap to view their profile.",
+        link: `/network/${args.authorId}`,
+        refId: args.storyId,
+      })
+    )
+  );
+
+  return taggedIds;
+}
 
 // ============================================================
 // CREATE STORY
@@ -123,22 +207,7 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
     .toBuffer();
 
   // Auto-tag table session kalau user lagi joined di bar ini
-  const [activeMembership] = await db
-    .select({ session_id: tableSessions.id })
-    .from(sessionMembers)
-    .innerJoin(tableSessions, eq(tableSessions.id, sessionMembers.sessionId))
-    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
-    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
-    .where(
-      and(
-        eq(sessionMembers.profileId, profile.id),
-        eq(sessionMembers.status, "joined"),
-        eq(floorAreas.barId, barId),
-        sql`${tableSessions.status} IN ('open', 'locked', 'overdue')`
-      )
-    )
-    .orderBy(desc(sessionMembers.joinedAt))
-    .limit(1);
+  const activeSessionId = await findActiveSessionId(profile.id, barId);
 
   // Insert story row (id dipakai sebagai storage key — unique + immutable)
   const [newStory] = await db
@@ -146,7 +215,8 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
     .values({
       userId: profile.id,
       barId,
-      tableSessionId: activeMembership?.session_id ?? null,
+      tableSessionId: activeSessionId,
+      kind: "image",
       caption: caption ?? null,
       imageUrl: "PENDING", // placeholder, update setelah upload
     })
@@ -160,10 +230,18 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
     contentType: "image/webp",
   });
 
-  // Update row dengan URL final
+  // Mention @username di caption → notif ke teman yg di-tag.
+  const mentions = await resolveMentionsAndNotify({
+    authorId: profile.id,
+    authorName: profile.displayName,
+    text: caption,
+    storyId: newStory.id,
+  });
+
+  // Update row dengan URL final (+ mentions).
   await db
     .update(stories)
-    .set({ imageUrl: publicUrl })
+    .set({ imageUrl: publicUrl, mentions })
     .where(eq(stories.id, newStory.id));
 
   // Notify bar channel supaya semua viewer di bar dapat update realtime
@@ -172,6 +250,93 @@ export async function createStory(formData: FormData): Promise<{ id: string }> {
   revalidatePath("/", "layout");
 
   return { id: newStory.id };
+}
+
+/**
+ * Buat story TEKS (tanpa foto): latar warna + teks di tengah.
+ * Skip pipeline sharp/upload — langsung insert row.
+ *
+ * Field:
+ * - barId: uuid bar
+ * - text: isi story (1..280 char, WAJIB)
+ * - bgColor: hex warna latar (harus salah satu STORY_TEXT_BG_COLORS)
+ */
+const createTextStorySchema = z.object({
+  barId: barIdSchema,
+  text: z.string().trim().min(1, "Write something").max(280, "Max 280 characters"),
+  bgColor: z.enum(STORY_TEXT_BG_COLORS),
+  textStyle: z.enum(STORY_TEXT_STYLES as [string, ...string[]]).default("classic"),
+});
+
+export async function createTextStory(input: {
+  barId: string;
+  text: string;
+  bgColor: string;
+  textStyle?: string;
+}): Promise<{ id: string }> {
+  const profile = await requireProfile();
+  const { barId, text, bgColor, textStyle } = createTextStorySchema.parse(input);
+
+  const activeSessionId = await findActiveSessionId(profile.id, barId);
+
+  const [newStory] = await db
+    .insert(stories)
+    .values({
+      userId: profile.id,
+      barId,
+      tableSessionId: activeSessionId,
+      kind: "text",
+      imageUrl: null,
+      bgColor,
+      textStyle: textStyle as "classic" | "serif" | "mono" | "strong",
+      caption: text,
+    })
+    .returning({ id: stories.id });
+
+  // Mention @username di teks → notif ke teman yg di-tag + simpan di row.
+  const mentions = await resolveMentionsAndNotify({
+    authorId: profile.id,
+    authorName: profile.displayName,
+    text,
+    storyId: newStory.id,
+  });
+  if (mentions.length > 0) {
+    await db
+      .update(stories)
+      .set({ mentions })
+      .where(eq(stories.id, newStory.id));
+  }
+
+  await notify(channels.bar(barId), { type: "story.new", storyId: newStory.id });
+  revalidatePath("/", "layout");
+
+  return { id: newStory.id };
+}
+
+/**
+ * Daftar teman yang bisa di-mention (@) — hanya yang PUNYA username.
+ * Dipakai autocomplete di composer. Menyaring yg saling blokir.
+ */
+export interface MentionCandidate {
+  id: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export async function getMentionableFriends(): Promise<MentionCandidate[]> {
+  const profile = await requireProfile();
+  const { getFriendsListOf } = await import("@/lib/friends");
+  const blocked = await getBlockedIdSet(profile.id);
+  const friends = await getFriendsListOf(profile.id, { excludeIds: blocked });
+  return friends
+    .filter((f) => !!f.username)
+    .map((f) => ({
+      id: f.id,
+      displayName: f.display_name,
+      username: f.username as string,
+      avatarUrl: f.avatar_url,
+    }));
 }
 
 // ============================================================
@@ -201,8 +366,8 @@ export async function deleteStory(storyId: string): Promise<void> {
     throw new Error("Only the owner can delete this");
   }
 
-  // Hapus file dulu (best-effort), lalu row
-  await storage.delete(story.imageUrl);
+  // Hapus file dulu (best-effort), lalu row. Story teks tak punya file.
+  if (story.imageUrl) await storage.delete(story.imageUrl);
   await db.delete(stories).where(eq(stories.id, storyId));
 
   await notify(channels.bar(story.barId), {
@@ -371,10 +536,20 @@ export async function getActiveStoriesByBar(
  * Detail story untuk viewer modal — list semua story user ini yang aktif,
  * urut created_at ASC (story lama di-tampil pertama, kayak IG).
  */
+export interface MentionedUser {
+  id: string;
+  username: string;
+}
+
 export interface StoryDetail {
   id: string;
-  imageUrl: string;
+  kind: "image" | "text";
+  imageUrl: string | null;
+  bgColor: string | null;
+  textStyle: "classic" | "serif" | "mono" | "strong";
   caption: string | null;
+  /** Profil (id + username) yang di-tag — untuk highlight @handle klik-ke-profil. */
+  mentionedUsers: MentionedUser[];
   createdAt: Date;
   expiresAt: Date;
   table_label: string | null;
@@ -408,8 +583,12 @@ export async function getStoriesForUser(
   const rows = await db
     .select({
       id: stories.id,
+      kind: stories.kind,
       imageUrl: stories.imageUrl,
+      bgColor: stories.bgColor,
+      textStyle: stories.textStyle,
       caption: stories.caption,
+      mentions: stories.mentions,
       createdAt: stories.createdAt,
       expiresAt: stories.expiresAt,
       table_label: tables.label,
@@ -436,7 +615,31 @@ export async function getStoriesForUser(
     )
     .orderBy(stories.createdAt);
 
-  return rows;
+  // Resolve semua mention id → username (sekali query untuk seluruh story).
+  const allMentionIds = Array.from(
+    new Set(rows.flatMap((r) => r.mentions ?? []))
+  );
+  const mentionMap = new Map<string, string>();
+  if (allMentionIds.length > 0) {
+    const mentioned = await db
+      .select({ id: profiles.id, username: profiles.username })
+      .from(profiles)
+      .where(inArray(profiles.id, allMentionIds));
+    for (const m of mentioned) {
+      if (m.username) mentionMap.set(m.id, m.username);
+    }
+  }
+
+  return rows.map((r) => {
+    const { mentions, ...rest } = r;
+    return {
+      ...rest,
+      mentionedUsers: (mentions ?? []).flatMap((id) => {
+        const username = mentionMap.get(id);
+        return username ? [{ id, username }] : [];
+      }),
+    };
+  });
 }
 
 /** True kalau user punya minimal 1 story aktif (belum expired) di bar. Ringan. */
@@ -480,7 +683,10 @@ export interface FeedStoryItem {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
-  imageUrl: string;
+  kind: "image" | "text";
+  imageUrl: string | null;
+  bgColor: string | null;
+  textStyle: "classic" | "serif" | "mono" | "strong";
   caption: string | null;
   createdAt: Date;
   table_label: string | null;
@@ -498,7 +704,10 @@ export async function getLatestStoriesByBar(
       userId: stories.userId,
       displayName: profiles.displayName,
       avatarUrl: profiles.avatarUrl,
+      kind: stories.kind,
       imageUrl: stories.imageUrl,
+      bgColor: stories.bgColor,
+      textStyle: stories.textStyle,
       caption: stories.caption,
       createdAt: stories.createdAt,
       table_label: tables.label,

@@ -15,7 +15,8 @@ import {
   type StoryDetail,
   type StoryViewer as ViewerEntry,
 } from "@/lib/story-actions";
-import { getActionErrorMessage, initials } from "@/lib/utils";
+import { getActionErrorMessage, initials, cn } from "@/lib/utils";
+import { STORY_TEXT_STYLE_CLASS } from "@/lib/story-constants";
 
 /** Info profil ringkas pembuat story (untuk header). */
 export interface StoryUserMeta {
@@ -289,15 +290,35 @@ export function StoryViewer({
   return (
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
       <div className="relative w-full h-full max-w-md mx-auto bg-zinc-950 overflow-hidden">
-        {/* Image */}
-        <Image
-          src={currentStory.imageUrl}
-          alt="Story"
-          fill
-          className="object-contain"
-          unoptimized
-          priority
-        />
+        {/* Media: foto ATAU story teks (latar warna + teks tengah). */}
+        {currentStory.kind === "text" ? (
+          <div
+            className="absolute inset-0 flex items-center justify-center px-8"
+            style={{ backgroundColor: currentStory.bgColor ?? "#0f172a" }}
+          >
+            <MentionText
+              text={currentStory.caption ?? ""}
+              mentions={currentStory.mentionedUsers}
+              onMentionClick={goToProfile}
+              className={cn(
+                "text-center text-2xl leading-snug text-white whitespace-pre-line break-words drop-shadow-sm",
+                STORY_TEXT_STYLE_CLASS[currentStory.textStyle] ??
+                  STORY_TEXT_STYLE_CLASS.classic
+              )}
+            />
+          </div>
+        ) : (
+          currentStory.imageUrl && (
+            <Image
+              src={currentStory.imageUrl}
+              alt="Story"
+              fill
+              className="object-contain"
+              unoptimized
+              priority
+            />
+          )
+        )}
 
         {/* Tap zones (kiri/kanan). Tap cepat → prev/next; tahan → pause. */}
         <button
@@ -400,10 +421,13 @@ export function StoryViewer({
                 {currentStory.table_label} · {currentStory.area_name}
               </div>
             )}
-            {currentStory.caption && (
-              <p className="text-sm text-white whitespace-pre-line">
-                {currentStory.caption}
-              </p>
+            {currentStory.kind !== "text" && currentStory.caption && (
+              <MentionText
+                text={currentStory.caption}
+                mentions={currentStory.mentionedUsers}
+                onMentionClick={goToProfile}
+                className="block text-sm text-white whitespace-pre-line"
+              />
             )}
             {isOwner && (
               <div className="flex gap-2 pt-2">
@@ -544,4 +568,50 @@ function formatViewedAt(date: Date): string {
     month: "short",
   });
   return `${day}, ${time}`;
+}
+
+/**
+ * Render teks story dengan @username ter-highlight. Handle yang cocok dgn
+ * mentionedUsers jadi tautan ke profil; sisanya teks biasa. Case-insensitive.
+ */
+function MentionText({
+  text,
+  mentions,
+  className,
+  onMentionClick,
+}: {
+  text: string;
+  mentions: { id: string; username: string }[];
+  className?: string;
+  onMentionClick: (userId: string) => void;
+}) {
+  if (mentions.length === 0) {
+    return <span className={className}>{text}</span>;
+  }
+  const byHandle = new Map(mentions.map((m) => [m.username.toLowerCase(), m.id]));
+  const parts = text.split(/(@[a-z0-9_]{3,20})/gi);
+  return (
+    <span className={className}>
+      {parts.map((part, i) => {
+        const m = /^@([a-z0-9_]{3,20})$/i.exec(part);
+        const uid = m ? byHandle.get(m[1].toLowerCase()) : undefined;
+        if (uid) {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMentionClick(uid);
+              }}
+              className="font-semibold text-sky-300 hover:underline"
+            >
+              {part}
+            </button>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </span>
+  );
 }

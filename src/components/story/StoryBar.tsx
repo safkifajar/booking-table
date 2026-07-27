@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Camera } from "lucide-react";
+import { Plus, Camera, ImageIcon, Type, X } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn, initials } from "@/lib/utils";
 import { StoryUploader } from "./StoryUploader";
+import { StoryTextComposer } from "./StoryTextComposer";
 import { StoryViewer } from "./StoryViewer";
 import type { StoryBarItem } from "@/lib/story-actions";
 
@@ -41,7 +42,9 @@ export function StoryBar({
   initialItems,
 }: Props) {
   const router = useRouter();
-  const [uploadOpen, setUploadOpen] = React.useState(false);
+  const [pickerOpen, setPickerOpen] = React.useState(false); // sheet pilih Photo/Text
+  const [uploadOpen, setUploadOpen] = React.useState(false); // composer foto
+  const [textOpen, setTextOpen] = React.useState(false); // composer teks
   const [viewerOpen, setViewerOpen] = React.useState<string | null>(null); // userId
 
   // Realtime: refresh on story events
@@ -70,7 +73,7 @@ export function StoryBar({
             avatarUrl={ownItem ? viewerAvatarUrl : viewerAvatarUrl}
             displayName={viewerDisplayName}
             hasOwn={!!ownItem}
-            onUpload={() => setUploadOpen(true)}
+            onUpload={() => setPickerOpen(true)}
             onView={() => ownItem && setViewerOpen(viewerId)}
           />
 
@@ -85,13 +88,40 @@ export function StoryBar({
         </div>
       </div>
 
-      {/* Upload modal */}
+      {/* Sheet pilih jenis story: Photo atau Text */}
+      {pickerOpen && (
+        <StoryTypePicker
+          onClose={() => setPickerOpen(false)}
+          onPhoto={() => {
+            setPickerOpen(false);
+            setUploadOpen(true);
+          }}
+          onText={() => {
+            setPickerOpen(false);
+            setTextOpen(true);
+          }}
+        />
+      )}
+
+      {/* Composer foto */}
       {uploadOpen && (
         <StoryUploader
           barId={barId}
           onClose={() => setUploadOpen(false)}
           onUploaded={() => {
             setUploadOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {/* Composer teks */}
+      {textOpen && (
+        <StoryTextComposer
+          barId={barId}
+          onClose={() => setTextOpen(false)}
+          onCreated={() => {
+            setTextOpen(false);
             router.refresh();
           }}
         />
@@ -140,9 +170,9 @@ function YourStoryBubble({
           type="button"
           onClick={hasOwn ? onView : onUpload}
           className={cn(
-            "rounded-full p-[2px] transition",
+            "rounded-full p-[3px] transition",
             hasOwn
-              ? "bg-gradient-to-tr from-primary via-amber-400 to-primary"
+              ? "bg-gradient-to-tr from-primary via-amber-400 to-primary shadow-[0_0_10px_-1px_rgba(225,29,42,0.55)]"
               : "bg-border hover:bg-muted-foreground/40"
           )}
           aria-label={hasOwn ? "View your story" : "Upload new story"}
@@ -194,10 +224,10 @@ function StoryItem({
         type="button"
         onClick={onClick}
         className={cn(
-          "rounded-full p-[2px] transition hover:scale-105",
+          "rounded-full p-[3px] transition hover:scale-105",
           item.allViewed
             ? "bg-border"
-            : "bg-gradient-to-tr from-primary via-amber-400 to-primary"
+            : "bg-gradient-to-tr from-primary via-amber-400 to-primary shadow-[0_0_10px_-1px_rgba(225,29,42,0.55)]"
         )}
         aria-label={`View ${item.displayName}'s story`}
       >
@@ -211,6 +241,63 @@ function StoryItem({
       <span className="text-[10px] text-center text-foreground/80 truncate w-full">
         {item.displayName}
       </span>
+    </div>
+  );
+}
+
+/** Bottom sheet: pilih bikin story dari Foto atau Teks. */
+function StoryTypePicker({
+  onClose,
+  onPhoto,
+  onText,
+}: {
+  onClose: () => void;
+  onPhoto: () => void;
+  onText: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-border bg-card p-4 pb-6 sm:pb-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold">Create a story</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted/60 transition"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={onPhoto}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 py-5 transition hover:border-primary/40 hover:bg-muted/40"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <ImageIcon className="h-5 w-5" />
+            </span>
+            <span className="text-sm font-medium">Photo</span>
+          </button>
+          <button
+            type="button"
+            onClick={onText}
+            className="flex flex-col items-center gap-2 rounded-xl border border-border bg-muted/20 py-5 transition hover:border-primary/40 hover:bg-muted/40"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <Type className="h-5 w-5" />
+            </span>
+            <span className="text-sm font-medium">Text</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

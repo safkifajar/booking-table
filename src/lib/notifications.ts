@@ -29,6 +29,7 @@ type NotifType =
   | "payment_cancelled"
   | "friend_request"
   | "friend_accepted"
+  | "story_mention"
   | "general";
 
 export interface AdminNotificationRow {

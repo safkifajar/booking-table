@@ -9,6 +9,8 @@ import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { Camera, MapPin, Clock } from "lucide-react";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { ProfileSubpageHeader } from "../ProfileSubpageHeader";
+import { cn } from "@/lib/utils";
+import { STORY_TEXT_STYLE_CLASS } from "@/lib/story-constants";
 
 /**
  * Halaman riwayat story user sendiri.
@@ -27,7 +29,10 @@ export default async function ProfileStoriesPage() {
   const rows = await db
     .select({
       id: stories.id,
+      kind: stories.kind,
       imageUrl: stories.imageUrl,
+      bgColor: stories.bgColor,
+      textStyle: stories.textStyle,
       caption: stories.caption,
       createdAt: stories.createdAt,
       expiresAt: stories.expiresAt,
@@ -70,7 +75,10 @@ function StoryCard({
 }: {
   story: {
     id: string;
-    imageUrl: string;
+    kind: "image" | "text";
+    imageUrl: string | null;
+    bgColor: string | null;
+    textStyle: "classic" | "serif" | "mono" | "strong";
     caption: string | null;
     createdAt: Date;
     expiresAt: Date;
@@ -87,13 +95,30 @@ function StoryCard({
 
   return (
     <div className="relative aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900 group">
-      <Image
-        src={story.imageUrl}
-        alt={story.caption ?? "Story"}
-        fill
-        className="object-cover"
-        sizes="(max-width: 640px) 50vw, 33vw"
-      />
+      {story.kind === "text" || !story.imageUrl ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center px-3"
+          style={{ backgroundColor: story.bgColor ?? "#0f172a" }}
+        >
+          <p
+            className={cn(
+              "text-center text-xs leading-snug text-white line-clamp-5 break-words",
+              STORY_TEXT_STYLE_CLASS[story.textStyle] ??
+                STORY_TEXT_STYLE_CLASS.classic
+            )}
+          >
+            {story.caption}
+          </p>
+        </div>
+      ) : (
+        <Image
+          src={story.imageUrl}
+          alt={story.caption ?? "Story"}
+          fill
+          className="object-cover"
+          sizes="(max-width: 640px) 50vw, 33vw"
+        />
+      )}
       {/* Overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent">
         <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-[10px] text-white/80 flex items-center gap-1">
@@ -107,7 +132,7 @@ function StoryCard({
               {story.table_label}
             </div>
           )}
-          {story.caption && (
+          {story.kind !== "text" && story.caption && (
             <p className="text-xs text-white line-clamp-2">{story.caption}</p>
           )}
           <div className="text-[10px] text-white/50">
@@ -128,7 +153,7 @@ function EmptyState() {
       <Camera className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
       <h2 className="text-sm font-medium mb-1">No story yet</h2>
       <p className="text-xs text-muted-foreground">
-        Upload a story from the home page — tap the &quot;Your story&quot; bubble
+        Upload a story from the home page. Tap the &quot;Your story&quot; bubble
         in the story bar to get started.
       </p>
     </div>

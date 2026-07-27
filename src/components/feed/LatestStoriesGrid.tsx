@@ -5,8 +5,9 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Camera, MapPin } from "lucide-react";
-import { initials } from "@/lib/utils";
+import { initials, cn } from "@/lib/utils";
 import { StoryViewer } from "@/components/story/StoryViewer";
+import { STORY_TEXT_STYLE_CLASS } from "@/lib/story-constants";
 import type { FeedStoryItem } from "@/lib/story-actions";
 
 interface Props {
@@ -97,13 +98,30 @@ function StoryThumbnail({
       onClick={onClick}
       className="relative aspect-[9/16] rounded-lg overflow-hidden bg-zinc-900 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
     >
-      <Image
-        src={story.imageUrl}
-        alt={story.caption ?? `Story by ${story.displayName}`}
-        fill
-        className="object-cover transition group-hover:scale-105"
-        sizes="(max-width: 640px) 50vw, 33vw"
-      />
+      {story.kind === "text" || !story.imageUrl ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center px-3"
+          style={{ backgroundColor: story.bgColor ?? "#0f172a" }}
+        >
+          <p
+            className={cn(
+              "text-center text-sm leading-snug text-white line-clamp-4 break-words",
+              STORY_TEXT_STYLE_CLASS[story.textStyle] ??
+                STORY_TEXT_STYLE_CLASS.classic
+            )}
+          >
+            {story.caption}
+          </p>
+        </div>
+      ) : (
+        <Image
+          src={story.imageUrl}
+          alt={story.caption ?? `Story by ${story.displayName}`}
+          fill
+          className="object-cover transition group-hover:scale-105"
+          sizes="(max-width: 640px) 50vw, 33vw"
+        />
+      )}
 
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />

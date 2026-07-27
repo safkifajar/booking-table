@@ -31,7 +31,12 @@ export async function expireOldStories(): Promise<{
     return { deleted: 0, durationMs: Date.now() - startTime };
   }
 
-  await Promise.allSettled(expired.map((s) => storage.delete(s.imageUrl)));
+  // Story teks tak punya file → skip yang imageUrl null.
+  await Promise.allSettled(
+    expired
+      .filter((s) => s.imageUrl)
+      .map((s) => storage.delete(s.imageUrl!))
+  );
   await db.delete(stories).where(
     inArray(
       stories.id,

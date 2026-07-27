@@ -55,6 +55,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "payment_cancelled", // pembayaran gagal / kadaluarsa (0054)
   "friend_request", // ada friend request masuk (0058)
   "friend_accepted", // friend request kamu diterima (0058)
+  "story_mention", // kamu di-tag di story teman (0066)
 ]);
 
 // Lifecycle friend request (PRD Friends): pending -> accepted/rejected/cancelled.
