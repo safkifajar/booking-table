@@ -244,7 +244,7 @@ export function PaymentSheet({
             <PickerRow
               icon={<Banknote className="h-5 w-5" />}
               label="Pay at cashier"
-              desc="Confirm & pay at the cashier desk — order is sent once confirmed"
+              desc="Confirm & pay at the cashier desk. Order is sent once confirmed"
               active={method === "cash"}
               onClick={() => { setMethod("cash"); setMethodSheet(false); }}
             />

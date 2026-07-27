@@ -424,7 +424,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       return {
         ok: false as const,
         error:
-          "Vouchers apply to payments — use it when paying your table bill instead.",
+          "Vouchers apply to payments. Use it when paying your table bill instead.",
       };
     }
     const resV = await resolveVoucherForBillPayment({
@@ -437,7 +437,7 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       return {
         ok: false as const,
         error:
-          "This voucher covers more than the deposit — save it for the bill payment instead.",
+          "This voucher covers more than the deposit. Save it for the bill payment instead.",
       };
     }
     dpVoucher = {
@@ -1071,7 +1071,7 @@ export async function requestJoinSession(input: z.infer<typeof joinSchema>) {
   if (!row) throw new Error("Session not found");
   if (row.status !== "open") throw new Error("Session is no longer open");
   if (row.host_id === profile.id) {
-    throw new Error("You're the host — no need to request");
+    throw new Error("You're the host, no need to request");
   }
 
   // Guard relasi (PRD Friends K3 + K6b). Penolakan yg DIHARAPKAN dikembalikan
@@ -1179,7 +1179,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
       and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.status, "joined"))
     );
   if (!row.allow_over_capacity && Number(count) >= row.capacity) {
-    throw new Error("Table is full — request can't be approved");
+    throw new Error("Table is full, request can't be approved");
   }
 
   // Ambil profileId requester (untuk notif) sebelum update.
@@ -1451,7 +1451,7 @@ export async function inviteUsersToSession(
   // overdue) tak bisa diundang.
   if (row.status !== "open" && row.status !== "reserved") {
     throw new Error(
-      "This table isn't open for invites yet — it needs to be reserved or active."
+      "This table isn't open for invites yet. It needs to be reserved or active."
     );
   }
 
@@ -1797,7 +1797,7 @@ export async function leaveSession(sessionId: string) {
     sess.status === "overdue" ||
     sess.status === "cancelled"
   ) {
-    throw new Error("This table has already ended — you can't leave it now.");
+    throw new Error("This table has already ended. You can't leave it now.");
   }
 
   // Sisa tagihan meja (subtotal+charge semua order − pembayaran lunas).
@@ -1937,7 +1937,7 @@ export async function closeSession(sessionId: string) {
 
     if (outstanding > 0) {
       throw new Error(
-        `Not fully paid — Rp ${outstanding.toLocaleString("id-ID")} remaining. Direct the guest to the cashier.`
+        `Not fully paid. Rp ${outstanding.toLocaleString("id-ID")} remaining. Direct the guest to the cashier.`
       );
     }
   }
@@ -2977,7 +2977,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     }
     if (data.amount > uncovered) {
       throw new Error(
-        `You can pay at most ${formatIDR(uncovered)} right now — the rest is covered by active QRIS payments.`
+        `You can pay at most ${formatIDR(uncovered)} right now. The rest is covered by active QRIS payments.`
       );
     }
   }
@@ -3030,7 +3030,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
     );
     if (!reserved) {
       await db.delete(payments).where(eq(payments.id, voucherPayment.id));
-      throw new Error("This voucher was just used — try another one");
+      throw new Error("This voucher was just used. Try another one");
     }
     // Tandai used_at TANPA mencetak baris diskon lagi — baris voucherPayment
     // di atas SUDAH menjadi pembayarannya (skipSyntheticRow).
@@ -3083,7 +3083,7 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
         .update(payments)
         .set({ status: "failed" })
         .where(eq(payments.id, newPayment.id));
-      throw new Error("This voucher was just used — try another one");
+      throw new Error("This voucher was just used. Try another one");
     }
   }
 
@@ -3295,7 +3295,7 @@ export async function createSplitBatch(
   // penuh. Tanpa penjagaan ini host bisa membagi pesanan pribadi anggota ke
   // seluruh meja, persis kebalikan dari aturan fitur ini.
   if (order.ownerMemberId) {
-    throw new Error("A member's own order can't be split — they pay it in full");
+    throw new Error("A member's own order can't be split, they pay it in full");
   }
 
   // 3. Bill: subtotal (non-void) + charge → total; remaining = total − paid.
@@ -3583,7 +3583,7 @@ export async function regenerateMemberPayment(input: {
       await settleOverdueIfPaid(old.sessionId);
       await notifySessionAndStaff(old.sessionId);
       revalidatePath(`/session/${old.sessionId}`);
-      throw new Error("That payment was actually paid — no new QRIS needed.");
+      throw new Error("That payment was actually paid. No new QRIS needed.");
     }
     if (gw !== "failed") {
       // Masih bisa dibayar di gateway → menerbitkan QRIS kedua = risiko bayar 2×.
@@ -3718,7 +3718,7 @@ export async function regenerateMemberPayment(input: {
     profileId: old.payerProfileId,
     type: "general",
     title: "New QRIS ready for you",
-    body: `Your previous QRIS expired. A new one for ${formatIDR(amount)} is ready — tap to pay.`,
+    body: `Your previous QRIS expired. A new one for ${formatIDR(amount)} is ready. Tap to pay.`,
     link: `/session/${old.sessionId}/order/${old.orderId}`,
   });
 

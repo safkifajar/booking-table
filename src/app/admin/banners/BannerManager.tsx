@@ -491,7 +491,7 @@ function BannerFormModal({ mode, barId, banner, onClose, onSaved }: FormProps) {
             />
             {/* Hint detail: rasio, rekomendasi resolusi, format, ukuran max */}
             <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground/70">
-              <li>• Ratio 16:9 (landscape) — recommended 1920×1080 px</li>
+              <li>• Ratio 16:9 (landscape), recommended 1920×1080 px</li>
               <li>• Format: JPG, PNG, WebP, or HEIC</li>
               <li>• Maximum size 10 MB</li>
             </ul>

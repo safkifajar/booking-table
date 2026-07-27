@@ -35,7 +35,7 @@ export function AccountDeletionsManager({
       const ok = await confirm({
         title: `Deactivate ${r.requester_name}'s account?`,
         description:
-          "Their account will be set inactive — they can no longer sign in. Past transactions are kept. This can be undone by re-activating the account in Manage Customer.",
+          "Their account will be set inactive. They can no longer sign in. Past transactions are kept. This can be undone by re-activating the account in Manage Customer.",
         confirmText: "Approve & deactivate",
         cancelText: "Cancel",
         variant: "danger",

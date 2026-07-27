@@ -84,12 +84,12 @@ export function PrivacyToggleSection({ initial }: { initial: boolean }) {
       <div className="rounded-xl border border-border bg-card/40 px-4 py-4 text-xs text-muted-foreground leading-relaxed space-y-2">
         <p>
           When your account is private, other members can still find you in the
-          network and see your basic card info — photos, name, age, area,
+          network and see your basic card info such as photos, name, age, area,
           education, and rating.
         </p>
         <p>
-          On your detail page, the rest — bio, social links, interests, and
-          prompts — is locked behind a blur with a{" "}
+          On your detail page, the rest such as bio, social links, interests, and
+          prompts is locked behind a blur with a{" "}
           <Lock className="inline h-3 w-3 -mt-0.5" /> icon, and your hangout
           history is hidden.
         </p>

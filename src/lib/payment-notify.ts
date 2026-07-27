@@ -116,7 +116,7 @@ export async function notifyCashiersPayAtCashier(input: {
     const amount = formatIDR(row.amount);
     const kind = input.isDownPayment ? "Deposit" : "Bill";
     const title = "Pay at cashier";
-    const body = `${kind} ${amount} for table ${label} — customer will pay at the cashier. Confirm once received.`;
+    const body = `${kind} ${amount} for table ${label}. Customer will pay at the cashier. Confirm once received.`;
     const link = `/session/${row.sessionId}`;
 
     // Hanya staff yang boleh menerima pembayaran: cashier/manager/admin.

@@ -280,7 +280,7 @@ export function OpenTableForm({
       if (res.discount >= dpAmount) {
         setVoucher(null);
         toast.error(
-          "This voucher covers more than the deposit — save it for the bill payment instead."
+          "This voucher covers more than the deposit. Save it for the bill payment instead."
         );
         return;
       }

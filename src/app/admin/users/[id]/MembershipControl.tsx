@@ -118,7 +118,7 @@ export function MembershipControl({
         <Dialog open onOpenChange={(o) => !o && setOpen(false)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>Change membership — {customerName}</DialogTitle>
+              <DialogTitle>Change membership · {customerName}</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div>

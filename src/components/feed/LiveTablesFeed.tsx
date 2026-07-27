@@ -45,11 +45,13 @@ export function LiveTablesFeed({
   const joined = new Set(joinedIds ?? []);
   if (sessions.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border p-8 text-center">
-        <Sparkles className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
+      <div className="rounded-xl border border-border bg-gradient-to-b from-card to-primary/[0.04] p-8 text-center">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
+          <Sparkles className="h-7 w-7 text-primary/70" />
+        </div>
         <p className="text-sm font-medium mb-1">No active tables yet</p>
         <p className="text-xs text-muted-foreground">
-          Be the first — open your own table and invite your friends.
+          Be the first. Open your own table and invite your friends.
         </p>
       </div>
     );

@@ -500,7 +500,7 @@ function BookingsList({ bookings }: { bookings: CashierBookingItem[] }) {
                   <div className="mt-1.5 flex items-center gap-1.5 rounded-md bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-xs text-amber-400">
                     <Banknote className="h-3.5 w-3.5 shrink-0" />
                     <span className="font-medium truncate flex-1">
-                      DP {formatIDR(b.dp_pending_cashier.amount)} — waiting
+                      DP {formatIDR(b.dp_pending_cashier.amount)} · waiting
                       payment
                     </span>
                     {/* Sisa waktu konfirmasi. Habis → refresh (server sudah
@@ -845,7 +845,7 @@ function CashierOrdersTab({ queue }: { queue: CashierOrderQueue }) {
               <Clock className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
               <p className="text-sm font-medium mb-1">No scheduled orders</p>
               <p className="text-xs text-muted-foreground">
-                Booking orders (time not reached yet) show up here — don&apos;t
+                Booking orders (time not reached yet) show up here. Don&apos;t
                 make them yet.
               </p>
             </>

@@ -197,7 +197,7 @@ export function ProfileMenuList({
             href="/membership"
             icon={<Crown className="h-5 w-5" />}
             label="Membership"
-            description={`${membership.name} plan — upgrade, renew & history`}
+            description={`${membership.name} plan · upgrade, renew & history`}
           />
           <MenuItem
             href="/profile/privacy"
@@ -205,8 +205,8 @@ export function ProfileMenuList({
             label="Private Account"
             description={
               isPrivate
-                ? "On — only network info is visible to others"
-                : "Off — your profile is public"
+                ? "On, only network info is visible to others"
+                : "Off, your profile is public"
             }
           />
           <MenuItem
@@ -219,7 +219,7 @@ export function ProfileMenuList({
             href="/profile/invites"
             icon={<MailOpen className="h-5 w-5" />}
             label="Table Invites"
-            description="Invites to tables — who invited you & when"
+            description="Invites to tables · who invited you & when"
             badge={pendingInviteCount}
           />
           <MenuItem

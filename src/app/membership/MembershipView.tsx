@@ -131,7 +131,7 @@ export function MembershipView({
           <div className="flex items-center gap-3">
             <QrCode className="h-5 w-5 text-amber-400 shrink-0" />
             <div className="flex-1 min-w-0 text-sm">
-              Waiting for payment — {pendingTx.level_name} (
+              Waiting for payment · {pendingTx.level_name} (
               {formatIDR(pendingTx.amount)})
             </div>
             <Button
@@ -552,7 +552,7 @@ function BuyDialog({
         return;
       }
       if (!res.qrString) {
-        toast.error("Payment created but QR is missing — try again");
+        toast.error("Payment created but QR is missing. Try again");
         return;
       }
       onQr({

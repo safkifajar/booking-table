@@ -89,6 +89,17 @@ export interface TopItem {
   transaction_count: number;
 }
 
+export interface TopCustomer {
+  profile_id: string;
+  name: string;
+  username: string | null;
+  avatar_url: string | null;
+  /** Jumlah kunjungan (session yg benar-benar terjadi) dlm periode. */
+  visit_count: number;
+  /** Kunjungan terakhir (ISO) dalam periode. */
+  last_visit: string | null;
+}
+
 export interface SalesByHour {
   hour_of_day: number;
   total_revenue: number;
@@ -238,6 +249,68 @@ export async function getTopItems(
     total_qty: Number(r.total_qty),
     total_revenue: Number(r.total_revenue),
     transaction_count: Number(r.transaction_count),
+  }));
+}
+
+/**
+ * Pelanggan yang paling sering datang dalam periode. Kunjungan dihitung dari
+ * session_members pada session yang BENAR-BENAR terjadi (bukan 'reserved' yg
+ * belum datang, bukan 'cancelled'), difilter tanggal via session.started_at,
+ * dan hanya session di bar ini. Exclude staff & guest walk-in.
+ */
+export async function getTopCustomers(
+  barId: string,
+  from: string,
+  to: string,
+  limit = 10
+): Promise<TopCustomer[]> {
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const rows = await db
+    .select({
+      profile_id: profiles.id,
+      name: profiles.displayName,
+      username: profiles.username,
+      avatar_url: profiles.avatarUrl,
+      visit_count: sql<number>`COUNT(DISTINCT ${tableSessions.id})::int`,
+      last_visit: sql<string | null>`MAX(${tableSessions.startedAt})`,
+    })
+    .from(sessionMembers)
+    .innerJoin(
+      tableSessions,
+      eq(tableSessions.id, sessionMembers.sessionId)
+    )
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(floorAreas.barId, barId),
+        inArray(tableSessions.status, ["open", "locked", "closed", "overdue"]),
+        sql`${tableSessions.startedAt} >= ${from}::timestamptz`,
+        sql`${tableSessions.startedAt} < ${to}::timestamptz`,
+        eq(profiles.isGuest, false),
+        sql`${profiles.id} NOT IN (${staffIds})`
+      )
+    )
+    .groupBy(
+      profiles.id,
+      profiles.displayName,
+      profiles.username,
+      profiles.avatarUrl
+    )
+    .orderBy(desc(sql`COUNT(DISTINCT ${tableSessions.id})`))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    profile_id: r.profile_id,
+    name: r.name,
+    username: r.username,
+    avatar_url: r.avatar_url,
+    visit_count: Number(r.visit_count),
+    last_visit: r.last_visit
+      ? new Date(r.last_visit as unknown as string | Date).toISOString()
+      : null,
   }));
 }
 

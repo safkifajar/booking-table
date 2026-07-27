@@ -330,7 +330,7 @@ export async function resendInvite(
   if (!row) throw new Error("Staff not found");
   if (row.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (row.passwordHash) {
-    throw new Error("User has already set a password — no need to re-invite");
+    throw new Error("User has already set a password, no need to re-invite");
   }
 
   return sendStaffInvite({

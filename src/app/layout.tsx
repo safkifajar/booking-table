@@ -19,14 +19,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "SOHO Social House — Reserve your night",
+    default: "SOHO Social House · Reserve your night",
     template: "%s · SOHO Social House",
   },
   description:
     "Book a table, host your night, share the bill. Social table booking for SOHO Social House Purwokerto.",
   applicationName: "SOHO Social House",
   openGraph: {
-    title: "SOHO Social House — Reserve your night",
+    title: "SOHO Social House · Reserve your night",
     description:
       "Book a table, host your night, share the bill. Social table booking for SOHO Social House Purwokerto.",
     siteName: "SOHO Social House",
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "SOHO Social House — Reserve your night",
+    title: "SOHO Social House · Reserve your night",
     description:
       "Book a table, host your night, share the bill.",
   },

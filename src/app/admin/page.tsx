@@ -2,6 +2,7 @@ import {
   requireAdmin,
   getSummaryWithDelta,
   getTopItems,
+  getTopCustomers,
   getSalesByHour,
   getSalesByDay,
   getPaymentMethods,
@@ -12,6 +13,7 @@ import { DateRangeFilter } from "./DateRangeFilter";
 import { StatCard } from "./components/StatCard";
 import { SalesChart } from "./components/SalesChart";
 import { TopItemsList } from "./components/TopItemsList";
+import { TopCustomersList } from "./components/TopCustomersList";
 import { PaymentMethodChart } from "./components/PaymentMethodChart";
 import {
   Receipt,
@@ -21,6 +23,7 @@ import {
   Wallet,
   Utensils,
   Minus,
+  UserRound,
 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 import { Crown } from "lucide-react";
@@ -40,10 +43,11 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
   );
 
   const membershipStats = await getMembershipStats();
-  const [summary, topItems, byHour, byDay, paymentMethods] =
+  const [summary, topItems, topCustomers, byHour, byDay, paymentMethods] =
     await Promise.all([
       getSummaryWithDelta(bar.id, range.from, range.to),
       getTopItems(bar.id, range.from, range.to, 10),
+      getTopCustomers(bar.id, range.from, range.to, 10),
       getSalesByHour(bar.id, range.from, range.to),
       getSalesByDay(bar.id, range.from, range.to),
       getPaymentMethods(bar.id, range.from, range.to),
@@ -176,7 +180,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   {isMultiDay
                     ? `${chartData.length} days · ${range.label.toLowerCase()}`
-                    : "Operating hours 16:00 — 03:00"}
+                    : "Operating hours 16:00–03:00"}
                 </p>
               </div>
             </div>
@@ -197,18 +201,36 @@ export default async function AdminOverviewPage({ searchParams }: PageProps) {
           </div>
         </section>
 
-        {/* Top sellers */}
-        <section className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-semibold">Top 10 best sellers</h2>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Based on revenue for this period
-              </p>
+        {/* Top sellers (kiri) + Pelanggan sering datang (kanan) */}
+        <section className="grid lg:grid-cols-2 gap-4 items-start">
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold">Top 10 best sellers</h2>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Based on revenue for this period
+                </p>
+              </div>
+              <Utensils className="h-4 w-4 text-primary/50" />
             </div>
-            <Utensils className="h-4 w-4 text-primary/50" />
+            <TopItemsList
+              items={topItems}
+              totalRevenue={summary.total_revenue}
+            />
           </div>
-          <TopItemsList items={topItems} totalRevenue={summary.total_revenue} />
+
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold">Top 10 loyal customers</h2>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Most frequent visitors this period
+                </p>
+              </div>
+              <UserRound className="h-4 w-4 text-primary/50" />
+            </div>
+            <TopCustomersList customers={topCustomers} />
+          </div>
         </section>
       </div>
     </>

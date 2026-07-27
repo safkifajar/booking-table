@@ -659,7 +659,7 @@ export async function updateCustomer(input: z.infer<typeof updateSchema>) {
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, data.id));
-  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
+  if (staff) throw new Error("This user is staff. Manage them in Manage Staff");
 
   // Email unik (kecuali milik sendiri).
   const [clash] = await db
@@ -719,7 +719,7 @@ export async function setCustomerPassword(
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, data.id));
-  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
+  if (staff) throw new Error("This user is staff. Manage them in Manage Staff");
 
   const passwordHash = await hashPassword(data.password);
   await db
@@ -742,7 +742,7 @@ export async function deleteCustomer(id: string) {
     .select({ id: staffRoles.profileId })
     .from(staffRoles)
     .where(eq(staffRoles.profileId, id));
-  if (staff) throw new Error("This user is staff — manage them in Manage Staff");
+  if (staff) throw new Error("This user is staff. Manage them in Manage Staff");
 
   // Cek history: kalau pernah jadi member session ATAU host session, tolak
   // (cegah relasi rusak). Admin bisa biarkan akun-nya.
@@ -758,7 +758,7 @@ export async function deleteCustomer(id: string) {
     .limit(1);
   if (asMember || asHost) {
     throw new Error(
-      "This customer has visit history — can't be deleted (to preserve transaction data)."
+      "This customer has visit history, can't be deleted (to preserve transaction data)."
     );
   }
 

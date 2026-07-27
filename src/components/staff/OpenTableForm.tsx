@@ -177,7 +177,7 @@ export function OpenTableForm({
       });
       // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
       if ("paid" in result) {
-        toast.success("Payment received — table opened");
+        toast.success("Payment received. Table opened");
         router.push(`/session/${result.sessionId}`);
         return;
       }
@@ -585,7 +585,7 @@ export function OpenTableForm({
           qrString={qr.qrString}
           amount={qr.amount}
           onPaid={() => {
-            toast.success("Payment received — table opened");
+            toast.success("Payment received. Table opened");
             router.push(`/session/${qr.sessionId}`);
           }}
           onClose={() => setQr(null)}

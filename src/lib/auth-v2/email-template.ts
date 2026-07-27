@@ -316,7 +316,7 @@ export function tableInviteEmail(
     ? `You have been added to table ${tableLabel}`
     : `You are invited to table ${tableLabel}`;
   const bodyLine = joined
-    ? `<strong style="color:${COLORS.text};">${inviterName}</strong> added you to table <strong style="color:${COLORS.text};">${tableLabel}</strong> at ${barName}. You have already been added — open to see the table.`
+    ? `<strong style="color:${COLORS.text};">${inviterName}</strong> added you to table <strong style="color:${COLORS.text};">${tableLabel}</strong> at ${barName}. You have already been added. Open to see the table.`
     : `<strong style="color:${COLORS.text};">${inviterName}</strong> invited you to table <strong style="color:${COLORS.text};">${tableLabel}</strong> at ${barName}. Open to <strong style="color:${COLORS.text};">accept the invite</strong>.`;
   const cta = joined ? "View table →" : "Accept invite →";
 

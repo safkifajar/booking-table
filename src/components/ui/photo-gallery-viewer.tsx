@@ -163,7 +163,7 @@ export function PhotoGalleryViewer({
           >
             <Image
               src={src}
-              alt={alt ? `${alt} — photo` : "Photo"}
+              alt={alt ? `${alt} photo` : "Photo"}
               fill
               className="object-contain"
               unoptimized

@@ -125,7 +125,7 @@ export function PushToggle() {
         <p className="text-sm font-medium">Push notifications</p>
         <p className="text-xs text-muted-foreground">
           {denied
-            ? "Permission blocked — enable it in your browser settings."
+            ? "Permission blocked. Enable it in your browser settings."
             : enabled
               ? "Active on this device (move table requests, etc.)."
               : "Get notified even when the app is closed."}

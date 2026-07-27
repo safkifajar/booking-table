@@ -32,7 +32,7 @@ export async function MembershipBanner({ profileId }: { profileId: string }) {
     );
     if (daysLeft > 7) return null;
     title = `${status.name} expires in ${daysLeft <= 1 ? "1 day" : `${daysLeft} days`}`;
-    body = "Renew now — time is added to your current period";
+    body = "Renew now. Time is added to your current period";
     cta = "Renew";
   } else {
     return null; // lifetime — tak perlu banner

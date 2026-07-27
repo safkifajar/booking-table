@@ -1220,7 +1220,7 @@ function InviteToSessionModal({
         <div className="p-4 space-y-4">
           <p className="text-xs text-muted-foreground">
             {visibility === "friends"
-              ? "Friends-only table — you can invite your friends. They join once they accept."
+              ? "Friends-only table. You can invite your friends. They join once they accept."
               : "They join once they accept the invite."}
           </p>
 
@@ -1313,7 +1313,7 @@ function MenuTab({
             return;
           }
           if (isStaff && !hostMemberId) {
-            toast.error("Table has no host yet — can't create the order");
+            toast.error("Table has no host yet. Can't create the order");
             return;
           }
           try {
@@ -1328,7 +1328,7 @@ function MenuTab({
               onBehalfOfMemberId: isStaff ? hostMemberId! : undefined,
             });
             onCartChange({});
-            toast.success("Order created — proceed to payment");
+            toast.success("Order created. Proceed to payment");
             onOrderCreated?.(orderId);
           } catch (err) {
             toast.error(getActionErrorMessage(err, "Failed to create order"));
@@ -1894,7 +1894,7 @@ function SessionFooter({
               title={
                 !isLunas
                   ? isStaff
-                    ? "Table not fully paid — direct the guest to the cashier"
+                    ? "Table not fully paid. Direct the guest to the cashier"
                     : "Settle all payments before closing the table"
                   : undefined
               }

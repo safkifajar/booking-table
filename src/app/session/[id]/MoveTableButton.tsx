@@ -127,7 +127,7 @@ export function MoveTableButton({
     setMoving(true);
     try {
       const res = await requestMoveTable({ sessionId, targetTableId: t.id });
-      toast.success("Move request sent — waiting for staff approval");
+      toast.success("Move request sent. Waiting for staff approval");
       setOpen(false);
       setConfirmMinSpend(null);
       setOptimisticPending({
@@ -175,7 +175,7 @@ export function MoveTableButton({
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 flex items-center gap-2 flex-wrap">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
           <span className="flex-1 min-w-0">
-            Waiting for staff approval — moving to table{" "}
+            Waiting for staff approval, moving to table{" "}
             <strong>{pending.toLabel}</strong>.
           </span>
           {pending.id && (
@@ -226,7 +226,7 @@ export function MoveTableButton({
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <p className="text-xs text-muted-foreground mb-2">
                 {needsApproval
-                  ? "Only tables with enough capacity and free during your booking time. Your booking time stays the same — moving only changes the table and needs staff approval."
+                  ? "Only tables with enough capacity and free during your booking time. Your booking time stays the same. Moving only changes the table and needs staff approval."
                   : "Only tables with enough capacity. The booking duration stays the same; you pick the start time in the next step."}
               </p>
               {loading ? (
@@ -544,7 +544,7 @@ function MoveOrderModal({
           items,
           paymentMethod: method,
         });
-        toast.success("Payment successful — move request waiting for approval");
+        toast.success("Payment successful. Move request waiting for approval");
         onDone(res?.requestId);
         return;
       }
@@ -572,7 +572,7 @@ function MoveOrderModal({
           <div>
             <h2 className="text-sm font-semibold">Table {target.label} · min spend</h2>
             <p className="text-[11px] text-muted-foreground">
-              Min. {formatIDR(target.min_spend)} — add an order & pay first
+              Min. {formatIDR(target.min_spend)} · add an order & pay first
             </p>
           </div>
           <button

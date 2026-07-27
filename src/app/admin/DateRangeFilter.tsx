@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Calendar } from "lucide-react";
+import { Calendar, ArrowRight } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 
@@ -137,27 +137,33 @@ export function DateRangeFilter({
   }
 
   return (
-    <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-md border-b border-border">
+    <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 space-y-2">
-        {/* Top row — label + custom date inputs langsung */}
+        {/* Top row — label + custom date range (satu unit tergabung) */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
             <Calendar className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-medium truncate">{currentLabel}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-input/40 p-1.5">
             <DatePicker
               value={fromValue}
               onChange={onFromChange}
-              placeholder="From"
+              max={toValue || undefined}
+              placeholder="Start"
               ariaLabel="Start date"
+              className="h-9 w-[9.5rem] border-transparent bg-transparent hover:bg-muted/40"
             />
-            <span className="text-muted-foreground text-xs">→</span>
+            <span className="shrink-0 text-muted-foreground">
+              <ArrowRight className="h-4 w-4" />
+            </span>
             <DatePicker
               value={toValue}
               onChange={onToChange}
-              placeholder="To"
+              min={fromValue || undefined}
+              placeholder="End"
               ariaLabel="End date"
+              className="h-9 w-[9.5rem] border-transparent bg-transparent hover:bg-muted/40"
             />
           </div>
         </div>

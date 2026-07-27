@@ -108,7 +108,7 @@ export function QrisPaymentDialog({
               } catch {
                 // best-effort; sweep denah tetap jadi jaring pengaman.
               }
-              toast.error("Payment time is up — booking cancelled");
+              toast.error("Payment time is up. Booking cancelled");
               onExpired?.();
             })
             .catch(() => {
@@ -140,7 +140,7 @@ export function QrisPaymentDialog({
         toast.success("Payment received");
         onPaid();
       } else {
-        toast.info("Not paid yet — please complete the scan");
+        toast.info("Not paid yet. Please complete the scan");
       }
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to check status"));
@@ -252,7 +252,7 @@ export function QrisPaymentDialog({
               </div>
             ) : (
               <div className="text-[10px] text-muted-foreground italic">
-                Waiting for payment — this updates automatically once paid.
+                Waiting for payment. This updates automatically once paid.
               </div>
             )}
           </div>
@@ -280,7 +280,7 @@ export function QrisPaymentDialog({
               </>
             ) : (
               <>
-                <CheckCircle2 className="h-4 w-4" /> I&apos;ve paid — check status
+                <CheckCircle2 className="h-4 w-4" /> I&apos;ve paid · check status
               </>
             )}
           </Button>

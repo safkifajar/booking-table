@@ -363,7 +363,7 @@ export function BarFloorView({
     <main className="relative flex-1 pb-32">
       <SohoGlow />
       {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <span className="inline-flex h-9 w-9 rounded-lg overflow-hidden border border-border shadow-md shrink-0">
             <Image
@@ -430,7 +430,7 @@ export function BarFloorView({
         {/* Area tabs — di bawah denah, rata tengah. Garis pemisah bawah
             menandai bahwa tab ini milik section denah (pisah dari Jadwal). */}
         {areasWithTables.length > 1 && (
-          <div className="mt-4 pb-4 border-b border-border flex justify-center gap-2 flex-wrap">
+          <div className="mt-4 flex justify-center gap-2 flex-wrap">
             {areasWithTables.map(({ area, tables }) => {
               const openCount = tables.filter(
                 (t) => t.active_session?.status === "open"

@@ -165,7 +165,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
           router.push(`/session/${detail.sessionId}/order/${detail.id}/pay`);
           return;
         }
-        toast.success("Payment created — confirm it below to complete");
+        toast.success("Payment created. Confirm it below to complete");
       } else {
         toast.success(result.status === "paid" ? "Payment successful" : "Payment is being processed");
       }
@@ -252,8 +252,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       if (res.status === "paid") {
         toast.success(
           method === "cash" && res.change > 0
-            ? `Payment confirmed — change ${formatIDR(res.change)}`
-            : "Payment confirmed — order sent to the kitchen"
+            ? `Payment confirmed. Change ${formatIDR(res.change)}`
+            : "Payment confirmed. Order sent to the kitchen"
         );
       } else if (res.qrString) {
         // QRIS pending → tampilkan QR utk di-scan customer di meja kasir.
@@ -954,7 +954,7 @@ function CashierPayBox({
         const change =
           method === "cash" && received ? Math.max(0, received - amount) : 0;
         toast.success(
-          change > 0 ? `Paid — change ${formatIDR(change)}` : "Payment received"
+          change > 0 ? `Paid. Change ${formatIDR(change)}` : "Payment received"
         );
       }
       onDone();

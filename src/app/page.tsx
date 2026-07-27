@@ -104,7 +104,7 @@ export default async function HomePage() {
     <main className="relative flex-1 pb-24">
       <SohoGlow />
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link href="/" className="flex items-center gap-2.5 min-w-0">
             <span className="inline-flex h-9 w-9 rounded-lg overflow-hidden border border-border shadow-md shrink-0">
@@ -227,15 +227,16 @@ export default async function HomePage() {
             </Link>
           )}
 
-          {/* CTA: buka meja sendiri */}
+          {/* CTA: buka meja sendiri — tombol glowing merah (CTA utama) */}
           {!isAnon && (
             <div className="mt-4">
-              <Button asChild variant="outline" className="w-full" size="default">
-                <Link href={`/bar/${barSlug}`}>
-                  <Plus className="h-3.5 w-3.5" />
-                  <span className="text-xs">Open your own table</span>
-                </Link>
-              </Button>
+              <Link
+                href={`/bar/${barSlug}`}
+                className="group relative flex w-full items-center justify-center gap-2 rounded-xl border border-primary/60 bg-gradient-to-b from-primary/[0.12] to-primary/[0.04] py-3.5 text-sm font-semibold text-foreground shadow-[0_0_20px_-4px_rgba(225,29,42,0.5)] transition hover:border-primary hover:from-primary/20 hover:shadow-[0_0_28px_-2px_rgba(225,29,42,0.7)]"
+              >
+                <Plus className="h-4 w-4 text-primary transition group-hover:scale-110" />
+                <span>Open your own table</span>
+              </Link>
             </div>
           )}
         </section>
@@ -243,9 +244,18 @@ export default async function HomePage() {
         {/* Promo banner carousel */}
         {banners.length > 0 && (
           <section className="px-4 sm:px-6 pt-6">
-            <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80 mb-3">
-Promos & Events
-            </h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs uppercase tracking-widest font-semibold text-foreground/80">
+                Promos & Events
+              </h2>
+              <Link
+                href="/promo"
+                className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:text-primary/80 transition"
+              >
+                See all
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
             <BannerCarousel banners={banners} />
           </section>
         )}

@@ -205,7 +205,7 @@ export function ProfileForm({
             Prompts
           </CardTitle>
           <CardDescription>
-            Pick a few and answer them — up to {MAX_PROMPTS}. Great ice-breakers
+            Pick a few and answer them, up to {MAX_PROMPTS}. Great ice-breakers
             for people at SOHO.
           </CardDescription>
         </CardHeader>
