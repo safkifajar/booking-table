@@ -66,8 +66,8 @@ export function StoryBar({
 
   return (
     <>
-      <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
-        <div className="flex gap-3 pb-2">
+      <div className="overflow-x-auto overflow-y-visible scrollbar-none -mx-4 px-4">
+        <div className="flex gap-3 pt-2 pb-2">
           {/* Your Story bubble */}
           <YourStoryBubble
             avatarUrl={viewerAvatarUrl}

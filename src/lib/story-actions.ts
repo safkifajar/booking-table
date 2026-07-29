@@ -127,8 +127,8 @@ async function resolveMentionsAndNotify(args: {
         profileId: pid,
         type: "story_mention",
         title: `${args.authorName} mentioned you in a story`,
-        body: "Tap to view their profile.",
-        link: `/network/${args.authorId}`,
+        body: "Tap to view the story.",
+        link: `/story/${args.storyId}`,
         refId: args.storyId,
       })
     )
@@ -376,8 +376,8 @@ export async function repostStory(sourceStoryId: string): Promise<{ id: string }
     profileId: originalAuthorId,
     type: "story_mention",
     title: `${profile.displayName} reposted your story`,
-    body: "Tap to view their profile.",
-    link: `/network/${profile.id}`,
+    body: "Tap to view the story.",
+    link: `/story/${newStory.id}`,
     refId: newStory.id,
   });
 
@@ -388,6 +388,42 @@ export async function repostStory(sourceStoryId: string): Promise<{ id: string }
   revalidatePath("/", "layout");
 
   return { id: newStory.id };
+}
+
+/**
+ * Info pembuat story tunggal (untuk halaman /story/[id] dari klik notifikasi).
+ * NULL kalau story tak ada / sudah expired. Tidak mengecek blokir/level di sini
+ * karena StoryViewer + getStoriesForUser sudah menyaring.
+ */
+export interface StoryOwnerInfo {
+  userId: string;
+  barId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export async function getStoryOwner(
+  storyId: string
+): Promise<StoryOwnerInfo | null> {
+  const [row] = await db
+    .select({
+      userId: stories.userId,
+      barId: stories.barId,
+      expiresAt: stories.expiresAt,
+      displayName: profiles.displayName,
+      avatarUrl: profiles.avatarUrl,
+    })
+    .from(stories)
+    .innerJoin(profiles, eq(profiles.id, stories.userId))
+    .where(eq(stories.id, storyId));
+  if (!row) return null;
+  if (row.expiresAt.getTime() < Date.now()) return null; // sudah expired
+  return {
+    userId: row.userId,
+    barId: row.barId,
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
+  };
 }
 
 /**

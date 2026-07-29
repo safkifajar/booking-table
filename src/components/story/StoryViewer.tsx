@@ -349,7 +349,7 @@ export function StoryViewer({
 
         {/* Kartu embed "via @pembuat" untuk story hasil repost (ala IG). */}
         {currentStory.repostAuthor && (
-          <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2">
+          <div className="absolute left-3 top-16 z-20">
             <button
               type="button"
               onClick={(e) => {
@@ -512,26 +512,27 @@ export function StoryViewer({
                 </button>
               </div>
             )}
-            {/* Repost: hanya yang di-mention (bukan owner) yang bisa. */}
-            {!isOwner && currentStory.canRepost && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleRepost}
-                  disabled={reposting}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
-                >
-                  {reposting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Repeat2 className="h-3.5 w-3.5" />
-                  )}
-                  Add to your story
-                </button>
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Repost — tombol di TENGAH bawah (ala IG). Hanya yang di-mention. */}
+        {!isOwner && currentStory.canRepost && (
+          <div className="absolute bottom-5 inset-x-0 z-20 flex justify-center pointer-events-none">
+            <button
+              type="button"
+              onClick={handleRepost}
+              disabled={reposting}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/50 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/70 disabled:opacity-50"
+            >
+              {reposting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Repeat2 className="h-4 w-4" />
+              )}
+              Add to your story
+            </button>
+          </div>
+        )}
 
         {/* Viewers overlay */}
         {showViewers && (
