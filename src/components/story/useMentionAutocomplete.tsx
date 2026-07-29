@@ -109,7 +109,7 @@ export function useMentionAutocomplete({
 
   const dropdown =
     query !== null && results.length > 0 ? (
-      <div className="absolute inset-x-0 bottom-full mb-2 z-20 max-h-56 overflow-y-auto rounded-xl border border-white/15 bg-black/90 backdrop-blur-md shadow-2xl">
+      <div className="fixed inset-x-4 bottom-24 z-[60] mx-auto max-w-md max-h-56 overflow-y-auto rounded-xl border border-white/15 bg-black/90 backdrop-blur-md shadow-2xl">
         {results.map((f) => (
           <button
             key={f.id}

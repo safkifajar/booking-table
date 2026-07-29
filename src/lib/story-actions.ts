@@ -127,8 +127,8 @@ async function resolveMentionsAndNotify(args: {
         profileId: pid,
         type: "story_mention",
         title: `${args.authorName} mentioned you in a story`,
-        body: "Tap to view their profile.",
-        link: `/network/${args.authorId}`,
+        body: "Tap to view the story.",
+        link: `/story/${args.storyId}`,
         refId: args.storyId,
       })
     )
@@ -311,6 +311,119 @@ export async function createTextStory(input: {
   revalidatePath("/", "layout");
 
   return { id: newStory.id };
+}
+
+/**
+ * Repost story ala IG "add to your story": user yang DI-MENTION di sebuah story
+ * membuat story baru miliknya, menyalin media/teks asli + menandai pembuat asli
+ * (repostOfAuthorId) supaya viewer bisa render kartu embed "via @pembuat".
+ *
+ * Guard: hanya yang di-tag di story sumber yang boleh repost.
+ */
+export async function repostStory(sourceStoryId: string): Promise<{ id: string }> {
+  const profile = await requireProfile();
+
+  const [src] = await db
+    .select({
+      userId: stories.userId,
+      barId: stories.barId,
+      kind: stories.kind,
+      imageUrl: stories.imageUrl,
+      bgColor: stories.bgColor,
+      textStyle: stories.textStyle,
+      caption: stories.caption,
+      mentions: stories.mentions,
+      repostOfAuthorId: stories.repostOfAuthorId,
+    })
+    .from(stories)
+    .where(eq(stories.id, sourceStoryId));
+
+  if (!src) throw new Error("Story not found");
+  // Hanya yang di-tag boleh repost; tak bisa repost story sendiri.
+  if (src.userId === profile.id) {
+    throw new Error("You can't repost your own story");
+  }
+  if (!(src.mentions ?? []).includes(profile.id)) {
+    throw new Error("Only mentioned people can repost this story");
+  }
+  // Cegah repost berantai: repost dari repost tetap kredit ke pembuat ASLI.
+  const originalAuthorId = src.repostOfAuthorId ?? src.userId;
+  if (originalAuthorId === profile.id) {
+    throw new Error("You can't repost your own story");
+  }
+
+  const activeSessionId = await findActiveSessionId(profile.id, src.barId);
+
+  const [newStory] = await db
+    .insert(stories)
+    .values({
+      userId: profile.id,
+      barId: src.barId,
+      tableSessionId: activeSessionId,
+      kind: src.kind,
+      imageUrl: src.imageUrl,
+      bgColor: src.bgColor,
+      textStyle: src.textStyle,
+      caption: src.caption,
+      // Repost TIDAK membawa mention asli (biar tak spam notif ulang).
+      mentions: [],
+      repostOfAuthorId: originalAuthorId,
+    })
+    .returning({ id: stories.id });
+
+  // Beri tahu pembuat asli bahwa story-nya di-repost.
+  await createNotification({
+    profileId: originalAuthorId,
+    type: "story_mention",
+    title: `${profile.displayName} reposted your story`,
+    body: "Tap to view the story.",
+    link: `/story/${newStory.id}`,
+    refId: newStory.id,
+  });
+
+  await notify(channels.bar(src.barId), {
+    type: "story.new",
+    storyId: newStory.id,
+  });
+  revalidatePath("/", "layout");
+
+  return { id: newStory.id };
+}
+
+/**
+ * Info pembuat story tunggal (untuk halaman /story/[id] dari klik notifikasi).
+ * NULL kalau story tak ada / sudah expired. Tidak mengecek blokir/level di sini
+ * karena StoryViewer + getStoriesForUser sudah menyaring.
+ */
+export interface StoryOwnerInfo {
+  userId: string;
+  barId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+export async function getStoryOwner(
+  storyId: string
+): Promise<StoryOwnerInfo | null> {
+  const [row] = await db
+    .select({
+      userId: stories.userId,
+      barId: stories.barId,
+      expiresAt: stories.expiresAt,
+      displayName: profiles.displayName,
+      avatarUrl: profiles.avatarUrl,
+    })
+    .from(stories)
+    .innerJoin(profiles, eq(profiles.id, stories.userId))
+    .where(eq(stories.id, storyId));
+  if (!row) return null;
+  if (row.expiresAt.getTime() < Date.now()) return null; // sudah expired
+  return {
+    userId: row.userId,
+    barId: row.barId,
+    displayName: row.displayName,
+    avatarUrl: row.avatarUrl,
+  };
 }
 
 /**
@@ -541,6 +654,13 @@ export interface MentionedUser {
   username: string;
 }
 
+export interface RepostAuthor {
+  id: string;
+  displayName: string;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
 export interface StoryDetail {
   id: string;
   kind: "image" | "text";
@@ -550,6 +670,10 @@ export interface StoryDetail {
   caption: string | null;
   /** Profil (id + username) yang di-tag — untuk highlight @handle klik-ke-profil. */
   mentionedUsers: MentionedUser[];
+  /** True kalau viewer di-mention di story ini → boleh repost (bukan miliknya). */
+  canRepost: boolean;
+  /** Pembuat asli kalau story ini repost — untuk kartu embed "via @pembuat". */
+  repostAuthor: RepostAuthor | null;
   createdAt: Date;
   expiresAt: Date;
   table_label: string | null;
@@ -589,6 +713,7 @@ export async function getStoriesForUser(
       textStyle: stories.textStyle,
       caption: stories.caption,
       mentions: stories.mentions,
+      repostOfAuthorId: stories.repostOfAuthorId,
       createdAt: stories.createdAt,
       expiresAt: stories.expiresAt,
       table_label: tables.label,
@@ -615,29 +740,52 @@ export async function getStoriesForUser(
     )
     .orderBy(stories.createdAt);
 
-  // Resolve semua mention id → username (sekali query untuk seluruh story).
+  // Resolve mention id → username + pembuat asli repost → profil kartu (satu
+  // query gabungan untuk seluruh story yang tampil).
   const allMentionIds = Array.from(
     new Set(rows.flatMap((r) => r.mentions ?? []))
   );
+  const repostAuthorIds = rows
+    .map((r) => r.repostOfAuthorId)
+    .filter((id): id is string => !!id);
+  const lookupIds = Array.from(new Set([...allMentionIds, ...repostAuthorIds]));
   const mentionMap = new Map<string, string>();
-  if (allMentionIds.length > 0) {
-    const mentioned = await db
-      .select({ id: profiles.id, username: profiles.username })
+  const profileMap = new Map<string, RepostAuthor>();
+  if (lookupIds.length > 0) {
+    const people = await db
+      .select({
+        id: profiles.id,
+        username: profiles.username,
+        displayName: profiles.displayName,
+        avatarUrl: profiles.avatarUrl,
+      })
       .from(profiles)
-      .where(inArray(profiles.id, allMentionIds));
-    for (const m of mentioned) {
-      if (m.username) mentionMap.set(m.id, m.username);
+      .where(inArray(profiles.id, lookupIds));
+    for (const p of people) {
+      if (p.username) mentionMap.set(p.id, p.username);
+      profileMap.set(p.id, {
+        id: p.id,
+        displayName: p.displayName,
+        username: p.username,
+        avatarUrl: p.avatarUrl,
+      });
     }
   }
 
   return rows.map((r) => {
-    const { mentions, ...rest } = r;
+    const { mentions, repostOfAuthorId, ...rest } = r;
     return {
       ...rest,
       mentionedUsers: (mentions ?? []).flatMap((id) => {
         const username = mentionMap.get(id);
         return username ? [{ id, username }] : [];
       }),
+      // Viewer boleh repost kalau di-tag & bukan story miliknya sendiri.
+      canRepost:
+        userId !== viewerId && (mentions ?? []).includes(viewerId),
+      repostAuthor: repostOfAuthorId
+        ? profileMap.get(repostOfAuthorId) ?? null
+        : null,
     };
   });
 }

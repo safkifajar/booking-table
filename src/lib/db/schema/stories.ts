@@ -60,6 +60,15 @@ export const stories = pgTable(
     textStyle: storyTextStyleEnum("text_style").notNull().default("classic"),
     /** Profil (teman) yang di-tag via @username di caption/teks. */
     mentions: uuid("mentions").array().notNull().default([]),
+    /**
+     * Repost: kalau story ini hasil "add to your story" dari mention, ini =
+     * profileId pembuat ASLI (untuk render kartu embed "via @pembuat"). Null =
+     * story original. FK set null kalau pembuat asli terhapus.
+     */
+    repostOfAuthorId: uuid("repost_of_author_id").references(
+      () => profiles.id,
+      { onDelete: "set null" }
+    ),
     caption: text("caption"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" })

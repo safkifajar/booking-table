@@ -4,12 +4,22 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, ChevronLeft, ChevronRight, MapPin, Eye, Trash2 } from "lucide-react";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Eye,
+  Trash2,
+  Repeat2,
+  Loader2,
+} from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   markStoryAsViewed,
   deleteStory,
+  repostStory,
   getStoriesForUser,
   getStoryViewers,
   type StoryDetail,
@@ -28,6 +38,11 @@ interface Props {
   barId: string;
   /** UserId yang stories-nya pertama mau dilihat */
   startUserId: string;
+  /**
+   * Story ID yang langsung dibuka (mis. dari notif mention/repost). Kalau ada
+   * & masih aktif, viewer mulai dari story ini — bukan story pertama pembuat.
+   */
+  startStoryId?: string;
   /** UserId yang lagi login (untuk owner check) */
   viewerId: string;
   /** Urutan user yang punya story aktif — untuk navigasi antar user */
@@ -56,6 +71,7 @@ type Phase = "loading" | "viewing" | "viewers";
 export function StoryViewer({
   barId,
   startUserId,
+  startStoryId,
   viewerId,
   orderedUserIds,
   userMeta,
@@ -63,6 +79,14 @@ export function StoryViewer({
 }: Props) {
   const confirm = useConfirm();
   const router = useRouter();
+
+  // Tutup viewer AMAN dari tap: tunda unmount 1 frame supaya event `click`
+  // yang tersintesis (setelah pointerup di tap-zone) sudah selesai diserap
+  // overlay viewer — cegah "click-through" ke elemen di belakang (mis. banner
+  // yang kebetulan sejajar dengan zona tap kanan saat menutup story terakhir).
+  const closeSafely = React.useCallback(() => {
+    requestAnimationFrame(() => onClose());
+  }, [onClose]);
 
   // Buka halaman profil user (pembuat story / viewer). Tutup viewer dulu supaya
   // tak menutupi halaman tujuan.
@@ -82,6 +106,8 @@ export function StoryViewer({
   const [paused, setPaused] = React.useState(false);
   const [viewers, setViewers] = React.useState<ViewerEntry[] | null>(null);
   const [showViewers, setShowViewers] = React.useState(false);
+  const [reposting, setReposting] = React.useState(false);
+  const startStoryHandledRef = React.useRef(false);
 
   const currentStory = stories[currentIndex];
   const isOwner = currentStory?.id && currentUserId === viewerId;
@@ -107,6 +133,13 @@ export function StoryViewer({
         return;
       }
       setStories(rows);
+      // Buka langsung story yg dituju (notif mention/repost). Hanya sekali,
+      // saat load pertama; navigasi berikutnya tetap normal dari index 0.
+      if (!startStoryHandledRef.current && startStoryId) {
+        startStoryHandledRef.current = true;
+        const idx = rows.findIndex((s) => s.id === startStoryId);
+        if (idx > 0) setCurrentIndex(idx);
+      }
       setPhase("viewing");
     });
     return () => {
@@ -135,9 +168,9 @@ export function StoryViewer({
     } else if (hasNextUser) {
       setCurrentUserId(orderedUserIds[userIndex + 1]);
     } else {
-      onClose();
+      closeSafely(); // story terakhir → tutup tanpa click-through
     }
-  }, [currentIndex, stories.length, hasNextUser, orderedUserIds, userIndex, onClose]);
+  }, [currentIndex, stories.length, hasNextUser, orderedUserIds, userIndex, closeSafely]);
 
   const goPrev = React.useCallback(() => {
     if (currentIndex > 0) {
@@ -258,6 +291,22 @@ export function StoryViewer({
     }
   }
 
+  async function handleRepost() {
+    if (!currentStory || reposting) return;
+    setReposting(true);
+    setPaused(true);
+    try {
+      await repostStory(currentStory.id);
+      toast.success("Added to your story");
+      onClose();
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to repost story"));
+      setReposting(false);
+      setPaused(false);
+    }
+  }
+
   async function handleShowViewers() {
     if (!currentStory || !isOwner) return;
     setShowViewers(true);
@@ -320,12 +369,47 @@ export function StoryViewer({
           )
         )}
 
+        {/* Kartu embed "via @pembuat" untuk story hasil repost (ala IG). */}
+        {currentStory.repostAuthor && (
+          <div className="absolute left-3 top-16 z-20">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                goToProfile(currentStory.repostAuthor!.id);
+              }}
+              className="flex items-center gap-2 rounded-full border border-white/20 bg-black/55 py-1 pl-1 pr-3 backdrop-blur-md transition hover:bg-black/70"
+            >
+              <Avatar className="h-6 w-6 shrink-0">
+                {currentStory.repostAuthor.avatarUrl && (
+                  <AvatarImage
+                    src={currentStory.repostAuthor.avatarUrl}
+                    alt={currentStory.repostAuthor.displayName}
+                  />
+                )}
+                <AvatarFallback className="text-[9px]">
+                  {initials(currentStory.repostAuthor.displayName)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-white/90">
+                via{" "}
+                <span className="font-semibold">
+                  {currentStory.repostAuthor.username
+                    ? `@${currentStory.repostAuthor.username}`
+                    : currentStory.repostAuthor.displayName}
+                </span>
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* Tap zones (kiri/kanan). Tap cepat → prev/next; tahan → pause. */}
         <button
           type="button"
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("prev")}
           onPointerLeave={onPressCancel}
+          onClick={(e) => e.preventDefault()}
           className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2 touch-none select-none"
           aria-label="Previous story"
         >
@@ -338,6 +422,7 @@ export function StoryViewer({
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("next")}
           onPointerLeave={onPressCancel}
+          onClick={(e) => e.preventDefault()}
           className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2 touch-none select-none"
           aria-label="Next story"
         >
@@ -453,6 +538,25 @@ export function StoryViewer({
             )}
           </div>
         </div>
+
+        {/* Repost — tombol di TENGAH bawah (ala IG). Hanya yang di-mention. */}
+        {!isOwner && currentStory.canRepost && (
+          <div className="absolute bottom-5 inset-x-0 z-20 flex justify-center pointer-events-none">
+            <button
+              type="button"
+              onClick={handleRepost}
+              disabled={reposting}
+              className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/50 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/70 disabled:opacity-50"
+            >
+              {reposting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Repeat2 className="h-4 w-4" />
+              )}
+              Add to your story
+            </button>
+          </div>
+        )}
 
         {/* Viewers overlay */}
         {showViewers && (

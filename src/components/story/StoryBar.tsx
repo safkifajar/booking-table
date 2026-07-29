@@ -66,13 +66,14 @@ export function StoryBar({
 
   return (
     <>
-      <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
-        <div className="flex gap-3 pb-2">
+      <div className="overflow-x-auto overflow-y-visible scrollbar-none -mx-4 px-4">
+        <div className="flex gap-3 pt-2 pb-2">
           {/* Your Story bubble */}
           <YourStoryBubble
-            avatarUrl={ownItem ? viewerAvatarUrl : viewerAvatarUrl}
+            avatarUrl={viewerAvatarUrl}
             displayName={viewerDisplayName}
             hasOwn={!!ownItem}
+            storyCount={ownItem?.storyCount ?? 0}
             onUpload={() => setPickerOpen(true)}
             onView={() => ownItem && setViewerOpen(viewerId)}
           />
@@ -154,35 +155,45 @@ function YourStoryBubble({
   avatarUrl,
   displayName,
   hasOwn,
+  storyCount,
   onUpload,
   onView,
 }: {
   avatarUrl: string | null;
   displayName: string;
   hasOwn: boolean;
+  storyCount: number;
   onUpload: () => void;
   onView: () => void;
 }) {
+  const avatar = (
+    <Avatar className="h-14 w-14 ring-2 ring-background">
+      {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
+      <AvatarFallback className="text-xs">
+        {initials(displayName)}
+      </AvatarFallback>
+    </Avatar>
+  );
   return (
     <div className="flex flex-col items-center gap-1 shrink-0 w-[70px]">
       <div className="relative">
         <button
           type="button"
           onClick={hasOwn ? onView : onUpload}
-          className={cn(
-            "rounded-full p-[3px] transition",
-            hasOwn
-              ? "bg-gradient-to-tr from-primary via-amber-400 to-primary shadow-[0_0_10px_-1px_rgba(225,29,42,0.55)]"
-              : "bg-border hover:bg-muted-foreground/40"
-          )}
+          className="transition hover:scale-105"
           aria-label={hasOwn ? "View your story" : "Upload new story"}
         >
-          <Avatar className="h-14 w-14 ring-2 ring-background">
-            {avatarUrl && <AvatarImage src={avatarUrl} alt={displayName} />}
-            <AvatarFallback className="text-xs">
-              {initials(displayName)}
-            </AvatarFallback>
-          </Avatar>
+          {hasOwn ? (
+            // Story sendiri: ring merah tersegmentasi sesuai jumlah story.
+            <StoryRing count={storyCount} viewed={false}>
+              {avatar}
+            </StoryRing>
+          ) : (
+            // Belum ada story: ring abu polos.
+            <span className="inline-block rounded-full bg-border p-[3px] hover:bg-muted-foreground/40">
+              {avatar}
+            </span>
+          )}
         </button>
         {!hasOwn ? (
           <button
@@ -223,25 +234,67 @@ function StoryItem({
       <button
         type="button"
         onClick={onClick}
-        className={cn(
-          "rounded-full p-[3px] transition hover:scale-105",
-          item.allViewed
-            ? "bg-border"
-            : "bg-gradient-to-tr from-primary via-amber-400 to-primary shadow-[0_0_10px_-1px_rgba(225,29,42,0.55)]"
-        )}
+        className="transition hover:scale-105"
         aria-label={`View ${item.displayName}'s story`}
       >
-        <Avatar className="h-14 w-14 ring-2 ring-background">
-          {item.avatarUrl && <AvatarImage src={item.avatarUrl} alt={item.displayName} />}
-          <AvatarFallback className="text-xs">
-            {initials(item.displayName)}
-          </AvatarFallback>
-        </Avatar>
+        <StoryRing count={item.storyCount} viewed={item.allViewed}>
+          <Avatar className="h-14 w-14 ring-2 ring-background">
+            {item.avatarUrl && <AvatarImage src={item.avatarUrl} alt={item.displayName} />}
+            <AvatarFallback className="text-xs">
+              {initials(item.displayName)}
+            </AvatarFallback>
+          </Avatar>
+        </StoryRing>
       </button>
       <span className="text-[10px] text-center text-foreground/80 truncate w-full">
         {item.displayName}
       </span>
     </div>
+  );
+}
+
+/**
+ * Ring story ala IG/WA. 1 story = ring penuh. >1 story = ring TERPOTONG jadi
+ * segmen (satu busur per story, ada gap antar segmen). allViewed = ring abu.
+ *
+ * Implementasi: conic-gradient warna ring diselang-seling dengan warna gap
+ * (transparan) per segmen. Padding p-[3px] jadi tebal ring; lingkaran dalam
+ * (avatar) menutupi bagian tengah.
+ */
+function StoryRing({
+  count,
+  viewed,
+  children,
+}: {
+  count: number;
+  viewed: boolean;
+  children: React.ReactNode;
+}) {
+  const segments = Math.max(1, count);
+  const activeColor = viewed
+    ? "rgba(120,120,120,0.7)" // abu (sudah dilihat semua)
+    : "#e11d2a"; // merah SOHO
+  const gapColor = "transparent";
+  const gapDeg = segments > 1 ? 6 : 0; // besar gap antar segmen (derajat)
+
+  const ringStyle: React.CSSProperties =
+    segments === 1
+      ? { background: activeColor }
+      : {
+          background: `conic-gradient(${Array.from({ length: segments })
+            .map((_, i) => {
+              const seg = 360 / segments;
+              const start = i * seg + gapDeg / 2;
+              const end = (i + 1) * seg - gapDeg / 2;
+              return `${gapColor} ${i * seg}deg ${start}deg, ${activeColor} ${start}deg ${end}deg, ${gapColor} ${end}deg ${(i + 1) * seg}deg`;
+            })
+            .join(", ")})`,
+        };
+
+  return (
+    <span className="inline-block rounded-full p-[3px]" style={ringStyle}>
+      {children}
+    </span>
   );
 }
 

@@ -43,7 +43,7 @@ export async function MembershipBanner({ profileId }: { profileId: string }) {
   return (
     <Link
       href="/membership"
-      className="relative flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary to-primary/75 p-3.5 shadow-lg shadow-primary/20 transition hover:shadow-primary/35 group"
+      className="relative mx-4 mt-4 flex items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-primary via-primary to-primary/75 p-3.5 shadow-lg shadow-primary/20 transition hover:shadow-primary/35 group sm:mx-6"
     >
       {/* Aksen dekoratif lembut — di pojok KIRI-atas, jauh dari pill CTA
           supaya tepinya tak memotong tombol. */}
