@@ -74,6 +74,14 @@ export function StoryViewer({
   const confirm = useConfirm();
   const router = useRouter();
 
+  // Tutup viewer AMAN dari tap: tunda unmount 1 frame supaya event `click`
+  // yang tersintesis (setelah pointerup di tap-zone) sudah selesai diserap
+  // overlay viewer — cegah "click-through" ke elemen di belakang (mis. banner
+  // yang kebetulan sejajar dengan zona tap kanan saat menutup story terakhir).
+  const closeSafely = React.useCallback(() => {
+    requestAnimationFrame(() => onClose());
+  }, [onClose]);
+
   // Buka halaman profil user (pembuat story / viewer). Tutup viewer dulu supaya
   // tak menutupi halaman tujuan.
   const goToProfile = React.useCallback(
@@ -146,9 +154,9 @@ export function StoryViewer({
     } else if (hasNextUser) {
       setCurrentUserId(orderedUserIds[userIndex + 1]);
     } else {
-      onClose();
+      closeSafely(); // story terakhir → tutup tanpa click-through
     }
-  }, [currentIndex, stories.length, hasNextUser, orderedUserIds, userIndex, onClose]);
+  }, [currentIndex, stories.length, hasNextUser, orderedUserIds, userIndex, closeSafely]);
 
   const goPrev = React.useCallback(() => {
     if (currentIndex > 0) {
@@ -387,6 +395,7 @@ export function StoryViewer({
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("prev")}
           onPointerLeave={onPressCancel}
+          onClick={(e) => e.preventDefault()}
           className="absolute inset-y-0 left-0 w-1/3 group flex items-center pl-2 touch-none select-none"
           aria-label="Previous story"
         >
@@ -399,6 +408,7 @@ export function StoryViewer({
           onPointerDown={onPressStart}
           onPointerUp={() => onPressEnd("next")}
           onPointerLeave={onPressCancel}
+          onClick={(e) => e.preventDefault()}
           className="absolute inset-y-0 right-0 w-1/3 group flex items-center justify-end pr-2 touch-none select-none"
           aria-label="Next story"
         >
