@@ -4,12 +4,22 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, ChevronLeft, ChevronRight, MapPin, Eye, Trash2 } from "lucide-react";
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Eye,
+  Trash2,
+  Repeat2,
+  Loader2,
+} from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useConfirm } from "@/components/ConfirmDialog";
 import {
   markStoryAsViewed,
   deleteStory,
+  repostStory,
   getStoriesForUser,
   getStoryViewers,
   type StoryDetail,
@@ -82,6 +92,7 @@ export function StoryViewer({
   const [paused, setPaused] = React.useState(false);
   const [viewers, setViewers] = React.useState<ViewerEntry[] | null>(null);
   const [showViewers, setShowViewers] = React.useState(false);
+  const [reposting, setReposting] = React.useState(false);
 
   const currentStory = stories[currentIndex];
   const isOwner = currentStory?.id && currentUserId === viewerId;
@@ -258,6 +269,22 @@ export function StoryViewer({
     }
   }
 
+  async function handleRepost() {
+    if (!currentStory || reposting) return;
+    setReposting(true);
+    setPaused(true);
+    try {
+      await repostStory(currentStory.id);
+      toast.success("Added to your story");
+      onClose();
+      router.refresh();
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to repost story"));
+      setReposting(false);
+      setPaused(false);
+    }
+  }
+
   async function handleShowViewers() {
     if (!currentStory || !isOwner) return;
     setShowViewers(true);
@@ -318,6 +345,40 @@ export function StoryViewer({
               priority
             />
           )
+        )}
+
+        {/* Kartu embed "via @pembuat" untuk story hasil repost (ala IG). */}
+        {currentStory.repostAuthor && (
+          <div className="absolute left-1/2 top-20 z-20 -translate-x-1/2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                goToProfile(currentStory.repostAuthor!.id);
+              }}
+              className="flex items-center gap-2 rounded-full border border-white/20 bg-black/55 py-1 pl-1 pr-3 backdrop-blur-md transition hover:bg-black/70"
+            >
+              <Avatar className="h-6 w-6 shrink-0">
+                {currentStory.repostAuthor.avatarUrl && (
+                  <AvatarImage
+                    src={currentStory.repostAuthor.avatarUrl}
+                    alt={currentStory.repostAuthor.displayName}
+                  />
+                )}
+                <AvatarFallback className="text-[9px]">
+                  {initials(currentStory.repostAuthor.displayName)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-xs text-white/90">
+                via{" "}
+                <span className="font-semibold">
+                  {currentStory.repostAuthor.username
+                    ? `@${currentStory.repostAuthor.username}`
+                    : currentStory.repostAuthor.displayName}
+                </span>
+              </span>
+            </button>
+          </div>
         )}
 
         {/* Tap zones (kiri/kanan). Tap cepat → prev/next; tahan → pause. */}
@@ -448,6 +509,24 @@ export function StoryViewer({
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete
+                </button>
+              </div>
+            )}
+            {/* Repost: hanya yang di-mention (bukan owner) yang bisa. */}
+            {!isOwner && currentStory.canRepost && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleRepost}
+                  disabled={reposting}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-50"
+                >
+                  {reposting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Repeat2 className="h-3.5 w-3.5" />
+                  )}
+                  Add to your story
                 </button>
               </div>
             )}

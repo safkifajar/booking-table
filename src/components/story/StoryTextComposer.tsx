@@ -139,8 +139,10 @@ export function StoryTextComposer({ barId, onClose, onCreated }: Props) {
         <span className="absolute bottom-3 right-4 text-[11px] font-medium text-white/70 tabular-nums">
           {text.length}/{MAX_TEXT}
         </span>
-        {mention.dropdown}
       </div>
+
+      {/* Dropdown mention — di luar canvas (canvas overflow-hidden meng-clip). */}
+      {mention.dropdown}
 
       {/* Palet warna preset */}
       <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none px-4 pb-6">
