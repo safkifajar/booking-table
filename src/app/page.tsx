@@ -161,12 +161,9 @@ export default async function HomePage() {
         {!isAnon && profile && <UnpaidBanner sessions={unpaidSessions} />}
 
         {/* Banner membership (PRD Membership M11): basic → upgrade;
-            H-7 kedaluwarsa → perpanjang. */}
-        {!isAnon && profile && (
-          <div className="mx-4 sm:mx-6 mt-4">
-            <MembershipBanner profileId={profile.id} />
-          </div>
-        )}
+            H-7 kedaluwarsa → perpanjang. Render null saat tak perlu → tanpa
+            wrapper margin supaya tak menyisakan gap kosong. */}
+        {!isAnon && profile && <MembershipBanner profileId={profile.id} />}
 
         {/* Story bar — logged-in only (Server Component skip render kalau anon) */}
         <StoryBarSection barSlug={barSlug} />
