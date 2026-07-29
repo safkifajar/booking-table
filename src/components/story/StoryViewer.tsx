@@ -38,6 +38,11 @@ interface Props {
   barId: string;
   /** UserId yang stories-nya pertama mau dilihat */
   startUserId: string;
+  /**
+   * Story ID yang langsung dibuka (mis. dari notif mention/repost). Kalau ada
+   * & masih aktif, viewer mulai dari story ini — bukan story pertama pembuat.
+   */
+  startStoryId?: string;
   /** UserId yang lagi login (untuk owner check) */
   viewerId: string;
   /** Urutan user yang punya story aktif — untuk navigasi antar user */
@@ -66,6 +71,7 @@ type Phase = "loading" | "viewing" | "viewers";
 export function StoryViewer({
   barId,
   startUserId,
+  startStoryId,
   viewerId,
   orderedUserIds,
   userMeta,
@@ -101,6 +107,7 @@ export function StoryViewer({
   const [viewers, setViewers] = React.useState<ViewerEntry[] | null>(null);
   const [showViewers, setShowViewers] = React.useState(false);
   const [reposting, setReposting] = React.useState(false);
+  const startStoryHandledRef = React.useRef(false);
 
   const currentStory = stories[currentIndex];
   const isOwner = currentStory?.id && currentUserId === viewerId;
@@ -126,6 +133,13 @@ export function StoryViewer({
         return;
       }
       setStories(rows);
+      // Buka langsung story yg dituju (notif mention/repost). Hanya sekali,
+      // saat load pertama; navigasi berikutnya tetap normal dari index 0.
+      if (!startStoryHandledRef.current && startStoryId) {
+        startStoryHandledRef.current = true;
+        const idx = rows.findIndex((s) => s.id === startStoryId);
+        if (idx > 0) setCurrentIndex(idx);
+      }
       setPhase("viewing");
     });
     return () => {

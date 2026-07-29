@@ -30,6 +30,7 @@ export default async function StoryPage({ params }: PageProps) {
     <StorySoloViewer
       barId={owner.barId}
       ownerId={owner.userId}
+      storyId={id}
       viewerId={profile.id}
       ownerName={owner.displayName}
       ownerAvatarUrl={owner.avatarUrl}

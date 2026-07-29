@@ -10,12 +10,15 @@ import { StoryViewer } from "./StoryViewer";
 export function StorySoloViewer({
   barId,
   ownerId,
+  storyId,
   viewerId,
   ownerName,
   ownerAvatarUrl,
 }: {
   barId: string;
   ownerId: string;
+  /** Story yang langsung dibuka (dari notif). */
+  storyId: string;
   viewerId: string;
   ownerName: string;
   ownerAvatarUrl: string | null;
@@ -25,6 +28,7 @@ export function StorySoloViewer({
     <StoryViewer
       barId={barId}
       startUserId={ownerId}
+      startStoryId={storyId}
       viewerId={viewerId}
       orderedUserIds={[ownerId]}
       userMeta={{

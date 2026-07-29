@@ -292,13 +292,7 @@ function StoryRing({
         };
 
   return (
-    <span
-      className={cn(
-        "inline-block rounded-full p-[3px]",
-        !viewed && "drop-shadow-[0_0_8px_rgba(225,29,42,0.5)]"
-      )}
-      style={ringStyle}
-    >
+    <span className="inline-block rounded-full p-[3px]" style={ringStyle}>
       {children}
     </span>
   );

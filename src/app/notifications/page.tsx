@@ -27,7 +27,7 @@ export default async function NotificationsPage() {
     <main className="relative flex-1 pb-24">
       <SohoGlow />
       {/* Header ala mobile app: back + judul */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Link
             href="/"
@@ -40,7 +40,7 @@ export default async function NotificationsPage() {
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-5">
         <NotificationsList userId={profile.id} initial={initial} />
       </div>
     </main>
