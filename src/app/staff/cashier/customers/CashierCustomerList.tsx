@@ -9,7 +9,6 @@ import {
   UserPlus,
   Loader2,
   Users,
-  KeyRound,
   Pencil,
   Copy,
   Check,
@@ -28,7 +27,6 @@ import {
   createCustomerByStaff,
   updateCustomerByStaff,
   getCustomerForStaff,
-  resetCustomerPasswordByStaff,
   type StaffCustomerRow,
 } from "@/lib/staff-customer-actions";
 
@@ -176,12 +174,6 @@ export function CashierCustomerList({
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
-                <ResetPasswordButton
-                  customerId={c.id}
-                  onDone={(password) =>
-                    setCreds({ name: c.name, email: c.email, password })
-                  }
-                />
               </div>
             </div>
           ))}
@@ -238,44 +230,6 @@ export function CashierCustomerList({
         <CredentialsSheet creds={creds} onClose={() => setCreds(null)} />
       )}
     </div>
-  );
-}
-
-/** Tombol reset password ke pola default (mis. pelanggan lupa). */
-function ResetPasswordButton({
-  customerId,
-  onDone,
-}: {
-  customerId: string;
-  onDone: (password: string) => void;
-}) {
-  const [busy, setBusy] = React.useState(false);
-  async function handle() {
-    setBusy(true);
-    try {
-      const res = await resetCustomerPasswordByStaff(customerId);
-      onDone(res.password);
-    } catch (err) {
-      toast.error(getActionErrorMessage(err, "Failed to reset password"));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={handle}
-      disabled={busy}
-      aria-label="Reset password"
-      title="Reset password to default"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:text-foreground hover:bg-muted/50 disabled:opacity-50"
-    >
-      {busy ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        <KeyRound className="h-4 w-4" />
-      )}
-    </button>
   );
 }
 

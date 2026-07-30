@@ -360,34 +360,6 @@ export async function updateCustomerByStaff(
   revalidatePath("/admin/users");
 }
 
-// ============================================================
-// RESET PASSWORD (kembali ke pola default)
-// ============================================================
-
-/**
- * Set ulang password pelanggan ke pola default & kembalikan plaintext-nya
- * supaya kasir bisa memberitahukan lagi (mis. pelanggan lupa).
- */
-export async function resetCustomerPasswordByStaff(
-  id: string
-): Promise<{ password: string }> {
-  await requirePermission("manage_customers", GUARD_PATH);
-
-  const [row] = await db
-    .select({ phone: profiles.phone, isGuest: profiles.isGuest })
-    .from(profiles)
-    .where(eq(profiles.id, id));
-  if (!row || row.isGuest) throw new Error("Customer not found");
-
-  const [staff] = await db
-    .select({ id: staffRoles.profileId })
-    .from(staffRoles)
-    .where(eq(staffRoles.profileId, id));
-  if (staff) throw new Error("This user is staff. Manage them in Manage Staff");
-
-  const password = defaultPasswordFrom(row.phone ?? undefined);
-  const passwordHash = await hashPassword(password);
-  await db.update(users).set({ passwordHash }).where(eq(users.id, id));
-
-  return { password };
-}
+// Catatan: reset/ubah password pelanggan TIDAK disediakan di sisi kasir —
+// hanya admin (setCustomerPassword di customer-actions.ts). Kasir hanya melihat
+// password default sekali saat membuat akun baru.
