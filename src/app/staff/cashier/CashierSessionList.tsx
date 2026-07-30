@@ -1035,10 +1035,6 @@ function OrderDetailSheet({
     };
   }, []);
 
-  // Tampilan daftar: dikelompokkan per order (default — kasir bisa lihat 1 order
-  // isinya apa) atau semua item datar.
-  const [mode, setMode] = React.useState<"grouped" | "all">("grouped");
-
   // Kelompokkan per order_id, urut waktu order tertua dulu (sesuai antrean).
   const orderGroups = React.useMemo(() => {
     const map = new Map<string, CashierOrderItem[]>();
@@ -1141,33 +1137,36 @@ function OrderDetailSheet({
           );
         })()}
 
-        {/* Toggle tampilan: per order vs semua item */}
-        {orderGroups.length > 1 && (
-          <div className="px-3 pt-3 shrink-0">
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border">
-              {(["grouped", "all"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={cn(
-                    "flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition",
-                    mode === m
-                      ? "bg-primary/15 text-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {m === "grouped" ? "Grouped" : "All items"}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Daftar item */}
+        {/* Daftar item — SELALU dikelompokkan per order (semua item tetap
+            tampil, hanya dipisah per order supaya jelas isi tiap order). */}
         <div className="p-3 overflow-y-auto [overscroll-behavior:contain] space-y-2">
-          {mode === "all" || orderGroups.length <= 1
-            ? t.items.map((it) => (
+          {orderGroups.map((g, gi) => (
+            <div key={g.orderId} className="space-y-2">
+              {/* Header per order: nomor, jam, pemesan, jumlah + aksi massal */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 text-[11px] font-semibold">
+                  Order {gi + 1}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                  <Clock className="h-3 w-3" />
+                  {fmtTime(g.firstAt)}
+                </span>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  · {g.items[0].added_by_name} · {g.totalQty} item
+                  {g.totalQty === 1 ? "" : "s"}
+                </span>
+                {!scheduled && g.pendingIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onMarkPreparingMany(g.pendingIds)}
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/20"
+                  >
+                    <ChefHat className="h-3 w-3" />
+                    Process all
+                  </button>
+                )}
+              </div>
+              {g.items.map((it) => (
                 <OrderItemRow
                   key={it.id}
                   it={it}
@@ -1175,44 +1174,9 @@ function OrderDetailSheet({
                   busy={busy}
                   onMarkPreparing={onMarkPreparing}
                 />
-              ))
-            : orderGroups.map((g, gi) => (
-                <div key={g.orderId} className="space-y-2">
-                  {/* Header per order: nomor, jam, pemesan, jumlah + aksi massal */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 text-[11px] font-semibold">
-                      Order {gi + 1}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
-                      <Clock className="h-3 w-3" />
-                      {fmtTime(g.firstAt)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground truncate">
-                      · {g.items[0].added_by_name} · {g.totalQty} item
-                      {g.totalQty === 1 ? "" : "s"}
-                    </span>
-                    {!scheduled && g.pendingIds.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => onMarkPreparingMany(g.pendingIds)}
-                        className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/20"
-                      >
-                        <ChefHat className="h-3 w-3" />
-                        Process all
-                      </button>
-                    )}
-                  </div>
-                  {g.items.map((it) => (
-                    <OrderItemRow
-                      key={it.id}
-                      it={it}
-                      scheduled={scheduled}
-                      busy={busy}
-                      onMarkPreparing={onMarkPreparing}
-                    />
-                  ))}
-                </div>
               ))}
+            </div>
+          ))}
         </div>
 
         {/* Footer: realtime hint */}
@@ -1225,7 +1189,7 @@ function OrderDetailSheet({
   );
 }
 
-/** Satu baris item order di sheet detail (dipakai mode grouped & all). */
+/** Satu baris item order di sheet detail. */
 function OrderItemRow({
   it,
   scheduled,

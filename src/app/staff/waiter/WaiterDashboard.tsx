@@ -586,6 +586,40 @@ function QueueDetailSheet({
     };
   }, []);
 
+  // Kelompokkan per order (samakan dgn kasir): semua item tetap tampil, hanya
+  // dipisah per order supaya jelas isi tiap order. Urut order tertua dulu.
+  const orderGroups = React.useMemo(() => {
+    const map = new Map<string, WaiterQueueItem[]>();
+    for (const it of items) {
+      const arr = map.get(it.order_id);
+      if (arr) arr.push(it);
+      else map.set(it.order_id, [it]);
+    }
+    return Array.from(map.entries())
+      .map(([orderId, list]) => ({
+        orderId,
+        items: list,
+        firstAt: list.reduce(
+          (min, i) => (i.created_at < min ? i.created_at : min),
+          list[0].created_at
+        ),
+        totalQty: list.reduce((s, i) => s + i.quantity, 0),
+      }))
+      .sort((a, b) => a.firstAt.localeCompare(b.firstAt));
+  }, [items]);
+
+  // Antar semua item satu order sekaligus (hanya tab pending).
+  const [servingAll, setServingAll] = React.useState<string | null>(null);
+  async function serveAll(orderId: string, ids: string[]) {
+    if (ids.length === 0) return;
+    setServingAll(orderId);
+    try {
+      await Promise.allSettled(ids.map((id) => onMarkServed(id)));
+    } finally {
+      setServingAll(null);
+    }
+  }
+
   // Portal + z-[100]: StaffBottomNav (tombol Open Table) fixed z-50 dan
   // di-portal ke akhir body — tanpa ini sheet tertimpa bar tsb.
   return createPortal(
@@ -659,17 +693,55 @@ function QueueDetailSheet({
           );
         })()}
 
-        {/* Daftar menu — scroll internal */}
+        {/* Daftar menu — scroll internal, dikelompokkan per order */}
         <div className="flex-1 min-h-0 overflow-y-auto [overscroll-behavior:contain] p-3 space-y-2">
-          {items.map((item) => (
-            <QueueMenuRow
-              key={item.id}
-              item={item}
-              served={kind === "served"}
-              onMarkServed={onMarkServed}
-              optimistic={optimisticIds.has(item.id)}
-            />
-          ))}
+          {orderGroups.map((g, gi) => {
+            const pendingIds = g.items
+              .filter((i) => !optimisticIds.has(i.id))
+              .map((i) => i.id);
+            return (
+              <div key={g.orderId} className="space-y-2">
+                {/* Header per order: nomor, jam, pemesan, jumlah + aksi massal */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 text-[11px] font-semibold">
+                    Order {gi + 1}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                    <Clock className="h-3 w-3" />
+                    {fmtTime(g.firstAt)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground truncate">
+                    · {g.items[0].added_by_name} · {g.totalQty} item
+                    {g.totalQty === 1 ? "" : "s"}
+                  </span>
+                  {kind === "pending" && pendingIds.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={servingAll === g.orderId}
+                      onClick={() => serveAll(g.orderId, pendingIds)}
+                      className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {servingAll === g.orderId ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3 w-3" />
+                      )}
+                      Serve all
+                    </button>
+                  )}
+                </div>
+                {g.items.map((item) => (
+                  <QueueMenuRow
+                    key={item.id}
+                    item={item}
+                    served={kind === "served"}
+                    onMarkServed={onMarkServed}
+                    optimistic={optimisticIds.has(item.id)}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* Footer: realtime hint */}
