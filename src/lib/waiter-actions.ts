@@ -32,6 +32,7 @@ import {
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems, menuCategories } from "@/lib/db/schema/menu";
@@ -888,6 +889,12 @@ export interface StaffOpenTableInput {
   items: { menuItemId: string; quantity: number; notes?: string }[];
   /** Metode bayar di muka: 'qris' (QR) atau 'cash' (bayar di kasir). */
   payMethod: "qris" | "cash";
+  /**
+   * Buka meja atas nama AKUN PELANGGAN yang sudah ada (dipilih kasir dari menu
+   * Customers) — meja & tagihan jadi milik akun itu, jadi kunjungan/riwayat
+   * tercatat di profilnya. Kosong = buat guest profile baru seperti biasa.
+   */
+  hostProfileId?: string | null;
 }
 
 /**
@@ -911,10 +918,42 @@ export async function staffOpenTableForCustomer(
     "open_table_for_customer",
     "/staff/waiter"
   );
-  const { tableId, guestNames, reservationAt, reservationEndAt, items, payMethod } =
-    input;
+  const {
+    tableId,
+    guestNames,
+    reservationAt,
+    reservationEndAt,
+    items,
+    payMethod,
+    hostProfileId,
+  } = input;
   if (!items || items.length === 0) {
     throw new Error("Add at least one menu item. Payment is required to open the table");
+  }
+
+  // Buka meja atas nama akun pelanggan (opsional). Validasi: harus profil
+  // customer aktif (bukan guest walk-in, bukan staff) supaya tagihan &
+  // riwayat menempel ke akun yang benar.
+  let hostAccount: { id: string; displayName: string } | null = null;
+  if (hostProfileId) {
+    const [row] = await db
+      .select({
+        id: profiles.id,
+        displayName: profiles.displayName,
+        isGuest: profiles.isGuest,
+        isActive: profiles.isActive,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, hostProfileId));
+    if (!row) throw new Error("Customer not found");
+    if (row.isGuest) throw new Error("That profile is a walk-in guest");
+    if (!row.isActive) throw new Error("That customer account is inactive");
+    const [isStaff] = await db
+      .select({ id: staffRoles.profileId })
+      .from(staffRoles)
+      .where(eq(staffRoles.profileId, hostProfileId));
+    if (isStaff) throw new Error("Staff can't be set as the table owner");
+    hostAccount = { id: row.id, displayName: row.displayName };
   }
 
   // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
@@ -995,28 +1034,35 @@ export async function staffOpenTableForCustomer(
   let paymentId: string;
   try {
     const result = await db.transaction(async (tx) => {
-      // 1. Create guest user (fake email, no password — can't login)
-      const guestToken = crypto.randomBytes(8).toString("hex");
-      const guestEmail = `guest-${guestToken}@walkin.soho`;
+      // 1-2. Host meja. Kalau kasir memilih AKUN pelanggan → pakai profil itu
+      // (tagihan & riwayat menempel ke akunnya). Kalau tidak → buat guest
+      // profile baru (fake email, tanpa password: tak bisa login).
+      let newProfile: { id: string };
+      if (hostAccount) {
+        newProfile = { id: hostAccount.id };
+      } else {
+        const guestToken = crypto.randomBytes(8).toString("hex");
+        const guestEmail = `guest-${guestToken}@walkin.soho`;
 
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          email: guestEmail,
-          name: mainGuest,
-          passwordHash: null, // No login
-        })
-        .returning({ id: users.id });
+        const [newUser] = await tx
+          .insert(users)
+          .values({
+            email: guestEmail,
+            name: mainGuest,
+            passwordHash: null, // No login
+          })
+          .returning({ id: users.id });
 
-      // 2. Create guest profile (is_guest=true)
-      const [newProfile] = await tx
-        .insert(profiles)
-        .values({
-          id: newUser.id, // 1-1 with users
-          displayName: mainGuest,
-          isGuest: true,
-        })
-        .returning({ id: profiles.id });
+        const [createdProfile] = await tx
+          .insert(profiles)
+          .values({
+            id: newUser.id, // 1-1 with users
+            displayName: mainGuest,
+            isGuest: true,
+          })
+          .returning({ id: profiles.id });
+        newProfile = createdProfile;
+      }
 
       // 3. Insert session — host = guest profile (bukan waiter!)
       const [newSession] = await tx

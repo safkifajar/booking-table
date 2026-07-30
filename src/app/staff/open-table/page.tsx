@@ -11,12 +11,13 @@ import {
   promoteDueReservations,
 } from "@/lib/queries";
 import { OpenTableForm } from "@/components/staff/OpenTableForm";
+import { getCustomerAsTableHost } from "@/lib/staff-customer-actions";
 
 // Denah + reservasi berbasis waktu → selalu dinamis.
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; customer?: string }>;
 }
 
 /**
@@ -29,9 +30,25 @@ export default async function StaffOpenTablePage({ searchParams }: PageProps) {
     ["waiter", "cashier", "manager", "admin"],
     "/staff/open-table"
   );
-  const { from } = await searchParams;
+  const { from, customer } = await searchParams;
   // Hanya izinkan tujuan internal staff (cegah open-redirect via ?from=).
-  const backHref = from === "cashier" ? "/staff/cashier" : "/staff/waiter";
+  const backHref =
+    from === "customers"
+      ? "/staff/cashier/customers"
+      : from === "cashier"
+        ? "/staff/cashier"
+        : "/staff/waiter";
+
+  // ?customer=<uuid> → buka meja atas nama AKUN pelanggan (dipilih dari menu
+  // Customers di kasir). Divalidasi di sini supaya form hanya menerima akun
+  // pelanggan asli (bukan guest walk-in / staff / akun nonaktif).
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      customer ?? ""
+    );
+  const hostCustomer = isUuid
+    ? await getCustomerAsTableHost(customer as string)
+    : null;
 
   // Transisi status berbasis waktu (lazy) sebelum ambil denah, supaya meja yg
   // reservasinya tiba / selesai tampil dengan status benar.
@@ -70,6 +87,7 @@ export default async function StaffOpenTablePage({ searchParams }: PageProps) {
       menu={menu}
       chargeConfig={chargeConfig}
       backHref={backHref}
+      hostCustomer={hostCustomer}
     />
   );
 }

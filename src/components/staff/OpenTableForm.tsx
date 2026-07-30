@@ -40,6 +40,7 @@ export function OpenTableForm({
   menu,
   chargeConfig,
   backHref,
+  hostCustomer,
 }: {
   floorMap: Array<{ area: FloorArea; tables: FloorMapTable[] }>;
   reservationData: WaiterReservationData;
@@ -50,9 +51,16 @@ export function OpenTableForm({
   chargeConfig: ChargeConfig;
   /** Ke mana tombol "Back" mengarah (dashboard asal: waiter/cashier). */
   backHref: string;
+  /**
+   * Kalau diisi (dibuka dari menu Customers), meja dibuka ATAS NAMA akun
+   * pelanggan ini — tagihan & riwayat menempel ke akunnya.
+   */
+  hostCustomer?: { id: string; name: string; phone: string | null } | null;
 }) {
   const router = useRouter();
-  const [guestNames, setGuestNames] = React.useState<string[]>([""]);
+  const [guestNames, setGuestNames] = React.useState<string[]>([
+    hostCustomer?.name ?? "",
+  ]);
   const [selectedTableId, setSelectedTableId] = React.useState<string | null>(
     null
   );
@@ -174,6 +182,7 @@ export function OpenTableForm({
         reservationEndAt: slotStart ? effectiveEnd : null,
         items: cartLines,
         payMethod,
+        hostProfileId: hostCustomer?.id ?? null,
       });
       // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
       if ("paid" in result) {
@@ -222,14 +231,30 @@ export function OpenTableForm({
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="text-base font-semibold">Open Table for Guest</h1>
+          <h1 className="text-base font-semibold">
+            {hostCustomer ? "Open Table for Customer" : "Open Table for Guest"}
+          </h1>
           <p className="text-[11px] text-muted-foreground">
-            For guests without a phone / walk-in
+            {hostCustomer
+              ? `On behalf of ${hostCustomer.name}`
+              : "For guests without a phone / walk-in"}
           </p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-lg px-4 py-5 space-y-5">
+        {/* Info: meja dibuka atas nama akun pelanggan (bukan guest walk-in). */}
+        {hostCustomer && (
+          <div className="rounded-xl border border-primary/30 bg-primary/[0.07] p-3 text-xs">
+            <p className="font-medium">
+              This table will belong to {hostCustomer.name}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              The bill and visit history are recorded on their account
+              {hostCustomer.phone ? ` (${hostCustomer.phone})` : ""}.
+            </p>
+          </div>
+        )}
         {/* 1. Pilih meja lewat denah */}
         <div>
           <label className="text-xs font-medium text-muted-foreground block mb-1.5">
