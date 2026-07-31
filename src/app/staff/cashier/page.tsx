@@ -18,7 +18,7 @@ import {
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import { eq } from "drizzle-orm";
-import { FileText } from "lucide-react";
+import { FileText, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StaffProfileButton } from "@/components/staff/StaffProfileButton";
 import { CashierSessionList } from "./CashierSessionList";
@@ -94,6 +94,12 @@ export default async function CashierPage() {
           )}
           <div className="flex-1" />
 
+          <Button asChild variant="outline" size="sm">
+            <Link href="/staff/cashier/customers">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Customers</span>
+            </Link>
+          </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/staff/cashier/shift">
               <FileText className="h-4 w-4" />

@@ -37,7 +37,8 @@ export type Permission =
   | "receive_payment" // payShare action (terima bayar)
   | "close_session" // close meja (cashier action)
   | "view_shift_report" // lihat transaksi yang dia close hari ini
-  | "view_all_reports"; // full analytics (admin/manager)
+  | "view_all_reports" // full analytics (admin/manager)
+  | "manage_customers"; // kasir: lihat/cari, tambah & edit akun pelanggan
 
 /**
  * Permission matrix per role. Boolean explicit — readable di review code.
@@ -56,6 +57,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     close_session: true,
     view_shift_report: true,
     view_all_reports: true,
+    manage_customers: true,
   },
   manager: {
     view_admin_dashboard: true,
@@ -70,6 +72,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     close_session: true,
     view_shift_report: true,
     view_all_reports: true,
+    manage_customers: true,
   },
   cashier: {
     view_admin_dashboard: false,
@@ -84,6 +87,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     close_session: true,
     view_shift_report: true,
     view_all_reports: false,
+    manage_customers: true,
   },
   waiter: {
     view_admin_dashboard: false,
@@ -100,6 +104,7 @@ const PERMISSIONS: Record<StaffRoleName, Record<Permission, boolean>> = {
     close_session: true,
     view_shift_report: false,
     view_all_reports: false,
+    manage_customers: false, // waiter tak mengelola akun pelanggan
   },
 };
 

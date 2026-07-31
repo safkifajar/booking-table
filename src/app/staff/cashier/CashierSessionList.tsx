@@ -795,6 +795,30 @@ function CashierOrdersTab({ queue }: { queue: CashierOrderQueue }) {
     }
   }
 
+  /** Proses SEMUA item satu order sekaligus — satu toast & satu refresh. */
+  async function markPreparingMany(itemIds: string[]) {
+    if (itemIds.length === 0) return;
+    setBusy(itemIds[0]); // tandai sibuk (tombol per-item ikut disabled)
+    try {
+      const results = await Promise.allSettled(
+        itemIds.map((id) => cashierMarkPreparing(id))
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed === 0) {
+        toast.success(
+          `${itemIds.length} item${itemIds.length === 1 ? "" : "s"} are being processed`
+        );
+      } else if (failed < itemIds.length) {
+        toast.error(`${itemIds.length - failed} processed, ${failed} failed`);
+      } else {
+        toast.error("Failed to update order");
+      }
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const activeTables = groupByTable(queue.active);
   const scheduledTables = groupByTable(queue.scheduled);
   const groups = sub === "active" ? activeTables : scheduledTables;
@@ -871,6 +895,7 @@ function CashierOrdersTab({ queue }: { queue: CashierOrderQueue }) {
           scheduled={sub === "scheduled"}
           busy={busy}
           onMarkPreparing={markPreparing}
+          onMarkPreparingMany={markPreparingMany}
           onClose={() => setOpenId(null)}
         />
       )}
@@ -991,12 +1016,14 @@ function OrderDetailSheet({
   scheduled,
   busy,
   onMarkPreparing,
+  onMarkPreparingMany,
   onClose,
 }: {
   group: OrderTableGroup;
   scheduled: boolean;
   busy: string | null;
   onMarkPreparing: (itemId: string) => void;
+  onMarkPreparingMany: (itemIds: string[]) => void;
   onClose: () => void;
 }) {
   // Kunci scroll body selama sheet terbuka → background tak ikut ter-scroll.
@@ -1007,6 +1034,28 @@ function OrderDetailSheet({
       document.body.style.overflow = prev;
     };
   }, []);
+
+  // Kelompokkan per order_id, urut waktu order tertua dulu (sesuai antrean).
+  const orderGroups = React.useMemo(() => {
+    const map = new Map<string, CashierOrderItem[]>();
+    for (const it of t.items) {
+      const arr = map.get(it.order_id);
+      if (arr) arr.push(it);
+      else map.set(it.order_id, [it]);
+    }
+    return Array.from(map.entries())
+      .map(([orderId, items]) => ({
+        orderId,
+        items,
+        firstAt: items.reduce(
+          (min, i) => (i.created_at < min ? i.created_at : min),
+          items[0].created_at
+        ),
+        totalQty: items.reduce((s, i) => s + i.quantity, 0),
+        pendingIds: items.filter((i) => i.status === "sent").map((i) => i.id),
+      }))
+      .sort((a, b) => a.firstAt.localeCompare(b.firstAt));
+  }, [t.items]);
 
   // z-[60] di atas StaffBottomNav (portal z-50) — kalau sama-sama z-50,
   // navbar+Open Table (dirender belakangan) menutupi tombol sheet.
@@ -1088,97 +1137,44 @@ function OrderDetailSheet({
           );
         })()}
 
-        {/* Daftar item */}
+        {/* Daftar item — SELALU dikelompokkan per order (semua item tetap
+            tampil, hanya dipisah per order supaya jelas isi tiap order). */}
         <div className="p-3 overflow-y-auto [overscroll-behavior:contain] space-y-2">
-          {t.items.map((it) => (
-            <div
-              key={it.id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card/60 p-2.5"
-            >
-              {/* Foto menu — besar */}
-              <div className="h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center">
-                {it.menu_item_image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={it.menu_item_image}
-                    alt={it.menu_item_name}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <Utensils className="h-5 w-5 text-muted-foreground/40" />
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">
-                  <span
-                    className={cn(
-                      "tabular-nums mr-1",
-                      scheduled ? "text-muted-foreground" : "text-primary"
-                    )}
-                  >
-                    {it.quantity}×
-                  </span>
-                  {it.menu_item_name}
-                </p>
-                {it.notes && (
-                  <p className="text-[11px] italic text-amber-300/90 truncate">
-                    note: {it.notes}
-                  </p>
-                )}
-                {/* Pemesan */}
-                <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                  <Avatar className="h-4 w-4 shrink-0">
-                    {it.added_by_avatar && (
-                      <AvatarImage src={it.added_by_avatar} />
-                    )}
-                    <AvatarFallback className="text-[7px]">
-                      {initials(it.added_by_name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-[11px] text-muted-foreground truncate">
-                    by {it.added_by_name}
-                  </span>
-                </div>
-                {/* Tanggal + jam order (ikon kalender & jam) */}
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums mt-0.5">
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {fmtDate(it.created_at)}
-                  </span>
-                  <span className="text-muted-foreground/40">|</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {fmtTime(it.created_at)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Aksi */}
-              <div className="shrink-0 flex items-center gap-1.5">
-                {scheduled ? (
-                  <span className="text-[11px] text-sky-400">for later</span>
-                ) : it.status === "preparing" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-1 text-[11px] font-medium text-amber-400">
-                    <ChefHat className="h-3 w-3" /> In kitchen
-                  </span>
-                ) : (
+          {orderGroups.map((g, gi) => (
+            <div key={g.orderId} className="space-y-2">
+              {/* Header per order: nomor, jam, pemesan, jumlah + aksi massal */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="inline-flex items-center rounded-md bg-muted/60 px-2 py-0.5 text-[11px] font-semibold">
+                  Order {gi + 1}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                  <Clock className="h-3 w-3" />
+                  {fmtTime(g.firstAt)}
+                </span>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  · {g.items[0].added_by_name} · {g.totalQty} item
+                  {g.totalQty === 1 ? "" : "s"}
+                </span>
+                {!scheduled && g.pendingIds.length > 0 && (
                   <button
                     type="button"
-                    disabled={busy === it.id}
-                    onClick={() => onMarkPreparing(it.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition disabled:opacity-50"
+                    onClick={() => onMarkPreparingMany(g.pendingIds)}
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary transition hover:bg-primary/20"
                   >
-                    {busy === it.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <ChefHat className="h-3.5 w-3.5" />
-                    )}
-                    Process
+                    <ChefHat className="h-3 w-3" />
+                    Process all
                   </button>
                 )}
-                {!scheduled && <ChevronRight className="h-4 w-4 text-muted-foreground/50" />}
               </div>
+              {g.items.map((it) => (
+                <OrderItemRow
+                  key={it.id}
+                  it={it}
+                  scheduled={scheduled}
+                  busy={busy}
+                  onMarkPreparing={onMarkPreparing}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -1188,6 +1184,108 @@ function OrderDetailSheet({
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           All orders are synced in real time
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Satu baris item order di sheet detail. */
+function OrderItemRow({
+  it,
+  scheduled,
+  busy,
+  onMarkPreparing,
+}: {
+  it: CashierOrderItem;
+  scheduled: boolean;
+  busy: string | null;
+  onMarkPreparing: (itemId: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 p-2.5">
+      {/* Foto menu — besar */}
+      <div className="h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center">
+        {it.menu_item_image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={it.menu_item_image}
+            alt={it.menu_item_name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Utensils className="h-5 w-5 text-muted-foreground/40" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate">
+          <span
+            className={cn(
+              "tabular-nums mr-1",
+              scheduled ? "text-muted-foreground" : "text-primary"
+            )}
+          >
+            {it.quantity}×
+          </span>
+          {it.menu_item_name}
+        </p>
+        {it.notes && (
+          <p className="text-[11px] italic text-amber-300/90 truncate">
+            note: {it.notes}
+          </p>
+        )}
+        {/* Pemesan */}
+        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+          <Avatar className="h-4 w-4 shrink-0">
+            {it.added_by_avatar && <AvatarImage src={it.added_by_avatar} />}
+            <AvatarFallback className="text-[7px]">
+              {initials(it.added_by_name)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-[11px] text-muted-foreground truncate">
+            by {it.added_by_name}
+          </span>
+        </div>
+        {/* Tanggal + jam order (ikon kalender & jam) */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums mt-0.5">
+          <span className="inline-flex items-center gap-1">
+            <Calendar className="h-3 w-3" />
+            {fmtDate(it.created_at)}
+          </span>
+          <span className="text-muted-foreground/40">|</span>
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {fmtTime(it.created_at)}
+          </span>
+        </div>
+      </div>
+
+      {/* Aksi */}
+      <div className="shrink-0 flex items-center gap-1.5">
+        {scheduled ? (
+          <span className="text-[11px] text-sky-400">for later</span>
+        ) : it.status === "preparing" ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/40 px-2 py-1 text-[11px] font-medium text-amber-400">
+            <ChefHat className="h-3 w-3" /> In progress
+          </span>
+        ) : (
+          <button
+            type="button"
+            disabled={busy === it.id}
+            onClick={() => onMarkPreparing(it.id)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition disabled:opacity-50"
+          >
+            {busy === it.id ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ChefHat className="h-3.5 w-3.5" />
+            )}
+            Process
+          </button>
+        )}
+        {!scheduled && (
+          <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+        )}
       </div>
     </div>
   );

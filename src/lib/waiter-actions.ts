@@ -32,6 +32,7 @@ import {
 } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { users } from "@/lib/db/schema/auth";
 import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { menuItems, menuCategories } from "@/lib/db/schema/menu";
@@ -888,6 +889,18 @@ export interface StaffOpenTableInput {
   items: { menuItemId: string; quantity: number; notes?: string }[];
   /** Metode bayar di muka: 'qris' (QR) atau 'cash' (bayar di kasir). */
   payMethod: "qris" | "cash";
+  /**
+   * Buka meja atas nama AKUN PELANGGAN yang sudah ada (dipilih kasir dari menu
+   * Customers) — meja & tagihan jadi milik akun itu, jadi kunjungan/riwayat
+   * tercatat di profilnya. Kosong = buat guest profile baru seperti biasa.
+   */
+  hostProfileId?: string | null;
+  /**
+   * Akun pelanggan per BARIS tamu (sejajar dgn guestNames). Indeks yang berisi
+   * profileId → dipakai profil pelanggan itu; null/undefined → guest profile
+   * baru dari nama manual. Indeks 0 = host (bisa juga lewat hostProfileId).
+   */
+  memberProfileIds?: (string | null)[];
 }
 
 /**
@@ -911,11 +924,62 @@ export async function staffOpenTableForCustomer(
     "open_table_for_customer",
     "/staff/waiter"
   );
-  const { tableId, guestNames, reservationAt, reservationEndAt, items, payMethod } =
-    input;
+  const {
+    tableId,
+    guestNames,
+    reservationAt,
+    reservationEndAt,
+    items,
+    payMethod,
+    hostProfileId,
+    memberProfileIds,
+  } = input;
   if (!items || items.length === 0) {
     throw new Error("Add at least one menu item. Payment is required to open the table");
   }
+
+  // Akun pelanggan yang dipilih staff per baris tamu (opsional). Validasi:
+  // harus profil customer aktif (bukan guest walk-in, bukan staff) supaya
+  // tagihan & riwayat menempel ke akun yang benar.
+  // memberProfileIds[0] dan hostProfileId sama-sama menunjuk HOST — pakai yang
+  // mana saja yang terisi.
+  const pickedIds = Array.from(
+    new Set(
+      [hostProfileId ?? memberProfileIds?.[0] ?? null, ...(memberProfileIds ?? []).slice(1)]
+        .filter((v): v is string => !!v)
+    )
+  );
+  const accountById = new Map<string, { id: string; displayName: string }>();
+  if (pickedIds.length > 0) {
+    const rows = await db
+      .select({
+        id: profiles.id,
+        displayName: profiles.displayName,
+        isGuest: profiles.isGuest,
+        isActive: profiles.isActive,
+      })
+      .from(profiles)
+      .where(inArray(profiles.id, pickedIds));
+    const staffHits = await db
+      .select({ id: staffRoles.profileId })
+      .from(staffRoles)
+      .where(inArray(staffRoles.profileId, pickedIds));
+    const staffSet = new Set(staffHits.map((s) => s.id));
+
+    for (const id of pickedIds) {
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new Error("Customer not found");
+      if (row.isGuest) throw new Error("That profile is a walk-in guest");
+      if (!row.isActive) throw new Error("That customer account is inactive");
+      if (staffSet.has(id)) {
+        throw new Error("Staff can't be added as a table guest");
+      }
+      accountById.set(id, { id: row.id, displayName: row.displayName });
+    }
+  }
+
+  const hostPickedId = hostProfileId ?? memberProfileIds?.[0] ?? null;
+  const hostAccount = hostPickedId ? accountById.get(hostPickedId)! : null;
 
   // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
   const resAt = reservationAt ? new Date(reservationAt) : null;
@@ -995,28 +1059,35 @@ export async function staffOpenTableForCustomer(
   let paymentId: string;
   try {
     const result = await db.transaction(async (tx) => {
-      // 1. Create guest user (fake email, no password — can't login)
-      const guestToken = crypto.randomBytes(8).toString("hex");
-      const guestEmail = `guest-${guestToken}@walkin.soho`;
+      // 1-2. Host meja. Kalau kasir memilih AKUN pelanggan → pakai profil itu
+      // (tagihan & riwayat menempel ke akunnya). Kalau tidak → buat guest
+      // profile baru (fake email, tanpa password: tak bisa login).
+      let newProfile: { id: string };
+      if (hostAccount) {
+        newProfile = { id: hostAccount.id };
+      } else {
+        const guestToken = crypto.randomBytes(8).toString("hex");
+        const guestEmail = `guest-${guestToken}@walkin.soho`;
 
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          email: guestEmail,
-          name: mainGuest,
-          passwordHash: null, // No login
-        })
-        .returning({ id: users.id });
+        const [newUser] = await tx
+          .insert(users)
+          .values({
+            email: guestEmail,
+            name: mainGuest,
+            passwordHash: null, // No login
+          })
+          .returning({ id: users.id });
 
-      // 2. Create guest profile (is_guest=true)
-      const [newProfile] = await tx
-        .insert(profiles)
-        .values({
-          id: newUser.id, // 1-1 with users
-          displayName: mainGuest,
-          isGuest: true,
-        })
-        .returning({ id: profiles.id });
+        const [createdProfile] = await tx
+          .insert(profiles)
+          .values({
+            id: newUser.id, // 1-1 with users
+            displayName: mainGuest,
+            isGuest: true,
+          })
+          .returning({ id: profiles.id });
+        newProfile = createdProfile;
+      }
 
       // 3. Insert session — host = guest profile (bukan waiter!)
       const [newSession] = await tx
@@ -1057,7 +1128,26 @@ export async function staffOpenTableForCustomer(
       // Kalau ada tamu tambahan (cleanNames[1..]), bikin guest profile untuk
       // tiap tamu juga supaya semua tamu tampak di member list.
       if (cleanNames.length > 1) {
-        for (const extraName of cleanNames.slice(1)) {
+        for (let i = 1; i < cleanNames.length; i++) {
+          const extraName = cleanNames[i];
+          // Baris ini menunjuk AKUN pelanggan? Pakai profilnya (tak bikin guest
+          // baru) supaya kunjungan tercatat di akun orang tsb.
+          const pickedId = memberProfileIds?.[i] ?? null;
+          const picked = pickedId ? accountById.get(pickedId) : null;
+          if (picked) {
+            // Host sudah jadi member; jangan dobel kalau dipilih lagi.
+            if (picked.id === newProfile.id) continue;
+            await tx
+              .insert(sessionMembers)
+              .values({
+                sessionId: newSession.id,
+                profileId: picked.id,
+                role: "member",
+                status: "joined",
+              })
+              .onConflictDoNothing();
+            continue;
+          }
           const extraToken = crypto.randomBytes(8).toString("hex");
           const extraEmail = `guest-${extraToken}@walkin.soho`;
           const [extraUser] = await tx
