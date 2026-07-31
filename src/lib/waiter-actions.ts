@@ -895,6 +895,12 @@ export interface StaffOpenTableInput {
    * tercatat di profilnya. Kosong = buat guest profile baru seperti biasa.
    */
   hostProfileId?: string | null;
+  /**
+   * Akun pelanggan per BARIS tamu (sejajar dgn guestNames). Indeks yang berisi
+   * profileId → dipakai profil pelanggan itu; null/undefined → guest profile
+   * baru dari nama manual. Indeks 0 = host (bisa juga lewat hostProfileId).
+   */
+  memberProfileIds?: (string | null)[];
 }
 
 /**
@@ -926,17 +932,26 @@ export async function staffOpenTableForCustomer(
     items,
     payMethod,
     hostProfileId,
+    memberProfileIds,
   } = input;
   if (!items || items.length === 0) {
     throw new Error("Add at least one menu item. Payment is required to open the table");
   }
 
-  // Buka meja atas nama akun pelanggan (opsional). Validasi: harus profil
-  // customer aktif (bukan guest walk-in, bukan staff) supaya tagihan &
-  // riwayat menempel ke akun yang benar.
-  let hostAccount: { id: string; displayName: string } | null = null;
-  if (hostProfileId) {
-    const [row] = await db
+  // Akun pelanggan yang dipilih staff per baris tamu (opsional). Validasi:
+  // harus profil customer aktif (bukan guest walk-in, bukan staff) supaya
+  // tagihan & riwayat menempel ke akun yang benar.
+  // memberProfileIds[0] dan hostProfileId sama-sama menunjuk HOST — pakai yang
+  // mana saja yang terisi.
+  const pickedIds = Array.from(
+    new Set(
+      [hostProfileId ?? memberProfileIds?.[0] ?? null, ...(memberProfileIds ?? []).slice(1)]
+        .filter((v): v is string => !!v)
+    )
+  );
+  const accountById = new Map<string, { id: string; displayName: string }>();
+  if (pickedIds.length > 0) {
+    const rows = await db
       .select({
         id: profiles.id,
         displayName: profiles.displayName,
@@ -944,17 +959,27 @@ export async function staffOpenTableForCustomer(
         isActive: profiles.isActive,
       })
       .from(profiles)
-      .where(eq(profiles.id, hostProfileId));
-    if (!row) throw new Error("Customer not found");
-    if (row.isGuest) throw new Error("That profile is a walk-in guest");
-    if (!row.isActive) throw new Error("That customer account is inactive");
-    const [isStaff] = await db
+      .where(inArray(profiles.id, pickedIds));
+    const staffHits = await db
       .select({ id: staffRoles.profileId })
       .from(staffRoles)
-      .where(eq(staffRoles.profileId, hostProfileId));
-    if (isStaff) throw new Error("Staff can't be set as the table owner");
-    hostAccount = { id: row.id, displayName: row.displayName };
+      .where(inArray(staffRoles.profileId, pickedIds));
+    const staffSet = new Set(staffHits.map((s) => s.id));
+
+    for (const id of pickedIds) {
+      const row = rows.find((r) => r.id === id);
+      if (!row) throw new Error("Customer not found");
+      if (row.isGuest) throw new Error("That profile is a walk-in guest");
+      if (!row.isActive) throw new Error("That customer account is inactive");
+      if (staffSet.has(id)) {
+        throw new Error("Staff can't be added as a table guest");
+      }
+      accountById.set(id, { id: row.id, displayName: row.displayName });
+    }
   }
+
+  const hostPickedId = hostProfileId ?? memberProfileIds?.[0] ?? null;
+  const hostAccount = hostPickedId ? accountById.get(hostPickedId)! : null;
 
   // Reservasi (kalau jam dipilih) vs walk-in (langsung sekarang).
   const resAt = reservationAt ? new Date(reservationAt) : null;
@@ -1103,7 +1128,26 @@ export async function staffOpenTableForCustomer(
       // Kalau ada tamu tambahan (cleanNames[1..]), bikin guest profile untuk
       // tiap tamu juga supaya semua tamu tampak di member list.
       if (cleanNames.length > 1) {
-        for (const extraName of cleanNames.slice(1)) {
+        for (let i = 1; i < cleanNames.length; i++) {
+          const extraName = cleanNames[i];
+          // Baris ini menunjuk AKUN pelanggan? Pakai profilnya (tak bikin guest
+          // baru) supaya kunjungan tercatat di akun orang tsb.
+          const pickedId = memberProfileIds?.[i] ?? null;
+          const picked = pickedId ? accountById.get(pickedId) : null;
+          if (picked) {
+            // Host sudah jadi member; jangan dobel kalau dipilih lagi.
+            if (picked.id === newProfile.id) continue;
+            await tx
+              .insert(sessionMembers)
+              .values({
+                sessionId: newSession.id,
+                profileId: picked.id,
+                role: "member",
+                status: "joined",
+              })
+              .onConflictDoNothing();
+            continue;
+          }
           const extraToken = crypto.randomBytes(8).toString("hex");
           const extraEmail = `guest-${extraToken}@walkin.soho`;
           const [extraUser] = await tx

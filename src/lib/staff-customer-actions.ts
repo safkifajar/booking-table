@@ -197,6 +197,49 @@ export async function getCustomerForStaff(
 }
 
 /**
+ * Cari pelanggan untuk dipilih sebagai pemilik meja di form Open Table.
+ * Di-guard `open_table_for_customer` supaya WAITER (yang tak boleh mengelola
+ * akun pelanggan) tetap bisa memilih pelanggan saat membuka meja.
+ * Hasil ringkas & dibatasi 8 baris — hanya untuk picker.
+ */
+export async function searchCustomersForTableHost(
+  queryRaw: string
+): Promise<CustomerTableHost[]> {
+  await requirePermission("open_table_for_customer", "/staff/open-table");
+
+  const q = queryRaw.trim();
+  if (q.length < 1) return [];
+  const staffIds = db.select({ id: staffRoles.profileId }).from(staffRoles);
+
+  const rows = await db
+    .select({
+      id: profiles.id,
+      name: profiles.displayName,
+      phone: profiles.phone,
+      username: profiles.username,
+    })
+    .from(users)
+    .innerJoin(profiles, eq(profiles.id, users.id))
+    .where(
+      and(
+        sql`${users.id} NOT IN (${staffIds})`,
+        eq(profiles.isGuest, false),
+        eq(profiles.isActive, true),
+        or(
+          ilike(profiles.displayName, `%${q}%`),
+          ilike(users.email, `%${q}%`),
+          ilike(profiles.username, `%${q}%`),
+          ilike(profiles.phone, `%${q}%`)
+        )
+      )
+    )
+    .orderBy(desc(profiles.createdAt))
+    .limit(8);
+
+  return rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone }));
+}
+
+/**
  * Data ringkas pelanggan untuk dipakai sebagai HOST meja (dari menu Customers
  * → "Open table"). NULL kalau bukan akun pelanggan yang sah (guest walk-in,
  * staff, atau nonaktif) supaya form open-table tak menerima host tak valid.
@@ -210,7 +253,8 @@ export interface CustomerTableHost {
 export async function getCustomerAsTableHost(
   id: string
 ): Promise<CustomerTableHost | null> {
-  await requirePermission("manage_customers", GUARD_PATH);
+  // Guard buka-meja (bukan manage_customers) supaya waiter juga bisa memakai.
+  await requirePermission("open_table_for_customer", "/staff/open-table");
 
   const [row] = await db
     .select({
