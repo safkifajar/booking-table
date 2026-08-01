@@ -23,6 +23,8 @@ import {
   Ticket,
   TicketCheck,
   UserX,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -312,52 +314,92 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 /**
- * Mobile bottom nav — flat tabs (sub-pages dari "Laporan").
- * Untuk mobile kita skip group concept karena ruangnya terbatas.
+ * Menu mobile — tombol hamburger di header yang membuka drawer berisi SELURUH
+ * menu (sama dengan sidebar desktop). Menggantikan bottom nav yang dulu hanya
+ * memuat 3 halaman.
  */
-export function AdminMobileNav() {
+export function AdminMobileMenu() {
   const rawPathname = usePathname();
   const mounted = useMounted();
   const pathname = mounted ? rawPathname : "";
-  const items: NavLeaf[] = [
-    {
-      type: "leaf",
-      href: "/admin",
-      label: "Overview",
-      icon: <LayoutDashboard className="h-4 w-4" />,
-    },
-    {
-      type: "leaf",
-      href: "/admin/transactions",
-      label: "Transactions",
-      icon: <Receipt className="h-4 w-4" />,
-    },
-    {
-      type: "leaf",
-      href: "/admin/items",
-      label: "Items",
-      icon: <Utensils className="h-4 w-4" />,
-    },
-  ];
+  const [open, setOpen] = React.useState(false);
+
+  // Tutup drawer saat pindah halaman.
+  React.useEffect(() => {
+    setOpen(false);
+  }, [rawPathname]);
+
+  // Kunci scroll body selama drawer terbuka.
+  React.useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   return (
     <>
-      {items.map((item) => {
-        const active = isActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium transition",
-              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+        className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col border-r border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <span className="text-sm font-semibold">Menu</span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close menu"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 py-3">
+              <nav className="space-y-1">
+                {NAV.map((item) =>
+                  item.type === "leaf" ? (
+                    <SidebarLeaf
+                      key={item.href}
+                      item={item}
+                      pathname={pathname}
+                    />
+                  ) : (
+                    <SidebarGroup
+                      key={item.label}
+                      group={item}
+                      pathname={pathname}
+                    />
+                  )
+                )}
+              </nav>
+            </div>
+
+            <div className="border-t border-border px-3 py-3">
+              <Link
+                href="/staff"
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              >
+                <Settings className="h-3.5 w-3.5" /> Staff Dashboard
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
