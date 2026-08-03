@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -322,10 +323,25 @@ export function AdminMobileMenu() {
   const rawPathname = usePathname();
   const mounted = useMounted();
   const pathname = mounted ? rawPathname : "";
+  // `open` = drawer ada di DOM; `visible` = state animasi (slide/fade).
+  // Dipisah supaya animasi KELUAR sempat berjalan sebelum unmount.
   const [open, setOpen] = React.useState(false);
+  const [visible, setVisible] = React.useState(false);
+  const ANIM_MS = 300; // samakan dgn duration-300 di class transisi
 
-  // Tutup drawer saat pindah halaman.
+  function openDrawer() {
+    setOpen(true);
+    // Mulai dari posisi tertutup, lalu animasikan di frame berikutnya.
+    requestAnimationFrame(() => setVisible(true));
+  }
+  function closeDrawer() {
+    setVisible(false);
+    setTimeout(() => setOpen(false), ANIM_MS);
+  }
+
+  // Tutup drawer saat pindah halaman (tanpa animasi — halaman sudah berganti).
   React.useEffect(() => {
+    setVisible(false);
     setOpen(false);
   }, [rawPathname]);
 
@@ -343,25 +359,38 @@ export function AdminMobileMenu() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openDrawer}
         aria-label="Open menu"
         className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      {open && (
-        <div className="md:hidden fixed inset-0 z-50">
+      {/* Portal ke body: header admin `sticky z-30` membentuk stacking context,
+          kalau drawer dirender di dalamnya ia terkurung & ketutup konten lain. */}
+      {open && mounted && createPortal(
+        <div className="md:hidden fixed inset-0 z-[100]">
+          {/* Overlay — fade in/out */}
           <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setOpen(false)}
+            onClick={closeDrawer}
+            className={cn(
+              "absolute inset-0 bg-black/60 transition-opacity duration-300",
+              visible ? "opacity-100" : "opacity-0"
+            )}
           />
-          <div className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col border-r border-border bg-background shadow-2xl">
+          {/* Panel — slide dari kiri */}
+          <div
+            className={cn(
+              "absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col border-r border-border bg-background shadow-2xl",
+              "transition-transform duration-300 ease-out",
+              visible ? "translate-x-0" : "-translate-x-full"
+            )}
+          >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <span className="text-sm font-semibold">Menu</span>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={closeDrawer}
                 aria-label="Close menu"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
@@ -389,16 +418,9 @@ export function AdminMobileMenu() {
               </nav>
             </div>
 
-            <div className="border-t border-border px-3 py-3">
-              <Link
-                href="/staff"
-                className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                <Settings className="h-3.5 w-3.5" /> Staff Dashboard
-              </Link>
-            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

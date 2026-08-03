@@ -1,8 +1,6 @@
-import Link from "next/link";
 import Image from "next/image";
 import { requireAdmin } from "@/lib/admin";
 import { getCurrentUser, getCurrentProfile } from "@/lib/auth-v2/current";
-import { Settings } from "lucide-react";
 import { AdminSidebarNav, AdminMobileMenu } from "./AdminSidebarNav";
 import { AdminHeaderProfile } from "./AdminHeaderProfile";
 
@@ -66,15 +64,6 @@ export default async function AdminLayout({
         {/* Sidebar (desktop) */}
         <aside className="hidden md:flex w-56 flex-col py-6 shrink-0 sticky top-[57px] h-[calc(100vh-57px)]">
           <AdminSidebarNav />
-
-          <div className="mt-auto pt-4 border-t border-border space-y-1">
-            <Link
-              href="/staff"
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition"
-            >
-              <Settings className="h-3.5 w-3.5" /> Staff Dashboard
-            </Link>
-          </div>
         </aside>
 
         {/* Main — bottom nav dihapus, jadi tak perlu padding bawah ekstra. */}
