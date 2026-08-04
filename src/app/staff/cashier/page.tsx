@@ -19,7 +19,6 @@ import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
 import { eq } from "drizzle-orm";
 import { FileText, Users } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { StaffProfileButton } from "@/components/staff/StaffProfileButton";
 import { CashierSessionList } from "./CashierSessionList";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -94,21 +93,24 @@ export default async function CashierPage() {
           )}
           <div className="flex-1" />
 
-          <Button asChild variant="outline" size="sm">
-            <Link href="/staff/cashier/customers">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Customers</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/staff/cashier/shift">
-              <FileText className="h-4 w-4" />
-              {/* Isinya riwayat transaksi (bukan laporan shift) — samakan dgn
-                  judul halamannya: "Transactions". */}
-              <span className="hidden sm:inline">Transactions</span>
-              <span className="sm:hidden">History</span>
-            </Link>
-          </Button>
+          {/* Ikon saja, gaya disamakan dgn tombol notifikasi (tanpa kotak
+              border). Maksudnya tetap terbaca lewat aria-label & tooltip. */}
+          <Link
+            href="/staff/cashier/customers"
+            aria-label="Customers"
+            title="Customers"
+            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition text-muted-foreground hover:text-foreground"
+          >
+            <Users className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/staff/cashier/shift"
+            aria-label="Transactions"
+            title="Transactions"
+            className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition text-muted-foreground hover:text-foreground"
+          >
+            <FileText className="h-4 w-4" />
+          </Link>
           {profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
