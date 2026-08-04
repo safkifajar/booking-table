@@ -35,6 +35,15 @@ export const notifications = pgTable(
     // ID entitas sumber notif (mis. friend_requests.id) — untuk mencocokkan &
     // meng-update notif secara PASTI by ID, bukan by teks link (rapuh).
     refId: uuid("ref_id"),
+    /**
+     * Profil PENGIRIM notif (yg me-mention, repost, kirim friend request, dst)
+     * — dipakai menampilkan foto profilnya di list notifikasi (ala IG).
+     * NULL = notif dari sistem (pembayaran, booking) → UI pakai ikon per jenis.
+     * FK set null supaya notif tak ikut terhapus kalau akun pengirim dihapus.
+     */
+    actorId: uuid("actor_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

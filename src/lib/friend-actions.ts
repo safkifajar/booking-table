@@ -217,6 +217,7 @@ export async function sendFriendRequest(input: {
       body: "Tap to view their profile.",
       link: `/network/${me.id}`,
       refId: n.requestId,
+      actorId: me.id, // foto pengirim di list notifikasi
       skipPush: n.skipPush,
     });
   }
@@ -230,6 +231,7 @@ export async function sendFriendRequest(input: {
       title: `${me.displayName} accepted your friend request`,
       link: `/network/${me.id}`,
       refId: n.theirRequestId,
+      actorId: me.id,
     });
     await markNotificationRespondedByRef(me.id, n.theirRequestId);
   }
@@ -309,6 +311,7 @@ export async function acceptFriendRequest(input: {
       title: `${me.displayName} accepted your friend request`,
       link: `/network/${me.id}`,
       refId: requestId,
+      actorId: me.id,
     });
     // Tombol Accept/Decline di bell-ku hilang.
     await markNotificationRespondedByRef(me.id, requestId);

@@ -856,6 +856,7 @@ export async function sendBookingInvites(sessionId: string): Promise<void> {
   // Host (pengundang) + meja + bar untuk isi teks undangan.
   const [meta] = await db
     .select({
+      hostId: tableSessions.hostId,
       hostName: profiles.displayName,
       tableLabel: tables.label,
       barName: bars.name,
@@ -907,6 +908,7 @@ export async function sendBookingInvites(sessionId: string): Promise<void> {
         title: `${meta.hostName} invited you to table ${tableLabel}`,
         body: `Open to accept the invite to table ${tableLabel}.`,
         link,
+        actorId: meta.hostId, // foto pengundang di list notifikasi
       });
       const tpl = tableInviteEmail({
         email: u.email,
@@ -1214,6 +1216,7 @@ export async function approveJoinRequest(memberId: string, sessionId: string) {
       title: `You have been accepted to table ${row.table_label}`,
       body: "The host approved your request. Welcome aboard!",
       link: `/session/${sessionId}`,
+      actorId: profile.id, // host yang menyetujui
     });
   }
 
@@ -1340,6 +1343,7 @@ export async function acceptInvite(input: z.infer<typeof joinSchema>) {
     title: `${profile.displayName} accepted your invite`,
     body: `${profile.displayName} joined the table.`,
     link: `/session/${sessionId}`,
+    actorId: profile.id,
   });
 
   // Tandai notif undangan milik penerima sudah direspon → tombol Terima/Tolak
@@ -1397,6 +1401,7 @@ export async function declineInvite(input: z.infer<typeof joinSchema>) {
       title: `${profile.displayName} declined your invite`,
       body: `${profile.displayName} did not join table ${info.tableLabel}.`,
       link: `/session/${sessionId}`,
+      actorId: profile.id,
     });
   }
 
@@ -1582,6 +1587,7 @@ export async function inviteUsersToSession(
         title: `${profile.displayName} invited you to table ${tableLabel}`,
         body: `Open to accept the invite to table ${tableLabel}.`,
         link,
+        actorId: profile.id,
       });
       const tpl = tableInviteEmail({
         email: u.email,

@@ -130,6 +130,7 @@ async function resolveMentionsAndNotify(args: {
         body: "Tap to view the story.",
         link: `/story/${args.storyId}`,
         refId: args.storyId,
+        actorId: args.authorId, // foto pengirim di list notifikasi
       })
     )
   );
@@ -379,6 +380,7 @@ export async function repostStory(sourceStoryId: string): Promise<{ id: string }
     body: "Tap to view the story.",
     link: `/story/${newStory.id}`,
     refId: newStory.id,
+    actorId: profile.id, // foto pe-repost di list notifikasi
   });
 
   await notify(channels.bar(src.barId), {
