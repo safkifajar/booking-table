@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /**
@@ -73,4 +74,23 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * Bungkus Sentry — untuk upload source map saat build supaya stack trace di
+ * dashboard menunjuk baris kode asli (bukan bundle ter-minify).
+ *
+ * Upload source map hanya jalan kalau SENTRY_AUTH_TOKEN di-set (di VPS/CI).
+ * Tanpa token, build tetap sukses — hanya stack trace-nya kurang terbaca.
+ */
+export default withSentryConfig(nextConfig, {
+  org: "soho-dev-5j",
+  project: "javascript-nextjs",
+  // Jangan cerewet di log build.
+  silent: true,
+  sourcemaps: {
+    // Hapus source map dari hasil build setelah di-upload ke Sentry, supaya
+    // kode sumber tidak bisa diunduh publik dari server.
+    deleteSourcemapsAfterUpload: true,
+  },
+  // Buang logger Sentry dari bundle client (ukuran lebih kecil).
+  disableLogger: true,
+});
