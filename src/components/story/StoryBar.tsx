@@ -298,8 +298,11 @@ function StoryRing({
   );
 }
 
-/** Bottom sheet: pilih bikin story dari Foto atau Teks. */
-function StoryTypePicker({
+/**
+ * Bottom sheet: pilih bikin story dari Foto atau Teks.
+ * Di-export supaya bottom nav (HomeBottomNav) pakai sheet yang SAMA.
+ */
+export function StoryTypePicker({
   onClose,
   onPhoto,
   onText,
