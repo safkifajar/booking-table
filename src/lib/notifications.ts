@@ -11,6 +11,7 @@
 import { eq, and, desc, isNull, count } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { notifications } from "@/lib/db/schema/notifications";
+import { profiles } from "@/lib/db/schema/profiles";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
@@ -44,6 +45,10 @@ export interface AdminNotificationRow {
   /** ID entitas sumber (mis. friend_requests.id) — utk tombol aksi by ID. */
   ref_id: string | null;
   created_at: string;
+  /** Profil pengirim (mention/repost/friend). NULL = notif sistem. */
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_avatar_url: string | null;
 }
 
 /**
@@ -59,6 +64,11 @@ export async function createNotification(input: {
   link?: string | null;
   /** ID entitas sumber (mis. friend_requests.id) — utk update notif by ID. */
   refId?: string | null;
+  /**
+   * Profil PENGIRIM — dipakai menampilkan fotonya di list notifikasi.
+   * Kosongkan untuk notif sistem (pembayaran/booking) → UI pakai ikon jenis.
+   */
+  actorId?: string | null;
   /** true = simpan + bell saja, TANPA web push (mis. anti-spam request ulang). */
   skipPush?: boolean;
 }): Promise<void> {
@@ -69,6 +79,7 @@ export async function createNotification(input: {
     body: input.body ?? null,
     link: input.link ?? null,
     refId: input.refId ?? null,
+    actorId: input.actorId ?? null,
   });
   // Realtime in-app (SSE) — refresh bell.
   await notify(channels.user(input.profileId), { kind: "notification" });
@@ -135,8 +146,13 @@ export async function getNotifications(
       respondedAt: notifications.respondedAt,
       refId: notifications.refId,
       createdAt: notifications.createdAt,
+      actorId: notifications.actorId,
+      actorName: profiles.displayName,
+      actorAvatarUrl: profiles.avatarUrl,
     })
     .from(notifications)
+    // LEFT JOIN: notif sistem tak punya aktor — barisnya tetap ikut.
+    .leftJoin(profiles, eq(profiles.id, notifications.actorId))
     .where(eq(notifications.profileId, profile.id))
     .orderBy(desc(notifications.createdAt))
     .limit(limit);
@@ -150,6 +166,9 @@ export async function getNotifications(
     responded: r.respondedAt != null,
     ref_id: r.refId,
     created_at: r.createdAt.toISOString(),
+    actor_id: r.actorId,
+    actor_name: r.actorName,
+    actor_avatar_url: r.actorAvatarUrl,
   }));
 }
 

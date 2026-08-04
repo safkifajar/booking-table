@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Loader2, Bell, Trash2 } from "lucide-react";
+import {
+  Check,
+  X,
+  Loader2,
+  Bell,
+  Trash2,
+  Wallet,
+  ArrowRightLeft,
+} from "lucide-react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   getNotifications,
   markNotificationRead,
@@ -16,7 +25,7 @@ import {
   declineFriendRequest,
 } from "@/lib/friend-actions";
 import { toast } from "sonner";
-import { getActionErrorMessage } from "@/lib/utils";
+import { getActionErrorMessage, initials } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -401,10 +410,10 @@ function NotificationItem({
           }}
           className="w-full text-left"
         >
-          <div className="flex items-start gap-2">
-            {!n.read && (
-              <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
-            )}
+          <div className="flex items-start gap-3">
+            {/* Foto pengirim (mention/repost/friend/invite) atau ikon jenis
+                untuk notif sistem (pembayaran/booking). */}
+            <NotifAvatar n={n} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">{n.title}</p>
               {n.body && (
@@ -417,6 +426,9 @@ function NotificationItem({
                 {formatDateTime(n.created_at)}
               </p>
             </div>
+            {!n.read && (
+              <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
+            )}
           </div>
         </button>
         {isPendingInvite && (
@@ -501,5 +513,65 @@ function NotificationItem({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Gambar di kiri baris notifikasi:
+ * - Notif dari ORANG (mention, repost, friend, undangan) → foto profilnya.
+ * - Notif SISTEM (pembayaran, booking, dll) → ikon berwarna sesuai jenis.
+ */
+function NotifAvatar({ n }: { n: AdminNotificationRow }) {
+  // Ada aktor → tampilkan fotonya (fallback inisial nama).
+  if (n.actor_id) {
+    return (
+      <Avatar className="h-10 w-10 shrink-0">
+        {n.actor_avatar_url && (
+          <AvatarImage
+            src={n.actor_avatar_url}
+            alt={n.actor_name ?? "User"}
+          />
+        )}
+        <AvatarFallback className="text-xs">
+          {initials(n.actor_name ?? "?")}
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
+
+  // Notif sistem → ikon + warna per jenis.
+  const style: Record<string, { icon: React.ReactNode; cls: string }> = {
+    payment_received: {
+      icon: <Wallet className="h-5 w-5" />,
+      cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    },
+    payment_cancelled: {
+      icon: <Wallet className="h-5 w-5" />,
+      cls: "bg-red-500/15 text-red-400 border-red-500/30",
+    },
+    move_request: {
+      icon: <ArrowRightLeft className="h-5 w-5" />,
+      cls: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+    },
+    move_approved: {
+      icon: <ArrowRightLeft className="h-5 w-5" />,
+      cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    },
+    move_rejected: {
+      icon: <ArrowRightLeft className="h-5 w-5" />,
+      cls: "bg-red-500/15 text-red-400 border-red-500/30",
+    },
+  };
+  const s = style[n.type] ?? {
+    icon: <Bell className="h-5 w-5" />,
+    cls: "bg-muted text-muted-foreground border-border",
+  };
+
+  return (
+    <span
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${s.cls}`}
+    >
+      {s.icon}
+    </span>
   );
 }
