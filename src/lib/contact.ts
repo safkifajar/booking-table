@@ -17,19 +17,29 @@ export function waUrl(text = "Hi SOHO Social House, I'd like to ask about "): st
 
 /**
  * URL WhatsApp untuk PENGAJUAN RESET PASSWORD ke CS (diproses admin).
- * Data diisi user di halaman /auth/forgot lalu ikut terkirim di pesan, supaya
+ * Email diisi user di halaman /auth/forgot lalu ikut terkirim di pesan, supaya
  * CS tak perlu bertanya ulang.
  */
-export function waForgotPasswordUrl(email: string, name?: string): string {
+export function waForgotPasswordUrl(email: string): string {
+  const mail = email.trim();
   const text = [
+    // Bahasa Indonesia
     "Halo SOHO Social House, saya lupa password akun saya.",
     "Mohon dibantu untuk reset password.",
     "",
-    "Data akun saya:",
-    `- Email: ${email.trim()}`,
-    `- Nama akun: ${name?.trim() || "(mohon diisi)"}`,
+    `Email akun saya: ${mail}`,
     "",
     "Terima kasih.",
+    "",
+    "-----------",
+    "",
+    // English
+    "Hi SOHO Social House, I forgot my account password.",
+    "Could you please help me reset it?",
+    "",
+    `My account email: ${mail}`,
+    "",
+    "Thank you.",
   ].join("\n");
   return `https://wa.me/${CONTACT_WA}?text=${encodeURIComponent(text)}`;
 }

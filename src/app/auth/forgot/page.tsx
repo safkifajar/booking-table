@@ -11,10 +11,11 @@ export const metadata = {
 export default function ForgotPasswordPage() {
   return (
     <main
-      className="relative flex-1 flex items-stretch justify-center px-6 py-8 overflow-hidden"
+      className="relative flex-1 flex items-stretch justify-center px-6 pt-4 pb-5 overflow-hidden"
       style={{ background: "#8d1312" }}
     >
-      <div className="relative z-10 w-full max-w-sm flex flex-col justify-center">
+      {/* Rata ATAS (bukan center) — judul & field di atas, tombol di bawah. */}
+      <div className="relative z-10 w-full max-w-sm flex flex-col">
         <ForgotForm />
       </div>
     </main>
