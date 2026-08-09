@@ -34,32 +34,32 @@ const CATEGORY_STYLE: Record<
   { icon: React.ReactNode; cls: string; label: string }
 > = {
   payment: {
-    icon: <Wallet className="h-4 w-4" />,
+    icon: <Wallet className="h-3.5 w-3.5" />,
     cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
     label: "Payment",
   },
   order: {
-    icon: <UtensilsCrossed className="h-4 w-4" />,
+    icon: <UtensilsCrossed className="h-3.5 w-3.5" />,
     cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     label: "Order",
   },
   session: {
-    icon: <Armchair className="h-4 w-4" />,
+    icon: <Armchair className="h-3.5 w-3.5" />,
     cls: "bg-sky-500/15 text-sky-400 border-sky-500/30",
     label: "Table",
   },
   move: {
-    icon: <ArrowRightLeft className="h-4 w-4" />,
+    icon: <ArrowRightLeft className="h-3.5 w-3.5" />,
     cls: "bg-violet-500/15 text-violet-400 border-violet-500/30",
     label: "Move",
   },
   customer: {
-    icon: <UserCircle className="h-4 w-4" />,
+    icon: <UserCircle className="h-3.5 w-3.5" />,
     cls: "bg-pink-500/15 text-pink-400 border-pink-500/30",
     label: "Customer",
   },
   admin: {
-    icon: <Settings className="h-4 w-4" />,
+    icon: <Settings className="h-3.5 w-3.5" />,
     cls: "bg-primary/15 text-primary border-primary/30",
     label: "Admin",
   },
@@ -167,52 +167,73 @@ export function ActivityList({
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card divide-y divide-border">
-          {rows.map((r) => {
-            const s = CATEGORY_STYLE[r.category] ?? {
-              icon: <Activity className="h-4 w-4" />,
-              cls: "bg-muted text-muted-foreground border-border",
-              label: r.category,
-            };
-            return (
-              <div key={r.id} className="flex items-start gap-3 p-3">
-                <span
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
-                    s.cls
-                  )}
-                  title={s.label}
-                >
-                  {s.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{r.summary}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    <span
-                      className={cn(
-                        "font-medium",
-                        // Kejadian otomatis (gateway/sweep) dibedakan supaya tak
-                        // terbaca seolah ada staff yang melakukannya.
-                        r.actor_role === "system"
-                          ? "text-muted-foreground italic"
-                          : "text-foreground/80"
-                      )}
-                    >
-                      {r.actor_name}
-                    </span>
-                    {r.actor_role !== "system" && <> · {r.actor_role}</>} ·{" "}
-                    {r.action}
-                  </p>
-                </div>
-                <span
-                  className="shrink-0 text-[11px] text-muted-foreground tabular-nums"
-                  suppressHydrationWarning
-                >
-                  {fmtDateTime(r.created_at)}
-                </span>
-              </div>
-            );
-          })}
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 border-b border-border">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-medium w-44">Time</th>
+                  <th className="px-4 py-3 font-medium w-40">Staff</th>
+                  <th className="px-4 py-3 font-medium w-36">Category</th>
+                  <th className="px-4 py-3 font-medium">Activity</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((r) => {
+                  const s = CATEGORY_STYLE[r.category] ?? {
+                    icon: <Activity className="h-3.5 w-3.5" />,
+                    cls: "bg-muted text-muted-foreground border-border",
+                    label: r.category,
+                  };
+                  // Kejadian otomatis (gateway/sweep) dibedakan supaya tak
+                  // terbaca seolah ada staff yang melakukannya.
+                  const isSystem = r.actor_role === "system";
+                  return (
+                    <tr key={r.id} className="hover:bg-muted/30 transition">
+                      <td
+                        className="px-4 py-2.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap align-top"
+                        suppressHydrationWarning
+                      >
+                        {fmtDateTime(r.created_at)}
+                      </td>
+                      <td className="px-4 py-2.5 align-top">
+                        <span
+                          className={cn(
+                            "font-medium block truncate max-w-[160px]",
+                            isSystem && "text-muted-foreground italic"
+                          )}
+                        >
+                          {r.actor_name}
+                        </span>
+                        {!isSystem && (
+                          <span className="text-xs text-muted-foreground">
+                            {r.actor_role}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 align-top">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+                            s.cls
+                          )}
+                        >
+                          {s.icon}
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 align-top">
+                        <span className="block">{r.summary}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {r.action}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
