@@ -70,6 +70,42 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
 }
 
 /**
+ * Catat kejadian yang pelakunya SISTEM, bukan staff — mis. QRIS yang lunas
+ * lewat callback/polling gateway, atau tagihan yang kedaluwarsa sendiri.
+ *
+ * Perlu ada supaya riwayat tak menggantung: tanpa ini log memperlihatkan kasir
+ * MENERBITKAN tagihan QRIS tanpa pernah menunjukkan ujungnya lunas atau gagal.
+ * actorId sengaja NULL & actorName "Sistem" — jangan pernah mengatributkan
+ * kejadian otomatis ke seorang staff.
+ */
+export async function logSystem(input: {
+  barId: string;
+  action: string;
+  category: ActivityCategory;
+  summary: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  meta?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await db.insert(activityLogs).values({
+      actorId: null,
+      actorName: "Sistem",
+      actorRole: "system",
+      barId: input.barId,
+      action: input.action,
+      category: input.category,
+      entityType: input.entityType ?? null,
+      entityId: input.entityId ?? null,
+      summary: input.summary,
+      meta: input.meta ?? {},
+    });
+  } catch (err) {
+    console.error("[activity-log] gagal mencatat sistem:", input.action, err);
+  }
+}
+
+/**
  * Catat aktivitas HANYA kalau pelakunya staff aktif — untuk action yang dipakai
  * bersama customer & staff (mis. ubah profil / ganti password di /profile).
  * Customer yang melakukannya bukan aktivitas staff, jadi diabaikan diam-diam.

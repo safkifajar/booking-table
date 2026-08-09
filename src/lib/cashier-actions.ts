@@ -63,7 +63,7 @@ import {
 } from "@/lib/queries";
 import { sendBookingInvites } from "@/lib/actions";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
-import { logActivity } from "@/lib/activity-log";
+import { logActivity, logSystem } from "@/lib/activity-log";
 import { formatIDR } from "@/lib/utils";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
@@ -1797,6 +1797,9 @@ export async function markPaymentPaidBySystem(
       orderId: payments.orderId,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
+      amount: payments.amount,
+      method: payments.method,
+      tableLabel: tables.label,
     })
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
@@ -1829,6 +1832,27 @@ export async function markPaymentPaidBySystem(
         : {}),
     })
     .where(eq(payments.id, paymentId));
+
+  // Audit: tutup riwayat tagihan. Tanpa baris ini log berhenti di "kasir
+  // menerbitkan QRIS" tanpa pernah menunjukkan ujungnya. Pelakunya gateway,
+  // jadi dicatat sebagai Sistem — bukan diatribusikan ke kasir.
+  await logSystem({
+    barId: payment.barId,
+    action: wasFailed ? "payment.paid_after_cancelled" : "payment.settled",
+    category: "payment",
+    entityType: "payment",
+    entityId: paymentId,
+    summary: wasFailed
+      ? `Pembayaran ${formatIDR(payment.amount)} (${payment.method}) meja ${payment.tableLabel} MASUK padahal sudah dibatalkan`
+      : `Pembayaran ${formatIDR(payment.amount)} (${payment.method}) meja ${payment.tableLabel} lunas otomatis`,
+    meta: {
+      amount: payment.amount,
+      method: payment.method,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+      paidAfterCancelled: wasFailed,
+    },
+  });
 
   // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi).
   const meta =

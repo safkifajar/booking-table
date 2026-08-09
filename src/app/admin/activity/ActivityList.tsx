@@ -188,10 +188,20 @@ export function ActivityList({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{r.summary}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground/80">
+                    <span
+                      className={cn(
+                        "font-medium",
+                        // Kejadian otomatis (gateway/sweep) dibedakan supaya tak
+                        // terbaca seolah ada staff yang melakukannya.
+                        r.actor_role === "system"
+                          ? "text-muted-foreground italic"
+                          : "text-foreground/80"
+                      )}
+                    >
                       {r.actor_name}
-                    </span>{" "}
-                    · {r.actor_role} · {r.action}
+                    </span>
+                    {r.actor_role !== "system" && <> · {r.actor_role}</>} ·{" "}
+                    {r.action}
                   </p>
                 </div>
                 <span
