@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -10,6 +11,8 @@ import {
   Trash2,
   Wallet,
   ArrowRightLeft,
+  UserPlus,
+  ChevronRight,
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -35,16 +38,45 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-/** Format tanggal+jam langsung, mis. "7 Jul 2026, 14.30" (WIB). */
-function formatDateTime(iso: string): string {
+/** Jam saja, mis. "14.30" (WIB) — tanggal sudah jadi judul grup. */
+function formatTime(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Jakarta",
   }).format(new Date(iso));
+}
+
+/**
+ * Kelompokkan notif PER TANGGAL (bukan label relatif "Kemarin"/"7 hari
+ * terakhir" — permintaan user). Urutan mengikuti items (terbaru dulu).
+ */
+function groupByDate(rows: AdminNotificationRow[]) {
+  const dayKey = (iso: string) =>
+    new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "Asia/Jakarta",
+    }).format(new Date(iso)); // YYYY-MM-DD (aman diurutkan & dibandingkan)
+
+  const dayLabel = (iso: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Jakarta",
+    }).format(new Date(iso));
+
+  const groups: { key: string; label: string; items: AdminNotificationRow[] }[] =
+    [];
+  for (const r of rows) {
+    const key = dayKey(r.created_at);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.items.push(r);
+    else groups.push({ key, label: dayLabel(r.created_at), items: [r] });
+  }
+  return groups;
 }
 
 /** Lebar tombol hapus yg tersingkap saat digeser (px). */
@@ -58,9 +90,12 @@ const REVEAL = 88;
 export function NotificationsList({
   userId,
   initial,
+  friendRequestCount = 0,
 }: {
   userId: string;
   initial: AdminNotificationRow[];
+  /** Jumlah permintaan pertemanan masuk — badge di shortcut paling atas. */
+  friendRequestCount?: number;
 }) {
   const router = useRouter();
   const [items, setItems] = React.useState<AdminNotificationRow[]>(initial);
@@ -189,9 +224,32 @@ export function NotificationsList({
 
   return (
     <div>
+      {/* Shortcut ke permintaan pertemanan (ala IG "Permintaan mengikuti") */}
+      {friendRequestCount > 0 && (
+        <Link
+          href="/profile/friends?tab=requests"
+          className="-mx-4 sm:-mx-6 flex items-center gap-3 border-b border-border bg-card px-4 py-3 transition hover:bg-muted/40"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-primary">
+            <UserPlus className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">Friend requests</p>
+            <p className="text-xs text-muted-foreground">
+              {friendRequestCount} request{friendRequestCount === 1 ? "" : "s"}{" "}
+              waiting for you
+            </p>
+          </div>
+          <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+            {friendRequestCount}
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+        </Link>
+      )}
+
       {/* Header aksi */}
       {items.some((x) => !x.read) && (
-        <div className="flex justify-end mb-3">
+        <div className="flex justify-end my-3">
           <button
             type="button"
             onClick={handleMarkAll}
@@ -211,23 +269,31 @@ export function NotificationsList({
           </p>
         </div>
       ) : (
-        <div className="-mx-4 sm:-mx-6 border-y border-border bg-card overflow-hidden divide-y divide-border">
-          {items.map((n) => (
-            <NotificationItem
-              key={n.id}
-              n={n}
-              busyId={busyId}
-              revealed={openId === n.id}
-              onReveal={(open) => setOpenId(open ? n.id : null)}
-              onClickItem={handleClickItem}
-              onAccept={handleAccept}
-              onDecline={handleDecline}
-              onAcceptFriend={handleAcceptFriend}
-              onDeclineFriend={handleDeclineFriend}
-              onAskDelete={(row) => setConfirmDel(row)}
-            />
-          ))}
-        </div>
+        // Dikelompokkan PER TANGGAL (tanpa label relatif "Kemarin"/"7 hari").
+        groupByDate(items).map((group) => (
+          <div key={group.key} className="mb-4 last:mb-0">
+            <p className="px-1 pb-2 text-xs font-semibold text-muted-foreground">
+              {group.label}
+            </p>
+            <div className="-mx-4 sm:-mx-6 border-y border-border bg-card overflow-hidden divide-y divide-border">
+              {group.items.map((n) => (
+                <NotificationItem
+                  key={n.id}
+                  n={n}
+                  busyId={busyId}
+                  revealed={openId === n.id}
+                  onReveal={(open) => setOpenId(open ? n.id : null)}
+                  onClickItem={handleClickItem}
+                  onAccept={handleAccept}
+                  onDecline={handleDecline}
+                  onAcceptFriend={handleAcceptFriend}
+                  onDeclineFriend={handleDeclineFriend}
+                  onAskDelete={(row) => setConfirmDel(row)}
+                />
+              ))}
+            </div>
+          </div>
+        ))
       )}
 
       {/* Dialog konfirmasi hapus */}
@@ -423,7 +489,7 @@ function NotificationItem({
                 className="mt-1 text-[11px] text-muted-foreground/70"
                 suppressHydrationWarning
               >
-                {formatDateTime(n.created_at)}
+                {formatTime(n.created_at)}
               </p>
             </div>
             {!n.read && (

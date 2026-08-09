@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import { getNotifications } from "@/lib/notifications";
+import { getIncomingRequestCount } from "@/lib/friend-actions";
 import { SohoGlow } from "@/components/ui/soho-glow";
 import { NotificationsList } from "./NotificationsList";
 
@@ -21,7 +22,11 @@ export default async function NotificationsPage() {
     redirect("/onboarding");
   }
 
-  const initial = await getNotifications(50);
+  // Jumlah permintaan pertemanan masuk — untuk shortcut di atas list notif.
+  const [initial, friendRequestCount] = await Promise.all([
+    getNotifications(50),
+    getIncomingRequestCount(),
+  ]);
 
   return (
     <main className="relative flex-1 pb-24">
@@ -41,7 +46,11 @@ export default async function NotificationsPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-5">
-        <NotificationsList userId={profile.id} initial={initial} />
+        <NotificationsList
+          userId={profile.id}
+          initial={initial}
+          friendRequestCount={friendRequestCount}
+        />
       </div>
     </main>
   );

@@ -67,26 +67,9 @@ function usePushSetup() {
 /**
  * Tombol "Aktifkan notifikasi" di header. Tampil kalau push bisa ditawarkan.
  */
-export function PushSetup() {
-  const { canOffer, enable, busy } = usePushSetup();
-  if (!canOffer) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => void enable()}
-      disabled={busy}
-      className="h-9 px-3 rounded-full flex items-center gap-1.5 text-xs font-medium border border-primary/40 text-primary hover:bg-primary/10 transition disabled:opacity-50"
-      aria-label="Enable notifications"
-    >
-      {busy ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-      ) : (
-        <BellRing className="h-3.5 w-3.5" />
-      )}
-      <span className="hidden sm:inline">Enable notifications</span>
-    </button>
-  );
-}
+// Catatan: tombol "Enable notifications" di HEADER sudah dihapus (dulu
+// komponen PushSetup) — cukup lewat PushBanner di bawah header, supaya tak ada
+// dua ikon lonceng bersebelahan.
 
 /**
  * Soft-banner proaktif: muncul saat user pertama akses (kalau push bisa
