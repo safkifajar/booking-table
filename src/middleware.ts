@@ -170,7 +170,10 @@ export default authMiddleware(async (req) => {
   // dapat 401/JSON, bukan HTML redirect).
   if (!isAdmin && !req.auth?.user?.id) {
     const isPublic =
+      // /auth DAN sub-path-nya (mis. /auth/forgot) — halaman lupa password
+      // wajib bisa dibuka justru saat user BELUM login.
       path === "/auth" ||
+      path.startsWith("/auth/") ||
       path === "/terms" ||
       path === "/privacy" ||
       path === "/maintenance" ||

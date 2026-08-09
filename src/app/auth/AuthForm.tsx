@@ -308,6 +308,18 @@ function PasswordForm({
         </button>
       </div>
 
+      {/* Lupa password → halaman pengajuan (isi email) → lanjut ke WhatsApp CS. */}
+      {mode === "signin" && (
+        <div className="flex justify-end -mt-1">
+          <Link
+            href="/auth/forgot"
+            className="text-xs text-white/70 hover:text-white hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+      )}
+
       <Button
         type="submit"
         size="lg"
