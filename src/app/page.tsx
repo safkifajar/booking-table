@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
-import { PushSetup, PushBanner } from "@/components/PushSetup";
+import { PushBanner } from "@/components/PushSetup";
 import { StoryBarSection } from "@/components/story/StoryBarSection";
 import { LiveTablesFeed } from "@/components/feed/LiveTablesFeed";
 import { BannerCarousel } from "@/components/feed/BannerCarousel";
@@ -134,13 +134,10 @@ export default async function HomePage() {
 
           <div className="flex-1" />
 
-          {/* Notifikasi: tombol aktifkan push + bell (hanya user login) */}
-          {!isAnon && profile && (
-            <>
-              <PushSetup />
-              <NotificationBell userId={profile.id} />
-            </>
-          )}
+          {/* Bell notifikasi (hanya user login). Tombol "aktifkan push" TIDAK
+              di header — cukup lewat banner "Enable notifications" di bawah,
+              supaya header tak punya dua ikon lonceng. */}
+          {!isAnon && profile && <NotificationBell userId={profile.id} />}
         </div>
       </header>
 
