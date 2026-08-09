@@ -170,9 +170,9 @@ export async function listActivityLogs(opts: {
   page?: number;
   pageSize?: number;
 }): Promise<ListActivityResult> {
-  const size = [20, 50, 100].includes(opts.pageSize ?? 0)
+  const size = [10, 20, 50, 100].includes(opts.pageSize ?? 0)
     ? (opts.pageSize as number)
-    : 20;
+    : 10;
   const page = Math.max(1, opts.page ?? 1);
   const search = (opts.search ?? "").trim();
 
