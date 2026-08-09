@@ -27,7 +27,7 @@ export function Pagination({
         onClick={() => onChange(page - 1)}
       >
         <ChevronLeft className="h-4 w-4" />
-        <span className="hidden sm:inline">Sebelumnya</span>
+        <span className="hidden sm:inline">Previous</span>
       </Button>
       <div className="flex items-center gap-1">
         {pages.map((p, i) =>
@@ -61,7 +61,7 @@ export function Pagination({
         disabled={page >= totalPages - 1}
         onClick={() => onChange(page + 1)}
       >
-        <span className="hidden sm:inline">Berikutnya</span>
+        <span className="hidden sm:inline">Next</span>
         <ChevronRight className="h-4 w-4" />
       </Button>
     </div>

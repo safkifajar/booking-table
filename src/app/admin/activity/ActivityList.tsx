@@ -93,6 +93,9 @@ export function ActivityList({
   const [search, setSearch] = React.useState(query);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Rentang baris yang sedang tampil, mis. "21–40 of 137".
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
 
   /** Pertahankan filter tanggal (range/from/to) saat mengubah filter lain. */
   function pushParams(next: Record<string, string | number | undefined>) {
@@ -237,13 +240,43 @@ export function ActivityList({
         </div>
       )}
 
-      {/* Pagination — komponen admin memakai index 0-based. */}
-      {totalPages > 1 && (
-        <Pagination
-          page={page - 1}
-          totalPages={totalPages}
-          onChange={(p) => pushParams({ page: p + 1 })}
-        />
+      {/* Jumlah + page size + pagination (pola halaman admin lain). */}
+      {total > 0 && (
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {rangeStart}–{rangeEnd} of {total}
+            </span>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Per page:</span>
+              <Select
+                value={String(pageSize)}
+                // Ganti ukuran halaman → balik ke halaman 1, supaya tak
+                // mendarat di halaman yang sudah tak ada.
+                onChange={(v) => pushParams({ size: v, page: 1 })}
+                options={[
+                  { value: "20", label: "20" },
+                  { value: "50", label: "50" },
+                  { value: "100", label: "100" },
+                ]}
+                ariaLabel="Per page"
+              />
+            </label>
+          </div>
+          {/* Komponen admin memakai index 0-based. */}
+          {totalPages > 1 && (
+            <Pagination
+              page={page - 1}
+              totalPages={totalPages}
+              onChange={(p) => {
+                pushParams({ page: p + 1 });
+                if (typeof window !== "undefined") {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
