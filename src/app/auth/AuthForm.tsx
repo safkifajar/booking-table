@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Eye, EyeOff, MessageCircle } from "lucide-react";
 import { cn, normalizeUsername } from "@/lib/utils";
-import { waUrl, waForgotPasswordUrl } from "@/lib/contact";
+import { waUrl } from "@/lib/contact";
 
 type Mode = "choose" | "signin" | "signup" | "magic";
 
@@ -308,18 +308,15 @@ function PasswordForm({
         </button>
       </div>
 
-      {/* Lupa password → ajukan lewat WhatsApp CS (diproses admin). Email/no HP
-          yang sudah diketik ikut terkirim supaya CS tak perlu bertanya ulang. */}
+      {/* Lupa password → halaman pengajuan (isi email) → lanjut ke WhatsApp CS. */}
       {mode === "signin" && (
         <div className="flex justify-end -mt-1">
-          <a
-            href={waForgotPasswordUrl(email)}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/auth/forgot"
             className="text-xs text-white/70 hover:text-white hover:underline"
           >
             Forgot password?
-          </a>
+          </Link>
         </div>
       )}
 

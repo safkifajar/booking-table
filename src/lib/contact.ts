@@ -17,18 +17,17 @@ export function waUrl(text = "Hi SOHO Social House, I'd like to ask about "): st
 
 /**
  * URL WhatsApp untuk PENGAJUAN RESET PASSWORD ke CS (diproses admin).
- * Pesannya sudah berisi kerangka data yang dibutuhkan admin — email/no HP yang
- * sudah diketik user di form ikut terisi supaya CS tak perlu bertanya ulang.
+ * Data diisi user di halaman /auth/forgot lalu ikut terkirim di pesan, supaya
+ * CS tak perlu bertanya ulang.
  */
-export function waForgotPasswordUrl(identifier?: string): string {
-  const filled = identifier?.trim() ?? "";
+export function waForgotPasswordUrl(email: string, name?: string): string {
   const text = [
     "Halo SOHO Social House, saya lupa password akun saya.",
     "Mohon dibantu untuk reset password.",
     "",
     "Data akun saya:",
-    `- Email / No. HP: ${filled || "(mohon diisi)"}`,
-    "- Nama akun: (mohon diisi)",
+    `- Email: ${email.trim()}`,
+    `- Nama akun: ${name?.trim() || "(mohon diisi)"}`,
     "",
     "Terima kasih.",
   ].join("\n");
