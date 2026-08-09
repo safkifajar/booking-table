@@ -30,6 +30,7 @@ import {
   resolveUsername,
 } from "@/lib/customer-fields";
 import { effectiveLevelKey } from "@/lib/membership";
+import { logActivity } from "@/lib/activity-log";
 
 const GUARD_PATH = "/staff/cashier/customers";
 
@@ -312,7 +313,7 @@ export interface CreateCustomerByStaffResult {
 export async function createCustomerByStaff(
   input: z.infer<typeof createSchema>
 ): Promise<CreateCustomerByStaffResult> {
-  await requirePermission("manage_customers", GUARD_PATH);
+  const ctx = await requirePermission("manage_customers", GUARD_PATH);
   const data = createSchema.parse(input);
 
   const email = data.email.trim().toLowerCase();
@@ -346,6 +347,19 @@ export async function createCustomerByStaff(
     newId = u.id;
   });
 
+  // Audit: staff membuat akun pelanggan (password default dibuat sistem).
+  // Password TIDAK ikut dicatat.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "customer.created",
+    category: "customer",
+    summary: `Tambah pelanggan ${data.name}`,
+    entityType: "customer",
+    entityId: newId,
+    meta: { email, username },
+  });
+
   revalidatePath("/staff/cashier/customers");
   revalidatePath("/admin/users");
 
@@ -366,7 +380,7 @@ const updateSchema = z.object({
 export async function updateCustomerByStaff(
   input: z.infer<typeof updateSchema>
 ): Promise<void> {
-  await requirePermission("manage_customers", GUARD_PATH);
+  const ctx = await requirePermission("manage_customers", GUARD_PATH);
   const data = updateSchema.parse(input);
 
   // Jangan sentuh akun staff dari menu pelanggan.
@@ -398,6 +412,17 @@ export async function updateCustomerByStaff(
         ...profileValues(data),
       })
       .where(eq(profiles.id, data.id));
+  });
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "customer.updated",
+    category: "customer",
+    summary: `Ubah data pelanggan ${data.name}`,
+    entityType: "customer",
+    entityId: data.id,
+    meta: { email },
   });
 
   revalidatePath("/staff/cashier/customers");

@@ -46,6 +46,7 @@ import { getPaymentGateway } from "@/lib/payments/gateway";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import { notifyCashiersPayAtCashier } from "@/lib/payment-notify";
+import { logActivity } from "@/lib/activity-log";
 import {
   settleOrderIfPaid,
   settleOverdueIfPaid,
@@ -641,6 +642,7 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
       id: orderItems.id,
       order_id: orderItems.orderId,
       session_id: tableSessions.id,
+      table_label: tables.label,
       bar_id: floorAreas.barId,
       current_status: orderItems.status,
     })
@@ -668,6 +670,17 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
   await notify(channels.session(item.session_id), { type: "order.served" });
   await notify(channels.staff(ctx.barId), { type: "order.served" });
   await notify(channels.bar(ctx.barId), { type: "order.served" });
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "order.served",
+    category: "order",
+    summary: `Antar pesanan — meja ${item.table_label}`,
+    entityType: "order_item",
+    entityId: itemId,
+    meta: { sessionId: item.session_id, tableLabel: item.table_label },
+  });
 
   revalidatePath("/staff/waiter");
 }
@@ -1005,6 +1018,7 @@ export async function staffOpenTableForCustomer(
   const [table] = await db
     .select({
       id: tables.id,
+      label: tables.label,
       capacity: tables.capacity,
       isActive: tables.isActive,
       barId: floorAreas.barId,
@@ -1233,6 +1247,29 @@ export async function staffOpenTableForCustomer(
     const message = err instanceof Error ? err.message : "";
     throw new Error(message || "Failed to open table");
   }
+
+  // Audit: staff membuka meja atas nama tamu. Dicatat SEKALI di sini (sesi &
+  // order sudah jadi), sebelum percabangan metode bayar — supaya tak dobel
+  // dan tak terlewat di salah satu jalur (cash/QRIS/bayar-di-kasir).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "session.opened",
+    category: "session",
+    summary: `Buka meja ${table.label} untuk ${mainGuest}${
+      hostAccount ? " (akun terdaftar)" : ""
+    }`,
+    entityType: "session",
+    entityId: sessionId,
+    meta: {
+      tableLabel: table.label,
+      guestCount: cleanNames.length,
+      amount: payAmount,
+      payMethod,
+      isReservation,
+      hostAccountId: hostAccount?.id ?? null,
+    },
+  });
 
   void orderId; // dipakai lewat settleOrderIfPaid via jalur pembayaran
 

@@ -26,6 +26,7 @@ import {
   UserX,
   Menu,
   X,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,12 @@ const NAV: NavItem[] = [
         href: "/admin/items",
         label: "Item Performance",
         icon: <Utensils className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/activity",
+        label: "Staff Activity",
+        icon: <Activity className="h-4 w-4" />,
       },
     ],
   },

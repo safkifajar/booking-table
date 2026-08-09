@@ -63,6 +63,8 @@ import {
 } from "@/lib/queries";
 import { sendBookingInvites } from "@/lib/actions";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
+import { logActivity } from "@/lib/activity-log";
+import { formatIDR } from "@/lib/utils";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import type { PaymentMethod, SplitMode } from "@/types/db";
@@ -718,6 +720,7 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
       status: orderItems.status,
       session_id: tableSessions.id,
       session_status: tableSessions.status,
+      table_label: tables.label,
       bar_id: floorAreas.barId,
     })
     .from(orderItems)
@@ -746,6 +749,18 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
 
   // Kabari sesi + staff (waiter melihat penanda "sedang dibuat").
   await notifyAll(item.session_id, ctx.barId, { type: "order.preparing" });
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "order.preparing",
+    category: "order",
+    summary: `Proses order ke dapur — meja ${item.table_label}`,
+    entityType: "order_item",
+    entityId: itemId,
+    meta: { sessionId: item.session_id, tableLabel: item.table_label },
+  });
+
   revalidatePath("/staff/cashier");
   revalidatePath("/staff/waiter");
 }
@@ -1524,7 +1539,10 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
       id: payments.id,
       orderId: payments.orderId,
       splitMeta: payments.splitMeta,
+      amount: payments.amount,
+      method: payments.method,
       sessionId: orders.sessionId,
+      tableLabel: tables.label,
       barId: floorAreas.barId,
     })
     .from(payments)
@@ -1605,6 +1623,23 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     meta.isDownPayment ? "dp_confirmed" : "paid"
   );
 
+  // Audit: kasir mana yang mengonfirmasi pembayaran ini.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: meta.isDownPayment ? "payment.dp_confirmed" : "payment.received",
+    category: "payment",
+    summary: `${meta.isDownPayment ? "Konfirmasi DP" : "Terima pembayaran"} ${formatIDR(payment.amount)} meja ${payment.tableLabel}`,
+    entityType: "payment",
+    entityId: paymentId,
+    meta: {
+      amount: payment.amount,
+      method: payment.method,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
+
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/session/${payment.sessionId}`);
@@ -1620,7 +1655,9 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
   const [payment] = await db
     .select({
       id: payments.id,
+      amount: payments.amount,
       sessionId: orders.sessionId,
+      tableLabel: tables.label,
       barId: floorAreas.barId,
     })
     .from(payments)
@@ -1641,6 +1678,22 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.cancelled" });
   await notifyPaymentEvent(paymentId, "cancelled");
+
+  // Audit: pembatalan pembayaran = aksi sensitif, wajib tercatat.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "payment.cancelled",
+    category: "payment",
+    summary: `Batalkan pembayaran ${formatIDR(payment.amount)} meja ${payment.tableLabel}`,
+    entityType: "payment",
+    entityId: paymentId,
+    meta: {
+      amount: payment.amount,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -1815,7 +1868,11 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
 
   // Validate session di bar yang sama
   const [row] = await db
-    .select({ bar_id: floorAreas.barId, status: tableSessions.status })
+    .select({
+      bar_id: floorAreas.barId,
+      status: tableSessions.status,
+      table_label: tables.label,
+    })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -1860,6 +1917,18 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
   ]);
 
   await notifyAll(sessionId, ctx.barId, { type: "session.closed" });
+
+  // Audit: siapa yang menutup meja (sebelumnya tak tercatat sama sekali).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "session.closed",
+    category: "session",
+    summary: `Tutup meja ${row.table_label}`,
+    entityType: "session",
+    entityId: sessionId,
+    meta: { tableLabel: row.table_label, voidedOrders: unpaidOrders.length },
+  });
 
   revalidatePath(`/staff/cashier/${sessionId}`);
   revalidatePath("/staff/cashier");
