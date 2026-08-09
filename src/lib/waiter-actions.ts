@@ -1423,6 +1423,7 @@ export async function staffAddGuestToTable(
       tableCapacity: tables.capacity,
       allowOverCapacity: tables.allowOverCapacity,
       barId: floorAreas.barId,
+      tableLabel: tables.label,
       guestNames: tableSessions.guestNames,
     })
     .from(tableSessions)
@@ -1495,6 +1496,21 @@ export async function staffAddGuestToTable(
       .update(tableSessions)
       .set({ guestNames: [...session.guestNames, cleanName] })
       .where(eq(tableSessions.id, sessionId));
+  });
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "session.guest_added",
+    category: "session",
+    entityType: "session",
+    entityId: sessionId,
+    summary: `Tambah tamu ${cleanName} ke meja ${session.tableLabel}`,
+    meta: {
+      guestName: cleanName,
+      sessionId,
+      tableLabel: session.tableLabel,
+    },
   });
 
   await notify(channels.session(sessionId), { type: "member.joined" });
