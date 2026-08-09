@@ -1129,7 +1129,7 @@ export async function cashierCreatePayment(
 
   // 1. Validate session di bar yang sama
   const [sessionRow] = await db
-    .select({ bar_id: floorAreas.barId })
+    .select({ bar_id: floorAreas.barId, table_label: tables.label })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -1265,6 +1265,22 @@ export async function cashierCreatePayment(
     await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
+    await logActivity({
+      actorId: ctx.profileId,
+      barId: ctx.barId,
+      action: "payment.received",
+      category: "payment",
+      entityType: "payment",
+      entityId: voucherPayment.id,
+      summary: `Terima pembayaran ${formatIDR(voucher.discount)} via voucher meja ${sessionRow.table_label}`,
+      meta: {
+        amount: voucher.discount,
+        method: "voucher",
+        voucherCode: voucher.code,
+        sessionId: data.sessionId,
+        tableLabel: sessionRow.table_label,
+      },
+    });
     await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
     revalidatePath(`/staff/cashier/${data.sessionId}`);
     revalidatePath("/staff/cashier");
@@ -1356,6 +1372,35 @@ export async function cashierCreatePayment(
     await settleOverdueIfPaid(data.sessionId);
   }
 
+  // Audit: pembayaran yang diinput kasir. Cash/mock langsung lunas; QRIS masih
+  // menunggu scan (pelunasannya tercatat terpisah lewat callback/polling).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action:
+      chargeResult.status === "paid"
+        ? "payment.received"
+        : "payment.initiated",
+    category: "payment",
+    entityType: "payment",
+    entityId: newPayment.id,
+    summary:
+      chargeResult.status === "paid"
+        ? `Terima pembayaran ${formatIDR(chargeAmount)} (${data.method}) meja ${sessionRow.table_label}`
+        : `Buat tagihan ${formatIDR(chargeAmount)} (${data.method}) meja ${sessionRow.table_label}`,
+    meta: {
+      amount: chargeAmount,
+      method: data.method,
+      status: chargeResult.status,
+      sessionId: data.sessionId,
+      tableLabel: sessionRow.table_label,
+      ...(change !== null ? { cashReceived: data.cashReceived, change } : {}),
+      ...(voucher
+        ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+        : {}),
+    },
+  });
+
   // 8. Notify realtime (session + staff + bar)
   await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
 
@@ -1411,6 +1456,7 @@ export async function cashierConfirmPendingPayment(input: {
       splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
+      tableLabel: tables.label,
       payerName: profiles.displayName,
     })
     .from(payments)
@@ -1503,6 +1549,22 @@ export async function cashierConfirmPendingPayment(input: {
     // Mock gateway: langsung lunas → jalankan SEMUA hook via jalur sistem
     // (dp_paid_at, settleOrderIfPaid, voucher, split, notif) — idempotent.
     await markPaymentPaidBySystem(payment.id);
+    await logActivity({
+      actorId: ctx.profileId,
+      barId: ctx.barId,
+      action: "payment.received",
+      category: "payment",
+      entityType: "payment",
+      entityId: payment.id,
+      summary: `Terima pembayaran ${formatIDR(payment.amount)} (qris) meja ${payment.tableLabel}`,
+      meta: {
+        amount: payment.amount,
+        method: "qris",
+        viaPayAtCashier: true,
+        sessionId: payment.sessionId,
+        tableLabel: payment.tableLabel,
+      },
+    });
     return {
       status: "paid",
       qrString: cr.qrString ?? null,
@@ -1511,6 +1573,25 @@ export async function cashierConfirmPendingPayment(input: {
       change: 0,
     };
   }
+
+  // Belum lunas — QR baru dibuat, pelunasan tercatat lewat callback/polling.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "payment.initiated",
+    category: "payment",
+    entityType: "payment",
+    entityId: payment.id,
+    summary: `Buat tagihan ${formatIDR(payment.amount)} (qris) meja ${payment.tableLabel}`,
+    meta: {
+      amount: payment.amount,
+      method: "qris",
+      status: cr.status,
+      viaPayAtCashier: true,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
