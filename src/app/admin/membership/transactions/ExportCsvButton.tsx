@@ -39,7 +39,7 @@ export function ExportCsvButton({ rows }: { rows: AdminMembershipTxRow[] }) {
         r.amount,
         r.status,
         r.period_end
-          ? new Date(r.period_end).toLocaleDateString("en-US")
+          ? new Date(r.period_end).toLocaleDateString("en-GB")
           : "lifetime",
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)

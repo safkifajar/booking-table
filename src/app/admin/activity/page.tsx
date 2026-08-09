@@ -54,9 +54,6 @@ export default async function AdminActivityPage({ searchParams }: PageProps) {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-primary/70 font-semibold">
-            Audit
-          </p>
           <h1 className="text-2xl font-bold">Staff Activity</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             What each staff member did and when. Useful for checking payments,

@@ -39,7 +39,7 @@ export function DatePicker({
   onChange,
   min,
   max,
-  placeholder = "mm/dd/yyyy",
+  placeholder = "dd/mm/yyyy",
   disabled,
   className,
   ariaLabel,
@@ -82,9 +82,11 @@ export function DatePicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  // Format tampilan dd/mm/yyyy (konvensi Indonesia). Nilai yang dikirim ke
+  // parent tetap "YYYY-MM-DD" — hanya labelnya yang berubah.
   const label = selected
-    ? `${String(selected.m + 1).padStart(2, "0")}/${String(
-        selected.d
+    ? `${String(selected.d).padStart(2, "0")}/${String(
+        selected.m + 1
       ).padStart(2, "0")}/${selected.y}`
     : "";
 

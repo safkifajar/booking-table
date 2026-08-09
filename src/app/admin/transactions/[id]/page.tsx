@@ -466,7 +466,7 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
             Thank you for visiting
           </p>
           <p className="text-[10px] text-muted-foreground/60 print:text-black/40 mt-1">
-            Printed via booking-table · {new Date().toLocaleDateString("en-US")}
+            Printed via booking-table · {new Date().toLocaleDateString("en-GB")}
           </p>
         </div>
       </Card>
