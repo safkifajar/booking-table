@@ -58,7 +58,7 @@ export function StaffProfileButton({
           </div>
         )}
         <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-          Selamat datang kembali 👋
+          Welcome back 👋
         </div>
       </div>
     </Link>

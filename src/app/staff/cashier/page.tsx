@@ -82,7 +82,7 @@ export default async function CashierPage() {
 
   return (
     <main className="flex-1 pb-12">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
+      <header className="sticky top-0 z-30 bg-background/90 backdrop-blur-md">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {profile && (
             <StaffProfileButton
