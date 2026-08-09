@@ -32,7 +32,7 @@ export default async function AdminActivityPage({ searchParams }: PageProps) {
     to
   );
   const pageNum = Math.max(1, Number(page) || 1);
-  const pageSize = [20, 50, 100].includes(Number(size)) ? Number(size) : 20;
+  const pageSize = [10, 20, 50, 100].includes(Number(size)) ? Number(size) : 10;
 
   const [{ rows, total }, actors] = await Promise.all([
     listActivityLogs({
