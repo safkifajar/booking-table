@@ -47,7 +47,7 @@ import {
 } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
-import { logActivity } from "@/lib/activity-log";
+import { logActivity, logIfStaff } from "@/lib/activity-log";
 import {
   createNotification,
   markInviteResponded,
@@ -4686,10 +4686,29 @@ export async function updateStaffProfile(input: { displayName: string }) {
     .max(40)
     .parse(input.displayName.trim());
 
+  // Nama lama diambil SEBELUM update — supaya log bisa menampilkan
+  // perubahannya, bukan cuma nama akhirnya.
+  const [before] = await db
+    .select({ displayName: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+
   await db
     .update(profiles)
     .set({ displayName })
     .where(eq(profiles.id, profile.id));
+
+  if (before && before.displayName !== displayName) {
+    await logIfStaff({
+      actorId: profile.id,
+      action: "account.name_changed",
+      category: "admin",
+      entityType: "profile",
+      entityId: profile.id,
+      summary: `Ubah nama akun sendiri dari "${before.displayName}" jadi "${displayName}"`,
+      meta: { from: before.displayName, to: displayName },
+    });
+  }
 
   revalidatePath("/staff/profile");
   revalidatePath("/", "layout");
@@ -4866,6 +4885,20 @@ export async function changePassword(input: z.infer<typeof changePasswordSchema>
     .update(users)
     .set({ passwordHash: newHash, updatedAt: new Date() })
     .where(eq(users.id, profile.id));
+
+  // Audit: HANYA fakta bahwa password diganti — password/hash-nya JANGAN
+  // pernah ikut tercatat. Halaman /profile dipakai bersama customer, jadi
+  // logIfStaff menyaring supaya cuma aktivitas staff yang masuk.
+  await logIfStaff({
+    actorId: profile.id,
+    action: user.passwordHash ? "account.password_changed" : "account.password_set",
+    category: "admin",
+    entityType: "profile",
+    entityId: profile.id,
+    summary: user.passwordHash
+      ? "Ubah password akun sendiri"
+      : "Set password akun sendiri",
+  });
 
   revalidatePath("/profile");
   return { ok: true };

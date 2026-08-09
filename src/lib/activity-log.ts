@@ -69,6 +69,34 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
   }
 }
 
+/**
+ * Catat aktivitas HANYA kalau pelakunya staff aktif — untuk action yang dipakai
+ * bersama customer & staff (mis. ubah profil / ganti password di /profile).
+ * Customer yang melakukannya bukan aktivitas staff, jadi diabaikan diam-diam.
+ *
+ * barId diambil dari penugasan staff-nya, jadi pemanggil tak perlu tahu bar.
+ * Sama seperti logActivity: tak pernah melempar error.
+ */
+export async function logIfStaff(
+  input: Omit<LogActivityInput, "barId">
+): Promise<void> {
+  try {
+    const [staff] = await db
+      .select({ barId: staffRoles.barId })
+      .from(staffRoles)
+      .where(
+        and(
+          eq(staffRoles.profileId, input.actorId),
+          eq(staffRoles.isActive, true)
+        )
+      );
+    if (!staff) return; // customer biasa → bukan aktivitas staff
+    await logActivity({ ...input, barId: staff.barId });
+  } catch (err) {
+    console.error("[activity-log] gagal cek staff:", input.action, err);
+  }
+}
+
 // ============================================================
 // READ (halaman admin)
 // ============================================================
