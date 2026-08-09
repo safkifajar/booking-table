@@ -45,5 +45,7 @@ next-env.d.ts
 /public/uploads/**
 !/public/uploads/.gitkeep
 
-# Dokumen PRD internal — lokal saja, jangan ikut repo (permintaan user 2026-07-16)
-docs/PRD-*.md
+# Dokumen internal — LOKAL saja, jangan ikut repo (permintaan user).
+# Seluruh isi docs/ diabaikan; DEPLOYMENT.md & schema.md yang sudah terlanjur
+# ter-commit tetap ada di repo (gitignore tak mencabut file yang sudah track).
+docs/
