@@ -221,7 +221,7 @@ export async function inviteStaff(
     category: "admin",
     entityType: "staff_role",
     entityId: result.staffRoleId,
-    summary: `Undang staff ${displayName} (${data.role})`,
+    summary: `Invited staff ${displayName} (${data.role})`,
     meta: { email, displayName, role: data.role, isNewUser: result.isNewUser },
   });
 
@@ -399,7 +399,7 @@ export async function updateStaffRole(
     category: "admin",
     entityType: "staff_role",
     entityId: data.staffRoleId,
-    summary: `Ubah role ${existing.name} dari ${existing.role} jadi ${data.role}`,
+    summary: `Changed ${existing.name} role from ${existing.role} to ${data.role}`,
     meta: { staffName: existing.name, from: existing.role, to: data.role },
   });
 
@@ -493,10 +493,10 @@ export async function updateStaff(
   // Audit: rangkum HANYA yang benar-benar berubah. Reset password dicatat
   // sebagai fakta saja — password barunya JANGAN pernah ikut tersimpan.
   const changes: string[] = [];
-  if (existing.name !== displayName) changes.push("nama");
+  if (existing.name !== displayName) changes.push("name");
   if (existing.email !== email) changes.push("email");
   if (existing.role !== data.role) changes.push("role");
-  if (existing.isActive !== data.isActive) changes.push("status aktif");
+  if (existing.isActive !== data.isActive) changes.push("active status");
   if (data.password) changes.push("password");
   if (changes.length > 0) {
     await logActivity({
@@ -506,7 +506,7 @@ export async function updateStaff(
       category: "admin",
       entityType: "staff_role",
       entityId: data.staffRoleId,
-      summary: `Ubah data staff ${displayName} (${changes.join(", ")})`,
+      summary: `Updated staff ${displayName} (${changes.join(", ")})`,
       meta: {
         staffName: displayName,
         changed: changes,
@@ -563,7 +563,7 @@ export async function toggleStaffActive(
     category: "admin",
     entityType: "staff_role",
     entityId: staffRoleId,
-    summary: `${isActive ? "Aktifkan" : "Nonaktifkan"} akun staff ${existing.name}`,
+    summary: `${isActive ? "Activated" : "Deactivated"} staff account ${existing.name}`,
     meta: { staffName: existing.name, isActive },
   });
 

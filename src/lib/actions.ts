@@ -2152,7 +2152,7 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
         category: "order",
         entityType: "order",
         entityId: order.id,
-        summary: `Input pesanan ${data.quantity}x ${item.name} untuk tamu meja ${loc.tableLabel}`,
+        summary: `Added ${data.quantity}x ${item.name} for a guest at table ${loc.tableLabel}`,
         meta: {
           itemName: item.name,
           quantity: data.quantity,
@@ -2348,7 +2348,7 @@ export async function createOrder(
         category: "order",
         entityType: "order",
         entityId: orderId,
-        summary: `Buat pesanan ${totalQty} item untuk tamu meja ${loc.tableLabel}`,
+        summary: `Created an order of ${totalQty} item(s) for a guest at table ${loc.tableLabel}`,
         meta: {
           itemCount: data.items.length,
           totalQuantity: totalQty,
@@ -2856,9 +2856,9 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     category: "order",
     entityType: "order_item",
     entityId: itemId,
-    summary: `Batalkan item ${item.quantity}x ${item.name} (${formatIDR(
+    summary: `Voided ${item.quantity}x ${item.name} (${formatIDR(
       item.quantity * item.unitPrice
-    )}) meja ${session!.table_label}`,
+    )}) at table ${session!.table_label}`,
     meta: {
       itemName: item.name,
       quantity: item.quantity,
@@ -4705,7 +4705,7 @@ export async function updateStaffProfile(input: { displayName: string }) {
       category: "admin",
       entityType: "profile",
       entityId: profile.id,
-      summary: `Ubah nama akun sendiri dari "${before.displayName}" jadi "${displayName}"`,
+      summary: `Changed own account name from "${before.displayName}" to "${displayName}"`,
       meta: { from: before.displayName, to: displayName },
     });
   }
@@ -4896,8 +4896,8 @@ export async function changePassword(input: z.infer<typeof changePasswordSchema>
     entityType: "profile",
     entityId: profile.id,
     summary: user.passwordHash
-      ? "Ubah password akun sendiri"
-      : "Set password akun sendiri",
+      ? "Changed own account password"
+      : "Set own account password",
   });
 
   revalidatePath("/profile");

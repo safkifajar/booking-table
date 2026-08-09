@@ -755,7 +755,7 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
     barId: ctx.barId,
     action: "order.preparing",
     category: "order",
-    summary: `Proses order ke dapur — meja ${item.table_label}`,
+    summary: `Sent order to kitchen at table ${item.table_label}`,
     entityType: "order_item",
     entityId: itemId,
     meta: { sessionId: item.session_id, tableLabel: item.table_label },
@@ -1272,7 +1272,7 @@ export async function cashierCreatePayment(
       category: "payment",
       entityType: "payment",
       entityId: voucherPayment.id,
-      summary: `Terima pembayaran ${formatIDR(voucher.discount)} via voucher meja ${sessionRow.table_label}`,
+      summary: `Received ${formatIDR(voucher.discount)} by voucher at table ${sessionRow.table_label}`,
       meta: {
         amount: voucher.discount,
         method: "voucher",
@@ -1386,8 +1386,8 @@ export async function cashierCreatePayment(
     entityId: newPayment.id,
     summary:
       chargeResult.status === "paid"
-        ? `Terima pembayaran ${formatIDR(chargeAmount)} (${data.method}) meja ${sessionRow.table_label}`
-        : `Buat tagihan ${formatIDR(chargeAmount)} (${data.method}) meja ${sessionRow.table_label}`,
+        ? `Received ${formatIDR(chargeAmount)} (${data.method}) at table ${sessionRow.table_label}`
+        : `Created ${formatIDR(chargeAmount)} charge (${data.method}) at table ${sessionRow.table_label}`,
     meta: {
       amount: chargeAmount,
       method: data.method,
@@ -1556,7 +1556,7 @@ export async function cashierConfirmPendingPayment(input: {
       category: "payment",
       entityType: "payment",
       entityId: payment.id,
-      summary: `Terima pembayaran ${formatIDR(payment.amount)} (qris) meja ${payment.tableLabel}`,
+      summary: `Received ${formatIDR(payment.amount)} (qris) at table ${payment.tableLabel}`,
       meta: {
         amount: payment.amount,
         method: "qris",
@@ -1582,7 +1582,7 @@ export async function cashierConfirmPendingPayment(input: {
     category: "payment",
     entityType: "payment",
     entityId: payment.id,
-    summary: `Buat tagihan ${formatIDR(payment.amount)} (qris) meja ${payment.tableLabel}`,
+    summary: `Created ${formatIDR(payment.amount)} charge (qris) at table ${payment.tableLabel}`,
     meta: {
       amount: payment.amount,
       method: "qris",
@@ -1710,7 +1710,7 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     barId: ctx.barId,
     action: meta.isDownPayment ? "payment.dp_confirmed" : "payment.received",
     category: "payment",
-    summary: `${meta.isDownPayment ? "Konfirmasi DP" : "Terima pembayaran"} ${formatIDR(payment.amount)} meja ${payment.tableLabel}`,
+    summary: `${meta.isDownPayment ? "Confirmed deposit" : "Received payment"} ${formatIDR(payment.amount)} at table ${payment.tableLabel}`,
     entityType: "payment",
     entityId: paymentId,
     meta: {
@@ -1766,7 +1766,7 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
     barId: ctx.barId,
     action: "payment.cancelled",
     category: "payment",
-    summary: `Batalkan pembayaran ${formatIDR(payment.amount)} meja ${payment.tableLabel}`,
+    summary: `Cancelled payment ${formatIDR(payment.amount)} at table ${payment.tableLabel}`,
     entityType: "payment",
     entityId: paymentId,
     meta: {
@@ -1843,8 +1843,8 @@ export async function markPaymentPaidBySystem(
     entityType: "payment",
     entityId: paymentId,
     summary: wasFailed
-      ? `Pembayaran ${formatIDR(payment.amount)} (${payment.method}) meja ${payment.tableLabel} MASUK padahal sudah dibatalkan`
-      : `Pembayaran ${formatIDR(payment.amount)} (${payment.method}) meja ${payment.tableLabel} lunas otomatis`,
+      ? `Payment ${formatIDR(payment.amount)} (${payment.method}) at table ${payment.tableLabel} ARRIVED after being cancelled`
+      : `Payment ${formatIDR(payment.amount)} (${payment.method}) at table ${payment.tableLabel} settled automatically`,
     meta: {
       amount: payment.amount,
       method: payment.method,
@@ -2029,7 +2029,7 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
     barId: ctx.barId,
     action: "session.closed",
     category: "session",
-    summary: `Tutup meja ${row.table_label}`,
+    summary: `Closed table ${row.table_label}`,
     entityType: "session",
     entityId: sessionId,
     meta: { tableLabel: row.table_label, voidedOrders: unpaidOrders.length },

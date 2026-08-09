@@ -947,7 +947,7 @@ export async function expireOverduePayAtCashierOrders(
       action: "payment.expired",
       category: "payment",
       entityType: "payment",
-      summary: `${expired} tagihan "bayar di kasir" gagal karena lewat batas waktu`,
+      summary: `${expired} "pay at cashier" charge(s) expired`,
       meta: { count: expired, paymentIds: payIds },
     });
   }

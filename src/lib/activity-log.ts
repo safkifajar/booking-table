@@ -90,7 +90,7 @@ export async function logSystem(input: {
   try {
     await db.insert(activityLogs).values({
       actorId: null,
-      actorName: "Sistem",
+      actorName: "System",
       actorRole: "system",
       barId: input.barId,
       action: input.action,

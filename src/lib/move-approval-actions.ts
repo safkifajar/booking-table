@@ -650,8 +650,8 @@ export async function resolveMoveRequest(input: {
     action: input.approve ? "move.approved" : "move.rejected",
     category: "move",
     summary: input.approve
-      ? `Setujui pindah meja ke ${toLabel}`
-      : `Tolak permintaan pindah meja ke ${toLabel}`,
+      ? `Approved table move to ${toLabel}`
+      : `Rejected table move request to ${toLabel}`,
     entityType: "move_request",
     entityId: input.requestId,
     meta: { sessionId: session.id, toLabel },
@@ -768,7 +768,7 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     barId: session.barId,
     action: "move.direct",
     category: "move",
-    summary: `Pindahkan meja ke ${target.label}`,
+    summary: `Moved table to ${target.label}`,
     entityType: "session",
     entityId: session.id,
     meta: { toTableId: data.targetTableId, toLabel: target.label },

@@ -676,7 +676,7 @@ export async function waiterMarkServed(itemId: string): Promise<void> {
     barId: ctx.barId,
     action: "order.served",
     category: "order",
-    summary: `Antar pesanan — meja ${item.table_label}`,
+    summary: `Served order at table ${item.table_label}`,
     entityType: "order_item",
     entityId: itemId,
     meta: { sessionId: item.session_id, tableLabel: item.table_label },
@@ -1256,8 +1256,8 @@ export async function staffOpenTableForCustomer(
     barId: ctx.barId,
     action: "session.opened",
     category: "session",
-    summary: `Buka meja ${table.label} untuk ${mainGuest}${
-      hostAccount ? " (akun terdaftar)" : ""
+    summary: `Opened table ${table.label} for ${mainGuest}${
+      hostAccount ? " (registered account)" : ""
     }`,
     entityType: "session",
     entityId: sessionId,
@@ -1505,7 +1505,7 @@ export async function staffAddGuestToTable(
     category: "session",
     entityType: "session",
     entityId: sessionId,
-    summary: `Tambah tamu ${cleanName} ke meja ${session.tableLabel}`,
+    summary: `Added guest ${cleanName} to table ${session.tableLabel}`,
     meta: {
       guestName: cleanName,
       sessionId,

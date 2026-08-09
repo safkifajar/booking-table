@@ -622,8 +622,8 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
     action: priceChanged ? "menu.price_changed" : "menu.updated",
     category: "admin",
     summary: priceChanged
-      ? `Ubah harga ${meta.name.trim()}: ${formatIDR(existing.price)} → ${formatIDR(meta.price)}`
-      : `Ubah menu ${meta.name.trim()}`,
+      ? `Changed price of ${meta.name.trim()}: ${formatIDR(existing.price)} to ${formatIDR(meta.price)}`
+      : `Updated menu item ${meta.name.trim()}`,
     entityType: "menu_item",
     entityId: id,
     meta: priceChanged
@@ -714,7 +714,7 @@ export async function toggleItemAvailability(
     barId,
     action: "menu.availability",
     category: "admin",
-    summary: `${isAvailable ? "Aktifkan" : "Nonaktifkan"} menu ${existing.name}`,
+    summary: `${isAvailable ? "Enabled" : "Disabled"} menu item ${existing.name}`,
     entityType: "menu_item",
     entityId: itemId,
     meta: { isAvailable },
