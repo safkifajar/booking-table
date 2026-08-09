@@ -205,7 +205,7 @@ export function CashierSessionList({
     // bukan sticky yg sempat travel).
     <div className="flex flex-col h-[calc(100dvh-5.5rem)] -mb-6">
       {/* Quick stats + filter — DIAM (di luar area scroll). */}
-      <div className="shrink-0 pb-3 border-b border-border space-y-3">
+      <div className="shrink-0 pb-3 space-y-3">
         <div className="grid grid-cols-3 gap-2">
           <StatCard
             icon={<Users className="h-4 w-4" />}
