@@ -18,6 +18,8 @@ import { menuCategories, menuItems } from "@/lib/db/schema/menu";
 import { orderItems } from "@/lib/db/schema/orders";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { requireProfile } from "@/lib/auth-v2/current";
+import { logActivity } from "@/lib/activity-log";
+import { formatIDR } from "@/lib/utils";
 
 // ============================================================
 // ADMIN GUARD
@@ -531,13 +533,15 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
       id: menuItems.id,
       imageUrl: menuItems.imageUrl,
       categoryId: menuItems.categoryId,
+      price: menuItems.price,
+      name: menuItems.name,
     })
     .from(menuItems)
     .where(eq(menuItems.id, id));
   if (!existing) throw new Error("Item not found");
 
   const barId = await resolveBarIdForCategory(meta.categoryId);
-  await requireAdminForBar(barId);
+  const { profile } = await requireAdminForBar(barId);
 
   // Kalau pindah kategori, verify kategori baru juga milik bar yang sama
   if (existing.categoryId !== meta.categoryId) {
@@ -610,6 +614,23 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
     })
     .where(eq(menuItems.id, id));
 
+  // Audit: perubahan menu, terutama HARGA (paling perlu diawasi).
+  const priceChanged = existing.price !== meta.price;
+  await logActivity({
+    actorId: profile.id,
+    barId,
+    action: priceChanged ? "menu.price_changed" : "menu.updated",
+    category: "admin",
+    summary: priceChanged
+      ? `Changed price of ${meta.name.trim()}: ${formatIDR(existing.price)} to ${formatIDR(meta.price)}`
+      : `Updated menu item ${meta.name.trim()}`,
+    entityType: "menu_item",
+    entityId: id,
+    meta: priceChanged
+      ? { priceBefore: existing.price, priceAfter: meta.price }
+      : {},
+  });
+
   revalidatePath("/admin/menu");
 }
 
@@ -675,17 +696,29 @@ export async function toggleItemAvailability(
   isAvailable: boolean
 ): Promise<void> {
   const [existing] = await db
-    .select({ categoryId: menuItems.categoryId })
+    .select({ categoryId: menuItems.categoryId, name: menuItems.name })
     .from(menuItems)
     .where(eq(menuItems.id, itemId));
   if (!existing) throw new Error("Item not found");
 
   const barId = await resolveBarIdForCategory(existing.categoryId);
-  await requireAdminForBar(barId);
+  const { profile } = await requireAdminForBar(barId);
 
   await db
     .update(menuItems)
     .set({ isAvailable })
     .where(eq(menuItems.id, itemId));
+
+  await logActivity({
+    actorId: profile.id,
+    barId,
+    action: "menu.availability",
+    category: "admin",
+    summary: `${isAvailable ? "Enabled" : "Disabled"} menu item ${existing.name}`,
+    entityType: "menu_item",
+    entityId: itemId,
+    meta: { isAvailable },
+  });
+
   revalidatePath("/admin/menu");
 }

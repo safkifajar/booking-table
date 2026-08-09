@@ -36,14 +36,11 @@ export function StaffBottomNav({
     // yg mengintip di bawah nav.
     <div className="fixed bottom-0 inset-x-0 z-50 bg-background after:absolute after:inset-x-0 after:top-full after:h-10 after:bg-background">
       {topSlot && (
-        <div className="border-t border-border">
+        <div>
           <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">{topSlot}</div>
         </div>
       )}
-      <nav
-        className="border-t border-border"
-        aria-label="Staff navigation"
-      >
+      <nav aria-label="Staff navigation">
         <div
           className="max-w-md mx-auto px-1 grid items-stretch h-16"
           style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}

@@ -47,6 +47,7 @@ import {
 } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { logActivity, logIfStaff } from "@/lib/activity-log";
 import {
   createNotification,
   markInviteResponded,
@@ -2112,7 +2113,11 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
 
   // 3. Menu item snapshot
   const [item] = await db
-    .select({ price: menuItems.price, is_available: menuItems.isAvailable })
+    .select({
+      price: menuItems.price,
+      is_available: menuItems.isAvailable,
+      name: menuItems.name,
+    })
     .from(menuItems)
     .where(eq(menuItems.id, data.menuItemId));
   if (!item) throw new Error("Menu item not found");
@@ -2129,6 +2134,35 @@ export async function addOrderItem(input: z.infer<typeof addOrderItemSchema>) {
     notes: data.notes ?? null,
     status: "sent",
   });
+
+  // Audit: HANYA kalau staff yang menginput atas nama tamu. Order yang
+  // customer input sendiri bukan aktivitas staff, jadi tak dicatat.
+  if (inputByStaffId) {
+    const [loc] = await db
+      .select({ barId: floorAreas.barId, tableLabel: tables.label })
+      .from(tableSessions)
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+      .where(eq(tableSessions.id, data.sessionId));
+    if (loc) {
+      await logActivity({
+        actorId: inputByStaffId,
+        barId: loc.barId,
+        action: "order.item_added_for_guest",
+        category: "order",
+        entityType: "order",
+        entityId: order.id,
+        summary: `Added ${data.quantity}x ${item.name} for a guest at table ${loc.tableLabel}`,
+        meta: {
+          itemName: item.name,
+          quantity: data.quantity,
+          unitPrice: item.price,
+          sessionId: data.sessionId,
+          tableLabel: loc.tableLabel,
+        },
+      });
+    }
+  }
 
   await notifySessionAndStaff(data.sessionId);
   revalidatePath(`/session/${data.sessionId}`);
@@ -2295,6 +2329,35 @@ export async function createOrder(
     );
     return newOrder.id;
   });
+
+  // Audit: HANYA order yang dibuatkan staff atas nama tamu (order yang tamu
+  // buat sendiri bukan aktivitas staff). Dicatat setelah transaksi commit.
+  if (inputByStaffId) {
+    const [loc] = await db
+      .select({ barId: floorAreas.barId, tableLabel: tables.label })
+      .from(tableSessions)
+      .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+      .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+      .where(eq(tableSessions.id, data.sessionId));
+    if (loc) {
+      const totalQty = data.items.reduce((s, i) => s + i.quantity, 0);
+      await logActivity({
+        actorId: inputByStaffId,
+        barId: loc.barId,
+        action: "order.created_for_guest",
+        category: "order",
+        entityType: "order",
+        entityId: orderId,
+        summary: `Created an order of ${totalQty} item(s) for a guest at table ${loc.tableLabel}`,
+        meta: {
+          itemCount: data.items.length,
+          totalQuantity: totalQty,
+          sessionId: data.sessionId,
+          tableLabel: loc.tableLabel,
+        },
+      });
+    }
+  }
 
   revalidatePath(`/session/${data.sessionId}`);
   return { orderId };
@@ -2735,17 +2798,25 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     .select({
       id: orderItems.id,
       added_by_profile_id: sessionMembers.profileId,
+      name: menuItems.name,
+      quantity: orderItems.quantity,
+      unitPrice: orderItems.unitPrice,
     })
     .from(orderItems)
     .innerJoin(
       sessionMembers,
       eq(sessionMembers.id, orderItems.addedByMemberId)
     )
+    .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
     .where(eq(orderItems.id, itemId));
   if (!item) throw new Error("Item not found");
 
   const [session] = await db
-    .select({ host_id: tableSessions.hostId, bar_id: floorAreas.barId })
+    .select({
+      host_id: tableSessions.hostId,
+      bar_id: floorAreas.barId,
+      table_label: tables.label,
+    })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -2775,6 +2846,27 @@ export async function removeOrderItem(itemId: string, sessionId: string) {
     .update(orderItems)
     .set({ status: "void" })
     .where(eq(orderItems.id, itemId));
+
+  // Audit: pembatalan item = aksi sensitif (barang hilang dari tagihan) dan
+  // HANYA staff yang bisa melakukannya — wajib tercatat siapa pelakunya.
+  await logActivity({
+    actorId: profile.id,
+    barId: session!.bar_id,
+    action: "order.item_voided",
+    category: "order",
+    entityType: "order_item",
+    entityId: itemId,
+    summary: `Voided ${item.quantity}x ${item.name} (${formatIDR(
+      item.quantity * item.unitPrice
+    )}) at table ${session!.table_label}`,
+    meta: {
+      itemName: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      sessionId,
+      tableLabel: session!.table_label,
+    },
+  });
 
   await notifySessionAndStaff(sessionId);
   revalidatePath(`/session/${sessionId}`);
@@ -4594,10 +4686,29 @@ export async function updateStaffProfile(input: { displayName: string }) {
     .max(40)
     .parse(input.displayName.trim());
 
+  // Nama lama diambil SEBELUM update — supaya log bisa menampilkan
+  // perubahannya, bukan cuma nama akhirnya.
+  const [before] = await db
+    .select({ displayName: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, profile.id));
+
   await db
     .update(profiles)
     .set({ displayName })
     .where(eq(profiles.id, profile.id));
+
+  if (before && before.displayName !== displayName) {
+    await logIfStaff({
+      actorId: profile.id,
+      action: "account.name_changed",
+      category: "admin",
+      entityType: "profile",
+      entityId: profile.id,
+      summary: `Changed own account name from "${before.displayName}" to "${displayName}"`,
+      meta: { from: before.displayName, to: displayName },
+    });
+  }
 
   revalidatePath("/staff/profile");
   revalidatePath("/", "layout");
@@ -4774,6 +4885,20 @@ export async function changePassword(input: z.infer<typeof changePasswordSchema>
     .update(users)
     .set({ passwordHash: newHash, updatedAt: new Date() })
     .where(eq(users.id, profile.id));
+
+  // Audit: HANYA fakta bahwa password diganti — password/hash-nya JANGAN
+  // pernah ikut tercatat. Halaman /profile dipakai bersama customer, jadi
+  // logIfStaff menyaring supaya cuma aktivitas staff yang masuk.
+  await logIfStaff({
+    actorId: profile.id,
+    action: user.passwordHash ? "account.password_changed" : "account.password_set",
+    category: "admin",
+    entityType: "profile",
+    entityId: profile.id,
+    summary: user.passwordHash
+      ? "Changed own account password"
+      : "Set own account password",
+  });
 
   revalidatePath("/profile");
   return { ok: true };

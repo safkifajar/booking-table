@@ -36,6 +36,7 @@ import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { releaseVoucherForPayment } from "@/lib/member-voucher";
+import { logSystem } from "@/lib/activity-log";
 import type {
   Bar,
   FloorArea,
@@ -935,6 +936,20 @@ export async function expireOverduePayAtCashierOrders(
   for (const p of payIds) {
     await releaseVoucherForPayment(p).catch(() => {});
     await notifyPaymentEvent(p, "cancelled").catch(() => {});
+  }
+
+  // Audit: satu baris ringkas per sweep, BUKAN per pembayaran — fungsi ini
+  // dipanggil lazy tiap load halaman, jadi mencatat per item akan membanjiri
+  // log. Yang penting bagi admin: ada tagihan gagal karena lewat waktu.
+  if (expired > 0) {
+    await logSystem({
+      barId,
+      action: "payment.expired",
+      category: "payment",
+      entityType: "payment",
+      summary: `${expired} "pay at cashier" charge(s) expired`,
+      meta: { count: expired, paymentIds: payIds },
+    });
   }
   return expired;
 }

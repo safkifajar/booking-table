@@ -63,6 +63,8 @@ import {
 } from "@/lib/queries";
 import { sendBookingInvites } from "@/lib/actions";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
+import { logActivity, logSystem } from "@/lib/activity-log";
+import { formatIDR } from "@/lib/utils";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import type { PaymentMethod, SplitMode } from "@/types/db";
@@ -718,6 +720,7 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
       status: orderItems.status,
       session_id: tableSessions.id,
       session_status: tableSessions.status,
+      table_label: tables.label,
       bar_id: floorAreas.barId,
     })
     .from(orderItems)
@@ -746,6 +749,18 @@ export async function cashierMarkPreparing(itemId: string): Promise<void> {
 
   // Kabari sesi + staff (waiter melihat penanda "sedang dibuat").
   await notifyAll(item.session_id, ctx.barId, { type: "order.preparing" });
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "order.preparing",
+    category: "order",
+    summary: `Sent order to kitchen at table ${item.table_label}`,
+    entityType: "order_item",
+    entityId: itemId,
+    meta: { sessionId: item.session_id, tableLabel: item.table_label },
+  });
+
   revalidatePath("/staff/cashier");
   revalidatePath("/staff/waiter");
 }
@@ -1114,7 +1129,7 @@ export async function cashierCreatePayment(
 
   // 1. Validate session di bar yang sama
   const [sessionRow] = await db
-    .select({ bar_id: floorAreas.barId })
+    .select({ bar_id: floorAreas.barId, table_label: tables.label })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -1250,6 +1265,22 @@ export async function cashierCreatePayment(
     await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
     await settleOrderIfPaid(order.id);
     await settleOverdueIfPaid(data.sessionId);
+    await logActivity({
+      actorId: ctx.profileId,
+      barId: ctx.barId,
+      action: "payment.received",
+      category: "payment",
+      entityType: "payment",
+      entityId: voucherPayment.id,
+      summary: `Received ${formatIDR(voucher.discount)} by voucher at table ${sessionRow.table_label}`,
+      meta: {
+        amount: voucher.discount,
+        method: "voucher",
+        voucherCode: voucher.code,
+        sessionId: data.sessionId,
+        tableLabel: sessionRow.table_label,
+      },
+    });
     await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
     revalidatePath(`/staff/cashier/${data.sessionId}`);
     revalidatePath("/staff/cashier");
@@ -1341,6 +1372,35 @@ export async function cashierCreatePayment(
     await settleOverdueIfPaid(data.sessionId);
   }
 
+  // Audit: pembayaran yang diinput kasir. Cash/mock langsung lunas; QRIS masih
+  // menunggu scan (pelunasannya tercatat terpisah lewat callback/polling).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action:
+      chargeResult.status === "paid"
+        ? "payment.received"
+        : "payment.initiated",
+    category: "payment",
+    entityType: "payment",
+    entityId: newPayment.id,
+    summary:
+      chargeResult.status === "paid"
+        ? `Received ${formatIDR(chargeAmount)} (${data.method}) at table ${sessionRow.table_label}`
+        : `Created ${formatIDR(chargeAmount)} charge (${data.method}) at table ${sessionRow.table_label}`,
+    meta: {
+      amount: chargeAmount,
+      method: data.method,
+      status: chargeResult.status,
+      sessionId: data.sessionId,
+      tableLabel: sessionRow.table_label,
+      ...(change !== null ? { cashReceived: data.cashReceived, change } : {}),
+      ...(voucher
+        ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+        : {}),
+    },
+  });
+
   // 8. Notify realtime (session + staff + bar)
   await notifyAll(data.sessionId, ctx.barId, { type: "payment.created" });
 
@@ -1396,6 +1456,7 @@ export async function cashierConfirmPendingPayment(input: {
       splitMeta: payments.splitMeta,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
+      tableLabel: tables.label,
       payerName: profiles.displayName,
     })
     .from(payments)
@@ -1488,6 +1549,22 @@ export async function cashierConfirmPendingPayment(input: {
     // Mock gateway: langsung lunas → jalankan SEMUA hook via jalur sistem
     // (dp_paid_at, settleOrderIfPaid, voucher, split, notif) — idempotent.
     await markPaymentPaidBySystem(payment.id);
+    await logActivity({
+      actorId: ctx.profileId,
+      barId: ctx.barId,
+      action: "payment.received",
+      category: "payment",
+      entityType: "payment",
+      entityId: payment.id,
+      summary: `Received ${formatIDR(payment.amount)} (qris) at table ${payment.tableLabel}`,
+      meta: {
+        amount: payment.amount,
+        method: "qris",
+        viaPayAtCashier: true,
+        sessionId: payment.sessionId,
+        tableLabel: payment.tableLabel,
+      },
+    });
     return {
       status: "paid",
       qrString: cr.qrString ?? null,
@@ -1496,6 +1573,25 @@ export async function cashierConfirmPendingPayment(input: {
       change: 0,
     };
   }
+
+  // Belum lunas — QR baru dibuat, pelunasan tercatat lewat callback/polling.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "payment.initiated",
+    category: "payment",
+    entityType: "payment",
+    entityId: payment.id,
+    summary: `Created ${formatIDR(payment.amount)} charge (qris) at table ${payment.tableLabel}`,
+    meta: {
+      amount: payment.amount,
+      method: "qris",
+      status: cr.status,
+      viaPayAtCashier: true,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -1524,7 +1620,10 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
       id: payments.id,
       orderId: payments.orderId,
       splitMeta: payments.splitMeta,
+      amount: payments.amount,
+      method: payments.method,
       sessionId: orders.sessionId,
+      tableLabel: tables.label,
       barId: floorAreas.barId,
     })
     .from(payments)
@@ -1605,6 +1704,23 @@ export async function cashierMarkPaymentPaid(paymentId: string): Promise<void> {
     meta.isDownPayment ? "dp_confirmed" : "paid"
   );
 
+  // Audit: kasir mana yang mengonfirmasi pembayaran ini.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: meta.isDownPayment ? "payment.dp_confirmed" : "payment.received",
+    category: "payment",
+    summary: `${meta.isDownPayment ? "Confirmed deposit" : "Received payment"} ${formatIDR(payment.amount)} at table ${payment.tableLabel}`,
+    entityType: "payment",
+    entityId: paymentId,
+    meta: {
+      amount: payment.amount,
+      method: payment.method,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
+
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
   revalidatePath(`/session/${payment.sessionId}`);
@@ -1620,7 +1736,9 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
   const [payment] = await db
     .select({
       id: payments.id,
+      amount: payments.amount,
       sessionId: orders.sessionId,
+      tableLabel: tables.label,
       barId: floorAreas.barId,
     })
     .from(payments)
@@ -1641,6 +1759,22 @@ export async function cashierCancelPayment(paymentId: string): Promise<void> {
 
   await notifyAll(payment.sessionId, ctx.barId, { type: "payment.cancelled" });
   await notifyPaymentEvent(paymentId, "cancelled");
+
+  // Audit: pembatalan pembayaran = aksi sensitif, wajib tercatat.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "payment.cancelled",
+    category: "payment",
+    summary: `Cancelled payment ${formatIDR(payment.amount)} at table ${payment.tableLabel}`,
+    entityType: "payment",
+    entityId: paymentId,
+    meta: {
+      amount: payment.amount,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+    },
+  });
 
   revalidatePath(`/staff/cashier/${payment.sessionId}`);
   revalidatePath("/staff/cashier");
@@ -1663,6 +1797,9 @@ export async function markPaymentPaidBySystem(
       orderId: payments.orderId,
       sessionId: orders.sessionId,
       barId: floorAreas.barId,
+      amount: payments.amount,
+      method: payments.method,
+      tableLabel: tables.label,
     })
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
@@ -1695,6 +1832,27 @@ export async function markPaymentPaidBySystem(
         : {}),
     })
     .where(eq(payments.id, paymentId));
+
+  // Audit: tutup riwayat tagihan. Tanpa baris ini log berhenti di "kasir
+  // menerbitkan QRIS" tanpa pernah menunjukkan ujungnya. Pelakunya gateway,
+  // jadi dicatat sebagai Sistem — bukan diatribusikan ke kasir.
+  await logSystem({
+    barId: payment.barId,
+    action: wasFailed ? "payment.paid_after_cancelled" : "payment.settled",
+    category: "payment",
+    entityType: "payment",
+    entityId: paymentId,
+    summary: wasFailed
+      ? `Payment ${formatIDR(payment.amount)} (${payment.method}) at table ${payment.tableLabel} ARRIVED after being cancelled`
+      : `Payment ${formatIDR(payment.amount)} (${payment.method}) at table ${payment.tableLabel} settled automatically`,
+    meta: {
+      amount: payment.amount,
+      method: payment.method,
+      sessionId: payment.sessionId,
+      tableLabel: payment.tableLabel,
+      paidAfterCancelled: wasFailed,
+    },
+  });
 
   // DP booking lunas → tandai dp_paid_at (booking terkonfirmasi).
   const meta =
@@ -1815,7 +1973,11 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
 
   // Validate session di bar yang sama
   const [row] = await db
-    .select({ bar_id: floorAreas.barId, status: tableSessions.status })
+    .select({
+      bar_id: floorAreas.barId,
+      status: tableSessions.status,
+      table_label: tables.label,
+    })
     .from(tableSessions)
     .innerJoin(tables, eq(tables.id, tableSessions.tableId))
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
@@ -1860,6 +2022,18 @@ export async function cashierCloseSession(sessionId: string): Promise<void> {
   ]);
 
   await notifyAll(sessionId, ctx.barId, { type: "session.closed" });
+
+  // Audit: siapa yang menutup meja (sebelumnya tak tercatat sama sekali).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "session.closed",
+    category: "session",
+    summary: `Closed table ${row.table_label}`,
+    entityType: "session",
+    entityId: sessionId,
+    meta: { tableLabel: row.table_label, voidedOrders: unpaidOrders.length },
+  });
 
   revalidatePath(`/staff/cashier/${sessionId}`);
   revalidatePath("/staff/cashier");

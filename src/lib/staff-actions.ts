@@ -29,6 +29,7 @@ import {
   requirePermission,
   type StaffRoleName,
 } from "@/lib/auth-v2/permissions";
+import { logActivity } from "@/lib/activity-log";
 import { sendEmail } from "@/lib/auth-v2/email-service";
 import { staffInviteEmail } from "@/lib/auth-v2/email-template";
 
@@ -213,6 +214,17 @@ export async function inviteStaff(
     setupUrl = inviteResult.setupUrl;
   }
 
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "staff.invited",
+    category: "admin",
+    entityType: "staff_role",
+    entityId: result.staffRoleId,
+    summary: `Invited staff ${displayName} (${data.role})`,
+    meta: { email, displayName, role: data.role, isNewUser: result.isNewUser },
+  });
+
   revalidatePath("/admin/staff");
   return {
     staffRoleId: result.staffRoleId,
@@ -358,8 +370,14 @@ export async function updateStaffRole(
   const data = updateRoleSchema.parse(input);
 
   const [existing] = await db
-    .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
+    .select({
+      barId: staffRoles.barId,
+      profileId: staffRoles.profileId,
+      role: staffRoles.role,
+      name: profiles.displayName,
+    })
     .from(staffRoles)
+    .innerJoin(profiles, eq(profiles.id, staffRoles.profileId))
     .where(eq(staffRoles.id, data.staffRoleId));
   if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
@@ -373,6 +391,17 @@ export async function updateStaffRole(
     .update(staffRoles)
     .set({ role: data.role })
     .where(eq(staffRoles.id, data.staffRoleId));
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: "staff.role_changed",
+    category: "admin",
+    entityType: "staff_role",
+    entityId: data.staffRoleId,
+    summary: `Changed ${existing.name} role from ${existing.role} to ${data.role}`,
+    meta: { staffName: existing.name, from: existing.role, to: data.role },
+  });
 
   revalidatePath("/admin/staff");
 }
@@ -410,8 +439,13 @@ export async function updateStaff(
       barId: staffRoles.barId,
       profileId: staffRoles.profileId,
       role: staffRoles.role,
+      isActive: staffRoles.isActive,
+      name: profiles.displayName,
+      email: users.email,
     })
     .from(staffRoles)
+    .innerJoin(profiles, eq(profiles.id, staffRoles.profileId))
+    .innerJoin(users, eq(users.id, staffRoles.profileId))
     .where(eq(staffRoles.id, data.staffRoleId));
   if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
@@ -456,6 +490,37 @@ export async function updateStaff(
       .where(eq(staffRoles.id, data.staffRoleId));
   });
 
+  // Audit: rangkum HANYA yang benar-benar berubah. Reset password dicatat
+  // sebagai fakta saja — password barunya JANGAN pernah ikut tersimpan.
+  const changes: string[] = [];
+  if (existing.name !== displayName) changes.push("name");
+  if (existing.email !== email) changes.push("email");
+  if (existing.role !== data.role) changes.push("role");
+  if (existing.isActive !== data.isActive) changes.push("active status");
+  if (data.password) changes.push("password");
+  if (changes.length > 0) {
+    await logActivity({
+      actorId: ctx.profileId,
+      barId: ctx.barId,
+      action: data.password ? "staff.password_reset" : "staff.updated",
+      category: "admin",
+      entityType: "staff_role",
+      entityId: data.staffRoleId,
+      summary: `Updated staff ${displayName} (${changes.join(", ")})`,
+      meta: {
+        staffName: displayName,
+        changed: changes,
+        ...(existing.role !== data.role
+          ? { roleFrom: existing.role, roleTo: data.role }
+          : {}),
+        ...(existing.isActive !== data.isActive
+          ? { activeTo: data.isActive }
+          : {}),
+        passwordReset: !!data.password,
+      },
+    });
+  }
+
   revalidatePath("/admin/staff");
 }
 
@@ -470,8 +535,13 @@ export async function toggleStaffActive(
   const ctx = await requirePermission("manage_staff", "/admin/staff");
 
   const [existing] = await db
-    .select({ barId: staffRoles.barId, profileId: staffRoles.profileId })
+    .select({
+      barId: staffRoles.barId,
+      profileId: staffRoles.profileId,
+      name: profiles.displayName,
+    })
     .from(staffRoles)
+    .innerJoin(profiles, eq(profiles.id, staffRoles.profileId))
     .where(eq(staffRoles.id, staffRoleId));
   if (!existing) throw new Error("Staff role not found");
   if (existing.barId !== ctx.barId) {
@@ -485,6 +555,17 @@ export async function toggleStaffActive(
     .update(staffRoles)
     .set({ isActive })
     .where(eq(staffRoles.id, staffRoleId));
+
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: ctx.barId,
+    action: isActive ? "staff.activated" : "staff.deactivated",
+    category: "admin",
+    entityType: "staff_role",
+    entityId: staffRoleId,
+    summary: `${isActive ? "Activated" : "Deactivated"} staff account ${existing.name}`,
+    meta: { staffName: existing.name, isActive },
+  });
 
   revalidatePath("/admin/staff");
 }

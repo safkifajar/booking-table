@@ -19,6 +19,7 @@ import { getPaymentGateway } from "@/lib/payments/gateway";
 import { isDbConstraintError } from "@/lib/utils";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { logActivity } from "@/lib/activity-log";
 import type { PaymentMethod } from "@/types/db";
 
 // ============================================================
@@ -641,6 +642,21 @@ export async function resolveMoveRequest(input: {
       notify(channels.staff(session.barId)),
     ]);
   }
+
+  // Audit: staff mana yang menyetujui/menolak permintaan pindah meja.
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: session.barId,
+    action: input.approve ? "move.approved" : "move.rejected",
+    category: "move",
+    summary: input.approve
+      ? `Approved table move to ${toLabel}`
+      : `Rejected table move request to ${toLabel}`,
+    entityType: "move_request",
+    entityId: input.requestId,
+    meta: { sessionId: session.id, toLabel },
+  });
+
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
 }
@@ -745,6 +761,18 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     notify(channels.bar(session.barId)),
     notify(channels.staff(session.barId)),
   ]);
+
+  // Audit: pindah meja langsung oleh staff (tanpa approval host).
+  await logActivity({
+    actorId: ctx.profileId,
+    barId: session.barId,
+    action: "move.direct",
+    category: "move",
+    summary: `Moved table to ${target.label}`,
+    entityType: "session",
+    entityId: session.id,
+    meta: { toTableId: data.targetTableId, toLabel: target.label },
+  });
 
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
