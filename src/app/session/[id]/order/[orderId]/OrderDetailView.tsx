@@ -249,6 +249,15 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         method,
         cashReceived,
       });
+      // Gagal validasi → pesan di res.error (pesan throw disensor Next.js
+      // di produksi, jadi tak pernah sampai ke kasir).
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to confirm payment");
+        // Tetap refresh: kegagalan spt "payment just changed state" justru
+        // berarti data di layar sudah basi.
+        router.refresh();
+        return;
+      }
       if (res.status === "paid") {
         toast.success(
           method === "cash" && res.change > 0
@@ -943,6 +952,12 @@ function CashierPayBox({
         method,
         cashReceived: method === "cash" ? received : undefined,
       });
+      // WAJIB dicek sebelum apa pun: tanpa ini, pembayaran yang GAGAL
+      // validasi akan tampil "Payment received" padahal uang tak masuk.
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to accept payment");
+        return;
+      }
       if (result.qrString && result.status === "pending") {
         onQr({
           paymentId: result.paymentId,
