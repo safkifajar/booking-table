@@ -1161,6 +1161,15 @@ function SessionCard({
               <Users className="h-2.5 w-2.5" />
               {session.member_count}/{session.table_capacity}
             </span>
+            {/* Disamakan dgn kartu kasir: berapa anggota yang punya akun. */}
+            {session.registered_count > 0 && (
+              <>
+                <span>·</span>
+                <span className="whitespace-nowrap text-primary/80">
+                  {session.registered_count} registered
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
             <Clock className="h-2.5 w-2.5 shrink-0" />
