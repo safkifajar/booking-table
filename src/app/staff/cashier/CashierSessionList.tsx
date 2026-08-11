@@ -673,6 +673,17 @@ function SessionCard({ session }: { session: CashierSessionItem }) {
               <span className="whitespace-nowrap tabular-nums">
                 {usageLabel(session)}
               </span>
+              {/* Berapa anggota yang punya akun — kasir jadi tahu di meja ini
+                  ada pelanggan terdaftar (bisa dikenai voucher/membership),
+                  bukan cuma tamu walk-in. */}
+              {session.registered_count > 0 && (
+                <>
+                  <span>·</span>
+                  <span className="whitespace-nowrap text-primary/80">
+                    {session.registered_count} registered
+                  </span>
+                </>
+              )}
             </div>
             {session.is_walk_in && session.opened_by_staff_name && (
               <div className="text-[10px] text-primary/70 mt-0.5 truncate">

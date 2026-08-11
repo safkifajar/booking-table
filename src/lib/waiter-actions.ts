@@ -242,6 +242,8 @@ export interface WaiterSessionItem {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  /** Berapa anggota yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). */
+  registered_count: number;
   table_capacity: number;
   started_at: string;
   reservation_at: string | null;
@@ -362,8 +364,12 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      // Berapa yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). Dihitung di
+      // query yang sama, tanpa round-trip tambahan.
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -373,6 +379,9 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   const rows = sessionRows.map((s) => {
@@ -386,6 +395,7 @@ export async function getActiveSessionsForWaiter(): Promise<WaiterSessionItem[]>
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       table_capacity: s.table_capacity,
       started_at: s.started_at.toISOString(),
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
@@ -484,8 +494,12 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      // Berapa yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). Dihitung di
+      // query yang sama, tanpa round-trip tambahan.
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -495,6 +509,9 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   const rows = sessionRows.map((s) => {
@@ -508,6 +525,7 @@ export async function getClosedSessionsForWaiter(): Promise<WaiterSessionItem[]>
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       table_capacity: s.table_capacity,
       started_at: s.started_at.toISOString(),
       reservation_at: s.reservation_at ? s.reservation_at.toISOString() : null,
@@ -538,6 +556,8 @@ export interface WaiterBookingItem {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  /** Berapa anggota yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). */
+  registered_count: number;
   table_capacity: number;
   reservation_at: string;
   reservation_end_at: string | null;
@@ -596,8 +616,10 @@ export async function getBookingsForWaiter(): Promise<WaiterBookingItem[]> {
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, ids),
@@ -606,6 +628,9 @@ export async function getBookingsForWaiter(): Promise<WaiterBookingItem[]> {
     )
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(memberRows.map((m) => [m.session_id, Number(m.count)]));
+  const registeredMap = new Map(
+    memberRows.map((m) => [m.session_id, Number(m.registered)])
+  );
 
   return rows.map((r) => ({
     session_id: r.id,
@@ -615,6 +640,7 @@ export async function getBookingsForWaiter(): Promise<WaiterBookingItem[]> {
     host_name: r.host_name,
     host_avatar: r.host_avatar,
     member_count: memberMap.get(r.id) ?? 0,
+    registered_count: registeredMap.get(r.id) ?? 0,
     table_capacity: r.table_capacity,
     reservation_at: r.reservation_at
       ? r.reservation_at.toISOString()

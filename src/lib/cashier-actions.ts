@@ -81,6 +81,8 @@ export interface CashierSessionItem {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  /** Berapa anggota yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). */
+  registered_count: number;
   status: string;
   started_at: string;
   /** Kapan sesi ditutup (null = masih aktif) — utk filter "hari ini" & urutan. */
@@ -199,8 +201,13 @@ export async function getActiveSessionsForCashier(): Promise<
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      // Berapa di antaranya PELANGGAN TERDAFTAR (punya akun) — sisanya tamu
+      // walk-in yang dibuatkan staff. Dihitung di query yang sama, tanpa
+      // round-trip tambahan.
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -211,6 +218,9 @@ export async function getActiveSessionsForCashier(): Promise<
 
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   // Payment "Pay at cashier" pending per session — customer menunggu
@@ -276,6 +286,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
       closed_at: s.closed_at ? s.closed_at.toISOString() : null,
@@ -385,8 +396,10 @@ export async function getClosedSessionsForCashier(): Promise<
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -396,6 +409,9 @@ export async function getClosedSessionsForCashier(): Promise<
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   const staffIds = Array.from(
@@ -428,6 +444,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
       closed_at: s.closed_at ? s.closed_at.toISOString() : null,
@@ -523,8 +540,10 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, ids),
@@ -534,6 +553,9 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   // DP pending "Pay at cashier" per booking (kasir perlu tahu siapa yang
@@ -579,6 +601,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     host_name: r.host_name,
     host_avatar: r.host_avatar,
     member_count: memberMap.get(r.id) ?? 0,
+    registered_count: registeredMap.get(r.id) ?? 0,
     table_capacity: r.table_capacity,
     reservation_at: r.reservation_at
       ? r.reservation_at.toISOString()
@@ -1111,6 +1134,19 @@ const createPaymentSchema = z.object({
 });
 
 export interface CreatePaymentResult {
+  /**
+   * false = gagal karena VALIDASI (nominal kurang, tagihan sudah lunas,
+   * voucher keburu dipakai). Pesannya di `error`.
+   *
+   * Sengaja RETURN, bukan throw: pesan dari Error yang dilempar server action
+   * DISENSOR Next.js di build produksi ("An error occurred in the Server
+   * Components render…"), sehingga kasir tak pernah tahu alasan gagalnya —
+   * padahal dia sedang melayani tamu di depan meja. Nilai return tidak
+   * disensor. Guard teknis (session/order/member tak ditemukan, akses bar
+   * salah) TETAP throw — pesan generik memang benar di situ.
+   */
+  ok: boolean;
+  error?: string;
   paymentId: string;
   status: string;
   externalRef: string;
@@ -1119,6 +1155,20 @@ export interface CreatePaymentResult {
   expiresAt: string | null;
   /** Untuk cash: kembalian (cashReceived - amount). Null untuk method lain. */
   change: number | null;
+}
+
+/** Bentuk hasil saat validasi gagal — field lain diisi nilai kosong. */
+function paymentFailure(error: string): CreatePaymentResult {
+  return {
+    ok: false,
+    error,
+    paymentId: "",
+    status: "failed",
+    externalRef: "",
+    qrString: null,
+    expiresAt: null,
+    change: null,
+  };
 }
 
 export async function cashierCreatePayment(
@@ -1199,11 +1249,11 @@ export async function cashierCreatePayment(
   const bill = computeBillTotals(Number(billAgg?.subtotal ?? 0), charge);
   const outstanding = Math.max(0, bill.total - Number(paidAgg?.paid ?? 0));
   if (outstanding <= 0) {
-    throw new Error("This bill is already fully paid");
+    return paymentFailure("This bill is already fully paid");
   }
   if (data.amount > outstanding) {
-    throw new Error(
-      `Amount exceeds the outstanding balance (${outstanding})`
+    return paymentFailure(
+      `Amount exceeds the outstanding balance (${formatIDR(outstanding)})`
     );
   }
 
@@ -1211,10 +1261,10 @@ export async function cashierCreatePayment(
   let change: number | null = null;
   if (data.method === "cash") {
     if (!data.cashReceived) {
-      throw new Error("Received amount is required for cash payment");
+      return paymentFailure("Received amount is required for cash payment");
     }
     if (data.cashReceived < data.amount) {
-      throw new Error("Received amount is less than the total");
+      return paymentFailure("Received amount is less than the total");
     }
     change = data.cashReceived - data.amount;
   }
@@ -1229,7 +1279,7 @@ export async function cashierCreatePayment(
       sessionId: data.sessionId,
       amount: data.amount,
     });
-    if (!res.ok) throw new Error(res.error);
+    if (!res.ok) return paymentFailure(res.error);
     voucher = {
       voucherId: res.voucher.voucherId,
       code: res.voucher.code,
@@ -1260,7 +1310,7 @@ export async function cashierCreatePayment(
     );
     if (!reserved) {
       await db.delete(payments).where(eq(payments.id, voucherPayment.id));
-      throw new Error("This voucher was just used. Try another one");
+      return paymentFailure("This voucher was just used. Try another one");
     }
     await settleVoucherForPayment(voucherPayment.id, { skipSyntheticRow: true });
     await settleOrderIfPaid(order.id);
@@ -1285,6 +1335,7 @@ export async function cashierCreatePayment(
     revalidatePath(`/staff/cashier/${data.sessionId}`);
     revalidatePath("/staff/cashier");
     return {
+      ok: true,
       paymentId: voucherPayment.id,
       status: "paid" as const,
       externalRef: "",
@@ -1328,7 +1379,7 @@ export async function cashierCreatePayment(
         .update(payments)
         .set({ status: "failed" })
         .where(eq(payments.id, newPayment.id));
-      throw new Error("This voucher was just used. Try another one");
+      return paymentFailure("This voucher was just used. Try another one");
     }
   }
 
@@ -1408,6 +1459,7 @@ export async function cashierCreatePayment(
   revalidatePath("/staff/cashier");
 
   return {
+    ok: true,
     paymentId: newPayment.id,
     status: chargeResult.status,
     externalRef: chargeResult.externalRef,
@@ -1433,6 +1485,10 @@ export async function cashierConfirmPendingPayment(input: {
   /** Uang tunai diterima (utk catat kembalian) — hanya method cash. */
   cashReceived?: number;
 }): Promise<{
+  /** false = gagal validasi (lihat `error`). Alasannya sama seperti
+   *  CreatePaymentResult: pesan throw disensor Next.js di produksi. */
+  ok: boolean;
+  error?: string;
   status: string;
   qrString: string | null;
   expiresAt: string | null;
@@ -1470,9 +1526,16 @@ export async function cashierConfirmPendingPayment(input: {
   if (!payment) throw new Error("Payment not found");
   if (payment.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (payment.status !== "pending") {
-    throw new Error(
-      "This payment is no longer pending (already confirmed, cancelled, or expired)"
-    );
+    return {
+      ok: false,
+      error:
+        "This payment is no longer pending (already confirmed, cancelled, or expired)",
+      status: payment.status,
+      qrString: null,
+      expiresAt: null,
+      amount: payment.amount,
+      change: 0,
+    };
   }
 
   const change =
@@ -1502,6 +1565,7 @@ export async function cashierConfirmPendingPayment(input: {
       .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")));
     await cashierMarkPaymentPaid(payment.id);
     return {
+      ok: true,
       status: "paid",
       qrString: null,
       expiresAt: null,
@@ -1542,7 +1606,15 @@ export async function cashierConfirmPendingPayment(input: {
     .where(and(eq(payments.id, payment.id), eq(payments.status, "pending")))
     .returning({ id: payments.id });
   if (updated.length === 0) {
-    throw new Error("This payment just changed state. Refresh and try again");
+    return {
+      ok: false,
+      error: "This payment just changed state. Refresh and try again",
+      status: payment.status,
+      qrString: null,
+      expiresAt: null,
+      amount: payment.amount,
+      change: 0,
+    };
   }
 
   if (cr.status === "paid") {
@@ -1566,6 +1638,7 @@ export async function cashierConfirmPendingPayment(input: {
       },
     });
     return {
+      ok: true,
       status: "paid",
       qrString: cr.qrString ?? null,
       expiresAt: null,
@@ -1597,6 +1670,7 @@ export async function cashierConfirmPendingPayment(input: {
   revalidatePath("/staff/cashier");
   revalidatePath(`/session/${payment.sessionId}`);
   return {
+    ok: true,
     status: cr.status,
     qrString: cr.qrString ?? null,
     expiresAt: cr.expiresAt ?? null,

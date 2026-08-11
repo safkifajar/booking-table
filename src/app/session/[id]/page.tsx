@@ -152,6 +152,9 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
       profile_display_name: profiles.displayName,
       profile_avatar_url: profiles.avatarUrl,
       profile_hobbies: profiles.hobbies,
+      // Tamu walk-in (dibuatkan staff) vs pelanggan terdaftar — dipakai UI
+      // utk menandai siapa yang punya akun (mis. bisa dikenai voucher).
+      profile_is_guest: profiles.isGuest,
     })
     .from(sessionMembers)
     .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
@@ -366,6 +369,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
           display_name: m.profile_display_name,
           avatar_url: m.profile_avatar_url,
           hobbies: m.profile_hobbies,
+          is_guest: m.profile_is_guest,
         },
         rating: ratingsBatch[m.profile_id] ?? null,
       }))}

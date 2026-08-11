@@ -660,6 +660,15 @@ function PaymentModal({
         voucherCode: voucher?.code,
       });
 
+      // Gagal validasi (nominal kurang, tagihan lunas, voucher keburu
+      // dipakai) → pesannya di result.error, BUKAN exception. Pesan throw
+      // disensor Next.js di produksi, jadi jalur ini yang dipakai.
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to process payment");
+        setLoading(false);
+        return;
+      }
+
       // Kalau QRIS dan dapat qrString → tampilkan QR
       if (method === "qris" && result.qrString) {
         setQrPaymentId(result.paymentId);

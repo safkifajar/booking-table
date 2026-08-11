@@ -846,9 +846,13 @@ export async function listAllMembers(opts?: {
     opts?.interestedIn === "male" || opts?.interestedIn === "female"
       ? opts.interestedIn
       : null;
+  // CATATAN: literal telanjang `0` TIDAK BOLEH dipakai di sini — di ORDER BY,
+  // Postgres membacanya sbg NOMOR KOLOM ("ORDER BY position 0 is not in select
+  // list") sehingga query gagal total saat tak ada preferensi gender.
+  // Di-cast supaya jadi ekspresi konstanta, bukan posisi kolom.
   const priorityExpr = wantGender
     ? sql<number>`CASE WHEN ${profiles.gender} = ${wantGender} THEN 0 ELSE 1 END`
-    : sql<number>`0`;
+    : sql<number>`0::int`;
   // Urutan level: VIP → Premium → Basic (rank efektif DESC). Dinegasikan
   // supaya tuple-compare keyset tetap ASC seragam.
   const tierExpr = sql<number>`-(${sqlEffectiveRank()})`;

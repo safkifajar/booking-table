@@ -634,7 +634,20 @@ export async function updateMenuItem(formData: FormData): Promise<void> {
   revalidatePath("/admin/menu");
 }
 
-export async function deleteMenuItem(itemId: string): Promise<void> {
+/**
+ * Hasil hapus menu. Sengaja RETURN, bukan throw: pesan dari Error yang
+ * dilempar server action DISENSOR Next.js di build produksi ("An error
+ * occurred in the Server Components render…"), sehingga admin tak pernah
+ * tahu alasan gagalnya. Nilai yang di-return tidak disensor.
+ */
+export interface DeleteMenuItemResult {
+  ok: boolean;
+  error?: string;
+}
+
+export async function deleteMenuItem(
+  itemId: string
+): Promise<DeleteMenuItemResult> {
   const [existing] = await db
     .select({
       id: menuItems.id,
@@ -643,7 +656,7 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
     })
     .from(menuItems)
     .where(eq(menuItems.id, itemId));
-  if (!existing) return;
+  if (!existing) return { ok: true };
 
   const barId = await resolveBarIdForCategory(existing.categoryId);
   await requireAdminForBar(barId);
@@ -657,9 +670,11 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
     .where(eq(orderItems.menuItemId, itemId))
     .limit(1);
   if (ordered) {
-    throw new Error(
-      "This item has already been ordered by customers, so it can't be deleted (order history would break). Turn it off with the availability toggle instead to hide it from the menu."
-    );
+    return {
+      ok: false,
+      error:
+        "This item has already been ordered by customers, so it can't be deleted (order history would break). Turn it off with the availability toggle instead to hide it from the menu.",
+    };
   }
 
   try {
@@ -670,13 +685,15 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
         ? String((err as { code?: unknown }).code)
         : "";
     if (code === "23503") {
-      throw new Error(
-        "This item is still referenced elsewhere, so it can't be deleted. Turn it off with the availability toggle instead."
-      );
+      return {
+        ok: false,
+        error:
+          "This item is still referenced elsewhere, so it can't be deleted. Turn it off with the availability toggle instead.",
+      };
     }
     // Fallback — JANGAN bocorkan err.message (bisa berisi query mentah).
     console.error("[deleteMenuItem] unexpected error:", err);
-    throw new Error("Failed to delete item. Please try again.");
+    return { ok: false, error: "Failed to delete item. Please try again." };
   }
 
   // Hapus foto SETELAH row terhapus (best-effort) supaya tak kehilangan foto
@@ -686,6 +703,7 @@ export async function deleteMenuItem(itemId: string): Promise<void> {
     await storage.delete(existing.imageUrl).catch(() => {});
   }
   revalidatePath("/admin/menu");
+  return { ok: true };
 }
 
 /**

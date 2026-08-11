@@ -181,7 +181,13 @@ export function MenuManager({
             if (!ok) return;
             setDeletingId(item.id);
             try {
-              await deleteMenuItem(item.id);
+              // deleteMenuItem me-RETURN error (bukan throw) supaya pesannya
+              // tak disensor Next.js di build produksi.
+              const res = await deleteMenuItem(item.id);
+              if (!res.ok) {
+                toast.error(res.error ?? "Failed to delete item");
+                return;
+              }
               setItems((arr) => arr.filter((i) => i.id !== item.id));
               toast.success("Item deleted");
             } catch (err) {
