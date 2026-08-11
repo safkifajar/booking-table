@@ -21,6 +21,7 @@ import {
   eq,
   gte,
   inArray,
+  isNull,
   ne,
   notInArray,
   sql,
@@ -46,6 +47,13 @@ import { getPaymentGateway } from "@/lib/payments/gateway";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { computeBillTotals } from "@/lib/settings-constants";
 import { notifyCashiersPayAtCashier } from "@/lib/payment-notify";
+import { memberVouchers } from "@/lib/db/schema/membership-transactions";
+import {
+  resolveVoucherForBillPayment,
+  reserveVoucherForPayment,
+  settleVoucherForPayment,
+  releaseVoucherForPayment,
+} from "@/lib/member-voucher";
 import { logActivity } from "@/lib/activity-log";
 import {
   settleOrderIfPaid,
@@ -66,6 +74,14 @@ import {
   type BookedRange,
 } from "@/lib/reservation-helpers";
 import crypto from "node:crypto";
+
+/**
+ * Penanda internal: voucher kalah balapan saat dikunci di dalam transaksi
+ * buka-meja. Dipakai utk membedakannya dari error DB lain di catch, lalu
+ * diubah jadi pesan yang ramah. Sengaja konstanta lokal (file "use server"
+ * hanya boleh mengekspor fungsi async).
+ */
+const VOUCHER_RACE_LOST = "__voucher_race_lost__";
 
 // ============================================================
 // ORDER QUEUE
@@ -940,6 +956,12 @@ export interface StaffOpenTableInput {
    * baru dari nama manual. Indeks 0 = host (bisa juga lewat hostProfileId).
    */
   memberProfileIds?: (string | null)[];
+  /**
+   * Kode voucher benefit membership. Boleh milik PELANGGAN TERDAFTAR MANA PUN
+   * yang ada di meja ini (tak harus pemilik meja) — arahan user. Sesi belum
+   * ada saat ini, jadi kepemilikan divalidasi lewat mode `ownerId`.
+   */
+  voucherCode?: string;
 }
 
 /**
@@ -954,7 +976,12 @@ export interface StaffOpenTableInput {
 export type StaffOpenTableResult =
   | { ok: true; sessionId: string; qris: { paymentId: string; qrString: string } }
   | { ok: true; sessionId: string; awaitCashier: true }
-  | { ok: true; sessionId: string; paid: true };
+  | { ok: true; sessionId: string; paid: true }
+  /**
+   * Gagal VALIDASI (voucher tak berlaku, dsb) — di-RETURN, bukan throw, sebab
+   * pesan Error dari server action disensor Next.js di build produksi.
+   */
+  | { ok: false; error: string };
 
 export async function staffOpenTableForCustomer(
   input: StaffOpenTableInput
@@ -1091,8 +1118,48 @@ export async function staffOpenTableForCustomer(
   );
   const charge = await getChargeConfig(ctx.barId);
   const bill = computeBillTotals(subtotal, charge);
-  const payAmount = bill.total;
-  if (payAmount <= 0) throw new Error("Order total must be greater than zero");
+  if (bill.total <= 0) throw new Error("Order total must be greater than zero");
+
+  // Voucher (opsional). Sesi belum ada, jadi kepemilikan dicek lewat mode
+  // `ownerId` — dicoba ke SETIAP akun terdaftar di meja ini, terima yang
+  // pertama cocok (arahan user: boleh milik anggota mana pun, tak harus
+  // pemilik meja). Voucher yang dipakai dikunci per-BARIS, jadi voucher lain
+  // milik orang yang sama tetap utuh.
+  let voucher: { voucherId: string; code: string; discount: number } | null =
+    null;
+  const voucherCode = input.voucherCode?.trim();
+  if (voucherCode) {
+    const owners = Array.from(accountById.keys());
+    if (owners.length === 0) {
+      return {
+        ok: false,
+        error: "Vouchers are only for registered customers",
+      };
+    }
+    let lastError = "This voucher can't be used here";
+    for (const ownerId of owners) {
+      const res = await resolveVoucherForBillPayment({
+        code: voucherCode,
+        amount: bill.total,
+        ownerId,
+      });
+      if (res.ok) {
+        voucher = {
+          voucherId: res.voucher.voucherId,
+          code: res.voucher.code,
+          discount: res.voucher.discount,
+        };
+        break;
+      }
+      lastError = res.error;
+    }
+    if (!voucher) return { ok: false, error: lastError };
+  }
+
+  // Nominal yang benar-benar ditagih setelah potongan. Bisa 0 → gateway
+  // DILEWATI (QRIS minimum Rp 1.000, tak bisa menagih nol).
+  const payAmount = Math.max(0, bill.total - (voucher?.discount ?? 0));
+  const fullyCoveredByVoucher = payAmount <= 0;
 
   let sessionId: string;
   let orderId: string;
@@ -1237,19 +1304,60 @@ export async function staffOpenTableForCustomer(
 
       // Pembayaran di muka PENUH (dpFull) — tamu bayar seluruh tagihan sebelum
       // meja terbuka. 'pending' sampai QRIS dibayar / kasir konfirmasi.
+      // Voucher menutup SELURUH tagihan → tak ada yang perlu ditagih.
+      // Gateway dilewati (QRIS minimum Rp 1.000, tak bisa menagih nol):
+      // payment dicatat langsung lunas sebagai baris voucher.
       const [newPayment] = await tx
         .insert(payments)
         .values({
           orderId: newOrder.id,
           paidByMemberId: hostMember.id,
-          amount: payAmount,
-          method: payMethod,
-          status: "pending",
+          amount: fullyCoveredByVoucher ? voucher!.discount : payAmount,
+          method: fullyCoveredByVoucher ? "voucher" : payMethod,
+          status: fullyCoveredByVoucher ? "paid" : "pending",
           splitMode: "custom",
-          splitMeta: { isDownPayment: true, dpFull: true },
-          paidAt: null,
+          splitMeta: fullyCoveredByVoucher
+            ? {
+                isDownPayment: true,
+                dpFull: true,
+                voucherCode: voucher!.code,
+                voucherId: voucher!.voucherId,
+              }
+            : {
+                isDownPayment: true,
+                dpFull: true,
+                ...(voucher
+                  ? {
+                      voucherCode: voucher.code,
+                      voucherDiscount: voucher.discount,
+                    }
+                  : {}),
+              },
+          paidAt: fullyCoveredByVoucher ? new Date() : null,
         })
         .returning({ id: payments.id });
+
+      // Kunci voucher DI DALAM transaksi: kalau tx di-rollback, penguncian
+      // ikut batal sehingga voucher tak hangus percuma. Mengunci per-BARIS
+      // (WHERE id = voucherId), jadi voucher lain milik orang yang sama tetap
+      // utuh. Kalah balapan → batalkan seluruh tx (meja tak jadi terbuka).
+      if (voucher) {
+        const [locked] = await tx
+          .update(memberVouchers)
+          .set({
+            usedPaymentId: newPayment.id,
+            discountApplied: voucher.discount,
+          })
+          .where(
+            and(
+              eq(memberVouchers.id, voucher.voucherId),
+              isNull(memberVouchers.usedAt),
+              isNull(memberVouchers.usedPaymentId)
+            )
+          )
+          .returning({ id: memberVouchers.id });
+        if (!locked) throw new Error(VOUCHER_RACE_LOST);
+      }
 
       return {
         sessionId: newSession.id,
@@ -1261,6 +1369,11 @@ export async function staffOpenTableForCustomer(
     orderId = result.orderId;
     paymentId = result.paymentId;
   } catch (err) {
+    // Voucher keburu dipakai di tempat lain. Transaksi sudah rollback penuh
+    // (meja tak terbuka, voucher TIDAK hangus) — cukup beri tahu kasir.
+    if (err instanceof Error && err.message === VOUCHER_RACE_LOST) {
+      return { ok: false, error: "This voucher was just used. Try another one" };
+    }
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
       throw new Error("This table already has an active session");
     }
@@ -1298,6 +1411,21 @@ export async function staffOpenTableForCustomer(
   });
 
   void orderId; // dipakai lewat settleOrderIfPaid via jalur pembayaran
+
+  // Voucher menutup SELURUH tagihan → tak ada yang ditagih, gateway dilewati
+  // (QRIS minimum Rp 1.000). Payment sudah 'paid' sejak di transaksi; tinggal
+  // tandai voucher terpakai & buka mejanya. skipSyntheticRow: barisnya SUDAH
+  // berupa payment voucher, jadi tak perlu baris sintetis tambahan.
+  if (fullyCoveredByVoucher) {
+    await settleVoucherForPayment(paymentId, { skipSyntheticRow: true });
+    await settleOrderIfPaid(orderId);
+    await notify(channels.session(sessionId), { type: "payment.paid" });
+    await notify(channels.staff(ctx.barId), { type: "payment.paid" });
+    await notify(channels.bar(ctx.barId), { type: "payment.paid" });
+    revalidatePath("/staff/waiter");
+    revalidatePath("/staff/cashier");
+    return { ok: true, sessionId, paid: true };
+  }
 
   // Proses pembayaran di muka. Pola sama dengan DP customer (openTable).
   if (payMethod === "cash") {
@@ -1365,6 +1493,11 @@ export async function staffOpenTableForCustomer(
         splitMeta: {
           isDownPayment: true,
           dpFull: true,
+          // Pertahankan info voucher — tanpa ini metadata QRIS menimpanya
+          // dan jejak potongan hilang dari struk/riwayat.
+          ...(voucher
+            ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
+            : {}),
           qrString: chargeResult.qrString ?? null,
           redirectUrl: chargeResult.redirectUrl ?? null,
           expiresAt: new Date(
@@ -1409,6 +1542,12 @@ export async function staffOpenTableForCustomer(
       .set({ status: "cancelled", closedAt: new Date() })
       .where(eq(tableSessions.id, sessionId))
       .catch(() => {});
+    // Sesi batal → voucher WAJIB dilepas. Transaksi sudah commit, jadi
+    // rollback tak lagi menolong: tanpa ini vouchernya hangus percuma
+    // padahal tamu tak jadi bayar apa pun.
+    if (voucher) {
+      await releaseVoucherForPayment(paymentId).catch(() => {});
+    }
     console.error("[staffOpenTable] QRIS charge failed:", err);
     throw new Error(
       "Payment gateway is unavailable right now. Please try again or use pay-at-cashier."

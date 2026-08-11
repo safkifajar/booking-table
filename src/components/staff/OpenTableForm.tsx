@@ -27,6 +27,7 @@ import {
   type WaiterReservationData,
 } from "@/lib/waiter-actions";
 import { searchCustomersForTableHost } from "@/lib/staff-customer-actions";
+import { previewVoucherForOpenTable } from "@/lib/membership-actions";
 import { cn, formatIDR, getActionErrorMessage } from "@/lib/utils";
 
 /**
@@ -114,6 +115,63 @@ export function OpenTableForm({
     () => computeBillTotals(cartSubtotal, chargeConfig),
     [cartSubtotal, chargeConfig]
   );
+
+  // Voucher — hanya bisa dipakai kalau ADA tamu yang akun terdaftar. Boleh
+  // milik anggota mana pun di meja ini, tak harus pemilik meja.
+  const [voucherInput, setVoucherInput] = React.useState("");
+  const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucher, setVoucher] = React.useState<{
+    code: string;
+    name: string;
+    discount: number;
+  } | null>(null);
+  const voucherOwnerIds = React.useMemo(
+    () => guestAccounts.filter((a) => a !== null).map((a) => a!.id),
+    [guestAccounts]
+  );
+  const canUseVoucher = voucherOwnerIds.length > 0;
+  const discount = voucher ? Math.min(voucher.discount, bill.total) : 0;
+  const payableTotal = Math.max(0, bill.total - discount);
+  // Potongan menutup seluruh tagihan → tak ada yang ditagih ke gateway.
+  const fullyCovered = voucher !== null && payableTotal === 0;
+
+  // Semua akun dilepas (diganti nama manual) → voucher ikut dibuang supaya
+  // tak terkirim diam-diam.
+  React.useEffect(() => {
+    if (!canUseVoucher && voucher) {
+      setVoucher(null);
+      setVoucherInput("");
+    }
+  }, [canUseVoucher, voucher]);
+
+  // Nominal berubah (item ditambah/dikurangi) → potongan bisa tak lagi valid
+  // (mis. minimum belanja). Buang, biar kasir menerapkannya ulang.
+  React.useEffect(() => {
+    setVoucher(null);
+  }, [bill.total]);
+
+  async function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code || bill.total <= 0) return;
+    setVoucherChecking(true);
+    try {
+      const res = await previewVoucherForOpenTable({
+        code,
+        amount: bill.total,
+        ownerIds: voucherOwnerIds,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setVoucher({ code: res.code, name: res.name, discount: res.discount });
+      toast.success(`Voucher applied: -${formatIDR(res.discount)}`);
+    } catch {
+      toast.error("Failed to check voucher");
+    } finally {
+      setVoucherChecking(false);
+    }
+  }
 
   const [activeAreaSlug, setActiveAreaSlug] = React.useState(
     floorMap[0]?.area.slug ?? ""
@@ -233,7 +291,16 @@ export function OpenTableForm({
         items: cartLines,
         payMethod,
         memberProfileIds: filled.map((r) => r.account?.id ?? null),
+        voucherCode: canUseVoucher ? voucher?.code : undefined,
       });
+      // Gagal validasi (voucher tak berlaku / keburu dipakai) → pesannya
+      // di result.error, bukan exception (pesan throw disensor Next.js).
+      if (result.ok === false) {
+        toast.error(result.error);
+        setVoucher(null);
+        setSubmitting(false);
+        return;
+      }
       // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
       if ("paid" in result) {
         toast.success("Payment received. Table opened");
@@ -250,7 +317,8 @@ export function OpenTableForm({
         setQr({
           paymentId: result.qris.paymentId,
           qrString: result.qris.qrString,
-          amount: bill.total,
+          // Nominal SETELAH potongan voucher — yang benar-benar ditagih.
+          amount: payableTotal,
           sessionId: result.sessionId,
         });
         setSubmitting(false);
@@ -535,12 +603,80 @@ export function OpenTableForm({
                   </span>
                 </div>
               )}
+              {discount > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-primary">
+                    <span className="truncate">Voucher ({voucher!.code})</span>
+                    <span className="font-semibold tabular-nums">
+                      -{formatIDR(discount)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border pt-1.5">
+                    <span className="text-muted-foreground">Amount to pay</span>
+                    <span className="font-semibold tabular-nums">
+                      {formatIDR(payableTotal)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Voucher — hanya kalau ada tamu yang akun terdaftar. */}
+          {cartCount > 0 && canUseVoucher && (
+            <div className="mt-3">
+              <label className="text-xs font-medium text-muted-foreground block mb-1.5">
+                Voucher (optional)
+              </label>
+              {voucher ? (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {voucher.name} ({voucher.code})
+                    </p>
+                    <p className="text-xs text-primary">
+                      -{formatIDR(discount)}
+                      {fullyCovered ? " · fully covered" : ""}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoucher(null);
+                      setVoucherInput("");
+                    }}
+                    className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={voucherInput}
+                    onChange={(e) => setVoucherInput(e.target.value)}
+                    placeholder="Voucher code"
+                    className="flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase focus:outline-none focus:border-primary/60"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyVoucher}
+                    disabled={voucherChecking || !voucherInput.trim()}
+                    className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-40"
+                  >
+                    {voucherChecking ? "..." : "Apply"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
 
         {/* 5. Metode bayar */}
-        {cartCount > 0 && (
+        {/* Tagihan tertutup penuh voucher → tak ada yang ditagih, jadi
+            pilihan metode bayar tak relevan. */}
+        {cartCount > 0 && !fullyCovered && (
           <div>
             <label className="text-xs font-medium text-muted-foreground block mb-1.5">
               5. Payment method
@@ -582,9 +718,12 @@ export function OpenTableForm({
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                {bill.total > 0
-                  ? `${payMethod === "qris" ? "Pay" : "Charge cash"} · ${formatIDR(bill.total)}`
-                  : "Pick menu items to continue"}
+                {bill.total <= 0
+                  ? "Pick menu items to continue"
+                  : fullyCovered
+                    ? // Voucher menutup semuanya → tak ada yang ditagih.
+                      "Open table · covered by voucher"
+                    : `${payMethod === "qris" ? "Pay" : "Charge cash"} · ${formatIDR(payableTotal)}`}
               </>
             )}
           </Button>
