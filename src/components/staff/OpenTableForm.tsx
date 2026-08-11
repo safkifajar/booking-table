@@ -120,6 +120,7 @@ export function OpenTableForm({
   // milik anggota mana pun di meja ini, tak harus pemilik meja.
   const [voucherInput, setVoucherInput] = React.useState("");
   const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucherError, setVoucherError] = React.useState<string | null>(null);
   const [voucher, setVoucher] = React.useState<{
     code: string;
     name: string;
@@ -154,6 +155,7 @@ export function OpenTableForm({
     const code = voucherInput.trim().toUpperCase();
     if (!code || bill.total <= 0) return;
     setVoucherChecking(true);
+    setVoucherError(null);
     try {
       const res = await previewVoucherForOpenTable({
         code,
@@ -161,13 +163,14 @@ export function OpenTableForm({
         ownerIds: voucherOwnerIds,
       });
       if (!res.ok) {
-        toast.error(res.error);
+        // Di field, bukan cuma toast — toast keburu hilang sebelum dibaca.
+        setVoucherError(res.error);
         return;
       }
       setVoucher({ code: res.code, name: res.name, discount: res.discount });
       toast.success(`Voucher applied: -${formatIDR(res.discount)}`);
     } catch {
-      toast.error("Failed to check voucher");
+      setVoucherError("Failed to check voucher. Try again");
     } finally {
       setVoucherChecking(false);
     }
@@ -651,23 +654,61 @@ export function OpenTableForm({
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={voucherInput}
-                    onChange={(e) => setVoucherInput(e.target.value)}
-                    placeholder="Voucher code"
-                    className="flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase focus:outline-none focus:border-primary/60"
-                  />
-                  <button
-                    type="button"
-                    onClick={applyVoucher}
-                    disabled={voucherChecking || !voucherInput.trim()}
-                    className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-40"
-                  >
-                    {voucherChecking ? "..." : "Apply"}
-                  </button>
-                </div>
+                <>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={voucherInput}
+                        onChange={(e) => {
+                          setVoucherInput(e.target.value);
+                          if (voucherError) setVoucherError(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            applyVoucher();
+                          }
+                        }}
+                        placeholder="Voucher code"
+                        aria-invalid={!!voucherError}
+                        className={cn(
+                          "w-full h-10 rounded-md border bg-background pl-3 pr-9 text-sm uppercase focus:outline-none",
+                          voucherError
+                            ? "border-destructive focus:border-destructive"
+                            : "border-border focus:border-primary/60"
+                        )}
+                      />
+                      {voucherInput && (
+                        <button
+                          type="button"
+                          aria-label="Clear voucher code"
+                          onClick={() => {
+                            setVoucherInput("");
+                            setVoucherError(null);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={applyVoucher}
+                      disabled={voucherChecking || !voucherInput.trim()}
+                      className="shrink-0"
+                    >
+                      {voucherChecking ? "…" : "Apply"}
+                    </Button>
+                  </div>
+                  {voucherError && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {voucherError}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}

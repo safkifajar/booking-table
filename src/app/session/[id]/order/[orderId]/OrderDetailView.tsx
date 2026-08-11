@@ -9,8 +9,10 @@ import {
   QrCode,
   RefreshCw,
   UtensilsCrossed,
+  X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -937,6 +939,7 @@ function CashierPayBox({
   const [loading, setLoading] = React.useState(false);
   const [voucherInput, setVoucherInput] = React.useState("");
   const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucherError, setVoucherError] = React.useState<string | null>(null);
   const [voucher, setVoucher] = React.useState<{
     code: string;
     name: string;
@@ -956,6 +959,7 @@ function CashierPayBox({
     if (!canUseVoucher && voucher) {
       setVoucher(null);
       setVoucherInput("");
+      setVoucherError(null);
     }
   }, [canUseVoucher, voucher]);
 
@@ -963,6 +967,7 @@ function CashierPayBox({
     const code = voucherInput.trim().toUpperCase();
     if (!code) return;
     setVoucherChecking(true);
+    setVoucherError(null);
     try {
       const res = await previewBillVoucher({
         code,
@@ -970,7 +975,9 @@ function CashierPayBox({
         amount,
       });
       if (!res.ok) {
-        toast.error(res.error);
+        // Tampilkan DI FIELD (bukan cuma toast) supaya kasir tahu persis
+        // input mana yang bermasalah — toast keburu hilang.
+        setVoucherError(res.error);
         return;
       }
       setVoucher({
@@ -980,7 +987,7 @@ function CashierPayBox({
       });
       toast.success(`Voucher applied: -${formatIDR(res.discount)}`);
     } catch {
-      toast.error("Failed to check voucher");
+      setVoucherError("Failed to check voucher. Try again");
     } finally {
       setVoucherChecking(false);
     }
@@ -1043,18 +1050,16 @@ function CashierPayBox({
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted-foreground">Payer</label>
-              <select
+              <Select
                 value={payerId}
-                onChange={(e) => setPayerId(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              >
-                {detail.members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.is_guest ? " (guest)" : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={setPayerId}
+                ariaLabel="Payer"
+                className="mt-1"
+                options={detail.members.map((m) => ({
+                  value: m.id,
+                  label: `${m.name}${m.is_guest ? " (guest)" : ""}`,
+                }))}
+              />
             </div>
 
             {/* Voucher — hanya utk pelanggan terdaftar (tamu tak punya akun). */}
@@ -1086,23 +1091,62 @@ function CashierPayBox({
                     </button>
                   </div>
                 ) : (
-                  <div className="mt-1 flex gap-2">
-                    <input
-                      type="text"
-                      value={voucherInput}
-                      onChange={(e) => setVoucherInput(e.target.value)}
-                      placeholder="Voucher code"
-                      className="flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase focus:outline-none focus:border-primary/60"
-                    />
-                    <button
-                      type="button"
-                      onClick={applyVoucher}
-                      disabled={voucherChecking || !voucherInput.trim()}
-                      className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-40"
-                    >
-                      {voucherChecking ? "..." : "Apply"}
-                    </button>
-                  </div>
+                  <>
+                    <div className="mt-1 flex gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={voucherInput}
+                          onChange={(e) => {
+                            setVoucherInput(e.target.value);
+                            // Mengetik ulang → buang pesan error lama.
+                            if (voucherError) setVoucherError(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              applyVoucher();
+                            }
+                          }}
+                          placeholder="Voucher code"
+                          aria-invalid={!!voucherError}
+                          className={cn(
+                            "w-full h-10 rounded-md border bg-background pl-3 pr-9 text-sm uppercase focus:outline-none",
+                            voucherError
+                              ? "border-destructive focus:border-destructive"
+                              : "border-border focus:border-primary/60"
+                          )}
+                        />
+                        {voucherInput && (
+                          <button
+                            type="button"
+                            aria-label="Clear voucher code"
+                            onClick={() => {
+                              setVoucherInput("");
+                              setVoucherError(null);
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={applyVoucher}
+                        disabled={voucherChecking || !voucherInput.trim()}
+                        className="shrink-0"
+                      >
+                        {voucherChecking ? "…" : "Apply"}
+                      </Button>
+                    </div>
+                    {voucherError && (
+                      <p className="mt-1 text-xs text-destructive">
+                        {voucherError}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
