@@ -23,6 +23,7 @@ import {
   cashierCreatePayment,
   cashierConfirmPendingPayment,
 } from "@/lib/cashier-actions";
+import { previewBillVoucher } from "@/lib/membership-actions";
 import {
   payShare,
   createSplitBatch,
@@ -934,8 +935,56 @@ function CashierPayBox({
 }) {
   const [payerId, setPayerId] = React.useState(detail.members[0]?.id ?? "");
   const [loading, setLoading] = React.useState(false);
+  const [voucherInput, setVoucherInput] = React.useState("");
+  const [voucherChecking, setVoucherChecking] = React.useState(false);
+  const [voucher, setVoucher] = React.useState<{
+    code: string;
+    name: string;
+    discount: number;
+  } | null>(null);
 
   const amount = detail.outstanding;
+  // Voucher = benefit membership, jadi hanya utk pelanggan TERDAFTAR. Tamu
+  // walk-in yang dibuatkan staff tak punya akun → inputnya disembunyikan.
+  // (Server tetap menolak sendiri lewat cek kepemilikan voucher.)
+  const payer = detail.members.find((m) => m.id === payerId);
+  const canUseVoucher = !!payer && !payer.is_guest;
+
+  // Ganti payer ke tamu → buang voucher yang sudah terpasang, supaya tak
+  // ikut terkirim diam-diam.
+  React.useEffect(() => {
+    if (!canUseVoucher && voucher) {
+      setVoucher(null);
+      setVoucherInput("");
+    }
+  }, [canUseVoucher, voucher]);
+
+  async function applyVoucher() {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code) return;
+    setVoucherChecking(true);
+    try {
+      const res = await previewBillVoucher({
+        code,
+        sessionId: detail.sessionId,
+        amount,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setVoucher({
+        code: res.code,
+        name: res.name,
+        discount: res.discount,
+      });
+      toast.success(`Voucher applied: -${formatIDR(res.discount)}`);
+    } catch {
+      toast.error("Failed to check voucher");
+    } finally {
+      setVoucherChecking(false);
+    }
+  }
 
   async function accept(method: "cash" | "qris", received?: number) {
     if (!payerId) {
@@ -951,6 +1000,8 @@ function CashierPayBox({
         amount,
         method,
         cashReceived: method === "cash" ? received : undefined,
+        // Hanya kirim kalau payer memang pelanggan terdaftar.
+        voucherCode: canUseVoucher ? voucher?.code : undefined,
       });
       // WAJIB dicek sebelum apa pun: tanpa ini, pembayaran yang GAGAL
       // validasi akan tampil "Payment received" padahal uang tak masuk.
@@ -989,19 +1040,72 @@ function CashierPayBox({
         busy={loading}
         onSubmit={accept}
         payer={
-          <div>
-            <label className="text-xs text-muted-foreground">Payer</label>
-            <select
-              value={payerId}
-              onChange={(e) => setPayerId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            >
-              {detail.members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Payer</label>
+              <select
+                value={payerId}
+                onChange={(e) => setPayerId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              >
+                {detail.members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.is_guest ? " (guest)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Voucher — hanya utk pelanggan terdaftar (tamu tak punya akun). */}
+            {canUseVoucher && (
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Voucher (optional)
+                </label>
+                {voucher ? (
+                  <div className="mt-1 flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {voucher.name} ({voucher.code})
+                      </p>
+                      <p className="text-xs text-primary">
+                        -{formatIDR(voucher.discount)} · pay{" "}
+                        {formatIDR(Math.max(0, amount - voucher.discount))}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoucher(null);
+                        setVoucherInput("");
+                      }}
+                      className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      type="text"
+                      value={voucherInput}
+                      onChange={(e) => setVoucherInput(e.target.value)}
+                      placeholder="Voucher code"
+                      className="flex-1 min-w-0 rounded-md border border-border bg-background px-3 py-2 text-sm uppercase focus:outline-none focus:border-primary/60"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyVoucher}
+                      disabled={voucherChecking || !voucherInput.trim()}
+                      className="shrink-0 rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-40"
+                    >
+                      {voucherChecking ? "..." : "Apply"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         }
       />

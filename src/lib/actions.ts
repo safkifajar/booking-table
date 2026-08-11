@@ -2512,8 +2512,9 @@ export interface OrderDetail {
   canPay: boolean;
   /** View-only: penonton non-member — nominal/pemesan/pembayaran di-redaksi. */
   viewOnly: boolean;
-  /** Anggota joined (id + nama) — utk kasir pilih payer saat terima cash. */
-  members: { id: string; name: string }[];
+  /** Anggota joined (id + nama) — utk kasir pilih payer saat terima cash.
+   *  is_guest = tamu walk-in tanpa akun → tak punya voucher. */
+  members: { id: string; name: string; is_guest: boolean }[];
   items: {
     id: string;
     name: string;
@@ -2624,6 +2625,9 @@ export async function getOrderDetail(
       id: sessionMembers.id,
       profileId: sessionMembers.profileId,
       name: profiles.displayName,
+      // Tamu walk-in (dibuatkan staff) tak punya akun/membership → tak
+      // mungkin punya voucher. Dipakai UI utk sembunyikan input voucher.
+      isGuest: profiles.isGuest,
     })
     .from(sessionMembers)
     .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
@@ -2746,7 +2750,13 @@ export async function getOrderDetail(
           ? memberRows.find((m) => m.id === order.ownerMemberId)?.name
           : hostName) ?? null,
     viewOnly: isViewOnly,
-    members: isViewOnly ? [] : memberRows.map((m) => ({ id: m.id, name: m.name })),
+    members: isViewOnly
+      ? []
+      : memberRows.map((m) => ({
+          id: m.id,
+          name: m.name,
+          is_guest: m.isGuest,
+        })),
     items: itemRows.map((i) => ({
       id: i.id,
       name: i.name,
