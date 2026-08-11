@@ -35,6 +35,7 @@ import { staffRoles } from "@/lib/db/schema/extras";
 import { notifications } from "@/lib/db/schema/notifications";
 import { requireAdmin } from "@/lib/admin";
 import { getCurrentProfile, requireProfile } from "@/lib/auth-v2/current";
+import { requirePermission } from "@/lib/auth-v2/permissions";
 import { getPaymentGateway } from "@/lib/payments/gateway";
 import { createNotification } from "@/lib/notifications";
 import { getChargeConfig } from "@/lib/settings-actions";
@@ -1094,6 +1095,52 @@ export async function previewMyVoucher(input: {
     name: res.voucher.name,
     discount: res.voucher.discount,
   };
+}
+
+/**
+ * Pratinjau voucher saat STAFF membuka meja (Open Table) — sesi belum ada,
+ * jadi kepemilikan dicek lewat mode `ownerId` ke SETIAP akun pelanggan
+ * terdaftar yang dipilih di form. Terima yang pertama cocok (arahan user:
+ * voucher boleh milik anggota mana pun di meja itu, tak harus pemilik meja).
+ *
+ * Hanya pratinjau — tak mengunci apa pun. Penguncian terjadi di
+ * staffOpenTableForCustomer, di dalam transaksi.
+ */
+export async function previewVoucherForOpenTable(input: {
+  code: string;
+  amount: number;
+  ownerIds: string[];
+}): Promise<
+  | { ok: true; code: string; name: string; discount: number }
+  | { ok: false; error: string }
+> {
+  await requirePermission("open_table_for_customer", "/staff");
+  const parsed = z
+    .object({
+      code: z.string().trim().min(3).max(20),
+      amount: z.number().int().positive(),
+      ownerIds: z.array(z.string().uuid()).min(1).max(20),
+    })
+    .parse(input);
+
+  let lastError = "This voucher can't be used here";
+  for (const ownerId of parsed.ownerIds) {
+    const res = await resolveVoucherForBillPayment({
+      code: parsed.code,
+      amount: parsed.amount,
+      ownerId,
+    });
+    if (res.ok) {
+      return {
+        ok: true,
+        code: res.voucher.code,
+        name: res.voucher.name,
+        discount: res.voucher.discount,
+      };
+    }
+    lastError = res.error;
+  }
+  return { ok: false, error: lastError };
 }
 
 // ============================================================

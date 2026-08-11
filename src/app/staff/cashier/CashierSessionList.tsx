@@ -206,7 +206,7 @@ export function CashierSessionList({
     <div className="flex flex-col h-[calc(100dvh-5.5rem)] -mb-6">
       {/* Quick stats + filter — DIAM (di luar area scroll). */}
       <div className="shrink-0 pb-3 space-y-3">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 items-stretch">
           <StatCard
             icon={<Users className="h-4 w-4" />}
             label="Active today"
@@ -569,7 +569,8 @@ function StatCard({
   return (
     <Card
       className={cn(
-        "p-3 min-w-0 bg-gradient-to-br to-transparent",
+        // h-full: ketiga kartu sama tinggi walau isinya beda panjang.
+        "p-3 min-w-0 h-full bg-gradient-to-br to-transparent",
         t.bg
       )}
     >
@@ -582,12 +583,17 @@ function StatCard({
       >
         {icon}
       </span>
-      <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-muted-foreground truncate">
+      {/* Label BOLEH turun ke baris kedua — sebelumnya di-truncate sehingga
+          "Outstanding today" terpotong jadi "OUTSTANDING TO…". min-h menjaga
+          tinggi ketiga kartu tetap sama walau labelnya sebaris/dua baris. */}
+      <div className="text-[9px] sm:text-[10px] uppercase tracking-wide text-muted-foreground leading-tight min-h-[1.75em]">
         {label}
       </div>
       <div
         className={cn(
-          "font-bold tabular-nums leading-tight text-base sm:text-lg mt-0.5",
+          // Nominal panjang (mis. Rp 2.262.000) mengecil sendiri di layar
+          // sempit supaya tak meluber atau memaksa kartu melebar.
+          "font-bold tabular-nums leading-tight text-sm sm:text-lg mt-1 truncate",
           t.value
         )}
       >
