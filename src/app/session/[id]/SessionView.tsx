@@ -119,7 +119,14 @@ interface SessionViewProps {
     left_at: string | null;
     /** Terisi = diundang host (user yg approve). NULL + pending = request-join. */
     invited_by: string | null;
-    profile: { id: string; display_name: string; avatar_url: string | null; hobbies?: string[] };
+    profile: {
+      id: string;
+      display_name: string;
+      avatar_url: string | null;
+      hobbies?: string[];
+      /** true = tamu walk-in tanpa akun (dibuatkan staff saat Open Table). */
+      is_guest?: boolean;
+    };
     rating: { avg_stars: number; rating_count: number; top_tags: string[] | null } | null;
   }>;
   orderItems: Array<{
@@ -837,6 +844,17 @@ function VibeTab(
                   {m.profile.id === props.myProfileId && (
                     <Badge variant="outline" className="text-[10px] px-1 py-0">
                       you
+                    </Badge>
+                  )}
+                  {/* Tamu walk-in tanpa akun. Ditandai yang TAMU (bukan yang
+                      terdaftar) karena mayoritas anggota biasanya punya akun —
+                      jadi badge tetap jarang & mudah dipindai kasir. */}
+                  {m.profile.is_guest && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1 py-0 text-muted-foreground"
+                    >
+                      guest
                     </Badge>
                   )}
                   {m.rating && m.rating.rating_count > 0 && (

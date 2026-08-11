@@ -81,6 +81,8 @@ export interface CashierSessionItem {
   host_name: string;
   host_avatar: string | null;
   member_count: number;
+  /** Berapa anggota yang PELANGGAN TERDAFTAR (sisanya tamu walk-in). */
+  registered_count: number;
   status: string;
   started_at: string;
   /** Kapan sesi ditutup (null = masih aktif) — utk filter "hari ini" & urutan. */
@@ -199,8 +201,13 @@ export async function getActiveSessionsForCashier(): Promise<
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      // Berapa di antaranya PELANGGAN TERDAFTAR (punya akun) — sisanya tamu
+      // walk-in yang dibuatkan staff. Dihitung di query yang sama, tanpa
+      // round-trip tambahan.
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -211,6 +218,9 @@ export async function getActiveSessionsForCashier(): Promise<
 
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   // Payment "Pay at cashier" pending per session — customer menunggu
@@ -276,6 +286,7 @@ export async function getActiveSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
       closed_at: s.closed_at ? s.closed_at.toISOString() : null,
@@ -385,8 +396,10 @@ export async function getClosedSessionsForCashier(): Promise<
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, sessionIds),
@@ -396,6 +409,9 @@ export async function getClosedSessionsForCashier(): Promise<
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberCountRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberCountRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   const staffIds = Array.from(
@@ -428,6 +444,7 @@ export async function getClosedSessionsForCashier(): Promise<
       host_name: s.host_name,
       host_avatar: s.host_avatar,
       member_count: memberMap.get(s.id) ?? 0,
+      registered_count: registeredMap.get(s.id) ?? 0,
       status: s.status,
       started_at: s.started_at.toISOString(),
       closed_at: s.closed_at ? s.closed_at.toISOString() : null,
@@ -523,8 +540,10 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     .select({
       session_id: sessionMembers.sessionId,
       count: sql<number>`COUNT(*)::int`,
+      registered: sql<number>`COUNT(*) FILTER (WHERE ${profiles.isGuest} = false)::int`,
     })
     .from(sessionMembers)
+    .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
     .where(
       and(
         inArray(sessionMembers.sessionId, ids),
@@ -534,6 +553,9 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     .groupBy(sessionMembers.sessionId);
   const memberMap = new Map(
     memberRows.map((m) => [m.session_id, Number(m.count)])
+  );
+  const registeredMap = new Map(
+    memberRows.map((m) => [m.session_id, Number(m.registered)])
   );
 
   // DP pending "Pay at cashier" per booking (kasir perlu tahu siapa yang
@@ -579,6 +601,7 @@ export async function getBookingsForCashier(): Promise<CashierBookingItem[]> {
     host_name: r.host_name,
     host_avatar: r.host_avatar,
     member_count: memberMap.get(r.id) ?? 0,
+    registered_count: registeredMap.get(r.id) ?? 0,
     table_capacity: r.table_capacity,
     reservation_at: r.reservation_at
       ? r.reservation_at.toISOString()
