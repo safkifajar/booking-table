@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { prompts } from "@/lib/db/schema/prompts";
 import { requireAdmin } from "@/lib/admin";
+import { isDbConstraintError } from "@/lib/utils";
 
 /**
  * Server Actions untuk master pertanyaan prompt (ice-breaker) onboarding.
@@ -45,18 +46,22 @@ const addSchema = z.object({
   text: z.string().min(1, "Prompt text is required").max(120),
 });
 
-export async function addPrompt(input: z.infer<typeof addSchema>) {
+export async function addPrompt(
+  input: z.infer<typeof addSchema>
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = addSchema.parse(input);
   try {
     await db.insert(prompts).values({ text: data.text.trim(), sortOrder: 999 });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_prompt_text")) {
-      throw new Error("This prompt already exists");
+    // Helper bersama: memeriksa err.constraint_name DAN err.cause.
+    if (isDbConstraintError(err, "uq_prompt_text")) {
+      return { ok: false, error: "This prompt already exists" };
     }
     throw err;
   }
   revalidatePath("/admin/prompts");
+  return { ok: true };
 }
 
 const updateSchema = z.object({
@@ -64,7 +69,9 @@ const updateSchema = z.object({
   text: z.string().min(1).max(120),
 });
 
-export async function updatePrompt(input: z.infer<typeof updateSchema>) {
+export async function updatePrompt(
+  input: z.infer<typeof updateSchema>
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = updateSchema.parse(input);
   try {
@@ -73,12 +80,13 @@ export async function updatePrompt(input: z.infer<typeof updateSchema>) {
       .set({ text: data.text.trim() })
       .where(eq(prompts.id, data.id));
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_prompt_text")) {
-      throw new Error("Prompt text is already used");
+    if (isDbConstraintError(err, "uq_prompt_text")) {
+      return { ok: false, error: "Prompt text is already used" };
     }
     throw err;
   }
   revalidatePath("/admin/prompts");
+  return { ok: true };
 }
 
 export async function deletePrompt(id: string) {

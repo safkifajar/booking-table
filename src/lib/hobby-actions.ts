@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
 import { hobbies, hobbyCategories } from "@/lib/db/schema/hobbies";
 import { requireAdmin } from "@/lib/admin";
+import { isDbConstraintError } from "@/lib/utils";
 import type { HobbyItem, HobbyGroup, HobbyCategory } from "@/lib/hobbies";
 
 // ============================================================
@@ -93,7 +94,9 @@ export async function addHobby(
       sortOrder: 999,
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_hobby_name")) {
+    // Pakai helper bersama: ia memeriksa err.constraint_name DAN err.cause,
+    // jadi tetap cocok walau driver/Next membungkus errornya.
+    if (isDbConstraintError(err, "uq_hobby_name")) {
       return { ok: false, error: "This hobby already exists" };
     }
     throw err;
@@ -124,7 +127,9 @@ export async function updateHobby(
       })
       .where(eq(hobbies.id, data.id));
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_hobby_name")) {
+    // Pakai helper bersama: ia memeriksa err.constraint_name DAN err.cause,
+    // jadi tetap cocok walau driver/Next membungkus errornya.
+    if (isDbConstraintError(err, "uq_hobby_name")) {
       return { ok: false, error: "Hobby name is already used" };
     }
     throw err;
@@ -155,7 +160,7 @@ export async function addHobbyCategory(
       .insert(hobbyCategories)
       .values({ name: data.name.trim(), sortOrder: 999 });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
+    if (isDbConstraintError(err, "uq_hobby_category_name")) {
       return { ok: false, error: "This category already exists" };
     }
     throw err;
@@ -196,7 +201,7 @@ export async function updateHobbyCategory(
     });
   } catch (err) {
     // Nama kategori bentrok — sebelumnya lolos tanpa pesan yang jelas.
-    if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
+    if (isDbConstraintError(err, "uq_hobby_category_name")) {
       return { ok: false, error: "This category already exists" };
     }
     throw err;
