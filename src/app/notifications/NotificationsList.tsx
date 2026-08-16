@@ -11,6 +11,7 @@ import {
   Trash2,
   Wallet,
   ArrowRightLeft,
+  Clock,
   UserPlus,
   ChevronRight,
 } from "lucide-react";
@@ -626,6 +627,12 @@ function NotifAvatar({ n }: { n: AdminNotificationRow }) {
     move_rejected: {
       icon: <ArrowRightLeft className="h-5 w-5" />,
       cls: "bg-red-500/15 text-red-400 border-red-500/30",
+    },
+    // Pengingat menjelang jam booking — ikon jam, warna primary supaya
+    // menonjol di antara notif lain (tamu perlu segera berangkat).
+    booking_reminder: {
+      icon: <Clock className="h-5 w-5" />,
+      cls: "bg-primary/15 text-primary border-primary/30",
     },
   };
   const s = style[n.type] ?? {

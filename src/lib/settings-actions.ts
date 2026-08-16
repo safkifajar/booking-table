@@ -181,6 +181,9 @@ const reservationConfigSchema = z.object({
     z.literal(120),
   ]),
   minDownPaymentPercent: z.number().int().min(0).max(100),
+  // 0 = pengingat dimatikan. Batas 1440 menit (24 jam) — lebih awal dari itu
+  // tak berguna sebagai "sebentar lagi".
+  reminderMinutesBefore: z.number().int().min(0).max(1440),
 });
 
 export async function updateReservationConfig(

@@ -68,6 +68,15 @@ export const tableSessions = pgTable(
      * Timestamp DP terverify. NULL = no DP required atau belum bayar.
      */
     dpPaidAt: timestamp("dp_paid_at", { withTimezone: true, mode: "date" }),
+    /**
+     * Kapan pengingat "sebentar lagi jam booking" dikirim. NULL = belum.
+     * Penanda anti-dobel: cron jalan berkala, tanpa ini tamu akan dikirimi
+     * pengingat berulang setiap cron menyala.
+     */
+    reminderSentAt: timestamp("reminder_sent_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

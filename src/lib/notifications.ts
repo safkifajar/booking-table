@@ -31,6 +31,7 @@ type NotifType =
   | "friend_request"
   | "friend_accepted"
   | "story_mention"
+  | "booking_reminder"
   | "general";
 
 export interface AdminNotificationRow {
