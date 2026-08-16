@@ -179,6 +179,7 @@ export function OpenTableForm({
   // Dialog QRIS untuk DP booking (kalau DP wajib & pending pembayaran).
   const [dpQris, setDpQris] = React.useState<{
     paymentId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     sessionId: string;
@@ -385,6 +386,7 @@ export function OpenTableForm({
       if (result && result.ok === true && "dpQris" in result && result.dpQris) {
         setDpQris({
           paymentId: result.dpQris.paymentId,
+          reference: result.dpQris.reference,
           qrString: result.dpQris.qrString,
           amount: dpAmount,
           sessionId: result.sessionId,
@@ -848,6 +850,7 @@ export function OpenTableForm({
       {dpQris && (
         <QrisPaymentDialog
           paymentId={dpQris.paymentId}
+          reference={dpQris.reference}
           qrString={dpQris.qrString}
           amount={dpQris.amount}
           expirySeconds={60}

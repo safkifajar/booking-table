@@ -80,6 +80,7 @@ export function MembershipView({
   );
   const [qr, setQr] = React.useState<{
     txId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     expirySeconds?: number;
@@ -140,6 +141,7 @@ export function MembershipView({
               onClick={() =>
                 setQr({
                   txId: pendingTx.id,
+                  reference: pendingTx.external_ref,
                   qrString: pendingTx.qr_string!,
                   amount: pendingTx.amount,
                   expirySeconds: pendingTx.qr_expiry_seconds ?? undefined,
@@ -331,6 +333,7 @@ export function MembershipView({
       {qr && (
         <QrisPaymentDialog
           paymentId={qr.txId}
+          reference={qr.reference}
           qrString={qr.qrString}
           amount={qr.amount}
           expirySeconds={qr.expirySeconds}
@@ -508,6 +511,7 @@ function BuyDialog({
   onClose: () => void;
   onQr: (q: {
     txId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     expirySeconds?: number;
@@ -557,6 +561,7 @@ function BuyDialog({
       }
       onQr({
         txId: res.txId,
+        reference: res.reference ?? null,
         qrString: res.qrString,
         amount: res.amount,
         expirySeconds: res.qrExpirySeconds ?? undefined,
