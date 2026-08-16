@@ -1089,7 +1089,14 @@ function AddGuestModal({
 
     setSubmitting(true);
     try {
-      await staffAddGuestToTable(sessionId, clean);
+      // WAJIB dicek: tanpa ini kegagalan (mis. meja penuh) tetap menampilkan
+      // "Guest added" dan menutup dialog — kasir mengira berhasil.
+      const res = await staffAddGuestToTable(sessionId, clean);
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to add guest");
+        setSubmitting(false);
+        return;
+      }
       toast.success(`Guest "${clean}" added`);
       onClose();
     } catch (err) {

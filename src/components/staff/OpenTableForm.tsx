@@ -300,8 +300,16 @@ export function OpenTableForm({
       // di result.error, bukan exception (pesan throw disensor Next.js).
       if (result.ok === false) {
         toast.error(result.error);
-        setVoucher(null);
+        // Voucher dibuang HANYA kalau memang voucher yang bermasalah —
+        // validasi lain (mis. kapasitas) tak boleh menghapus voucher yang
+        // sudah benar, nanti kasir harus mengetik ulang percuma.
+        if (result.error.toLowerCase().includes("voucher")) setVoucher(null);
         setSubmitting(false);
+        // Slot keburu dibooking → kembali ke daftar meja supaya kasir
+        // memilih ulang. Dulu dicek di catch; kini datang lewat return.
+        if (result.error.toLowerCase().includes("booked")) {
+          router.push(backHref);
+        }
         return;
       }
       // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
