@@ -38,7 +38,19 @@ const requestSchema = z.object({
  * Waktu: pindah berlaku SEKARANG s/d jam selesai booking lama (tak reset jam,
  * tak ada waktu gratis). Tamu tak memilih jam saat aktif.
  */
-export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
+/**
+ * Hasil permintaan pindah meja. Gagal validasi di-RETURN, bukan throw:
+ * pesan Error dari server action disensor Next.js di build produksi.
+ */
+export interface MoveRequestResult {
+  ok: boolean;
+  error?: string;
+  requestId?: string;
+}
+
+export async function requestMoveTable(
+  input: z.infer<typeof requestSchema>
+): Promise<MoveRequestResult> {
   const profile = await requireProfile();
   const data = requestSchema.parse(input);
 
@@ -59,11 +71,14 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
     .where(eq(tableSessions.id, data.sessionId));
   if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id)
-    throw new Error("Only the host can request a table move");
+    return { ok: false, error: "Only the host can request a table move" };
   if (session.status !== "open" && session.status !== "locked")
-    throw new Error("Table move requests are only allowed while the table is active");
+    return {
+      ok: false,
+      error: "Table move requests are only allowed while the table is active",
+    };
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("This session has no time range");
+    return { ok: false, error: "This session has no time range" };
 
   const [pendingExisting] = await db
     .select({ id: tableMoveRequests.id })
@@ -74,9 +89,13 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
         eq(tableMoveRequests.status, "pending")
       )
     );
-  if (pendingExisting) throw new Error("There's already a pending move request");
+  if (pendingExisting)
+    return { ok: false, error: "There's already a pending move request" };
   if (session.tableId === data.targetTableId)
-    throw new Error("Destination table is the same as the current one");
+    return {
+      ok: false,
+      error: "Destination table is the same as the current one",
+    };
 
   const [target] = await db
     .select({
@@ -89,7 +108,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Invalid destination table");
+    return { ok: false, error: "Invalid destination table" };
 
   // Min-spend: enforce server-side. Kalau meja tujuan ber-min-spend & order
   // sekarang belum cukup → tolak (client harus lewat requestMoveTableWithOrder).
@@ -105,9 +124,10 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
         and(eq(orders.sessionId, session.id), ne(orderItems.status, "void"))
       );
     if (Number(existing?.total ?? 0) < minSpend) {
-      throw new Error(
-        `Table ${target.label} has a minimum spend. Add an order before requesting the move.`
-      );
+      return {
+        ok: false,
+        error: `Table ${target.label} has a minimum spend. Add an order before requesting the move.`,
+      };
     }
   }
 
@@ -117,7 +137,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Booking time is over, can't move");
+    return { ok: false, error: "Booking time is over, can't move" };
 
   const [inserted] = await db
     .insert(tableMoveRequests)
@@ -158,7 +178,7 @@ export async function requestMoveTable(input: z.infer<typeof requestSchema>) {
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
-  return { requestId: inserted.id };
+  return { ok: true, requestId: inserted.id };
 }
 
 const requestWithOrderSchema = z.object({
@@ -182,7 +202,7 @@ const requestWithOrderSchema = z.object({
  */
 export async function requestMoveTableWithOrder(
   input: z.infer<typeof requestWithOrderSchema>
-) {
+): Promise<MoveRequestResult & { payId?: string }> {
   const profile = await requireProfile();
   const data = requestWithOrderSchema.parse(input);
 
@@ -203,11 +223,14 @@ export async function requestMoveTableWithOrder(
     .where(eq(tableSessions.id, data.sessionId));
   if (!session) throw new Error("Session not found");
   if (session.hostId !== profile.id)
-    throw new Error("Only the host can request a table move");
+    return { ok: false, error: "Only the host can request a table move" };
   if (session.status !== "open" && session.status !== "locked")
-    throw new Error("Table move requests are only allowed while the table is active");
+    return {
+      ok: false,
+      error: "Table move requests are only allowed while the table is active",
+    };
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("This session has no time range");
+    return { ok: false, error: "This session has no time range" };
 
   const [pendingExisting] = await db
     .select({ id: tableMoveRequests.id })
@@ -218,7 +241,8 @@ export async function requestMoveTableWithOrder(
         eq(tableMoveRequests.status, "pending")
       )
     );
-  if (pendingExisting) throw new Error("There's already a pending move request");
+  if (pendingExisting)
+    return { ok: false, error: "There's already a pending move request" };
 
   const [target] = await db
     .select({
@@ -231,9 +255,12 @@ export async function requestMoveTableWithOrder(
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Invalid destination table");
+    return { ok: false, error: "Invalid destination table" };
   if (session.tableId === data.targetTableId)
-    throw new Error("Destination table is the same as the current one");
+    return {
+      ok: false,
+      error: "Destination table is the same as the current one",
+    };
   const minSpend = target.minSpend ?? 0;
 
   // Resolve harga item dari DB.
@@ -265,16 +292,17 @@ export async function requestMoveTableWithOrder(
     .where(and(eq(orders.sessionId, session.id), ne(orderItems.status, "void")));
   const existingTotal = Number(existing?.total ?? 0);
   if (existingTotal + addedTotal < minSpend) {
-    throw new Error(
-      `Minimum spend for table ${target.label} not reached. Add more orders.`
-    );
+    return {
+      ok: false,
+      error: `Minimum spend for table ${target.label} not reached. Add more orders.`,
+    };
   }
 
   // Pertahankan JAM BOOKING ASLI (tak reset). Lihat catatan di requestMoveTable.
   const newStart = session.reservationAt;
   const newEnd = session.reservationEndAt;
   if (Date.now() >= newEnd.getTime())
-    throw new Error("Booking time is over, can't move");
+    return { ok: false, error: "Booking time is over, can't move" };
 
   // Order + payment + request pending (atomik). Pindah dieksekusi saat approve.
   const tx = await db.transaction(async (tx) => {
@@ -390,7 +418,7 @@ export async function requestMoveTableWithOrder(
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
-  return { requestId: tx.requestId };
+  return { ok: true, requestId: tx.requestId };
 }
 
 /** Request pindah pending milik sesi (badge status di UI customer). */
@@ -524,7 +552,7 @@ export async function getMoveRequests(): Promise<MoveRequestRow[]> {
 export async function resolveMoveRequest(input: {
   requestId: string;
   approve: boolean;
-}) {
+}): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission(
     "open_table_for_customer",
     "/staff/waiter"
@@ -535,7 +563,8 @@ export async function resolveMoveRequest(input: {
     .from(tableMoveRequests)
     .where(eq(tableMoveRequests.id, input.requestId));
   if (!req) throw new Error("Request not found");
-  if (req.status !== "pending") throw new Error("Request already processed");
+  if (req.status !== "pending")
+    return { ok: false, error: "Request already processed" };
 
   const [session] = await db
     .select({
@@ -577,7 +606,8 @@ export async function resolveMoveRequest(input: {
     }
     revalidatePath("/staff/waiter");
     revalidatePath("/staff/cashier");
-    return;
+    // Menolak request = tindakan yang BERHASIL dijalankan.
+    return { ok: true };
   }
 
   // Approve → eksekusi pindah (constraint DB cek slot ulang).
@@ -612,9 +642,12 @@ export async function resolveMoveRequest(input: {
           link: `/session/${session.id}`,
         });
       }
-      throw new Error(
-        `Table ${toLabel} was taken. Request auto-rejected.`
-      );
+      // Request sudah di-auto-reject di atas → keluar, jangan lanjut ke
+      // notifikasi "approved".
+      return {
+        ok: false,
+        error: `Table ${toLabel} was taken. Request auto-rejected.`,
+      };
     }
     throw err;
   }
@@ -659,6 +692,7 @@ export async function resolveMoveRequest(input: {
 
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
+  return { ok: true };
 }
 
 // ============================================================
@@ -676,7 +710,9 @@ const staffMoveSchema = z.object({
  * table_move_requests status 'approved' + resolvedBy = staff (audit). Host
  * dapat notif.
  */
-export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
+export async function staffMoveTable(
+  input: z.infer<typeof staffMoveSchema>
+): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission("open_table_for_customer", "/staff/waiter");
   const data = staffMoveSchema.parse(input);
 
@@ -702,9 +738,9 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     session.status !== "open" &&
     session.status !== "locked"
   )
-    throw new Error("Only active/booking sessions can be moved");
+    return { ok: false, error: "Only active/booking sessions can be moved" };
   if (!session.reservationAt || !session.reservationEndAt)
-    throw new Error("This session has no time range");
+    return { ok: false, error: "This session has no time range" };
 
   const [target] = await db
     .select({ id: tables.id, label: tables.label, barId: floorAreas.barId })
@@ -712,9 +748,12 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
     .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
     .where(eq(tables.id, data.targetTableId));
   if (!target || target.barId !== session.barId)
-    throw new Error("Invalid destination table");
+    return { ok: false, error: "Invalid destination table" };
   if (session.tableId === data.targetTableId)
-    throw new Error("Destination table is the same as the current one");
+    return {
+      ok: false,
+      error: "Destination table is the same as the current one",
+    };
 
   // Jam booking dipertahankan apa adanya.
   const newStart = session.reservationAt;
@@ -730,7 +769,12 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
       isDbConstraintError(err, "no_overlapping_reservation") ||
       isDbConstraintError(err, "uq_active_session_per_table")
     ) {
-      throw new Error(`Table ${target.label} conflicts at this booking time`);
+      // Pindah TIDAK terjadi → keluar sekarang, jangan lanjut mencatat audit
+      // & notifikasi seolah berhasil.
+      return {
+        ok: false,
+        error: `Table ${target.label} conflicts at this booking time`,
+      };
     }
     throw err;
   }
@@ -777,4 +821,5 @@ export async function staffMoveTable(input: z.infer<typeof staffMoveSchema>) {
   revalidatePath(`/session/${session.id}`);
   revalidatePath("/staff/waiter");
   revalidatePath("/staff/cashier");
+  return { ok: true };
 }

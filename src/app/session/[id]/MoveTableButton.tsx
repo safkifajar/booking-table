@@ -127,6 +127,12 @@ export function MoveTableButton({
     setMoving(true);
     try {
       const res = await requestMoveTable({ sessionId, targetTableId: t.id });
+      // WAJIB: tanpa ini permintaan yang DITOLAK tetap tampil "Move request
+      // sent" dan memasang badge pending palsu.
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to send request");
+        return;
+      }
       toast.success("Move request sent. Waiting for staff approval");
       setOpen(false);
       setConfirmMinSpend(null);
@@ -544,8 +550,15 @@ function MoveOrderModal({
           items,
           paymentMethod: method,
         });
+        // WAJIB: tanpa ini kegagalan validasi tetap tampil "Payment
+        // successful" padahal tak ada pembayaran yang terjadi.
+        if (!res.ok) {
+          toast.error(res.error ?? "Failed to move");
+          setSubmitting(false);
+          return;
+        }
         toast.success("Payment successful. Move request waiting for approval");
-        onDone(res?.requestId);
+        onDone(res.requestId);
         return;
       }
       await moveTableWithOrder({
