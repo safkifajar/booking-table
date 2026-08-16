@@ -167,10 +167,20 @@ function PromptFormDialog({
     setSaving(true);
     try {
       if (isEdit) {
-        await updatePrompt({ id: mode.item.id, text: text.trim() });
+        const res = await updatePrompt({ id: mode.item.id, text: text.trim() });
+        if (!res.ok) {
+          toast.error(res.error ?? "Failed to save");
+          setSaving(false);
+          return;
+        }
         toast.success("Prompt updated");
       } else {
-        await addPrompt({ text: text.trim() });
+        const res = await addPrompt({ text: text.trim() });
+        if (!res.ok) {
+          toast.error(res.error ?? "Failed to save");
+          setSaving(false);
+          return;
+        }
         toast.success("Prompt added");
       }
       onSaved();

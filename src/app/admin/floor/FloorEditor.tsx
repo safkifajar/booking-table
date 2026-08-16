@@ -606,25 +606,32 @@ function TableDialog({
         minSpend: Number(minSpend) || 0,
         allowOverCapacity,
       };
+      // WAJIB cek res.ok: tanpa itu label yang bentrok tetap tampil "Table
+      // created/updated" & menutup dialog, padahal tak tersimpan.
+      let res: { ok: boolean; error?: string };
       if (isNew) {
         // Ukuran otomatis dari kapasitas+bentuk → taruh di tengah kanvas.
         const size = tableSize(shape, Number(capacity));
-        await createTable({
+        res = await createTable({
           areaId,
           ...common,
           posX: Math.round((canvas.w - size.width) / 2),
           posY: Math.round((canvas.h - size.height) / 2),
         });
-        toast.success("Table created");
       } else {
-        await updateTable({
+        res = await updateTable({
           id: t!.id,
           ...common,
           posX: t!.pos_x,
           posY: t!.pos_y,
         });
-        toast.success("Table updated");
       }
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to save table");
+        setSaving(false);
+        return;
+      }
+      toast.success(isNew ? "Table created" : "Table updated");
       onSaved();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to save table"));

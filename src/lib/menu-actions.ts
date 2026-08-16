@@ -208,7 +208,9 @@ async function generateUniqueSlug(
   return `${baseSlug}-${n}`;
 }
 
-export async function createCategory(input: z.infer<typeof categorySchema>) {
+export async function createCategory(
+  input: z.infer<typeof categorySchema>
+): Promise<{ ok: boolean; error?: string; id?: string; slug?: string }> {
   const data = categorySchema.parse(input);
   await requireAdminForBar(data.barId);
 
@@ -220,9 +222,12 @@ export async function createCategory(input: z.infer<typeof categorySchema>) {
       .from(menuCategories)
       .where(eq(menuCategories.id, data.parentId));
     if (!parent || parent.barId !== data.barId)
-      throw new Error("Invalid parent category");
+      return { ok: false, error: "Invalid parent category" };
     if (parent.parentId != null)
-      throw new Error("Sub-category cannot be nested under another sub-category");
+      return {
+        ok: false,
+        error: "Sub-category cannot be nested under another sub-category",
+      };
   }
 
   const slug = await generateUniqueSlug(data.barId, data.name);
@@ -239,10 +244,10 @@ export async function createCategory(input: z.infer<typeof categorySchema>) {
       })
       .returning({ id: menuCategories.id });
     revalidatePath("/admin/menu");
-    return { id: created.id, slug };
+    return { ok: true, id: created.id, slug };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    throw new Error(msg || "Failed to create category");
+    return { ok: false, error: msg || "Failed to create category" };
   }
 }
 
@@ -252,7 +257,7 @@ const updateCategorySchema = categorySchema.extend({
 
 export async function updateCategory(
   input: z.infer<typeof updateCategorySchema>
-) {
+): Promise<{ ok: boolean; error?: string; slug?: string }> {
   const data = updateCategorySchema.parse(input);
   await requireAdminForBar(data.barId);
 
@@ -266,15 +271,18 @@ export async function updateCategory(
   // Validasi parent (kalau dikirim): utama, bar sama, bukan diri sendiri.
   if (data.parentId) {
     if (data.parentId === data.id)
-      throw new Error("Category cannot be its own parent");
+      return { ok: false, error: "Category cannot be its own parent" };
     const [parent] = await db
       .select({ barId: menuCategories.barId, parentId: menuCategories.parentId })
       .from(menuCategories)
       .where(eq(menuCategories.id, data.parentId));
     if (!parent || parent.barId !== data.barId)
-      throw new Error("Invalid parent category");
+      return { ok: false, error: "Invalid parent category" };
     if (parent.parentId != null)
-      throw new Error("Sub-category cannot be nested under another sub-category");
+      return {
+        ok: false,
+        error: "Sub-category cannot be nested under another sub-category",
+      };
   }
 
   // Kalau nama berubah, regenerate slug. Kalau tidak, slug tetap.
@@ -296,10 +304,10 @@ export async function updateCategory(
       })
       .where(eq(menuCategories.id, data.id));
     revalidatePath("/admin/menu");
-    return { slug };
+    return { ok: true, slug };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "";
-    throw new Error(msg || "Failed to update category");
+    return { ok: false, error: msg || "Failed to update category" };
   }
 }
 

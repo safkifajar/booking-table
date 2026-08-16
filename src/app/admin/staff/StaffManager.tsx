@@ -97,11 +97,17 @@ export function StaffManager({ barId, initialStaff }: Props) {
     setResending(row.id);
     try {
       const result = await resendInvite(row.id);
+      // WAJIB: tanpa ini kegagalan (mis. user sudah punya password) tetap
+      // membuka dialog sukses dengan URL kosong.
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to resend");
+        return;
+      }
       setInviteSuccess({
         email: row.email,
         displayName: row.displayName,
-        setupUrl: result.setupUrl,
-        emailSent: result.emailSent,
+        setupUrl: result.setupUrl ?? "",
+        emailSent: !!result.emailSent,
       });
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to resend"));
@@ -704,7 +710,9 @@ function EditStaffModal({
     }
     setSaving(true);
     try {
-      await updateStaff({
+      // WAJIB: tanpa ini kegagalan (mis. email sudah dipakai akun lain)
+      // tetap tampil "Staff details updated" & menutup dialog.
+      const res = await updateStaff({
         staffRoleId: row.id,
         displayName: displayName.trim(),
         email: email.trim(),
@@ -712,6 +720,11 @@ function EditStaffModal({
         isActive,
         password: password || undefined,
       });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to update staff");
+        setSaving(false);
+        return;
+      }
       toast.success("Staff details updated");
       onSaved({
         ...row,
