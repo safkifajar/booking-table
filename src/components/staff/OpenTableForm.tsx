@@ -85,6 +85,7 @@ export function OpenTableForm({
   // QR yang sedang ditampilkan setelah submit (QRIS).
   const [qr, setQr] = React.useState<{
     paymentId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     sessionId: string;
@@ -300,8 +301,16 @@ export function OpenTableForm({
       // di result.error, bukan exception (pesan throw disensor Next.js).
       if (result.ok === false) {
         toast.error(result.error);
-        setVoucher(null);
+        // Voucher dibuang HANYA kalau memang voucher yang bermasalah —
+        // validasi lain (mis. kapasitas) tak boleh menghapus voucher yang
+        // sudah benar, nanti kasir harus mengetik ulang percuma.
+        if (result.error.toLowerCase().includes("voucher")) setVoucher(null);
         setSubmitting(false);
+        // Slot keburu dibooking → kembali ke daftar meja supaya kasir
+        // memilih ulang. Dulu dicek di catch; kini datang lewat return.
+        if (result.error.toLowerCase().includes("booked")) {
+          router.push(backHref);
+        }
         return;
       }
       // Kasir buka meja + cash → sudah langsung lunas. Meja terbuka, ke sesi.
@@ -319,6 +328,7 @@ export function OpenTableForm({
       if ("qris" in result) {
         setQr({
           paymentId: result.qris.paymentId,
+          reference: result.qris.reference,
           qrString: result.qris.qrString,
           // Nominal SETELAH potongan voucher — yang benar-benar ditagih.
           amount: payableTotal,
@@ -818,6 +828,7 @@ export function OpenTableForm({
       {qr && (
         <QrisPaymentDialog
           paymentId={qr.paymentId}
+          reference={qr.reference}
           qrString={qr.qrString}
           amount={qr.amount}
           onPaid={() => {

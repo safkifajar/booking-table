@@ -119,6 +119,8 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   // countdown, poll, cancel). Sama seperti tampilan QRIS di tempat lain.
   const [activeQr, setActiveQr] = React.useState<{
     paymentId: string;
+    /** Reference gateway (Duitku). Null = tak tersedia → tampilkan id kita. */
+    reference?: string | null;
     qrString: string;
     amount: number;
     expirySeconds?: number;
@@ -156,6 +158,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       if (result.qrString && result.status === "pending") {
         setActiveQr({
           paymentId: result.paymentId,
+          reference: result.externalRef || null,
           qrString: result.qrString,
           amount,
           expirySeconds: toExpirySeconds(result.expiresAt),
@@ -598,6 +601,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                         onClick={() =>
                           setActiveQr({
                             paymentId: p.id,
+                            reference: p.external_ref,
                             qrString: p.qr_string!,
                             amount: p.amount,
                             expirySeconds: toExpirySeconds(p.expires_at),
@@ -708,6 +712,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       {activeQr && (
         <QrisPaymentDialog
           paymentId={activeQr.paymentId}
+          reference={activeQr.reference}
           qrString={activeQr.qrString}
           amount={activeQr.amount}
           expirySeconds={activeQr.expirySeconds}

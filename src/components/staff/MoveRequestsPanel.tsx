@@ -141,7 +141,14 @@ export function MoveRequestsPanel({
   async function resolve(id: string, approve: boolean) {
     setBusy(id);
     try {
-      await resolveMoveRequest({ requestId: id, approve });
+      // WAJIB: tanpa ini kegagalan (mis. meja keburu diambil, request sudah
+      // diproses orang lain) tetap tampil "approved".
+      const res = await resolveMoveRequest({ requestId: id, approve });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to process");
+        router.refresh(); // data di layar sudah basi
+        return;
+      }
       toast.success(approve ? "Table move approved" : "Request rejected");
       router.refresh();
     } catch (err) {

@@ -814,6 +814,9 @@ export interface CashierPayment {
   /** Digantikan pembayaran lain yang menutup tagihan (tampil "Replaced"). */
   superseded: boolean;
   qr_string: string | null;
+  /** Reference dari gateway (Duitku) — utk melacak transaksi di dashboard
+   *  gateway. Beda dari id kita. */
+  external_ref: string | null;
   expires_at: string | null;
   paid_by_name: string;
   /** Rincian item yang dicakup pembayaran itemized (kosong utk DP/equal/treat). */
@@ -977,6 +980,7 @@ export async function getSessionDetailForCashier(
           paid_at: payments.paidAt,
           created_at: payments.createdAt,
           split_meta: payments.splitMeta,
+          external_ref: payments.externalRef,
           paid_by_name: profiles.displayName,
         })
         .from(payments)
@@ -1089,6 +1093,7 @@ export async function getSessionDetailForCashier(
         pay_at_cashier: !!meta.payAtCashier,
         superseded: !!meta.supersededByPaid,
         qr_string: meta.qrString ?? null,
+        external_ref: p.external_ref ?? null,
         expires_at: meta.expiresAt ?? null,
         paid_by_name: p.paid_by_name,
         items: itemsByPayment.get(p.id) ?? [],

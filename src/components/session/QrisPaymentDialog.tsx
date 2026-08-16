@@ -15,6 +15,7 @@ import { buildQrisFramePng } from "@/lib/qris-frame";
  */
 export function QrisPaymentDialog({
   paymentId,
+  reference,
   qrString,
   amount,
   expirySeconds,
@@ -26,6 +27,12 @@ export function QrisPaymentDialog({
   cancelAction,
 }: {
   paymentId: string;
+  /**
+   * Reference dari gateway (Duitku). INI yang dipakai untuk lacak transaksi
+   * di dashboard/simulator gateway — bukan paymentId kita. Null saat gateway
+   * belum mengembalikannya (mis. mode mock) → jatuh balik ke paymentId.
+   */
+  reference?: string | null;
   qrString: string;
   amount: number;
   /** Batas waktu bayar (detik). Tampilkan countdown; habis → onExpired. */
@@ -230,10 +237,14 @@ export function QrisPaymentDialog({
             <div className="text-2xl font-bold tabular-nums text-primary">
               {formatIDR(amount)}
             </div>
-            {/* ID transaksi — untuk referensi & cek status di dashboard. */}
+            {/* Reference gateway — dipakai melacak transaksi di dashboard
+                Duitku. Fallback ke paymentId kalau gateway belum memberi
+                reference (mis. mode mock). */}
             <div className="text-[10px] text-muted-foreground">
-              Transaction ID:{" "}
-              <span className="font-mono select-all">{paymentId}</span>
+              {reference ? "Reference" : "Transaction ID"}:{" "}
+              <span className="font-mono select-all">
+                {reference ?? paymentId}
+              </span>
             </div>
             {expirySeconds && expirySeconds > 0 ? (
               <div className="text-xs font-medium">

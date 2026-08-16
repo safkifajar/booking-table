@@ -50,7 +50,6 @@ import { notifyCashiersPayAtCashier } from "@/lib/payment-notify";
 import { memberVouchers } from "@/lib/db/schema/membership-transactions";
 import {
   resolveVoucherForBillPayment,
-  reserveVoucherForPayment,
   settleVoucherForPayment,
   releaseVoucherForPayment,
 } from "@/lib/member-voucher";
@@ -974,7 +973,13 @@ export interface StaffOpenTableInput {
  *   terima uang di tempat, tak perlu antre ke dirinya). Meja langsung terbuka.
  */
 export type StaffOpenTableResult =
-  | { ok: true; sessionId: string; qris: { paymentId: string; qrString: string } }
+  | {
+      ok: true;
+      sessionId: string;
+      /** reference = ID transaksi milik gateway (Duitku), utk dilacak di
+       *  dashboard/simulator gateway. Beda dari paymentId kita. */
+      qris: { paymentId: string; qrString: string; reference: string | null };
+    }
   | { ok: true; sessionId: string; awaitCashier: true }
   | { ok: true; sessionId: string; paid: true }
   /**
@@ -1001,7 +1006,10 @@ export async function staffOpenTableForCustomer(
     memberProfileIds,
   } = input;
   if (!items || items.length === 0) {
-    throw new Error("Add at least one menu item. Payment is required to open the table");
+    return {
+      ok: false,
+      error: "Add at least one menu item. Payment is required to open the table",
+    };
   }
 
   // Akun pelanggan yang dipilih staff per baris tamu (opsional). Validasi:
@@ -1035,10 +1043,14 @@ export async function staffOpenTableForCustomer(
     for (const id of pickedIds) {
       const row = rows.find((r) => r.id === id);
       if (!row) throw new Error("Customer not found");
-      if (row.isGuest) throw new Error("That profile is a walk-in guest");
-      if (!row.isActive) throw new Error("That customer account is inactive");
+      if (row.isGuest) {
+        return { ok: false, error: "That profile is a walk-in guest" };
+      }
+      if (!row.isActive) {
+        return { ok: false, error: "That customer account is inactive" };
+      }
       if (staffSet.has(id)) {
-        throw new Error("Staff can't be added as a table guest");
+        return { ok: false, error: "Staff can't be added as a table guest" };
       }
       accountById.set(id, { id: row.id, displayName: row.displayName });
     }
@@ -1051,7 +1063,7 @@ export async function staffOpenTableForCustomer(
   const resAt = reservationAt ? new Date(reservationAt) : null;
   const resEnd = reservationEndAt ? new Date(reservationEndAt) : null;
   if (resAt && resEnd && resEnd.getTime() <= resAt.getTime()) {
-    throw new Error("End time must be after start time");
+    return { ok: false, error: "End time must be after start time" };
   }
   const isReservation = !!resAt;
 
@@ -1061,10 +1073,10 @@ export async function staffOpenTableForCustomer(
     .filter((n) => n.length > 0);
 
   if (cleanNames.length === 0) {
-    throw new Error("At least 1 guest name is required");
+    return { ok: false, error: "At least 1 guest name is required" };
   }
   if (cleanNames.some((n) => n.length > 80)) {
-    throw new Error("Each guest name can be at most 80 characters");
+    return { ok: false, error: "Each guest name can be at most 80 characters" };
   }
 
   // Validate table aktif & ada di bar yang sama
@@ -1081,12 +1093,15 @@ export async function staffOpenTableForCustomer(
     .where(eq(tables.id, tableId));
 
   if (!table) throw new Error("Table not found");
-  if (!table.isActive) throw new Error("Table is inactive");
+  if (!table.isActive) {
+    return { ok: false, error: "Table is inactive" };
+  }
   if (table.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (cleanNames.length > table.capacity) {
-    throw new Error(
-      `Maximum ${table.capacity} guests for this table (capacity)`
-    );
+    return {
+      ok: false,
+      error: `Maximum ${table.capacity} guests for this table (capacity)`,
+    };
   }
 
   const mainGuest = cleanNames[0];
@@ -1097,6 +1112,7 @@ export async function staffOpenTableForCustomer(
   const menuRows = await db
     .select({
       id: menuItems.id,
+      name: menuItems.name,
       price: menuItems.price,
       is_available: menuItems.isAvailable,
       barId: menuCategories.barId,
@@ -1109,7 +1125,12 @@ export async function staffOpenTableForCustomer(
     const m = menuMap.get(it.menuItemId);
     if (!m) throw new Error("Menu item not found");
     if (m.barId !== ctx.barId) throw new Error("Invalid menu item");
-    if (!m.is_available) throw new Error("A selected menu item is currently unavailable");
+    if (!m.is_available) {
+      return {
+        ok: false,
+        error: `${m.name ?? "A selected menu item"} is currently unavailable`,
+      };
+    }
     if (it.quantity < 1 || it.quantity > 20) throw new Error("Invalid quantity");
   }
   const subtotal = items.reduce(
@@ -1375,13 +1396,15 @@ export async function staffOpenTableForCustomer(
       return { ok: false, error: "This voucher was just used. Try another one" };
     }
     if (isDbConstraintError(err, "uq_active_session_per_table")) {
-      throw new Error("This table already has an active session");
+      return { ok: false, error: "This table already has an active session" };
     }
     // Race condition: slot waktu meja ini baru saja dibooking lebih dulu.
     if (isDbConstraintError(err, "no_overlapping_reservation")) {
-      throw new Error(
-        "This table's time slot was just booked. Pick another time or table."
-      );
+      return {
+        ok: false,
+        error:
+          "This table's time slot was just booked. Pick another time or table.",
+      };
     }
     const message = err instanceof Error ? err.message : "";
     throw new Error(message || "Failed to open table");
@@ -1531,7 +1554,11 @@ export async function staffOpenTableForCustomer(
     return {
       ok: true,
       sessionId,
-      qris: { paymentId, qrString: chargeResult.qrString },
+      qris: {
+        paymentId,
+        qrString: chargeResult.qrString,
+        reference: chargeResult.externalRef || null,
+      },
     };
   } catch (err) {
     // NEXT_REDIRECT dari cabang paid → lempar ulang.
@@ -1569,15 +1596,17 @@ export async function staffOpenTableForCustomer(
 export async function staffAddGuestToTable(
   sessionId: string,
   guestName: string
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission(
     "open_table_for_customer",
     "/staff/waiter"
   );
 
   const cleanName = guestName.trim();
-  if (!cleanName) throw new Error("Guest name is required");
-  if (cleanName.length > 80) throw new Error("Guest name can be at most 80 characters");
+  if (!cleanName) return { ok: false, error: "Guest name is required" };
+  if (cleanName.length > 80) {
+    return { ok: false, error: "Guest name can be at most 80 characters" };
+  }
 
   // Get session + capacity
   const [session] = await db
@@ -1599,12 +1628,14 @@ export async function staffAddGuestToTable(
   if (!session) throw new Error("Session not found");
   if (session.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (session.status !== "open") {
-    throw new Error("Session is no longer open");
+    return { ok: false, error: "Session is no longer open" };
   }
   if (!session.openedByStaffId) {
-    throw new Error(
-      "This session was opened by the customer. Ask the customer to invite their friends"
-    );
+    return {
+      ok: false,
+      error:
+        "This session was opened by the customer. Ask the customer to invite their friends",
+    };
   }
 
   // Count current members
@@ -1621,9 +1652,10 @@ export async function staffAddGuestToTable(
 
   // Dilewati kalau meja izinkan over-capacity (setting admin).
   if (!session.allowOverCapacity && currentCount >= session.tableCapacity) {
-    throw new Error(
-      `Table is full (${currentCount}/${session.tableCapacity})`
-    );
+    return {
+      ok: false,
+      error: `Table is full (${currentCount}/${session.tableCapacity})`,
+    };
   }
 
   // Insert guest user + profile + member dalam transaction
@@ -1684,4 +1716,5 @@ export async function staffAddGuestToTable(
 
   revalidatePath(`/session/${sessionId}`);
   revalidatePath("/staff/waiter");
+  return { ok: true };
 }

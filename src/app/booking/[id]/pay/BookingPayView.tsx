@@ -19,6 +19,7 @@ import { toast } from "sonner";
  */
 export function BookingPayView({
   paymentId,
+  reference,
   qrString,
   amount,
   secondsLeft,
@@ -28,6 +29,8 @@ export function BookingPayView({
   tableLabel,
 }: {
   paymentId: string;
+  /** Reference gateway (Duitku) — ditampilkan menggantikan id kita bila ada. */
+  reference?: string | null;
   qrString: string | null;
   amount: number;
   secondsLeft: number;
@@ -55,6 +58,7 @@ export function BookingPayView({
     <div className="min-h-dvh bg-background">
       <QrisPaymentDialog
         paymentId={paymentId}
+        reference={reference}
         qrString={qrString ?? ""}
         amount={amount}
         // Kalau sudah lewat (secondsLeft 0), tetap kasih 1 dtk supaya effect

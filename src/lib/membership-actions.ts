@@ -548,6 +548,9 @@ export type PurchaseResult =
       /** true = langsung aktif (mock gateway / total 0). */
       activated: boolean;
       txId: string;
+      /** Reference gateway (Duitku) — ID yang dikenali dashboard/simulator
+       *  gateway. Beda dari txId kita; null kalau gateway tak memberinya. */
+      reference?: string | null;
       qrString: string | null;
       amount: number;
       /** Detik menuju QR kedaluwarsa (utk countdown), null kalau tak ada. */
@@ -660,6 +663,9 @@ export async function purchaseMembership(input: {
     ok: true,
     activated: false,
     txId: tx.id,
+    // Reference gateway — dipakai UI utk menampilkan ID yang dikenali
+    // dashboard/simulator Duitku (bukan txId kita).
+    reference: charge.externalRef || null,
     qrString: charge.qrString ?? null,
     amount: preview.final_amount!,
     qrExpirySeconds: qrExpiresAt
@@ -881,6 +887,9 @@ export interface PendingMembershipTx {
   level_name: string;
   amount: number;
   qr_string: string | null;
+  /** Reference gateway (Duitku) — utk melacak transaksi di dashboard gateway.
+   *  Beda dari id transaksi kita. */
+  external_ref: string | null;
   /** Detik tersisa; null kalau gateway tak memberi batas. */
   qr_expiry_seconds: number | null;
 }
@@ -894,6 +903,7 @@ export async function getMyPendingMembershipTx(): Promise<PendingMembershipTx | 
       level_name: membershipLevels.name,
       amount: membershipTransactions.amount,
       qr_string: membershipTransactions.qrString,
+      external_ref: membershipTransactions.externalRef,
       qr_expires_at: membershipTransactions.qrExpiresAt,
     })
     .from(membershipTransactions)
@@ -928,6 +938,7 @@ export async function getMyPendingMembershipTx(): Promise<PendingMembershipTx | 
     level_name: row.level_name,
     amount: row.amount,
     qr_string: row.qr_string,
+    external_ref: row.external_ref,
     qr_expiry_seconds: row.qr_expires_at
       ? Math.max(1, Math.floor((row.qr_expires_at.getTime() - Date.now()) / 1000))
       : null,

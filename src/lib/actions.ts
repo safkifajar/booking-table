@@ -639,7 +639,13 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
   // 9. Call gateway untuk DP (kalau ada). Best-effort: kalau gagal, session
   // tetap created tapi DP pending — staff bisa konfirmasi manual nanti.
   // Untuk QRIS (Duitku), simpan qrString supaya client bisa tampilkan QR.
-  let dpQris: { paymentId: string; qrString: string } | null = null;
+  /** reference = ID transaksi milik gateway (Duitku), utk dilacak di
+   *  dashboard/simulator gateway. Beda dari paymentId kita. */
+  let dpQris: {
+    paymentId: string;
+    qrString: string;
+    reference: string | null;
+  } | null = null;
   let dpAwaitCashier = false;
   if (dpPaymentId && dpAmount > 0) {
     // Reservasi voucher ke payment DP (race-safe). Kalah race (nyaris
@@ -738,7 +744,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
         if (firstOrderId) await settleOrderIfPaid(firstOrderId);
       } else if (chargeResult.qrString) {
         // DP QRIS menunggu bayar → client tampilkan QR (jangan redirect).
-        dpQris = { paymentId: dpPaymentId, qrString: chargeResult.qrString };
+        dpQris = {
+          paymentId: dpPaymentId,
+          qrString: chargeResult.qrString,
+          reference: chargeResult.externalRef || null,
+        };
       }
     } catch (err) {
       console.error("[openTable] DP gateway charge failed:", err);
@@ -2545,6 +2555,9 @@ export interface OrderDetail {
     /** Nama kasir yang memproses (pay-at-cashier). null = bukan/ belum. */
     confirmed_by: string | null;
     qr_string: string | null;
+    /** Reference gateway (Duitku) — utk melacak transaksi di dashboard
+     *  gateway. Beda dari id payment kita. */
+    external_ref: string | null;
     expires_at: string | null;
   }[];
   /** Anggota joined (utk split di PaymentSheet). */
@@ -2663,6 +2676,7 @@ export async function getOrderDetail(
       status: payments.status,
       split_mode: payments.splitMode,
       split_meta: payments.splitMeta,
+      external_ref: payments.externalRef,
       created_at: payments.createdAt,
       paid_at: payments.paidAt,
       paid_by_member_id: payments.paidByMemberId,
@@ -2792,6 +2806,8 @@ export async function getOrderDetail(
             paid_by_is_host: p.paid_by_role === "host",
             confirmed_by: meta.confirmedByName ?? null,
             qr_string: isMine || isStaff ? meta.qrString ?? null : null,
+            // Ikut aturan qr_string: hanya pemilik payment / staff.
+            external_ref: isMine || isStaff ? p.external_ref ?? null : null,
             expires_at: meta.expiresAt ?? null,
           };
         }),

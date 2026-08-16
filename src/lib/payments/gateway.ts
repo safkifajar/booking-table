@@ -70,10 +70,12 @@ export interface PaymentGateway {
   createCharge(input: CreateChargeInput): Promise<ChargeResult>;
 
   /**
-   * Cek status payment di gateway.
-   * Dipakai untuk polling (saat customer scan QRIS) atau verifikasi.
+   * Cek status payment di gateway. Dipakai untuk polling (saat customer scan
+   * QRIS) atau verifikasi manual lewat tombol "Cek Status" di kasir.
+   *
+   * Argumennya merchantOrderId (= payments.id kita), BUKAN reference gateway.
    */
-  checkStatus(externalRef: string): Promise<PaymentStatus>;
+  checkStatus(merchantOrderId: string): Promise<PaymentStatus>;
 }
 
 // ============================================================
@@ -109,10 +111,12 @@ const mockGateway: PaymentGateway = {
     };
   },
 
-  async checkStatus(externalRef: string): Promise<PaymentStatus> {
-    // Mock: kalau ref start dengan "mock_", anggap paid
-    if (externalRef.startsWith("mock_")) return "paid";
-    return "pending";
+  async checkStatus(merchantOrderId: string): Promise<PaymentStatus> {
+    // Mock: selalu anggap lunas. Dulu mensyaratkan awalan "mock_" — padahal
+    // yang dikirim pemanggil adalah merchantOrderId (payments.id, sebuah
+    // UUID), jadi tombol "Cek Status" TIDAK PERNAH melunasi di mode mock.
+    void merchantOrderId;
+    return "paid";
   },
 };
 
@@ -242,11 +246,13 @@ const duitkuGateway: PaymentGateway = {
     };
   },
 
-  async checkStatus(externalRef: string): Promise<PaymentStatus> {
-    // Duitku transactionStatus di-lookup by merchantOrderId (bukan reference).
-    // externalRef di sini = merchantOrderId yang kita simpan (payment id).
+  async checkStatus(merchantOrderId: string): Promise<PaymentStatus> {
+    // PENTING: Duitku transactionStatus di-lookup by merchantOrderId, BUKAN
+    // reference. merchantOrderId kita = payments.id (lihat pemanggil di
+    // cashierCheckPaymentStatus). Parameter ini dulu bernama `externalRef`
+    // sehingga terbaca seolah memakai data.reference — menyesatkan, karena
+    // externalRef yang tersimpan di DB justru berisi reference Duitku.
     const cfg = duitkuConfig();
-    const merchantOrderId = externalRef;
     const signature = md5(cfg.merchantCode + merchantOrderId + cfg.apiKey);
     const res = await fetch(
       `${cfg.base}/webapi/api/merchant/transactionStatus`,

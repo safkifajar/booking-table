@@ -67,6 +67,9 @@ export default async function BookingPayPage({ params }: PageProps) {
       amount: payments.amount,
       status: payments.status,
       split_meta: payments.splitMeta,
+      // Reference gateway (Duitku) — utk melacak transaksi di dashboard
+      // gateway; beda dari payments.id kita.
+      external_ref: payments.externalRef,
       created_at: payments.createdAt,
     })
     .from(payments)
@@ -106,6 +109,7 @@ export default async function BookingPayPage({ params }: PageProps) {
   return (
     <BookingPayView
       paymentId={dp.id}
+      reference={dp.external_ref ?? null}
       qrString={meta.qrString ?? null}
       amount={dp.amount}
       secondsLeft={secondsLeft}

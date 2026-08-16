@@ -37,7 +37,13 @@ export function StaffMoveTableButton({ sessionId }: { sessionId: string }) {
   async function doMove(t: MoveTargetTable) {
     setMoving(true);
     try {
-      await staffMoveTable({ sessionId, targetTableId: t.id });
+      // WAJIB: tanpa ini pindah yang GAGAL (mis. meja bentrok) tetap tampil
+      // "Moved to table X" dan menutup dialog.
+      const res = await staffMoveTable({ sessionId, targetTableId: t.id });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to move table");
+        return;
+      }
       toast.success(`Moved to table ${t.label}`);
       setOpen(false);
       setConfirm(null);
