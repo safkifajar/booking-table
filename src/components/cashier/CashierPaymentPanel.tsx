@@ -98,6 +98,7 @@ export function CashierPaymentPanel({
   // Payment pending yg QR-nya mau ditampilkan ulang.
   const [reshowQr, setReshowQr] = React.useState<{
     paymentId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     expirySeconds?: number;
@@ -280,6 +281,7 @@ export function CashierPaymentPanel({
                           onClick={() =>
                             setReshowQr({
                               paymentId: p.id,
+                              reference: p.external_ref,
                               qrString: p.qr_string!,
                               amount: p.amount,
                               expirySeconds: p.expires_at
@@ -443,6 +445,7 @@ export function CashierPaymentPanel({
       {reshowQr && (
         <QrisPaymentDialog
           paymentId={reshowQr.paymentId}
+          reference={reshowQr.reference}
           qrString={reshowQr.qrString}
           amount={reshowQr.amount}
           expirySeconds={reshowQr.expirySeconds}
@@ -529,6 +532,8 @@ function PaymentModal({
   const [cashReceived, setCashReceived] = React.useState(detail.outstanding);
   const [loading, setLoading] = React.useState(false);
   const [qrPaymentId, setQrPaymentId] = React.useState<string | null>(null);
+  /** Reference dari gateway — ditampilkan menggantikan id kita bila ada. */
+  const [qrReference, setQrReference] = React.useState<string | null>(null);
   const [qrString, setQrString] = React.useState<string | null>(null);
   // Data-URL gambar QR (di-generate dari qrString via lib qrcode).
   const [qrImage, setQrImage] = React.useState<string | null>(null);
@@ -672,6 +677,7 @@ function PaymentModal({
       // Kalau QRIS dan dapat qrString → tampilkan QR
       if (method === "qris" && result.qrString) {
         setQrPaymentId(result.paymentId);
+        setQrReference(result.externalRef || null);
         setQrString(result.qrString);
         setStep("qris-display");
         setLoading(false);
@@ -1017,8 +1023,12 @@ function PaymentModal({
                 </div>
                 {qrPaymentId && (
                   <div className="text-[10px] text-muted-foreground">
-                    Transaction ID:{" "}
-                    <span className="font-mono select-all">{qrPaymentId}</span>
+                    {/* Reference gateway (Duitku) — ini yang dipakai melacak
+                        transaksi di dashboard gateway, bukan id kita. */}
+                    {qrReference ? "Reference" : "Transaction ID"}:{" "}
+                    <span className="font-mono select-all">
+                      {qrReference ?? qrPaymentId}
+                    </span>
                   </div>
                 )}
                 <div className="text-[10px] text-muted-foreground italic">

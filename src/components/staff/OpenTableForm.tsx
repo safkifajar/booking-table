@@ -85,6 +85,7 @@ export function OpenTableForm({
   // QR yang sedang ditampilkan setelah submit (QRIS).
   const [qr, setQr] = React.useState<{
     paymentId: string;
+    reference: string | null;
     qrString: string;
     amount: number;
     sessionId: string;
@@ -327,6 +328,7 @@ export function OpenTableForm({
       if ("qris" in result) {
         setQr({
           paymentId: result.qris.paymentId,
+          reference: result.qris.reference,
           qrString: result.qris.qrString,
           // Nominal SETELAH potongan voucher — yang benar-benar ditagih.
           amount: payableTotal,
@@ -826,6 +828,7 @@ export function OpenTableForm({
       {qr && (
         <QrisPaymentDialog
           paymentId={qr.paymentId}
+          reference={qr.reference}
           qrString={qr.qrString}
           amount={qr.amount}
           onPaid={() => {

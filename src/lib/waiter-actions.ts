@@ -973,7 +973,13 @@ export interface StaffOpenTableInput {
  *   terima uang di tempat, tak perlu antre ke dirinya). Meja langsung terbuka.
  */
 export type StaffOpenTableResult =
-  | { ok: true; sessionId: string; qris: { paymentId: string; qrString: string } }
+  | {
+      ok: true;
+      sessionId: string;
+      /** reference = ID transaksi milik gateway (Duitku), utk dilacak di
+       *  dashboard/simulator gateway. Beda dari paymentId kita. */
+      qris: { paymentId: string; qrString: string; reference: string | null };
+    }
   | { ok: true; sessionId: string; awaitCashier: true }
   | { ok: true; sessionId: string; paid: true }
   /**
@@ -1548,7 +1554,11 @@ export async function staffOpenTableForCustomer(
     return {
       ok: true,
       sessionId,
-      qris: { paymentId, qrString: chargeResult.qrString },
+      qris: {
+        paymentId,
+        qrString: chargeResult.qrString,
+        reference: chargeResult.externalRef || null,
+      },
     };
   } catch (err) {
     // NEXT_REDIRECT dari cabang paid → lempar ulang.
