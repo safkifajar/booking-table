@@ -78,7 +78,9 @@ const addHobbySchema = z.object({
   emoji: z.string().max(8).optional().or(z.literal("")),
 });
 
-export async function addHobby(input: z.infer<typeof addHobbySchema>) {
+export async function addHobby(
+  input: z.infer<typeof addHobbySchema>
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = addHobbySchema.parse(input);
   // Nama disimpan apa adanya (katalog SOHO Capitalized + emoji).
@@ -92,11 +94,12 @@ export async function addHobby(input: z.infer<typeof addHobbySchema>) {
     });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
-      throw new Error("This hobby already exists");
+      return { ok: false, error: "This hobby already exists" };
     }
     throw err;
   }
   revalidatePath("/admin/hobbies");
+  return { ok: true };
 }
 
 const updateHobbySchema = z.object({
@@ -106,7 +109,9 @@ const updateHobbySchema = z.object({
   emoji: z.string().max(8).optional().or(z.literal("")),
 });
 
-export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
+export async function updateHobby(
+  input: z.infer<typeof updateHobbySchema>
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = updateHobbySchema.parse(input);
   try {
@@ -120,11 +125,12 @@ export async function updateHobby(input: z.infer<typeof updateHobbySchema>) {
       .where(eq(hobbies.id, data.id));
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_name")) {
-      throw new Error("Hobby name is already used");
+      return { ok: false, error: "Hobby name is already used" };
     }
     throw err;
   }
   revalidatePath("/admin/hobbies");
+  return { ok: true };
 }
 
 export async function deleteHobby(id: string) {
@@ -139,7 +145,9 @@ export async function deleteHobby(id: string) {
 
 const addCatSchema = z.object({ name: z.string().min(1, "Name is required").max(60) });
 
-export async function addHobbyCategory(input: z.infer<typeof addCatSchema>) {
+export async function addHobbyCategory(
+  input: z.infer<typeof addCatSchema>
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = addCatSchema.parse(input);
   try {
@@ -148,11 +156,12 @@ export async function addHobbyCategory(input: z.infer<typeof addCatSchema>) {
       .values({ name: data.name.trim(), sortOrder: 999 });
   } catch (err) {
     if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
-      throw new Error("This category already exists");
+      return { ok: false, error: "This category already exists" };
     }
     throw err;
   }
   revalidatePath("/admin/hobbies");
+  return { ok: true };
 }
 
 const updateCatSchema = z.object({
@@ -162,7 +171,7 @@ const updateCatSchema = z.object({
 
 export async function updateHobbyCategory(
   input: z.infer<typeof updateCatSchema>
-) {
+): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const data = updateCatSchema.parse(input);
   // Ambil nama lama untuk update hobi yg memakainya (jaga konsistensi).
@@ -173,18 +182,27 @@ export async function updateHobbyCategory(
   if (!old) throw new Error("Category not found");
   const newName = data.name.trim();
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(hobbyCategories)
-      .set({ name: newName })
-      .where(eq(hobbyCategories.id, data.id));
-    // Pindahkan hobi lama ke nama kategori baru.
-    await tx
-      .update(hobbies)
-      .set({ category: newName })
-      .where(eq(hobbies.category, old.name));
-  });
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(hobbyCategories)
+        .set({ name: newName })
+        .where(eq(hobbyCategories.id, data.id));
+      // Pindahkan hobi lama ke nama kategori baru.
+      await tx
+        .update(hobbies)
+        .set({ category: newName })
+        .where(eq(hobbies.category, old.name));
+    });
+  } catch (err) {
+    // Nama kategori bentrok — sebelumnya lolos tanpa pesan yang jelas.
+    if (err instanceof Error && err.message.includes("uq_hobby_category_name")) {
+      return { ok: false, error: "This category already exists" };
+    }
+    throw err;
+  }
   revalidatePath("/admin/hobbies");
+  return { ok: true };
 }
 
 export async function deleteHobbyCategory(id: string) {

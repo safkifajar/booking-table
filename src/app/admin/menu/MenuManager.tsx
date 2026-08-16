@@ -1319,12 +1319,24 @@ function CategoryFormModal({
       };
       let savedId: string;
       let savedSlug: string;
+      // WAJIB cek res.ok: tanpa itu kegagalan validasi tetap tampil
+      // "added/saved" & menutup dialog, padahal tak tersimpan.
       if (mode === "create") {
         const result = await createCategory(payload);
-        savedId = result.id;
-        savedSlug = result.slug;
+        if (!result.ok) {
+          toast.error(result.error ?? "Failed to save");
+          setSubmitting(false);
+          return;
+        }
+        savedId = result.id!;
+        savedSlug = result.slug!;
       } else {
         const result = await updateCategory({ ...payload, id: initial!.id });
+        if (!result.ok) {
+          toast.error(result.error ?? "Failed to save");
+          setSubmitting(false);
+          return;
+        }
         savedId = initial!.id;
         savedSlug = result.slug ?? initial!.slug;
       }

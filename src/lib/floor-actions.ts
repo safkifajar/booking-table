@@ -154,7 +154,9 @@ const tableSchema = z.object({
   allowOverCapacity: z.boolean().optional(),
 });
 
-export async function createTable(input: z.infer<typeof tableSchema>) {
+export async function createTable(
+  input: z.infer<typeof tableSchema>
+): Promise<{ ok: boolean; error?: string }> {
   const bar = await requireAdmin();
   const data = tableSchema.parse(input);
   await assertAreaInBar(data.areaId, bar.id);
@@ -164,7 +166,11 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
     .select({ id: tables.id })
     .from(tables)
     .where(and(eq(tables.areaId, data.areaId), eq(tables.label, data.label)));
-  if (clash) throw new Error(`Label "${data.label}" already exists in this area`);
+  if (clash)
+    return {
+      ok: false,
+      error: `Label "${data.label}" already exists in this area`,
+    };
 
   const size = tableSize(data.shape, data.capacity);
   await db.insert(tables).values({
@@ -183,13 +189,16 @@ export async function createTable(input: z.infer<typeof tableSchema>) {
   });
 
   revalidatePath("/admin/floor");
+  return { ok: true };
 }
 
 const updateTableSchema = tableSchema
   .omit({ areaId: true })
   .extend({ id: z.string().uuid() });
 
-export async function updateTable(input: z.infer<typeof updateTableSchema>) {
+export async function updateTable(
+  input: z.infer<typeof updateTableSchema>
+): Promise<{ ok: boolean; error?: string }> {
   const bar = await requireAdmin();
   const data = updateTableSchema.parse(input);
 
@@ -207,7 +216,10 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
     .from(tables)
     .where(and(eq(tables.areaId, row.areaId), eq(tables.label, data.label)));
   if (clashes.some((c) => c.id !== data.id)) {
-    throw new Error(`Label "${data.label}" already exists in this area`);
+    return {
+      ok: false,
+      error: `Label "${data.label}" already exists in this area`,
+    };
   }
 
   const size = tableSize(data.shape, data.capacity);
@@ -228,6 +240,7 @@ export async function updateTable(input: z.infer<typeof updateTableSchema>) {
     .where(eq(tables.id, data.id));
 
   revalidatePath("/admin/floor");
+  return { ok: true };
 }
 
 export async function deleteTable(tableId: string) {

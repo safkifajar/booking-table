@@ -434,15 +434,21 @@ function HobbyFormModal({
     }
     setSubmitting(true);
     try {
-      if (mode === "create") {
-        await addHobby({ name: name.trim(), category, emoji: emoji.trim() });
-      } else {
-        await updateHobby({
-          id: initial!.id,
-          name: name.trim(),
-          category,
-          emoji: emoji.trim(),
-        });
+      // WAJIB cek res.ok: tanpa itu nama duplikat tetap tampil "Hobby added"
+      // & menutup dialog, padahal tak tersimpan.
+      const res =
+        mode === "create"
+          ? await addHobby({ name: name.trim(), category, emoji: emoji.trim() })
+          : await updateHobby({
+              id: initial!.id,
+              name: name.trim(),
+              category,
+              emoji: emoji.trim(),
+            });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to save");
+        setSubmitting(false);
+        return;
       }
       toast.success(mode === "create" ? "Hobby added" : "Hobby saved");
       onSaved();
@@ -544,10 +550,14 @@ function CategoryFormModal({
     if (!name.trim() || submitting) return;
     setSubmitting(true);
     try {
-      if (mode === "create") {
-        await addHobbyCategory({ name: name.trim() });
-      } else {
-        await updateHobbyCategory({ id: initial!.id, name: name.trim() });
+      const res =
+        mode === "create"
+          ? await addHobbyCategory({ name: name.trim() })
+          : await updateHobbyCategory({ id: initial!.id, name: name.trim() });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to save");
+        setSubmitting(false);
+        return;
       }
       toast.success(mode === "create" ? "Category added" : "Category saved");
       onSaved();

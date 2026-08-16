@@ -322,7 +322,7 @@ async function sendStaffInvite(args: {
  */
 export async function resendInvite(
   staffRoleId: string
-): Promise<{ emailSent: boolean; setupUrl: string }> {
+): Promise<{ ok: boolean; error?: string; emailSent?: boolean; setupUrl?: string }> {
   const ctx = await requirePermission("manage_staff", "/admin/staff");
 
   const [row] = await db
@@ -342,16 +342,20 @@ export async function resendInvite(
   if (!row) throw new Error("Staff not found");
   if (row.barId !== ctx.barId) throw new Error("Invalid bar access");
   if (row.passwordHash) {
-    throw new Error("User has already set a password, no need to re-invite");
+    return {
+      ok: false,
+      error: "User has already set a password, no need to re-invite",
+    };
   }
 
-  return sendStaffInvite({
+  const sent = await sendStaffInvite({
     userId: row.profileId,
     email: row.email,
     displayName: row.displayName,
     role: row.role as StaffRoleName,
     barId: row.barId,
   });
+  return { ok: true, ...sent };
 }
 
 // ============================================================
@@ -365,7 +369,7 @@ const updateRoleSchema = z.object({
 
 export async function updateStaffRole(
   input: z.infer<typeof updateRoleSchema>
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission("manage_staff", "/admin/staff");
   const data = updateRoleSchema.parse(input);
 
@@ -384,7 +388,7 @@ export async function updateStaffRole(
     throw new Error("No access to staff role in another bar");
   }
   if (existing.profileId === ctx.profileId) {
-    throw new Error("You cannot change your own role");
+    return { ok: false, error: "You cannot change your own role" };
   }
 
   await db
@@ -404,6 +408,7 @@ export async function updateStaffRole(
   });
 
   revalidatePath("/admin/staff");
+  return { ok: true };
 }
 
 // ============================================================
@@ -428,7 +433,7 @@ const updateStaffSchema = z.object({
  */
 export async function updateStaff(
   input: z.infer<typeof updateStaffSchema>
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission("manage_staff", "/admin/staff");
   const data = updateStaffSchema.parse(input);
   const email = data.email.trim().toLowerCase();
@@ -454,10 +459,10 @@ export async function updateStaff(
   const isSelf = existing.profileId === ctx.profileId;
   if (isSelf) {
     if (data.role !== existing.role) {
-      throw new Error("You cannot change your own role");
+      return { ok: false, error: "You cannot change your own role" };
     }
     if (!data.isActive) {
-      throw new Error("You cannot deactivate yourself");
+      return { ok: false, error: "You cannot deactivate yourself" };
     }
   }
 
@@ -466,7 +471,8 @@ export async function updateStaff(
     .select({ id: users.id })
     .from(users)
     .where(and(eq(users.email, email), sql`${users.id} <> ${existing.profileId}`));
-  if (dupe) throw new Error("Email is already used by another account");
+  if (dupe)
+    return { ok: false, error: "Email is already used by another account" };
 
   // Hash password kalau di-reset.
   let passwordHash: string | null = null;
@@ -522,6 +528,7 @@ export async function updateStaff(
   }
 
   revalidatePath("/admin/staff");
+  return { ok: true };
 }
 
 // ============================================================
@@ -531,7 +538,7 @@ export async function updateStaff(
 export async function toggleStaffActive(
   staffRoleId: string,
   isActive: boolean
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   const ctx = await requirePermission("manage_staff", "/admin/staff");
 
   const [existing] = await db
@@ -548,7 +555,7 @@ export async function toggleStaffActive(
     throw new Error("No access to staff role in another bar");
   }
   if (existing.profileId === ctx.profileId && !isActive) {
-    throw new Error("You cannot deactivate yourself");
+    return { ok: false, error: "You cannot deactivate yourself" };
   }
 
   await db
@@ -568,6 +575,7 @@ export async function toggleStaffActive(
   });
 
   revalidatePath("/admin/staff");
+  return { ok: true };
 }
 
 // ============================================================
