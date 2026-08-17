@@ -15,6 +15,12 @@ import { BarFloorView } from "./BarFloorView";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getJoinedSessionIds } from "@/lib/queries";
+import {
+  getEffectiveRankOf,
+  getEffectiveRankMap,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
+import { getFriendIdSet } from "@/lib/friends";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
 import type { ActiveSessionView } from "@/types/db";
 
@@ -193,6 +199,40 @@ export default async function BarPage({ params }: PageProps) {
   const joinedIds = profile
     ? Array.from(await getJoinedSessionIds(profile.id, scheduleSessionIds))
     : [];
+
+  // Gating membership di Booking Schedule: host ber-tier LEBIH TINGGI dari
+  // viewer disamarkan (foto & nama diganti label tier), sama seperti daftar
+  // anggota meja. Dikecualikan: diri sendiri & teman.
+  // (Halaman ini halaman customer; staff melayani lewat /staff/*.)
+  if (profile) {
+    const hostIds = Array.from(
+      new Set(
+        Object.values(reservationsByTable)
+          .flat()
+          .map((r) => r.host_id)
+          .filter((id): id is string => !!id)
+      )
+    );
+    if (hostIds.length > 0) {
+      const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+        getEffectiveRankOf(profile.id),
+        getEffectiveRankMap(hostIds),
+        getFriendIdSet(profile.id),
+      ]);
+      for (const list of Object.values(reservationsByTable)) {
+        for (const r of list) {
+          if (!r.host_id) continue;
+          if (r.host_id === profile.id || myFriendIds.has(r.host_id)) continue;
+          const rank = rankMap.get(r.host_id) ?? MEMBERSHIP_RANK.basic;
+          if (rank <= viewerRank) continue;
+          // Disamarkan DI SERVER — nama & URL foto asli tak dikirim ke browser.
+          r.host_name =
+            rank >= MEMBERSHIP_RANK.vip ? "VIP member" : "Premium member";
+          r.host_avatar = null;
+        }
+      }
+    }
+  }
 
   // DP "pay at cashier" pending milik VIEWER → arahan "segera ke kasir" +
   // countdown di kartu Booking Schedule miliknya. Hanya booking milik user.
