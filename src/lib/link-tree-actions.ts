@@ -130,12 +130,14 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
     .where(and(eq(barLinks.barId, bar.id), eq(barLinks.isActive, true)))
     .orderBy(asc(barLinks.sortOrder), asc(barLinks.createdAt));
 
+  // Tiap tautan bawaan: pakai URL/label KUSTOM kalau admin mengisinya,
+  // kalau kosong jatuh balik ke nilai otomatis dari data yang ada.
   const builtIn: LinkTreeItem[] = [];
   if (config.showApp) {
     builtIn.push({
       id: "builtin-app",
-      label: "Open the app",
-      url: appUrl(),
+      label: config.appLabel?.trim() || "Open the app",
+      url: config.appUrl?.trim() || appUrl(),
       icon: "smartphone",
       description: "Book a table, order, and join the night",
       isActive: true,
@@ -146,8 +148,8 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
   if (config.showWhatsapp) {
     builtIn.push({
       id: "builtin-wa",
-      label: "Chat on WhatsApp",
-      url: `https://wa.me/${CONTACT_WA}`,
+      label: config.whatsappLabel?.trim() || "Chat on WhatsApp",
+      url: config.whatsappUrl?.trim() || `https://wa.me/${CONTACT_WA}`,
       icon: "whatsapp",
       description: "Questions, bookings, or anything else",
       isActive: true,
@@ -155,14 +157,21 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
       isBuiltIn: true,
     });
   }
-  if (config.showAddress && bar.address) {
+  // Alamat: tampil kalau ada URL kustom ATAU alamat bar terisi — tanpa
+  // keduanya tak ada yang bisa dituju.
+  const addressUrl =
+    config.addressUrl?.trim() ||
+    (bar.address
+      ? // Google Maps pencarian teks — tak perlu koordinat.
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bar.address)}`
+      : "");
+  if (config.showAddress && addressUrl) {
     builtIn.push({
       id: "builtin-address",
-      label: "Find us",
-      // Google Maps pencarian — tak perlu koordinat, cukup teks alamat.
-      url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bar.address)}`,
+      label: config.addressLabel?.trim() || "Find us",
+      url: addressUrl,
       icon: "map-pin",
-      description: bar.address,
+      description: bar.address ?? null,
       isActive: true,
       sortOrder: -1,
       isBuiltIn: true,
@@ -398,6 +407,13 @@ const configSchema = z.object({
   showApp: z.boolean(),
   showWhatsapp: z.boolean(),
   showAddress: z.boolean(),
+  // Kosong = pakai nilai otomatis.
+  appUrl: z.string().trim().max(500),
+  appLabel: z.string().trim().max(60),
+  whatsappUrl: z.string().trim().max(500),
+  whatsappLabel: z.string().trim().max(60),
+  addressUrl: z.string().trim().max(500),
+  addressLabel: z.string().trim().max(60),
 });
 
 export async function updateLinkTreeConfig(
@@ -406,6 +422,23 @@ export async function updateLinkTreeConfig(
 ): Promise<{ ok: boolean; error?: string }> {
   await requireAdminForBar(barId);
   const cfg = configSchema.parse(input);
+
+  // URL kustom dinormalisasi & divalidasi SAMA seperti tautan biasa —
+  // tanpa ini "wa.me/628..." jadi tautan relatif ke link.<domain>, dan
+  // skema berbahaya (javascript:) bisa lolos ke halaman publik.
+  const urlFields = ["appUrl", "whatsappUrl", "addressUrl"] as const;
+  for (const f of urlFields) {
+    const raw = cfg[f];
+    if (!raw) continue; // kosong = pakai otomatis
+    const norm = normalizeUrl(raw);
+    if (!norm) {
+      return {
+        ok: false,
+        error: "URL must start with http://, https://, mailto:, or tel:",
+      };
+    }
+    cfg[f] = norm;
+  }
 
   await db.update(bars).set({ linkTreeConfig: cfg }).where(eq(bars.id, barId));
 

@@ -229,6 +229,20 @@ export interface LinkTreeConfig {
   showWhatsapp: boolean;
   /** Tampilkan tautan alamat (buka Google Maps). */
   showAddress: boolean;
+  /**
+   * URL & label KUSTOM untuk tiga tautan bawaan. KOSONG = pakai nilai
+   * otomatis dari data yang ada (domain app, CONTACT_WA, bars.address).
+   *
+   * Disediakan karena nilai otomatis tak selalu pas: Google Maps hasil
+   * pencarian teks bisa salah menunjuk, dan nomor WA promo kadang beda
+   * dari nomor CS.
+   */
+  appUrl: string;
+  appLabel: string;
+  whatsappUrl: string;
+  whatsappLabel: string;
+  addressUrl: string;
+  addressLabel: string;
 }
 
 export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
@@ -237,4 +251,11 @@ export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
   showApp: true,
   showWhatsapp: true,
   showAddress: true,
+  // Kosong = otomatis. Admin hanya mengisi kalau ingin menimpanya.
+  appUrl: "",
+  appLabel: "",
+  whatsappUrl: "",
+  whatsappLabel: "",
+  addressUrl: "",
+  addressLabel: "",
 };

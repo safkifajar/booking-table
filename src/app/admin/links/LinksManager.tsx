@@ -201,34 +201,66 @@ export function LinksManager({
         <div>
           <h2 className="text-sm font-semibold">Built-in links</h2>
           <p className="text-xs text-muted-foreground">
-            Filled in automatically from your bar data, so they stay correct
-            when the address or WhatsApp number changes.
+            Filled in automatically from your bar data. Leave the fields empty
+            to keep them in sync, or type your own label and URL to override.
           </p>
         </div>
         <div className="space-y-3">
           <BuiltInRow
             icon="smartphone"
-            label="Open the app"
+            title="Open the app"
             hint="Sends visitors to the customer app"
             checked={config.showApp}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showApp: v })}
+            label={config.appLabel}
+            url={config.appUrl}
+            urlPlaceholder="Auto: your customer app URL"
+            onLabelChange={(v) => setConfig((c) => ({ ...c, appLabel: v }))}
+            onUrlChange={(v) => setConfig((c) => ({ ...c, appUrl: v }))}
+            onCommit={() =>
+              saveConfig({ appLabel: config.appLabel, appUrl: config.appUrl })
+            }
           />
           <BuiltInRow
             icon="whatsapp"
-            label="Chat on WhatsApp"
+            title="Chat on WhatsApp"
             hint="Uses the CS number from your settings"
             checked={config.showWhatsapp}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showWhatsapp: v })}
+            label={config.whatsappLabel}
+            url={config.whatsappUrl}
+            urlPlaceholder="Auto: wa.me with your CS number"
+            onLabelChange={(v) =>
+              setConfig((c) => ({ ...c, whatsappLabel: v }))
+            }
+            onUrlChange={(v) => setConfig((c) => ({ ...c, whatsappUrl: v }))}
+            onCommit={() =>
+              saveConfig({
+                whatsappLabel: config.whatsappLabel,
+                whatsappUrl: config.whatsappUrl,
+              })
+            }
           />
           <BuiltInRow
             icon="map-pin"
-            label="Find us"
+            title="Find us"
             hint="Opens Google Maps with the bar address"
             checked={config.showAddress}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showAddress: v })}
+            label={config.addressLabel}
+            url={config.addressUrl}
+            urlPlaceholder="Auto: Google Maps search for your address"
+            onLabelChange={(v) => setConfig((c) => ({ ...c, addressLabel: v }))}
+            onUrlChange={(v) => setConfig((c) => ({ ...c, addressUrl: v }))}
+            onCommit={() =>
+              saveConfig({
+                addressLabel: config.addressLabel,
+                addressUrl: config.addressUrl,
+              })
+            }
           />
         </div>
       </Card>
@@ -390,31 +422,81 @@ function Toggle({
   );
 }
 
+/**
+ * Baris tautan bawaan: sakelar tampil/sembunyi + kolom label & URL opsional.
+ *
+ * Kolom dibiarkan KOSONG = pakai nilai otomatis dari data bar. Admin hanya
+ * mengisi kalau ingin menimpanya (mis. titik Google Maps yang lebih tepat,
+ * atau nomor WA promo yang beda dari CS).
+ */
 function BuiltInRow({
   icon,
-  label,
+  title,
   hint,
   checked,
   disabled,
   onChange,
+  label,
+  url,
+  urlPlaceholder,
+  onLabelChange,
+  onUrlChange,
+  onCommit,
 }: {
   icon: string;
-  label: string;
+  title: string;
   hint: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
+  label: string;
+  url: string;
+  urlPlaceholder: string;
+  onLabelChange: (v: string) => void;
+  onUrlChange: (v: string) => void;
+  onCommit: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-        <LinkIcon name={icon} className="h-4 w-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+    <div className="rounded-lg border border-border bg-background/40 p-3 space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+          <LinkIcon name={icon} className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        </div>
+        <Toggle
+          checked={checked}
+          onChange={onChange}
+          disabled={disabled}
+          label={title}
+        />
       </div>
-      <Toggle checked={checked} onChange={onChange} disabled={disabled} label={label} />
+
+      {/* Kolom timpa — hanya relevan kalau tautannya ditampilkan. */}
+      {checked && (
+        <div className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-12">
+          <input
+            type="text"
+            value={label}
+            maxLength={60}
+            onChange={(e) => onLabelChange(e.target.value)}
+            onBlur={onCommit}
+            placeholder={`Auto: ${title}`}
+            className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+          />
+          <input
+            type="text"
+            value={url}
+            maxLength={500}
+            onChange={(e) => onUrlChange(e.target.value)}
+            onBlur={onCommit}
+            placeholder={urlPlaceholder}
+            className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+          />
+        </div>
+      )}
     </div>
   );
 }
