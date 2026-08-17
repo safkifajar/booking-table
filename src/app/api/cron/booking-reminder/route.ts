@@ -14,6 +14,7 @@
  */
 
 import { sendBookingReminders } from "@/lib/booking-reminder";
+import { withCronLock, CRON_LOCK } from "@/lib/cron-lock";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,8 +26,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await sendBookingReminders();
-  return Response.json(result);
+  // Guard: kalau proses sebelumnya masih jalan (mis. antrean panjang saat
+  // banyak booking serentak), jadwal berikutnya BERHENTI alih-alih ikut
+  // mengerjakan pekerjaan yang sama.
+  const run = await withCronLock(CRON_LOCK.bookingReminder, () =>
+    sendBookingReminders()
+  );
+  if (run.skipped) {
+    return Response.json({ skipped: true, reason: "already running" });
+  }
+  return Response.json(run.result);
 }
 
 // GET untuk health check (tidak butuh secret)

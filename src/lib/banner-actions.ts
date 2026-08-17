@@ -15,6 +15,7 @@ import { db } from "@/lib/db/client";
 import { barBanners } from "@/lib/db/schema/banners";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { requireProfile } from "@/lib/auth-v2/current";
+import { logActivity } from "@/lib/activity-log";
 
 // ============================================================
 // PUBLIC — get active banners
@@ -449,4 +450,43 @@ export async function deleteBanner(bannerId: string): Promise<void> {
 
   revalidatePath("/", "layout");
   revalidatePath("/admin/banners");
+}
+
+/**
+ * Kirim notifikasi promo/event ke SEMUA customer SEKARANG — tanpa menunggu
+ * cron (yang jalan tiap 15 menit).
+ *
+ * Sekali terkirim TAK BISA dibatalkan, jadi UI wajib mengonfirmasi dulu.
+ * Setelah ini banner ditandai terkirim supaya cron tak mengulanginya.
+ */
+export async function notifyBannerNow(
+  bannerId: string
+): Promise<{ ok: boolean; error?: string; notified?: number }> {
+  const [existing] = await db
+    .select({ barId: barBanners.barId, title: barBanners.title })
+    .from(barBanners)
+    .where(eq(barBanners.id, bannerId));
+  if (!existing) return { ok: false, error: "Banner not found" };
+
+  const ctx = await requireAdminForBar(existing.barId);
+
+  const { sendBannerNotificationNow } = await import("@/lib/banner-notify");
+  const res = await sendBannerNotificationNow(bannerId);
+  if (!res.ok) return res;
+
+  // Audit: mengirim ke SELURUH customer itu aksi berdampak luas & tak bisa
+  // dibatalkan — wajib tercatat siapa pelakunya.
+  await logActivity({
+    actorId: ctx.profile.id,
+    barId: existing.barId,
+    action: "promo.notified",
+    category: "admin",
+    entityType: "banner",
+    entityId: bannerId,
+    summary: `Sent promo notification "${existing.title ?? "(untitled)"}" to ${res.notified} customers`,
+    meta: { bannerId, notified: res.notified },
+  });
+
+  revalidatePath("/admin/banners");
+  return res;
 }

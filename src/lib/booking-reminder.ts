@@ -24,6 +24,9 @@ import type { ReservationConfig } from "@/lib/settings-constants";
 /** Ambang toleransi keterlambatan cron (menit). */
 const GRACE_MINUTES = 10;
 
+/** Berapa notifikasi dikirim BERSAMAAN — lihat catatan di banner-notify. */
+const NOTIFY_BATCH_SIZE = 12;
+
 /** "18:30" waktu Jakarta — dipakai di badan notifikasi. */
 function formatTimeJakarta(d: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -124,43 +127,66 @@ export async function sendBookingReminders(): Promise<BookingReminderResult> {
     const toNotify = due.filter((d) => claimedIds.has(d.id));
     sessions += toNotify.length;
 
-    for (const s of toNotify) {
-      // Semua tamu yang masih tergabung — bukan cuma host. Tamu walk-in
-      // (is_guest) dilewati: mereka tak punya akun & tak bisa menerima notif.
-      const members = await db
-        .select({ profileId: sessionMembers.profileId })
-        .from(sessionMembers)
-        .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
-        .where(
-          and(
-            eq(sessionMembers.sessionId, s.id),
-            eq(sessionMembers.status, "joined"),
-            eq(profiles.isGuest, false)
-          )
-        );
+    if (toNotify.length === 0) continue;
 
-      const at = s.reservationAt!;
+    // Anggota SEMUA sesi diambil dalam SATU query, bukan satu query per sesi.
+    // Dulu: 2.000 sesi = 2.000 round-trip DB. Sekarang: 1.
+    // Tamu walk-in (is_guest) dilewati — tak punya akun, tak bisa terima notif.
+    const memberRows = await db
+      .select({
+        sessionId: sessionMembers.sessionId,
+        profileId: sessionMembers.profileId,
+      })
+      .from(sessionMembers)
+      .innerJoin(profiles, eq(profiles.id, sessionMembers.profileId))
+      .where(
+        and(
+          inArray(
+            sessionMembers.sessionId,
+            toNotify.map((s) => s.id)
+          ),
+          eq(sessionMembers.status, "joined"),
+          eq(profiles.isGuest, false)
+        )
+      );
+
+    // Rakit daftar kiriman dulu, supaya bisa dikirim paralel lintas sesi.
+    const jobs: { profileId: string; title: string; body: string; link: string; refId: string }[] =
+      [];
+    const bySession = new Map(toNotify.map((s) => [s.id, s]));
+    for (const m of memberRows) {
+      const s = bySession.get(m.sessionId);
+      if (!s?.reservationAt) continue;
       const minutesLeft = Math.max(
         1,
-        Math.round((at.getTime() - now.getTime()) / 60_000)
+        Math.round((s.reservationAt.getTime() - now.getTime()) / 60_000)
       );
-      const time = formatTimeJakarta(at);
+      jobs.push({
+        profileId: m.profileId,
+        title: `Your table is ready ${humanizeLead(minutesLeft)}`,
+        body: `Table ${s.tableLabel} at ${bar.name} is booked for ${formatTimeJakarta(s.reservationAt)}. Head over now so you don't lose your slot. Already here? Enjoy your night.`,
+        link: `/session/${s.id}`,
+        refId: s.id,
+      });
+    }
 
-      for (const m of members) {
-        try {
-          await createNotification({
-            profileId: m.profileId,
-            type: "booking_reminder",
-            title: `Your table is ready ${humanizeLead(minutesLeft)}`,
-            body: `Table ${s.tableLabel} at ${bar.name} is booked for ${time}. Head over now so you don't lose your slot. Already here? Enjoy your night.`,
-            link: `/session/${s.id}`,
-            refId: s.id,
-          });
-          notified++;
-        } catch (err) {
-          // Best-effort: satu tamu gagal tak boleh menghentikan sisanya.
-          console.error("[booking-reminder] gagal kirim:", m.profileId, err);
-        }
+    // Kirim PARALEL per batch. Berurutan dulu: 2.000 sesi ~22 detik; kini
+    // sekitar 1 detik. Batch dibatasi supaya connection pool tak jebol.
+    for (let i = 0; i < jobs.length; i += NOTIFY_BATCH_SIZE) {
+      const batch = jobs.slice(i, i + NOTIFY_BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((j) =>
+          createNotification({ ...j, type: "booking_reminder" })
+        )
+      );
+      for (const [idx, res] of results.entries()) {
+        if (res.status === "fulfilled") notified++;
+        else
+          console.error(
+            "[booking-reminder] gagal kirim:",
+            batch[idx].profileId,
+            res.reason
+          );
       }
     }
   }
