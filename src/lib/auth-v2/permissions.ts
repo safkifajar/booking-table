@@ -227,3 +227,28 @@ async function requireStaffContext(nextPath: string): Promise<{
     barId: row.barId,
   };
 }
+
+/**
+ * URL login ADMIN absolut: https://admin.<domain>/login
+ *
+ * Dipakai saat logout admin & staff. Tak boleh pakai path relatif "/login":
+ * Auth.js menyelesaikannya terhadap AUTH_URL — yang di production adalah
+ * host CUSTOMER — sehingga staff/admin dilempar ke halaman login customer.
+ *
+ * Kalau host sudah bersubdomain admin, tak ditambah lagi (tak jadi
+ * "admin.admin."). AUTH_URL tak valid → jatuh balik ke path relatif.
+ */
+export function adminLoginUrl(): string {
+  const base = process.env.AUTH_URL ?? "http://localhost:3000";
+  try {
+    const url = new URL(base);
+    if (!url.hostname.startsWith("admin.")) {
+      url.hostname = `admin.${url.hostname}`;
+    }
+    url.pathname = "/login";
+    url.search = "";
+    return url.toString();
+  } catch {
+    return "/login";
+  }
+}

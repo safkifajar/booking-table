@@ -4,7 +4,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { LogOut } from "lucide-react";
 import { useConfirm } from "@/components/ConfirmDialog";
-import { signOutAction } from "@/lib/auth-v2/actions";
+import { staffSignOutAction } from "@/lib/auth-v2/actions";
 import { getActionErrorMessage } from "@/lib/utils";
 
 /** Tombol logout staff (kartu merah terpisah) — gaya sama dgn profil customer. */
@@ -23,7 +23,7 @@ export function StaffLogoutButton() {
     if (!ok) return;
     setSigningOut(true);
     try {
-      await signOutAction();
+      await staffSignOutAction();
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to sign out"));
       setSigningOut(false);

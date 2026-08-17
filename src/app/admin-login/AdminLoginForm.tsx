@@ -157,20 +157,6 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
           <p className="text-[10px] text-muted-foreground text-center">
             Lupa password? Hubungi superadmin SOHO.
           </p>
-          <p className="text-[10px] text-muted-foreground/60 text-center mt-1">
-            Untuk app customer, kunjungi{" "}
-            <a
-              href={
-                typeof window !== "undefined" &&
-                window.location.host.startsWith("admin.")
-                  ? `https://${window.location.host.replace("admin.", "")}`
-                  : "/"
-              }
-              className="text-primary hover:underline"
-            >
-              bookingsoho.com
-            </a>
-          </p>
         </div>
       </CardContent>
     </Card>

@@ -18,7 +18,9 @@
 
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { signIn, signOut } from "@/auth";
+import { redirect } from "next/navigation";
 import { signup, SignupError } from "./signup";
+import { adminLoginUrl } from "./permissions";
 
 interface ActionResult {
   ok: boolean;
@@ -138,8 +140,24 @@ export async function magicLinkAction(formData: {
 }
 
 /**
- * Sign out — clear session, redirect ke landing.
+ * Sign out CUSTOMER — clear session, kembali ke landing.
  */
 export async function signOutAction(): Promise<void> {
   await signOut({ redirectTo: "/" });
+}
+
+/**
+ * Sign out STAFF (kasir/waiter) — kembali ke halaman login ADMIN.
+ *
+ * Tak boleh pakai signOutAction: `redirectTo: "/"` diselesaikan Auth.js
+ * terhadap AUTH_URL, yang di production adalah host CUSTOMER
+ * (https://ratssocial.com). Akibatnya staff yang logout dari subdomain
+ * admin justru dilempar ke halaman login customer.
+ *
+ * Diarahkan ke URL ABSOLUT https://admin.<domain>/login supaya staff
+ * kembali ke tempat mereka masuk.
+ */
+export async function staffSignOutAction(): Promise<void> {
+  await signOut({ redirect: false });
+  redirect(adminLoginUrl());
 }
