@@ -46,21 +46,18 @@ export default async function LinkTreePage() {
       <div className="mx-auto w-full max-w-md px-5 py-10 sm:py-14">
         {/* Identitas */}
         <div className="flex flex-col items-center text-center">
-          {logoUrl ? (
-            <span className="relative h-20 w-20 overflow-hidden rounded-2xl border border-border shadow-lg">
-              <Image
-                src={logoUrl}
-                alt={barName}
-                fill
-                sizes="80px"
-                className="object-cover"
-              />
-            </span>
-          ) : (
-            <span className="flex h-20 w-20 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-2xl font-bold text-primary">
-              {barName.slice(0, 2).toUpperCase()}
-            </span>
-          )}
+          {/* Logo bar kalau di-upload admin; kalau belum, pakai ikon aplikasi
+              (icon-192.png — logo yang sama dipakai PWA & notifikasi).
+              Inisial huruf hanya jadi cadangan terakhir. */}
+          <span className="relative h-20 w-20 overflow-hidden rounded-2xl border border-border shadow-lg">
+            <Image
+              src={logoUrl || "/icon-192.png"}
+              alt={barName}
+              fill
+              sizes="80px"
+              className="object-cover"
+            />
+          </span>
           <h1 className="mt-4 text-xl font-bold">{headline}</h1>
           {config.tagline?.trim() && (
             <p className="mt-1 text-sm text-muted-foreground max-w-xs">

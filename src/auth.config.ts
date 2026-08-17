@@ -77,8 +77,18 @@ export const authConfig = {
     authorized({ auth, request }) {
       const path = request.nextUrl.pathname;
       const host = request.headers.get("host") ?? "";
-      const isAdminSubdomain = host.startsWith("admin.");
+      const fwd = request.headers.get("x-forwarded-host") ?? "";
+      const isAdminSubdomain =
+        host.startsWith("admin.") || fwd.startsWith("admin.");
+      // Link-tree (link.<domain>) PUBLIK sepenuhnya — dipasang di bio
+      // Instagram. Callback ini jalan SEBELUM middleware.ts, jadi tanpa
+      // pengecualian di sini pengunjung bisa dilempar ke login walau
+      // middleware sudah mengizinkan.
+      const isLinkSubdomain =
+        host.startsWith("link.") || fwd.startsWith("link.");
       const isLoggedIn = !!auth?.user?.id;
+
+      if (isLinkSubdomain) return true;
 
       // Admin subdomain: middleware.ts yang handle gate, callback skip
       if (isAdminSubdomain) return true;
