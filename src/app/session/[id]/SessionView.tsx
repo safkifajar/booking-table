@@ -858,10 +858,12 @@ function VibeTab(
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
+                  {/* Nama sudah diganti label tier di server → tetap
+                      terbaca. Hanya fotonya yang blur. */}
                   <p
                     className={cn(
                       "font-medium text-sm truncate",
-                      m.profile.locked && "blur-[4px] select-none"
+                      m.profile.locked && "text-muted-foreground italic"
                     )}
                   >
                     {m.profile.display_name}

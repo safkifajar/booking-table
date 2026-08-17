@@ -19,6 +19,7 @@ import {
   getEffectiveRankOf,
   getEffectiveRankMap,
   MEMBERSHIP_RANK,
+  tierLabel,
 } from "@/lib/membership";
 import { getFriendIdSet } from "@/lib/friends";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
@@ -222,8 +223,17 @@ export default async function BarPage({ params }: PageProps) {
       ]);
       for (const id of hostIds) {
         if (id === profile.id || myFriendIds.has(id)) continue;
-        if ((rankMap.get(id) ?? MEMBERSHIP_RANK.basic) > viewerRank) {
+        const rank = rankMap.get(id) ?? MEMBERSHIP_RANK.basic;
+        if (rank > viewerRank) {
           lockedHostIds.add(id);
+          // Nama diganti label tier DI SERVER — nama asli tak dikirim ke
+          // browser. Hanya fotonya yang diburamkan di UI.
+          const label = tierLabel(rank);
+          for (const list of Object.values(reservationsByTable)) {
+            for (const r of list) {
+              if (r.host_id === id) r.host_name = label;
+            }
+          }
         }
       }
     }

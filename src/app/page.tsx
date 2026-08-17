@@ -25,6 +25,7 @@ import {
   getEffectiveRankOf,
   getEffectiveRankMap,
   MEMBERSHIP_RANK,
+  tierLabel,
 } from "@/lib/membership";
 import { getFriendIdSet } from "@/lib/friends";
 import { getActiveBanners } from "@/lib/banner-actions";
@@ -93,8 +94,10 @@ export default async function HomePage() {
     (s) => s.status === "open" || s.status === "locked"
   );
 
-  // Gating membership: host ber-tier LEBIH TINGGI dari viewer → foto & nama
-  // diburamkan di UI. Dikecualikan: diri sendiri & teman.
+  // Gating membership: host ber-tier LEBIH TINGGI dari viewer → FOTO
+  // diburamkan & NAMA diganti label tier ("VIP member"/"Premium member").
+  // Nama diganti DI SERVER supaya nama asli tak ikut terkirim ke browser.
+  // Dikecualikan: diri sendiri & teman.
   const lockedHostIds = new Set<string>();
   if (profile && activeSessions.length > 0) {
     const hostIds = Array.from(
@@ -108,8 +111,13 @@ export default async function HomePage() {
       ]);
       for (const id of hostIds) {
         if (id === profile.id || myFriendIds.has(id)) continue;
-        if ((rankMap.get(id) ?? MEMBERSHIP_RANK.basic) > viewerRank) {
+        const rank = rankMap.get(id) ?? MEMBERSHIP_RANK.basic;
+        if (rank > viewerRank) {
           lockedHostIds.add(id);
+          const label = tierLabel(rank);
+          for (const s of activeSessions) {
+            if (s.host_id === id) s.host_name = label;
+          }
         }
       }
     }

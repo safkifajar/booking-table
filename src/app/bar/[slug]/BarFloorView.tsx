@@ -698,10 +698,12 @@ function BookingSchedule({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
+                  {/* Nama sudah diganti label tier di server → tetap
+                      terbaca. Hanya fotonya yang blur. */}
                   <p
                     className={cn(
                       "text-sm truncate",
-                      hostLocked && "blur-[4px] select-none"
+                      hostLocked && "text-muted-foreground italic"
                     )}
                   >
                     {r.host_name}

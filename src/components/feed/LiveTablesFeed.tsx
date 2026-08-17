@@ -132,10 +132,12 @@ function TableCard({
         {/* Kiri: host → judul → badges → vibe (SUSUNAN SAMA dgn Booking
             Schedule, supaya dua halaman konsisten). */}
         <div className="flex-1 min-w-0">
+          {/* Nama TIDAK diburamkan — sudah diganti label tier di server,
+              jadi tetap terbaca ("VIP member"). Hanya fotonya yang blur. */}
           <p
             className={cn(
               "text-sm truncate group-hover:text-primary transition",
-              hostLocked && "blur-[4px] select-none"
+              hostLocked && "text-muted-foreground italic"
             )}
           >
             {session.host_name}

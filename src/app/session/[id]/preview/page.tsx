@@ -35,6 +35,7 @@ import {
   getEffectiveRankOf,
   getEffectiveRankMap,
   MEMBERSHIP_RANK,
+  tierLabel,
 } from "@/lib/membership";
 import { getFriendIdSet } from "@/lib/friends";
 
@@ -105,18 +106,20 @@ export default async function SessionPreviewPage({ params }: PageProps) {
   // diburamkan. Halaman ini justru paling relevan — dibuka saat mengintip
   // meja orang yang belum dikenal. Dikecualikan: diri sendiri & teman.
   let hostLocked = false;
+  let hostLabel: string | null = null;
   if (profile && profile.id !== sessionRow.host_id) {
     const [viewerRank, rankMap, myFriendIds] = await Promise.all([
       getEffectiveRankOf(profile.id),
       getEffectiveRankMap([sessionRow.host_id]),
       getFriendIdSet(profile.id),
     ]);
-    hostLocked =
-      !myFriendIds.has(sessionRow.host_id) &&
-      (rankMap.get(sessionRow.host_id) ?? MEMBERSHIP_RANK.basic) > viewerRank;
+    const rank = rankMap.get(sessionRow.host_id) ?? MEMBERSHIP_RANK.basic;
+    hostLocked = !myFriendIds.has(sessionRow.host_id) && rank > viewerRank;
+    // Nama diganti label tier DI SERVER — nama asli tak dikirim ke browser.
+    if (hostLocked) hostLabel = tierLabel(rank);
   }
   const host = {
-    display_name: sessionRow.host_display_name,
+    display_name: hostLabel ?? sessionRow.host_display_name,
     avatar_url: sessionRow.host_avatar_url,
     locked: hostLocked,
   };
@@ -267,10 +270,11 @@ export default async function SessionPreviewPage({ params }: PageProps) {
                   <Crown className="h-3 w-3" />
                   <span>Hosted by</span>
                 </div>
+                {/* Nama sudah diganti label tier di server → tetap terbaca. */}
                 <h2
                   className={cn(
                     "text-xl font-semibold",
-                    host.locked && "blur-[5px] select-none"
+                    host.locked && "text-muted-foreground italic"
                   )}
                 >
                   {host.display_name}
