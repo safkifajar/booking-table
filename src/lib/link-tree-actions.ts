@@ -21,7 +21,7 @@ import {
   DEFAULT_LINK_TREE_CONFIG,
   type LinkTreeConfig,
 } from "@/lib/settings-constants";
-import { CONTACT_WA } from "@/lib/contact";
+import { resolveWa } from "@/lib/contact";
 import { logActivity } from "@/lib/activity-log";
 
 // ============================================================
@@ -90,6 +90,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
           name: bars.name,
           address: bars.address,
           logoUrl: bars.logoUrl,
+          contactWa: bars.contactWa,
           linkTreeConfig: bars.linkTreeConfig,
         })
         .from(bars)
@@ -103,6 +104,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
           name: bars.name,
           address: bars.address,
           logoUrl: bars.logoUrl,
+          contactWa: bars.contactWa,
           linkTreeConfig: bars.linkTreeConfig,
         })
         .from(bars)
@@ -149,7 +151,8 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
     builtIn.push({
       id: "builtin-wa",
       label: config.whatsappLabel?.trim() || "Chat on WhatsApp",
-      url: config.whatsappUrl?.trim() || `https://wa.me/${CONTACT_WA}`,
+      url:
+        config.whatsappUrl?.trim() || `https://wa.me/${resolveWa(bar.contactWa)}`,
       icon: "whatsapp",
       description: "Questions, bookings, or anything else",
       isActive: true,

@@ -20,6 +20,11 @@ export const bars = pgTable("bars", {
   name: text("name").notNull(),
   tagline: text("tagline"),
   address: text("address"),
+  /**
+   * Nomor WhatsApp CS — format 62... tanpa +/spasi (sesuai wa.me).
+   * NULL/kosong = pakai default dari lib/contact.ts (env atau nomor bawaan).
+   */
+  contactWa: text("contact_wa"),
   logoUrl: text("logo_url"),
   coverUrl: text("cover_url"),
   theme: jsonb("theme").default({}).notNull(),

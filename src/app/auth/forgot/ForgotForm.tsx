@@ -16,7 +16,7 @@ import { waForgotPasswordUrl } from "@/lib/contact";
  * terdaftar", orang bisa memakai halaman ini untuk menebak siapa saja yang
  * punya akun di SOHO. Verifikasi dilakukan admin lewat WhatsApp.
  */
-export function ForgotForm() {
+export function ForgotForm({ contactWa }: { contactWa?: string | null }) {
   const [email, setEmail] = React.useState("");
   const canSubmit = email.trim().length > 0;
 
@@ -24,7 +24,7 @@ export function ForgotForm() {
     e.preventDefault();
     if (!canSubmit) return;
     window.open(
-      waForgotPasswordUrl(email.trim()),
+      waForgotPasswordUrl(email.trim(), contactWa),
       "_blank",
       "noopener,noreferrer"
     );

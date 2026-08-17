@@ -17,10 +17,10 @@ import { waUrl } from "@/lib/contact";
 type Mode = "choose" | "signin" | "signup" | "magic";
 
 /** Tombol Contact us — pill di kanan-atas, mengarah ke WhatsApp. */
-function ContactUsButton() {
+function ContactUsButton({ wa }: { wa?: string | null }) {
   return (
     <a
-      href={waUrl("Hi SOHO Social House, I'd like to ask about ")}
+      href={waUrl(wa)}
       target="_blank"
       rel="noopener noreferrer"
       className="fixed right-4 top-4 z-20 inline-flex items-center gap-1.5 h-10 rounded-full px-4 text-xs font-medium text-[#f0e6d2]/90 hover:text-[#8d1312] bg-[#f0e6d2]/10 hover:bg-[#f0e6d2] transition"
@@ -30,7 +30,7 @@ function ContactUsButton() {
   );
 }
 
-export function AuthForm() {
+export function AuthForm({ contactWa }: { contactWa?: string | null }) {
   const sp = useSearchParams();
   const next = sp.get("next") ?? "/";
   const checkEmail = sp.get("check_email");
@@ -40,7 +40,7 @@ export function AuthForm() {
   // consent Terms/Privacy — konsep app kencan (CMB-style). Mode form: layout
   // ringkas (logo kecil + form).
   if (mode === "choose") {
-    return <AuthLanding setMode={setMode} />;
+    return <AuthLanding setMode={setMode} contactWa={contactWa} />;
   }
 
   return (
@@ -53,7 +53,7 @@ export function AuthForm() {
       >
         <ArrowLeft className="h-5 w-5" />
       </button>
-      <ContactUsButton />
+      <ContactUsButton wa={contactWa} />
 
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -95,10 +95,16 @@ export function AuthForm() {
 // ============================================================
 // LANDING (mode choose) — CMB-style
 // ============================================================
-function AuthLanding({ setMode }: { setMode: (m: Mode) => void }) {
+function AuthLanding({
+  setMode,
+  contactWa,
+}: {
+  setMode: (m: Mode) => void;
+  contactWa?: string | null;
+}) {
   return (
     <div className="flex flex-col items-center text-center min-h-[80vh] w-full">
-      <ContactUsButton />
+      <ContactUsButton wa={contactWa} />
       {/* Logo + tagline — terpusat di area atas */}
       <div className="flex-1 flex flex-col items-center justify-center pt-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}

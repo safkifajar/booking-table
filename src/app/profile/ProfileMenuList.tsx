@@ -50,6 +50,7 @@ export function ProfileMenuList({
   isPrivate,
   membership,
   pendingInviteCount = 0,
+  contactWa,
 }: {
   avatarUrl: string | null;
   displayName: string;
@@ -60,6 +61,8 @@ export function ProfileMenuList({
   membership: { key: "basic" | "premium" | "vip"; name: string; expiresAt: string | null };
   /** Jumlah undangan meja yang menunggu keputusan → lencana di menu. */
   pendingInviteCount?: number;
+  /** Nomor WA CS dari pengaturan bar (kosong = pakai default). */
+  contactWa?: string | null;
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -301,7 +304,7 @@ export function ProfileMenuList({
       <Section title="Help">
         <MenuGroup>
           <a
-            href={waUrl()}
+            href={waUrl(contactWa)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"
