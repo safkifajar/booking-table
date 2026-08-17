@@ -10,6 +10,7 @@ import {
   Calendar,
   Image as ImageIcon,
   Loader2,
+  Send,
   X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import {
   updateBanner,
   replaceBannerImage,
   deleteBanner,
+  notifyBannerNow,
   type AdminBanner,
 } from "@/lib/banner-actions";
 import { getActionErrorMessage, cn } from "@/lib/utils";
@@ -39,6 +41,7 @@ export function BannerManager({ barId, initialBanners }: Props) {
   const [editing, setEditing] = React.useState<AdminBanner | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
+  const [notifyingId, setNotifyingId] = React.useState<string | null>(null);
   const confirm = useConfirm();
 
   async function handleDelete(banner: AdminBanner) {
@@ -60,6 +63,31 @@ export function BannerManager({ barId, initialBanners }: Props) {
       toast.error(getActionErrorMessage(err, "Failed to delete banner"));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleNotify(banner: AdminBanner) {
+    // WAJIB konfirmasi: notif ke seluruh customer TAK BISA dibatalkan.
+    const ok = await confirm({
+      title: "Notify all customers?",
+      description: `Every registered customer gets a push & in-app notification for "${banner.title ?? "(untitled)"}". This cannot be undone.`,
+      confirmText: "Send now",
+      cancelText: "Cancel",
+    });
+    if (!ok) return;
+
+    setNotifyingId(banner.id);
+    try {
+      const res = await notifyBannerNow(banner.id);
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to send notification");
+        return;
+      }
+      toast.success(`Notification sent to ${res.notified} customers`);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to send notification"));
+    } finally {
+      setNotifyingId(null);
     }
   }
 
@@ -108,8 +136,10 @@ export function BannerManager({ barId, initialBanners }: Props) {
                     key={b.id}
                     banner={b}
                     deleting={deletingId === b.id}
+                    notifying={notifyingId === b.id}
                     onEdit={() => setEditing(b)}
                     onDelete={() => handleDelete(b)}
+                    onNotify={() => handleNotify(b)}
                   />
                 ))}
               </tbody>
@@ -162,13 +192,17 @@ export function BannerManager({ barId, initialBanners }: Props) {
 function BannerRow({
   banner,
   deleting,
+  notifying,
   onEdit,
   onDelete,
+  onNotify,
 }: {
   banner: AdminBanner;
   deleting: boolean;
+  notifying: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onNotify: () => void;
 }) {
   const now = Date.now();
   const inWindow =
@@ -250,6 +284,21 @@ function BannerRow({
           <Button variant="ghost" size="sm" onClick={onEdit}>
             <Edit2 className="h-3.5 w-3.5" />
             Edit
+          </Button>
+          {/* Kirim notif ke SEMUA customer sekarang, tanpa menunggu cron. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onNotify}
+            disabled={notifying}
+            title="Send push & in-app notification to all customers"
+          >
+            {notifying ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
+            Notify
           </Button>
           <Button
             variant="ghost"
