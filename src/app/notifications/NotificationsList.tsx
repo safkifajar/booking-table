@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -494,6 +495,19 @@ function NotificationItem({
                 {formatTime(n.created_at)}
               </p>
             </div>
+            {/* Thumbnail banner promo/event. Ditaruh di kanan supaya tak
+                menggeser tata letak notif lain yang tak punya gambar. */}
+            {n.image_url && (
+              <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+                <Image
+                  src={n.image_url}
+                  alt=""
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              </span>
+            )}
             {!n.read && (
               <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
             )}

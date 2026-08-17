@@ -35,6 +35,12 @@ export interface PushPayload {
   title: string;
   body?: string;
   url?: string;
+  /**
+   * Gambar BESAR di dalam notif (mis. banner promo). Didukung Chrome/Android;
+   * platform yang tak mendukung mengabaikannya, jadi aman selalu dikirim.
+   * Harus URL absolut — service worker tak punya konteks origin halaman.
+   */
+  image?: string;
 }
 
 /**

@@ -20,6 +20,9 @@ self.addEventListener("push", (event) => {
     // transparan (siluet putih); kalau pakai gambar opaque → tampil kotak putih.
     // badge-96.png = siluet "SO.HO" putih transparan.
     badge: "/badge-96.png",
+    // image = gambar BESAR di bawah teks (mis. banner promo). Hanya
+    // didukung sebagian platform (Chrome/Android); yang lain mengabaikan.
+    ...(data.image ? { image: data.image } : {}),
     data: { url: data.url || "/" },
   };
   event.waitUntil(self.registration.showNotification(title, options));

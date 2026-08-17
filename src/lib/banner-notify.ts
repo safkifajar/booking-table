@@ -40,6 +40,7 @@ export async function notifyNewBanners(): Promise<BannerNotifyResult> {
       title: barBanners.title,
       subtitle: barBanners.subtitle,
       category: barBanners.category,
+      imageUrl: barBanners.imageUrl,
     })
     .from(barBanners)
     .where(
@@ -101,6 +102,8 @@ export async function notifyNewBanners(): Promise<BannerNotifyResult> {
           title: isEvent ? `Event: ${title}` : `Promo: ${title}`,
           body,
           link: `/promo/${b.id}`,
+          // Banner tampil sbg thumbnail di list in-app & gambar besar di push.
+          imageUrl: b.imageUrl,
           refId: b.id,
         });
         notified++;

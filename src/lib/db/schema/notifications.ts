@@ -28,6 +28,11 @@ export const notifications = pgTable(
     title: text("title").notNull(),
     body: text("body"),
     link: text("link"),
+    /**
+     * Gambar pendukung notif (mis. banner promo) — tampil sbg thumbnail di
+     * list in-app & gambar besar di push. NULL = notif tanpa gambar.
+     */
+    imageUrl: text("image_url"),
     readAt: timestamp("read_at", { mode: "date" }),
     // Saat notif undangan (table_invite) direspon (terima/tolak). NULL = belum
     // → tombol Terima/Tolak masih muncul di bell.
