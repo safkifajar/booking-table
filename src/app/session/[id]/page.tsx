@@ -294,8 +294,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   // (foto diburamkan + nama diganti label tier). Dikecualikan: diri sendiri
   // & teman — sama seperti aturan di halaman Friends/Network.
   // Staff dilewati sepenuhnya: mereka perlu melihat siapa yang di meja.
-  // profileId -> label pengganti nama, mis. "VIP member".
-  const lockedLabels = new Map<string, string>();
+  const lockedProfileIds = new Set<string>();
   if (!staffRole && memberProfileIds.length > 0) {
     const [viewerRank, rankMap, myFriendIds] = await Promise.all([
       getEffectiveRankOf(profile.id),
@@ -305,9 +304,7 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
     for (const pid of memberProfileIds) {
       if (pid === profile.id || myFriendIds.has(pid)) continue;
       const r = rankMap.get(pid) ?? MEMBERSHIP_RANK.basic;
-      if (r > viewerRank) {
-        lockedLabels.set(pid, r >= MEMBERSHIP_RANK.vip ? "VIP member" : "Premium member");
-      }
+      if (r > viewerRank) lockedProfileIds.add(pid);
     }
   }
 
@@ -393,18 +390,14 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         invited_by: m.invited_by,
         profile: {
           id: m.profile_id,
-          // Disamarkan DI SERVER: nama & foto asli tak ikut terkirim ke
-          // browser, jadi tak bisa diintip lewat devtools.
-          display_name:
-            lockedLabels.get(m.profile_id) ?? m.profile_display_name,
-          avatar_url: lockedLabels.has(m.profile_id)
-            ? null
-            : m.profile_avatar_url,
-          hobbies: lockedLabels.has(m.profile_id) ? [] : m.profile_hobbies,
+          display_name: m.profile_display_name,
+          avatar_url: m.profile_avatar_url,
+          // Hobi disembunyikan: itu detail personal, tak cukup diburamkan.
+          hobbies: lockedProfileIds.has(m.profile_id) ? [] : m.profile_hobbies,
           is_guest: m.profile_is_guest,
-          locked: lockedLabels.has(m.profile_id),
+          locked: lockedProfileIds.has(m.profile_id),
         },
-        rating: lockedLabels.has(m.profile_id)
+        rating: lockedProfileIds.has(m.profile_id)
           ? null
           : ratingsBatch[m.profile_id] ?? null,
       }))}

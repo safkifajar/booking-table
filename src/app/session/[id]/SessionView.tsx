@@ -834,10 +834,15 @@ function VibeTab(
                   ke profilnya. Nama sudah diganti label tier di server. */}
               {m.profile.locked ? (
                 <span className="relative shrink-0">
-                  <Avatar className="blur-[6px] opacity-70">
-                    <AvatarFallback>?</AvatarFallback>
+                  <Avatar className="blur-[6px] opacity-80">
+                    {m.profile.avatar_url && (
+                      <AvatarImage src={m.profile.avatar_url} alt="" />
+                    )}
+                    <AvatarFallback>
+                      {initials(m.profile.display_name)}
+                    </AvatarFallback>
                   </Avatar>
-                  <Lock className="absolute inset-0 m-auto h-4 w-4 text-muted-foreground" />
+                  <Lock className="absolute inset-0 m-auto h-3.5 w-3.5 text-muted-foreground/80" />
                 </span>
               ) : (
                 <Link
@@ -856,8 +861,7 @@ function VibeTab(
                   <p
                     className={cn(
                       "font-medium text-sm truncate",
-                      // Label tier, bukan nama asli → dibedakan.
-                      m.profile.locked && "text-muted-foreground italic"
+                      m.profile.locked && "blur-[4px] select-none"
                     )}
                   >
                     {m.profile.display_name}

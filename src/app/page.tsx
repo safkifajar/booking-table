@@ -21,6 +21,12 @@ import {
   promoteDueReservations,
   getJoinedSessionIds,
 } from "@/lib/queries";
+import {
+  getEffectiveRankOf,
+  getEffectiveRankMap,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
+import { getFriendIdSet } from "@/lib/friends";
 import { getActiveBanners } from "@/lib/banner-actions";
 import { UnpaidBanner } from "@/components/UnpaidBanner";
 import { PendingCashierBanner } from "@/components/PendingCashierBanner";
@@ -86,6 +92,28 @@ export default async function HomePage() {
   const activeSessions = allSessions.filter(
     (s) => s.status === "open" || s.status === "locked"
   );
+
+  // Gating membership: host ber-tier LEBIH TINGGI dari viewer → foto & nama
+  // diburamkan di UI. Dikecualikan: diri sendiri & teman.
+  const lockedHostIds = new Set<string>();
+  if (profile && activeSessions.length > 0) {
+    const hostIds = Array.from(
+      new Set(activeSessions.map((s) => s.host_id).filter((id): id is string => !!id))
+    );
+    if (hostIds.length > 0) {
+      const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+        getEffectiveRankOf(profile.id),
+        getEffectiveRankMap(hostIds),
+        getFriendIdSet(profile.id),
+      ]);
+      for (const id of hostIds) {
+        if (id === profile.id || myFriendIds.has(id)) continue;
+        if ((rankMap.get(id) ?? MEMBERSHIP_RANK.basic) > viewerRank) {
+          lockedHostIds.add(id);
+        }
+      }
+    }
+  }
 
   // Meja mana yang DIIKUTI user ini → dipakai badge "You're in" di kartu.
   const joinedIds = profile
@@ -208,6 +236,7 @@ export default async function HomePage() {
             isAnon={isAnon}
             joinedIds={Array.from(joinedIds)}
             viewerId={profile?.id ?? null}
+            lockedHostIds={Array.from(lockedHostIds)}
           />
 
           {/* Lihat semua kalau ada lebih dari 5 meja live */}

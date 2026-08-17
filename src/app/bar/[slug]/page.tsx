@@ -200,10 +200,11 @@ export default async function BarPage({ params }: PageProps) {
     ? Array.from(await getJoinedSessionIds(profile.id, scheduleSessionIds))
     : [];
 
-  // Gating membership di Booking Schedule: host ber-tier LEBIH TINGGI dari
-  // viewer disamarkan (foto & nama diganti label tier), sama seperti daftar
-  // anggota meja. Dikecualikan: diri sendiri & teman.
+  // Gating membership di Booking Schedule & denah: host ber-tier LEBIH TINGGI
+  // dari viewer → foto & namanya DIBURAMKAN di UI (identitas disembunyikan,
+  // kartunya tetap terbaca). Dikecualikan: diri sendiri & teman.
   // (Halaman ini halaman customer; staff melayani lewat /staff/*.)
+  const lockedHostIds = new Set<string>();
   if (profile) {
     const hostIds = Array.from(
       new Set(
@@ -219,16 +220,10 @@ export default async function BarPage({ params }: PageProps) {
         getEffectiveRankMap(hostIds),
         getFriendIdSet(profile.id),
       ]);
-      for (const list of Object.values(reservationsByTable)) {
-        for (const r of list) {
-          if (!r.host_id) continue;
-          if (r.host_id === profile.id || myFriendIds.has(r.host_id)) continue;
-          const rank = rankMap.get(r.host_id) ?? MEMBERSHIP_RANK.basic;
-          if (rank <= viewerRank) continue;
-          // Disamarkan DI SERVER — nama & URL foto asli tak dikirim ke browser.
-          r.host_name =
-            rank >= MEMBERSHIP_RANK.vip ? "VIP member" : "Premium member";
-          r.host_avatar = null;
+      for (const id of hostIds) {
+        if (id === profile.id || myFriendIds.has(id)) continue;
+        if ((rankMap.get(id) ?? MEMBERSHIP_RANK.basic) > viewerRank) {
+          lockedHostIds.add(id);
         }
       }
     }
@@ -262,6 +257,7 @@ export default async function BarPage({ params }: PageProps) {
         bookingWindowDays={reservationConfig.bookingWindowDays}
         userId={profile?.id ?? null}
         joinedIds={joinedIds}
+        lockedHostIds={Array.from(lockedHostIds)}
         menu={menu}
       />
       <HomeBottomNav

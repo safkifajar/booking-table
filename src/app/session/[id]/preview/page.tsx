@@ -30,7 +30,13 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { initials, formatIDR } from "@/lib/utils";
+import { initials, formatIDR, cn } from "@/lib/utils";
+import {
+  getEffectiveRankOf,
+  getEffectiveRankMap,
+  MEMBERSHIP_RANK,
+} from "@/lib/membership";
+import { getFriendIdSet } from "@/lib/friends";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -95,9 +101,24 @@ export default async function SessionPreviewPage({ params }: PageProps) {
   };
   const area = { name: sessionRow.area_name, slug: sessionRow.area_slug };
   const bar = { name: sessionRow.bar_name, slug: sessionRow.bar_slug };
+  // Gating membership: host ber-tier LEBIH TINGGI dari viewer → foto & nama
+  // diburamkan. Halaman ini justru paling relevan — dibuka saat mengintip
+  // meja orang yang belum dikenal. Dikecualikan: diri sendiri & teman.
+  let hostLocked = false;
+  if (profile && profile.id !== sessionRow.host_id) {
+    const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+      getEffectiveRankOf(profile.id),
+      getEffectiveRankMap([sessionRow.host_id]),
+      getFriendIdSet(profile.id),
+    ]);
+    hostLocked =
+      !myFriendIds.has(sessionRow.host_id) &&
+      (rankMap.get(sessionRow.host_id) ?? MEMBERSHIP_RANK.basic) > viewerRank;
+  }
   const host = {
     display_name: sessionRow.host_display_name,
     avatar_url: sessionRow.host_avatar_url,
+    locked: hostLocked,
   };
 
   // 2. Cek status user saat ini
@@ -229,7 +250,13 @@ export default async function SessionPreviewPage({ params }: PageProps) {
         <Card className="overflow-hidden">
           <CardHeader className="pb-4">
             <div className="flex items-start gap-3 mb-3">
-              <Avatar className="h-14 w-14 ring-2 ring-primary/30">
+              {/* Tier host lebih tinggi → foto & nama diburamkan. */}
+              <Avatar
+                className={cn(
+                  "h-14 w-14 ring-2 ring-primary/30",
+                  host.locked && "blur-[7px] opacity-80"
+                )}
+              >
                 {host.avatar_url && <AvatarImage src={host.avatar_url} />}
                 <AvatarFallback className="text-base">
                   {initials(host.display_name)}
@@ -240,7 +267,14 @@ export default async function SessionPreviewPage({ params }: PageProps) {
                   <Crown className="h-3 w-3" />
                   <span>Hosted by</span>
                 </div>
-                <h2 className="text-xl font-semibold">{host.display_name}</h2>
+                <h2
+                  className={cn(
+                    "text-xl font-semibold",
+                    host.locked && "blur-[5px] select-none"
+                  )}
+                >
+                  {host.display_name}
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   Opened <RelativeTime date={session.started_at} />
                 </p>

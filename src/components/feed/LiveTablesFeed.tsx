@@ -13,6 +13,11 @@ interface Props {
   joinedIds?: string[];
   /** Profile id penonton — badge "You're in" tak tampil di meja miliknya. */
   viewerId?: string | null;
+  /**
+   * Host ber-tier membership LEBIH TINGGI dari viewer → foto & namanya
+   * diburamkan. Dihitung di server (diri sendiri & teman dikecualikan).
+   */
+  lockedHostIds?: string[];
 }
 
 /** "HH:MM" dari ISO — sama dgn helper di Booking Schedule. */
@@ -41,8 +46,10 @@ export function LiveTablesFeed({
   isAnon,
   joinedIds,
   viewerId,
+  lockedHostIds,
 }: Props) {
   const joined = new Set(joinedIds ?? []);
+  const lockedHosts = new Set(lockedHostIds ?? []);
   if (sessions.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-gradient-to-b from-card to-primary/[0.04] p-8 text-center">
@@ -66,6 +73,7 @@ export function LiveTablesFeed({
           isAnon={isAnon}
           // Host tak perlu ditandai — dia jelas tahu itu mejanya sendiri.
           isJoined={joined.has(s.id) && s.host_id !== viewerId}
+          hostLocked={!!s.host_id && lockedHosts.has(s.host_id)}
         />
       ))}
     </div>
@@ -76,10 +84,13 @@ function TableCard({
   session,
   isAnon,
   isJoined,
+  hostLocked,
 }: {
   session: ActiveSessionView;
   isAnon?: boolean;
   isJoined?: boolean;
+  /** Tier host lebih tinggi dari viewer → foto & nama diburamkan. */
+  hostLocked?: boolean;
 }) {
   // Meja public → langsung tampilan penuh (/session): ada tab + "Minta gabung".
   // Meja friends/invite_only → preview saja (bukan untuk umum).
@@ -102,9 +113,16 @@ function TableCard({
     >
       <div className="p-4 flex items-start gap-3">
         {/* Avatar host — pola sama dgn kartu Booking Schedule */}
-        <Avatar className="h-9 w-9 shrink-0">
+        {/* Tier host lebih tinggi → foto & nama diburamkan (identitas
+            disembunyikan, tapi kartunya tetap terbaca). */}
+        <Avatar
+          className={cn(
+            "h-9 w-9 shrink-0",
+            hostLocked && "blur-[5px] opacity-80"
+          )}
+        >
           {session.host_avatar && (
-            <AvatarImage src={session.host_avatar} alt={session.host_name} />
+            <AvatarImage src={session.host_avatar} alt="" />
           )}
           <AvatarFallback className="text-[10px]">
             {initials(session.host_name)}
@@ -114,7 +132,12 @@ function TableCard({
         {/* Kiri: host → judul → badges → vibe (SUSUNAN SAMA dgn Booking
             Schedule, supaya dua halaman konsisten). */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm truncate group-hover:text-primary transition">
+          <p
+            className={cn(
+              "text-sm truncate group-hover:text-primary transition",
+              hostLocked && "blur-[4px] select-none"
+            )}
+          >
             {session.host_name}
           </p>
 
