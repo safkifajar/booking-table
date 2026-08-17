@@ -31,3 +31,4 @@ export * from "./membership-transactions";
 export * from "./revenue-split";
 export * from "./activity-logs";
 
+export * from "./link-tree";

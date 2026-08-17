@@ -205,3 +205,36 @@ export function calculateDP(
   const rounded = Math.ceil(raw / 100) * 100;
   return Math.min(rounded, Math.max(0, Math.round(grandTotal)));
 }
+
+// ============================================================
+// LINK TREE (halaman publik link.<domain> untuk bio Instagram)
+// ============================================================
+
+/**
+ * Judul/subjudul halaman + preferensi tampil untuk 3 tautan BAWAAN.
+ *
+ * Yang bawaan sengaja tak disimpan sebagai baris di bar_links: dirakit dari
+ * data yang sudah ada (bars.address, CONTACT_WA) supaya admin tak perlu
+ * mengetik ulang & tautannya ikut berubah kalau datanya berubah. Yang
+ * tersimpan di sini hanya "tampilkan atau tidak".
+ */
+export interface LinkTreeConfig {
+  /** Judul di atas daftar tautan. Kosong → pakai nama bar. */
+  headline: string;
+  /** Kalimat singkat di bawah judul. */
+  tagline: string;
+  /** Tampilkan tautan "Open the app" (ke domain customer). */
+  showApp: boolean;
+  /** Tampilkan tautan WhatsApp CS. */
+  showWhatsapp: boolean;
+  /** Tampilkan tautan alamat (buka Google Maps). */
+  showAddress: boolean;
+}
+
+export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
+  headline: "",
+  tagline: "",
+  showApp: true,
+  showWhatsapp: true,
+  showAddress: true,
+};

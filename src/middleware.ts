@@ -38,9 +38,38 @@ function isAdminSubdomain(request: NextRequest): boolean {
   return host.startsWith("admin.") || fwd.startsWith("admin.");
 }
 
+/**
+ * Cek subdomain link-tree: link.<domain> (mis. link.ratssocial.com,
+ * link.localhost:3000 di dev).
+ *
+ * Sama seperti isAdminSubdomain: cek `host` DAN `x-forwarded-host`, karena
+ * rewrite internal Next 16 menormalkan `host` & menghilangkan subdomainnya.
+ */
+function isLinkSubdomain(request: NextRequest): boolean {
+  const host = request.headers.get("host") ?? "";
+  const fwd = request.headers.get("x-forwarded-host") ?? "";
+  return host.startsWith("link.") || fwd.startsWith("link.");
+}
+
 export default authMiddleware(async (req) => {
   const isAdmin = isAdminSubdomain(req);
   const path = req.nextUrl.pathname;
+
+  // ==================================================
+  // LINK SUBDOMAIN (link.<domain>) — halaman link-tree utk bio Instagram
+  // ==================================================
+  // PUBLIK sepenuhnya: tak butuh login & SENGAJA di atas maintenance gate,
+  // karena tautannya dipasang di bio Instagram — harus tetap bisa dibuka
+  // walau app customer sedang ditutup untuk maintenance.
+  if (isLinkSubdomain(req)) {
+    // Aset & API tetap lewat apa adanya.
+    if (path.startsWith("/_next/") || path.startsWith("/api/")) {
+      return NextResponse.next();
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/link";
+    return NextResponse.rewrite(url);
+  }
 
   // ==================================================
   // MAINTENANCE GATE ("live tapi tertutup")
