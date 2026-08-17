@@ -55,6 +55,12 @@ export function DatePicker({
 }) {
   const [open, setOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement>(null);
+  /**
+   * Buka ke ATAS kalau ruang di bawah tak cukup. Tanpa ini kalender terpotong
+   * layar saat field berada di bagian bawah halaman (mis. form banner) —
+   * tanggalnya tak bisa diklik sama sekali.
+   */
+  const [dropUp, setDropUp] = React.useState(false);
 
   const selected = parseISO(value);
   // Bulan yg sedang ditampilkan di kalender (default: tanggal terpilih / hari ini).
@@ -64,9 +70,20 @@ export function DatePicker({
     return { y: now.getFullYear(), m: now.getMonth() };
   });
 
-  // Saat dibuka, sinkronkan view ke tanggal terpilih.
+  // Saat dibuka: sinkronkan view ke tanggal terpilih + tentukan arah buka.
   React.useEffect(() => {
-    if (open && selected) setView({ y: selected.y, m: selected.m });
+    if (!open) return;
+    if (selected) setView({ y: selected.y, m: selected.m });
+
+    // Panel kalender ~360px. Kalau sisa ruang di bawah tombol lebih kecil
+    // dari itu DAN ruang di atas lebih lega, buka ke atas.
+    const PANEL_H = 360;
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (rect) {
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropUp(spaceBelow < PANEL_H && spaceAbove > spaceBelow);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -166,7 +183,13 @@ export function DatePicker({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-[300px] rounded-lg border border-border bg-card p-3 shadow-2xl">
+        <div
+          className={cn(
+            "absolute z-50 w-[300px] rounded-lg border border-border bg-card p-3 shadow-2xl",
+            // Ruang bawah sempit → buka ke atas supaya tak terpotong layar.
+            dropUp ? "bottom-full mb-2" : "top-full mt-2"
+          )}
+        >
           {/* Header: dropdown bulan + tahun (navigasi cepat) + panah bulan */}
           <div className="flex items-center gap-1.5 mb-2">
             <Select
