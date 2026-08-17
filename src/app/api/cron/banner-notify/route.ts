@@ -12,6 +12,7 @@
  */
 
 import { notifyNewBanners } from "@/lib/banner-notify";
+import { withCronLock, CRON_LOCK } from "@/lib/cron-lock";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,8 +24,15 @@ export async function POST(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await notifyNewBanners();
-  return Response.json(result);
+  // Guard anti-tumpang-tindih: pengumuman ke SELURUH customer bisa lama,
+  // jangan sampai jadwal berikutnya ikut mengerjakannya.
+  const run = await withCronLock(CRON_LOCK.bannerNotify, () =>
+    notifyNewBanners()
+  );
+  if (run.skipped) {
+    return Response.json({ skipped: true, reason: "already running" });
+  }
+  return Response.json(run.result);
 }
 
 // GET untuk health check (tidak butuh secret)
