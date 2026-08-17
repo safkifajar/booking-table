@@ -88,7 +88,13 @@ export const authConfig = {
         host.startsWith("link.") || fwd.startsWith("link.");
       const isLoggedIn = !!auth?.user?.id;
 
-      if (isLinkSubdomain) return true;
+      // Cek PATH juga, bukan cuma host: setelah middleware me-rewrite ke
+      // /link, Next 16 menjalankan ulang pipeline dgn `host` yang sudah
+      // dinormalkan (subdomain "link." hilang) — tanpa cek path ini,
+      // pengunjung dilempar ke /auth?next=/link pada jalan kedua.
+      if (isLinkSubdomain || path === "/link" || path.startsWith("/link/")) {
+        return true;
+      }
 
       // Admin subdomain: middleware.ts yang handle gate, callback skip
       if (isAdminSubdomain) return true;

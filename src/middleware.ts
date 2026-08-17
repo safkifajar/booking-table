@@ -61,6 +61,14 @@ export default authMiddleware(async (req) => {
   // PUBLIK sepenuhnya: tak butuh login & SENGAJA di atas maintenance gate,
   // karena tautannya dipasang di bio Instagram — harus tetap bisa dibuka
   // walau app customer sedang ditutup untuk maintenance.
+  // Path /link SELALU publik, dari host mana pun. Ini yang membuat jalan
+  // KEDUA middleware (Next 16 menjalankan ulang middleware setelah rewrite,
+  // dgn `host` yang sudah dinormalkan sehingga "link." hilang) tak lagi
+  // menganggapnya halaman customer & melemparnya ke /auth?next=/link.
+  if (path === "/link" || path.startsWith("/link/")) {
+    return NextResponse.next();
+  }
+
   if (isLinkSubdomain(req)) {
     // Aset & API tetap lewat apa adanya.
     if (path.startsWith("/_next/") || path.startsWith("/api/")) {
