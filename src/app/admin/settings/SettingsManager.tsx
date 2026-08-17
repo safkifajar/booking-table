@@ -534,6 +534,17 @@ function ReservationSection({
           step={5}
           onChange={(v) => patch({ minDownPaymentPercent: v })}
         />
+
+        <ConfigField
+          label="Booking reminder"
+          hint="Send guests a reminder this many minutes before their booking time, by push and in-app notification. 0 = no reminder."
+          value={config.reminderMinutesBefore}
+          unit="min"
+          min={0}
+          max={1440}
+          step={5}
+          onChange={(v) => patch({ reminderMinutesBefore: v })}
+        />
       </div>
 
       <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">

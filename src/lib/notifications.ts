@@ -31,6 +31,8 @@ type NotifType =
   | "friend_request"
   | "friend_accepted"
   | "story_mention"
+  | "booking_reminder"
+  | "promo_new"
   | "general";
 
 export interface AdminNotificationRow {
@@ -39,6 +41,8 @@ export interface AdminNotificationRow {
   title: string;
   body: string | null;
   link: string | null;
+  /** Gambar pendukung (mis. banner promo) — thumbnail di list. */
+  image_url: string | null;
   read: boolean;
   /** Notif undangan sudah direspon (terima/tolak) → tombol aksi disembunyikan. */
   responded: boolean;
@@ -56,6 +60,17 @@ export interface AdminNotificationRow {
  * Best-effort: kalau notify gagal, notif tetap tersimpan (bell tetap update
  * saat refresh berikutnya).
  */
+/**
+ * Path relatif → URL absolut untuk payload web push. Service worker berjalan
+ * di luar konteks halaman, jadi path relatif tak bisa di-resolve olehnya.
+ * Sudah absolut (http/https) → dibiarkan.
+ */
+function toAbsoluteUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = process.env.AUTH_URL ?? "http://localhost:3000";
+  return `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export async function createNotification(input: {
   profileId: string;
   type: NotifType;
@@ -71,6 +86,12 @@ export async function createNotification(input: {
   actorId?: string | null;
   /** true = simpan + bell saja, TANPA web push (mis. anti-spam request ulang). */
   skipPush?: boolean;
+  /**
+   * Gambar pendukung (mis. banner promo) — thumbnail di list in-app +
+   * gambar besar di push. Boleh path relatif ("/uploads/x.jpg"); untuk push
+   * otomatis diubah jadi URL absolut.
+   */
+  imageUrl?: string | null;
 }): Promise<void> {
   await db.insert(notifications).values({
     profileId: input.profileId,
@@ -78,6 +99,7 @@ export async function createNotification(input: {
     title: input.title,
     body: input.body ?? null,
     link: input.link ?? null,
+    imageUrl: input.imageUrl ?? null,
     refId: input.refId ?? null,
     actorId: input.actorId ?? null,
   });
@@ -89,6 +111,8 @@ export async function createNotification(input: {
       title: input.title,
       body: input.body ?? undefined,
       url: input.link ?? undefined,
+      // Push butuh URL ABSOLUT — service worker tak punya konteks origin.
+      image: input.imageUrl ? toAbsoluteUrl(input.imageUrl) : undefined,
     }).catch(() => {});
   }
 }
@@ -142,6 +166,7 @@ export async function getNotifications(
       title: notifications.title,
       body: notifications.body,
       link: notifications.link,
+      imageUrl: notifications.imageUrl,
       readAt: notifications.readAt,
       respondedAt: notifications.respondedAt,
       refId: notifications.refId,
@@ -162,6 +187,7 @@ export async function getNotifications(
     title: r.title,
     body: r.body,
     link: r.link,
+    image_url: r.imageUrl,
     read: r.readAt != null,
     responded: r.respondedAt != null,
     ref_id: r.refId,

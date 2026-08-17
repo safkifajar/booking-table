@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -11,6 +12,8 @@ import {
   Trash2,
   Wallet,
   ArrowRightLeft,
+  Clock,
+  Sparkles,
   UserPlus,
   ChevronRight,
 } from "lucide-react";
@@ -492,6 +495,19 @@ function NotificationItem({
                 {formatTime(n.created_at)}
               </p>
             </div>
+            {/* Thumbnail banner promo/event. Ditaruh di kanan supaya tak
+                menggeser tata letak notif lain yang tak punya gambar. */}
+            {n.image_url && (
+              <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+                <Image
+                  src={n.image_url}
+                  alt=""
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              </span>
+            )}
             {!n.read && (
               <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
             )}
@@ -626,6 +642,17 @@ function NotifAvatar({ n }: { n: AdminNotificationRow }) {
     move_rejected: {
       icon: <ArrowRightLeft className="h-5 w-5" />,
       cls: "bg-red-500/15 text-red-400 border-red-500/30",
+    },
+    // Pengingat menjelang jam booking — ikon jam, warna primary supaya
+    // menonjol di antara notif lain (tamu perlu segera berangkat).
+    booking_reminder: {
+      icon: <Clock className="h-5 w-5" />,
+      cls: "bg-primary/15 text-primary border-primary/30",
+    },
+    // Promo/event baru mulai tayang.
+    promo_new: {
+      icon: <Sparkles className="h-5 w-5" />,
+      cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     },
   };
   const s = style[n.type] ?? {

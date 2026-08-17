@@ -50,17 +50,21 @@ export default async function AdminActivityPage({ searchParams }: PageProps) {
 
   return (
     <>
+      {/* Judul DULU, baru filter tanggal — pembaca tahu ini halaman apa
+          sebelum disodori kontrolnya. */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+        <h1 className="text-2xl font-bold">Staff Activity</h1>
+        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+          What each staff member did and when. Useful for checking payments,
+          table handling, and data changes.
+        </p>
+      </div>
+
+      {/* Filter tanggal + preset chips. Tetap sticky di bawah header saat
+          daftar digulir. */}
       <DateRangeFilter currentLabel={dateRange.label} defaultPreset="last30" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold">Staff Activity</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            What each staff member did and when. Useful for checking payments,
-            table handling, and data changes.
-          </p>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-6 space-y-4">
         <ActivityList
           rows={rows}
           total={total}

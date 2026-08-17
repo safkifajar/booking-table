@@ -44,6 +44,12 @@ export const barBanners = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     startsAt: timestamp("starts_at", { withTimezone: true, mode: "date" }),
     endsAt: timestamp("ends_at", { withTimezone: true, mode: "date" }),
+    /**
+     * Kapan notifikasi "promo baru" dikirim ke customer. NULL = belum.
+     * Penanda anti-dobel: cron jalan berkala, tanpa ini SEMUA customer
+     * dikirimi notif berulang setiap cron menyala.
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (t) => [

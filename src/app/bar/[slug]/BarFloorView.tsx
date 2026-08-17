@@ -268,6 +268,11 @@ interface Props {
   menu?: MenuCategoryTree[];
   /** Session yang DIIKUTI user ini → ditandai "You're in" di jadwal. */
   joinedIds?: string[];
+  /**
+   * Host ber-tier membership LEBIH TINGGI dari viewer → foto & namanya
+   * diburamkan. Dihitung di server (diri sendiri & teman dikecualikan).
+   */
+  lockedHostIds?: string[];
 }
 
 export function BarFloorView({
@@ -278,6 +283,7 @@ export function BarFloorView({
   slotIntervalMinutes = 60,
   bookingWindowDays = 7,
   joinedIds,
+  lockedHostIds,
   userId = null,
   menu = [],
 }: Props) {
@@ -470,6 +476,7 @@ export function BarFloorView({
           onDateChange={setActiveDate}
           joinedIds={joinedIds}
           viewerId={userId}
+          lockedHostIds={lockedHostIds}
         />
           </div>
         )}
@@ -564,6 +571,7 @@ function BookingSchedule({
   onDateChange,
   joinedIds,
   viewerId,
+  lockedHostIds,
 }: {
   reservationsByTable: Record<string, ActiveSessionView[]>;
   bookingWindowDays?: number;
@@ -574,10 +582,16 @@ function BookingSchedule({
   joinedIds?: string[];
   /** Profile id penonton — badge tak tampil di booking miliknya sendiri. */
   viewerId?: string | null;
+  /** Host ber-tier lebih tinggi → foto & nama diburamkan. */
+  lockedHostIds?: string[];
 }) {
   const router = useRouter();
   const [nowMs] = React.useState(() => Date.now());
   const joined = React.useMemo(() => new Set(joinedIds ?? []), [joinedIds]);
+  const lockedHosts = React.useMemo(
+    () => new Set(lockedHostIds ?? []),
+    [lockedHostIds]
+  );
 
   // Kumpulkan semua booking lintas meja, kelompokkan per tanggal (groupKey).
   const byDate = React.useMemo(() => {
@@ -651,6 +665,7 @@ function BookingSchedule({
       {dayBookings.length > 0 ? (
         <Card className="divide-y divide-border">
           {dayBookings.map((r) => {
+            const hostLocked = !!r.host_id && lockedHosts.has(r.host_id);
             const ended =
               !!r.reservation_end_at &&
               new Date(r.reservation_end_at).getTime() <= nowMs;
@@ -670,17 +685,29 @@ function BookingSchedule({
             // history saja). Yg masih aktif/akan datang tetap bisa diklik.
             const inner = (
               <>
-                {/* Avatar host */}
-                <Avatar className="h-9 w-9 shrink-0">
-                  {r.host_avatar && (
-                    <AvatarImage src={r.host_avatar} alt={r.host_name} />
+                {/* Avatar host. Tier lebih tinggi → diburamkan. */}
+                <Avatar
+                  className={cn(
+                    "h-9 w-9 shrink-0",
+                    hostLocked && "blur-[5px] opacity-80"
                   )}
+                >
+                  {r.host_avatar && <AvatarImage src={r.host_avatar} alt="" />}
                   <AvatarFallback className="text-[10px]">
                     {initials(r.host_name)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{r.host_name}</p>
+                  {/* Nama sudah diganti label tier di server → tetap
+                      terbaca. Hanya fotonya yang blur. */}
+                  <p
+                    className={cn(
+                      "text-sm truncate",
+                      hostLocked && "text-muted-foreground italic"
+                    )}
+                  >
+                    {r.host_name}
+                  </p>
                   {/* Deskripsi booking (title) — kalau ada. */}
                   {r.title && (
                     <p className="text-xs italic text-muted-foreground/90 truncate">

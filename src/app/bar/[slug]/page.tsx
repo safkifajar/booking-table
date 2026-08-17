@@ -15,6 +15,13 @@ import { BarFloorView } from "./BarFloorView";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { getCurrentProfile } from "@/lib/auth-v2/current";
 import { getJoinedSessionIds } from "@/lib/queries";
+import {
+  getEffectiveRankOf,
+  getEffectiveRankMap,
+  MEMBERSHIP_RANK,
+  tierLabel,
+} from "@/lib/membership";
+import { getFriendIdSet } from "@/lib/friends";
 import type { FloorMapTable } from "@/components/floor/FloorMap";
 import type { ActiveSessionView } from "@/types/db";
 
@@ -194,6 +201,44 @@ export default async function BarPage({ params }: PageProps) {
     ? Array.from(await getJoinedSessionIds(profile.id, scheduleSessionIds))
     : [];
 
+  // Gating membership di Booking Schedule & denah: host ber-tier LEBIH TINGGI
+  // dari viewer → foto & namanya DIBURAMKAN di UI (identitas disembunyikan,
+  // kartunya tetap terbaca). Dikecualikan: diri sendiri & teman.
+  // (Halaman ini halaman customer; staff melayani lewat /staff/*.)
+  const lockedHostIds = new Set<string>();
+  if (profile) {
+    const hostIds = Array.from(
+      new Set(
+        Object.values(reservationsByTable)
+          .flat()
+          .map((r) => r.host_id)
+          .filter((id): id is string => !!id)
+      )
+    );
+    if (hostIds.length > 0) {
+      const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+        getEffectiveRankOf(profile.id),
+        getEffectiveRankMap(hostIds),
+        getFriendIdSet(profile.id),
+      ]);
+      for (const id of hostIds) {
+        if (id === profile.id || myFriendIds.has(id)) continue;
+        const rank = rankMap.get(id) ?? MEMBERSHIP_RANK.basic;
+        if (rank > viewerRank) {
+          lockedHostIds.add(id);
+          // Nama diganti label tier DI SERVER — nama asli tak dikirim ke
+          // browser. Hanya fotonya yang diburamkan di UI.
+          const label = tierLabel(rank);
+          for (const list of Object.values(reservationsByTable)) {
+            for (const r of list) {
+              if (r.host_id === id) r.host_name = label;
+            }
+          }
+        }
+      }
+    }
+  }
+
   // DP "pay at cashier" pending milik VIEWER → arahan "segera ke kasir" +
   // countdown di kartu Booking Schedule miliknya. Hanya booking milik user.
   if (profile && scheduleSessionIds.length > 0) {
@@ -222,6 +267,7 @@ export default async function BarPage({ params }: PageProps) {
         bookingWindowDays={reservationConfig.bookingWindowDays}
         userId={profile?.id ?? null}
         joinedIds={joinedIds}
+        lockedHostIds={Array.from(lockedHostIds)}
         menu={menu}
       />
       <HomeBottomNav

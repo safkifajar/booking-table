@@ -64,6 +64,17 @@ export function effectiveRank(
  * CATATAN: teman & blokir dicek DI LUAR fungsi ini oleh pemanggil —
  * teman selalu saling terlihat (G2), blokir selalu menang.
  */
+/**
+ * Label pengganti NAMA untuk profil yang identitasnya disembunyikan dari
+ * viewer ber-tier lebih rendah, mis. "VIP member". Dipakai di Home, Bar,
+ * Session, & Preview supaya sebutannya seragam.
+ */
+export function tierLabel(rank: number): string {
+  if (rank >= MEMBERSHIP_RANK.vip) return "VIP member";
+  if (rank >= MEMBERSHIP_RANK.premium) return "Premium member";
+  return "Member";
+}
+
 export function canSeeRank(viewerRank: number, targetRank: number): boolean {
   return viewerRank >= targetRank;
 }

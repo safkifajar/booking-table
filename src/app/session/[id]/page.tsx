@@ -23,6 +23,13 @@ import { getMyPendingMove } from "@/lib/move-approval-actions";
 import { getSessionDetailForCashier } from "@/lib/cashier-actions";
 import { getChargeConfig } from "@/lib/settings-actions";
 import { getSessionOrders } from "@/lib/actions";
+import {
+  getEffectiveRankOf,
+  getEffectiveRankMap,
+  MEMBERSHIP_RANK,
+  tierLabel,
+} from "@/lib/membership";
+import { getFriendIdSet } from "@/lib/friends";
 import { SessionView } from "./SessionView";
 
 interface PageProps {
@@ -284,6 +291,25 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
   const memberProfileIds = membersRaw.map((m) => m.profile_id);
   const ratingsBatch = await getUserRatingsBatch(memberProfileIds);
 
+  // Gating membership: anggota ber-tier LEBIH TINGGI dari viewer disamarkan
+  // (foto diburamkan + nama diganti label tier). Dikecualikan: diri sendiri
+  // & teman — sama seperti aturan di halaman Friends/Network.
+  // Staff dilewati sepenuhnya: mereka perlu melihat siapa yang di meja.
+  // profileId -> label tier pengganti nama ("VIP member"/"Premium member").
+  const lockedLabels = new Map<string, string>();
+  if (!staffRole && memberProfileIds.length > 0) {
+    const [viewerRank, rankMap, myFriendIds] = await Promise.all([
+      getEffectiveRankOf(profile.id),
+      getEffectiveRankMap(memberProfileIds),
+      getFriendIdSet(profile.id),
+    ]);
+    for (const pid of memberProfileIds) {
+      if (pid === profile.id || myFriendIds.has(pid)) continue;
+      const r = rankMap.get(pid) ?? MEMBERSHIP_RANK.basic;
+      if (r > viewerRank) lockedLabels.set(pid, tierLabel(r));
+    }
+  }
+
   // Request pindah meja yg menunggu (badge realtime — ikut router.refresh).
   const pendingMove =
     isHost &&
@@ -366,12 +392,19 @@ export default async function SessionPage({ params, searchParams }: PageProps) {
         invited_by: m.invited_by,
         profile: {
           id: m.profile_id,
-          display_name: m.profile_display_name,
+          // Nama diganti label tier DI SERVER — nama asli tak terkirim ke
+          // browser. Fotonya tetap dikirim (diburamkan di UI).
+          display_name:
+            lockedLabels.get(m.profile_id) ?? m.profile_display_name,
           avatar_url: m.profile_avatar_url,
-          hobbies: m.profile_hobbies,
+          // Hobi disembunyikan: detail personal, tak cukup diburamkan.
+          hobbies: lockedLabels.has(m.profile_id) ? [] : m.profile_hobbies,
           is_guest: m.profile_is_guest,
+          locked: lockedLabels.has(m.profile_id),
         },
-        rating: ratingsBatch[m.profile_id] ?? null,
+        rating: lockedLabels.has(m.profile_id)
+          ? null
+          : ratingsBatch[m.profile_id] ?? null,
       }))}
       orderItems={
         isViewOnly

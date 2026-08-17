@@ -34,10 +34,9 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <DateRangeFilter currentLabel={range.label} defaultPreset="this_month" />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
-        {/* Header */}
+      {/* Judul DULU, baru filter tanggal — pembaca tahu ini halaman apa
+          sebelum disodori kontrolnya. */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -78,7 +77,11 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
             ]}
           />
         </div>
+      </div>
 
+      <DateRangeFilter currentLabel={range.label} defaultPreset="this_month" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-6 space-y-4">
         {/* Empty state */}
         {payments.length === 0 && (
           <Card className="p-8 text-center border-dashed">

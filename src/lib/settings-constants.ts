@@ -47,6 +47,14 @@ export interface ReservationConfig {
    * 100 = full prepayment.
    */
   minDownPaymentPercent: number;
+  /**
+   * Berapa menit SEBELUM jam booking pengingat dikirim ke tamu (in-app +
+   * push). 0 = fitur dimatikan.
+   *
+   * Contoh: 30 → tamu diingatkan 30 menit sebelum jamnya. Dikirim sekali
+   * saja per reservasi (ditandai table_sessions.reminder_sent_at).
+   */
+  reminderMinutesBefore: number;
 }
 
 /** Cara pembulatan nilai tax/service (rupiah tak berdesimal). */
@@ -94,6 +102,8 @@ export const DEFAULT_RESERVATION_CONFIG: ReservationConfig = {
   minLeadTimeMinutes: 60,
   slotIntervalMinutes: 60,
   minDownPaymentPercent: 0,
+  // 30 menit — cukup untuk berangkat, tak terlalu awal sampai terlupakan.
+  reminderMinutesBefore: 30,
 };
 
 export const DEFAULT_CHARGE_CONFIG: ChargeConfig = {

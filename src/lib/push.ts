@@ -35,6 +35,12 @@ export interface PushPayload {
   title: string;
   body?: string;
   url?: string;
+  /**
+   * Gambar BESAR di dalam notif (mis. banner promo). Didukung Chrome/Android;
+   * platform yang tak mendukung mengabaikannya, jadi aman selalu dikirim.
+   * Harus URL absolut — service worker tak punya konteks origin halaman.
+   */
+  image?: string;
 }
 
 /**
@@ -47,13 +53,21 @@ export async function sendPushToProfile(
   profileId: string,
   payload: PushPayload
 ): Promise<number> {
-  if (!ensureVapid()) return 0;
+  // Dua penyebab push "hilang tanpa jejak" — dulu keduanya return 0 diam-diam
+  // sehingga sulit dibedakan dari kegagalan kirim. Sekarang dicatat.
+  if (!ensureVapid()) {
+    console.warn("[push] VAPID belum di-set — push dilewati");
+    return 0;
+  }
 
   const subs = await db
     .select()
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.profileId, profileId));
-  if (subs.length === 0) return 0;
+  if (subs.length === 0) {
+    console.warn("[push] tak ada subscription untuk profil", profileId);
+    return 0;
+  }
 
   const data = JSON.stringify(payload);
   let sent = 0;
@@ -79,8 +93,12 @@ export async function sendPushToProfile(
           await db
             .delete(pushSubscriptions)
             .where(eq(pushSubscriptions.endpoint, s.endpoint));
+          console.warn("[push] subscription kedaluwarsa, dihapus:", statusCode);
+        } else {
+          // Dulu didiamkan sepenuhnya — akibatnya push yang gagal (mis. VAPID
+          // salah, payload kebesaran) tak meninggalkan jejak sama sekali.
+          console.error("[push] gagal kirim:", statusCode ?? err);
         }
-        // error lain: diam (best-effort).
       }
     })
   );

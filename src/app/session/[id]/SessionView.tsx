@@ -126,6 +126,12 @@ interface SessionViewProps {
       hobbies?: string[];
       /** true = tamu walk-in tanpa akun (dibuatkan staff saat Open Table). */
       is_guest?: boolean;
+      /**
+       * true = anggota ber-tier membership LEBIH TINGGI dari viewer, jadi
+       * identitasnya disamarkan (foto diburamkan, nama sudah diganti label
+       * tier di server). Dikecualikan: diri sendiri, teman, & staff.
+       */
+      locked?: boolean;
     };
     rating: { avg_stars: number; rating_count: number; top_tags: string[] | null } | null;
   }>;
@@ -824,20 +830,44 @@ function VibeTab(
         <div className="space-y-3">
           {joined.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
-              {/* Avatar → halaman profil user. */}
-              <Link
-                href={`/network/${m.profile.id}`}
-                className="shrink-0 rounded-full transition hover:ring-2 hover:ring-primary/40"
-                aria-label={`View ${m.profile.display_name}'s profile`}
-              >
-                <Avatar>
-                  {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
-                  <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
-                </Avatar>
-              </Link>
+              {/* Tier lebih tinggi → avatar diburamkan & TIDAK bisa dibuka
+                  ke profilnya. Nama sudah diganti label tier di server. */}
+              {m.profile.locked ? (
+                <span className="relative shrink-0">
+                  <Avatar className="blur-[6px] opacity-80">
+                    {m.profile.avatar_url && (
+                      <AvatarImage src={m.profile.avatar_url} alt="" />
+                    )}
+                    <AvatarFallback>
+                      {initials(m.profile.display_name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Lock className="absolute inset-0 m-auto h-3.5 w-3.5 text-muted-foreground/80" />
+                </span>
+              ) : (
+                <Link
+                  href={`/network/${m.profile.id}`}
+                  className="shrink-0 rounded-full transition hover:ring-2 hover:ring-primary/40"
+                  aria-label={`View ${m.profile.display_name}'s profile`}
+                >
+                  <Avatar>
+                    {m.profile.avatar_url && <AvatarImage src={m.profile.avatar_url} />}
+                    <AvatarFallback>{initials(m.profile.display_name)}</AvatarFallback>
+                  </Avatar>
+                </Link>
+              )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="font-medium text-sm truncate">{m.profile.display_name}</p>
+                  {/* Nama sudah diganti label tier di server → tetap
+                      terbaca. Hanya fotonya yang blur. */}
+                  <p
+                    className={cn(
+                      "font-medium text-sm truncate",
+                      m.profile.locked && "text-muted-foreground italic"
+                    )}
+                  >
+                    {m.profile.display_name}
+                  </p>
                   {m.role === "host" && (
                     <Crown className="h-3 w-3 text-primary" aria-label="Host" />
                   )}
