@@ -12,6 +12,7 @@ import {
   Wallet,
   ArrowRightLeft,
   Clock,
+  Sparkles,
   UserPlus,
   ChevronRight,
 } from "lucide-react";
@@ -633,6 +634,11 @@ function NotifAvatar({ n }: { n: AdminNotificationRow }) {
     booking_reminder: {
       icon: <Clock className="h-5 w-5" />,
       cls: "bg-primary/15 text-primary border-primary/30",
+    },
+    // Promo/event baru mulai tayang.
+    promo_new: {
+      icon: <Sparkles className="h-5 w-5" />,
+      cls: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     },
   };
   const s = style[n.type] ?? {
