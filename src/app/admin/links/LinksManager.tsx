@@ -34,6 +34,23 @@ import {
 } from "@/lib/settings-constants";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 
+/**
+ * Yang bisa diubah dari sebuah tautan BAWAAN lewat modal edit.
+ *
+ * Hanya URL: label, ikon & deskripsinya mengikuti data bar supaya tak perlu
+ * diperbarui di dua tempat. `defaultUrl` = nilai otomatis yang berlaku kalau
+ * kolomnya dikosongkan.
+ */
+interface BuiltInEdit {
+  /** Kunci config penyimpan URL timpa — null = tak bisa ditimpa (WhatsApp). */
+  urlKey: "appUrl" | "addressUrl" | null;
+  /** Kunci config sakelar tampil/sembunyi. */
+  showKey: "showApp" | "showWhatsapp" | "showAddress";
+  defaultUrl: string;
+  /** Alasan URL-nya terkunci — hanya untuk yang urlKey null. */
+  lockedReason?: string;
+}
+
 interface Props {
   barId: string;
   initialLinks: LinkTreeItem[];
@@ -57,7 +74,6 @@ export function LinksManager({
   const [editing, setEditing] = React.useState<LinkTreeItem | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
-  const [savingConfig, setSavingConfig] = React.useState(false);
 
   /**
    * Nilai config yang TERAKHIR TERSIMPAN di server. Dibandingkan saat onBlur
@@ -133,66 +149,63 @@ export function LinksManager({
   }
 
   /**
-   * Keterangan & kolom timpa tiap tautan bawaan — null utk tautan kustom.
+   * Apa yang bisa diedit dari tautan bawaan — null untuk tautan kustom.
    *
-   * WhatsApp sengaja TANPA `fields`: nomornya satu sumber di Settings →
+   * WhatsApp sengaja `urlKey: null`: nomornya satu sumber di Settings →
    * Customer service. Kalau bisa ditimpa di sini, admin harus ingat
    * memperbarui dua tempat setiap nomornya berganti.
    */
-  function builtInConfig(id: string) {
+  function builtInEdit(id: string): BuiltInEdit | null {
     switch (id) {
       case "builtin-app":
         return {
-          hint: "Sends visitors to the customer app",
-          fields: {
-            labelKey: "appLabel",
-            urlKey: "appUrl",
-            labelPlaceholder: defaults.appLabel,
-            urlPlaceholder: defaults.appUrl,
-          },
-        } as const;
+          urlKey: "appUrl",
+          showKey: "showApp",
+          defaultUrl: defaults.appUrl,
+        };
       case "builtin-wa":
         return {
-          hint: `Uses ${defaults.whatsappNumber} from Settings`,
-          fields: null,
-        } as const;
+          urlKey: null,
+          showKey: "showWhatsapp",
+          defaultUrl: `https://wa.me/${defaults.whatsappNumber}`,
+          lockedReason: `Uses ${defaults.whatsappNumber} from Settings → Customer service. Change it there and every link updates.`,
+        };
       case "builtin-address":
         return {
-          hint: defaults.addressUrl
-            ? "Opens Google Maps with the bar address"
-            : "Add your address in Settings, or type a URL below",
-          fields: {
-            labelKey: "addressLabel",
-            urlKey: "addressUrl",
-            labelPlaceholder: defaults.addressLabel,
-            urlPlaceholder:
-              defaults.addressUrl ||
-              "Paste a Google Maps link — no address set",
-          },
-        } as const;
+          urlKey: "addressUrl",
+          showKey: "showAddress",
+          defaultUrl: defaults.addressUrl,
+        };
       default:
         return null;
     }
   }
 
-  /** Sakelar tampil/sembunyi bawaan — sekaligus perbarui daftarnya. */
-  async function toggleBuiltIn(id: string, visible: boolean) {
-    const key =
-      id === "builtin-app"
-        ? "showApp"
-        : id === "builtin-wa"
-          ? "showWhatsapp"
-          : "showAddress";
+  /** Simpan hasil edit tautan bawaan (URL timpa + tampil/sembunyi). */
+  async function saveBuiltIn(
+    id: string,
+    edit: BuiltInEdit,
+    values: { url: string; isActive: boolean }
+  ): Promise<boolean> {
+    const patch: Partial<LinkTreeConfig> = { [edit.showKey]: values.isActive };
+    if (edit.urlKey) patch[edit.urlKey] = values.url.trim();
+
+    const ok = await saveConfig(patch);
+    if (!ok) return false;
+
     setLinks((arr) =>
-      arr.map((l) => (l.id === id ? { ...l, isActive: visible } : l))
+      arr.map((l) =>
+        l.id === id
+          ? {
+              ...l,
+              isActive: values.isActive,
+              // Kosong = kembali ke nilai otomatis.
+              url: values.url.trim() || edit.defaultUrl,
+            }
+          : l
+      )
     );
-    // Gagal simpan → kembalikan sakelarnya, jangan biarkan layar berbohong.
-    const ok = await saveConfig({ [key]: visible });
-    if (!ok) {
-      setLinks((arr) =>
-        arr.map((l) => (l.id === id ? { ...l, isActive: !visible } : l))
-      );
-    }
+    return true;
   }
 
   /** @returns true kalau tersimpan — pemanggil bisa mengembalikan tampilannya. */
@@ -208,7 +221,6 @@ export function LinksManager({
     }
     const next = { ...config, ...patch };
     setConfig(next);
-    setSavingConfig(true);
     try {
       const res = await updateLinkTreeConfig(barId, next);
       if (!res.ok) {
@@ -223,8 +235,6 @@ export function LinksManager({
       setConfig(config);
       toast.error(getActionErrorMessage(err, "Failed to save"));
       return false;
-    } finally {
-      setSavingConfig(false);
     }
   }
 
@@ -324,141 +334,90 @@ export function LinksManager({
 
         <div className="space-y-2">
           {links.map((l, i) => {
-            const builtIn = builtInConfig(l.id);
+            const builtIn = builtInEdit(l.id);
             return (
               <div
                 key={l.id}
-                className="rounded-lg border border-border bg-background/40 p-3 space-y-3"
+                className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
               >
-                <div className="flex items-center gap-3">
-                  {/* Urutan */}
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    <button
-                      type="button"
-                      aria-label="Move up"
-                      disabled={i === 0}
-                      onClick={() => move(i, -1)}
-                      className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
-                    >
-                      <ChevronUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Move down"
-                      disabled={i === links.length - 1}
-                      onClick={() => move(i, 1)}
-                      className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
-                    >
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-                    <LinkIcon name={l.icon} className="h-4 w-4" />
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium truncate">{l.label}</p>
-                      {builtIn && (
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] px-1 py-0"
-                        >
-                          Built-in
-                        </Badge>
-                      )}
-                      {!l.isActive && !builtIn && (
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] px-1 py-0"
-                        >
-                          Hidden
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {builtIn ? builtIn.hint : l.url}
-                    </p>
-                  </div>
-
-                  {/* Bawaan: sakelar tampil/sembunyi, tanpa tombol hapus.
-                      Kustom: edit & hapus seperti biasa. */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {builtIn ? (
-                      <Toggle
-                        checked={l.isActive}
-                        onChange={(v) => toggleBuiltIn(l.id, v)}
-                        disabled={savingConfig}
-                        label={l.label}
-                      />
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(l)}
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(l)}
-                          disabled={busyId === l.id}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                        >
-                          {busyId === l.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                {/* Urutan */}
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    aria-label="Move up"
+                    disabled={i === 0}
+                    onClick={() => move(i, -1)}
+                    className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Move down"
+                    disabled={i === links.length - 1}
+                    onClick={() => move(i, 1)}
+                    className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
                 </div>
 
-                {/* Kolom timpa bawaan — hanya saat tautannya ditampilkan.
-                    WhatsApp sengaja tak punya: nomornya satu sumber di
-                    Settings, agar tak perlu diperbarui di dua tempat. */}
-                {builtIn?.fields && l.isActive && (
-                  <OverrideFields
-                    label={config[builtIn.fields.labelKey]}
-                    url={config[builtIn.fields.urlKey]}
-                    labelPlaceholder={builtIn.fields.labelPlaceholder}
-                    urlPlaceholder={builtIn.fields.urlPlaceholder}
-                    onLabelChange={(v) =>
-                      setConfig((c) => ({ ...c, [builtIn.fields!.labelKey]: v }))
-                    }
-                    onUrlChange={(v) =>
-                      setConfig((c) => ({ ...c, [builtIn.fields!.urlKey]: v }))
-                    }
-                    onCommit={() =>
-                      saveConfig({
-                        [builtIn.fields!.labelKey]:
-                          config[builtIn.fields!.labelKey],
-                        [builtIn.fields!.urlKey]: config[builtIn.fields!.urlKey],
-                      })
-                    }
-                  />
-                )}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+                  <LinkIcon name={l.icon} className="h-4 w-4" />
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium truncate">{l.label}</p>
+                    {!l.isActive && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1 py-0"
+                      >
+                        Hidden
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {l.url}
+                  </p>
+                </div>
+
+                {/* Bawaan: edit saja — tak bisa dihapus, hanya disembunyikan
+                    lewat modal editnya. */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(l)}>
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                  {!builtIn && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(l)}
+                      disabled={busyId === l.id}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      {busyId === l.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Built-in links can be hidden but not deleted. The greyed-out text in
-          their fields is what they use right now — leave a field empty to keep
-          it in sync with your bar data.
-        </p>
       </Card>
 
       {(creating || editing) && (
         <LinkFormModal
           barId={barId}
           initial={editing}
+          builtIn={editing ? builtInEdit(editing.id) : null}
+          onSaveBuiltIn={saveBuiltIn}
           onClose={() => {
             setCreating(false);
             setEditing(null);
@@ -518,88 +477,38 @@ function Toggle({
   );
 }
 
-/**
- * Kolom label & URL untuk MENIMPA tautan bawaan.
- *
- * Dibiarkan KOSONG = pakai nilai otomatis dari data bar (placeholder abu-abu
- * menunjukkan nilai itu). Admin hanya mengisi kalau ingin menimpanya — mis.
- * titik Google Maps yang lebih tepat daripada hasil pencarian teks.
- */
-function OverrideFields({
-  label,
-  url,
-  labelPlaceholder,
-  urlPlaceholder,
-  onLabelChange,
-  onUrlChange,
-  onCommit,
-}: {
-  label: string;
-  url: string;
-  /** Nilai OTOMATIS yang berlaku saat kolom dibiarkan kosong. */
-  labelPlaceholder: string;
-  urlPlaceholder: string;
-  onLabelChange: (v: string) => void;
-  onUrlChange: (v: string) => void;
-  onCommit: () => void;
-}) {
-  // Nilai tiap kolom saat difokus — pembanding untuk memutuskan perlu simpan.
-  // Dipisah per kolom agar tak bergantung pada urutan blur/focus browser.
-  const focusedLabel = React.useRef("");
-  const focusedUrl = React.useRef("");
-  return (
-    // onFocus mencatat nilai awal; onBlur hanya menyimpan kalau benar-benar
-    // berubah, supaya klik-lalu-tinggalkan tak memicu toast "Saved".
-    <div className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-[4.5rem]">
-      <input
-        type="text"
-        value={label}
-        maxLength={60}
-        onChange={(e) => onLabelChange(e.target.value)}
-        onFocus={(e) => {
-          focusedLabel.current = e.target.value;
-        }}
-        onBlur={(e) => {
-          if (e.target.value !== focusedLabel.current) onCommit();
-        }}
-        placeholder={labelPlaceholder}
-        title={labelPlaceholder}
-        className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-      />
-      <input
-        type="text"
-        value={url}
-        maxLength={500}
-        onChange={(e) => onUrlChange(e.target.value)}
-        onFocus={(e) => {
-          focusedUrl.current = e.target.value;
-        }}
-        onBlur={(e) => {
-          if (e.target.value !== focusedUrl.current) onCommit();
-        }}
-        placeholder={urlPlaceholder}
-        // URL bawaan sering lebih panjang dari kolomnya — hover utk penuh.
-        title={urlPlaceholder}
-        className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-      />
-    </div>
-  );
-}
-
 function LinkFormModal({
   barId,
   initial,
+  builtIn,
+  onSaveBuiltIn,
   onClose,
   onSaved,
 }: {
   barId: string;
   initial: LinkTreeItem | null;
+  /**
+   * Diisi kalau yang diedit adalah tautan BAWAAN. Hanya URL & tampil/sembunyi
+   * yang bisa diubah: label, ikon & deskripsi ikut data bar supaya tak perlu
+   * diperbarui di dua tempat saat data itu berubah.
+   */
+  builtIn: BuiltInEdit | null;
+  /** Penyimpan khusus bawaan — datanya di config, bukan di tabel bar_links. */
+  onSaveBuiltIn: (
+    id: string,
+    edit: BuiltInEdit,
+    values: { url: string; isActive: boolean }
+  ) => Promise<boolean>;
   onClose: () => void;
   onSaved: (saved: LinkTreeItem, isNew: boolean) => void;
 }) {
   const isNew = !initial;
   const [label, setLabel] = React.useState(initial?.label ?? "");
-  const [url, setUrl] = React.useState(initial?.url ?? "");
+  // Bawaan: kolom URL menampilkan TIMPAAN saja. Yang sedang berlaku tampil
+  // sebagai placeholder, supaya jelas mana yang diketik admin & mana otomatis.
+  const [url, setUrl] = React.useState(
+    builtIn ? (initial?.url === builtIn.defaultUrl ? "" : (initial?.url ?? "")) : (initial?.url ?? "")
+  );
   const [description, setDescription] = React.useState(
     initial?.description ?? ""
   );
@@ -609,7 +518,19 @@ function LinkFormModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!label.trim() || !url.trim() || saving) return;
+    if (saving) return;
+
+    // Bawaan: hanya URL & tampil/sembunyi yang disimpan, dan URL boleh kosong
+    // (= kembali ke nilai otomatis). Tujuannya pun beda — config, bukan tabel.
+    if (builtIn && initial) {
+      setSaving(true);
+      const ok = await onSaveBuiltIn(initial.id, builtIn, { url, isActive });
+      if (ok) onClose();
+      else setSaving(false);
+      return;
+    }
+
+    if (!label.trim() || !url.trim()) return;
     setSaving(true);
     try {
       const payload = {
@@ -642,7 +563,7 @@ function LinkFormModal({
       <div className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-base font-semibold">
-            {isNew ? "New link" : "Edit link"}
+            {isNew ? "New link" : builtIn ? initial!.label : "Edit link"}
           </h2>
           <button
             type="button"
@@ -655,19 +576,23 @@ function LinkFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-4">
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">
-              Label
-            </span>
-            <input
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              maxLength={60}
-              placeholder="Follow us on Instagram"
-              className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
-            />
-          </label>
+          {/* Bawaan: label, ikon & deskripsi ikut data bar — tak diminta di
+              sini supaya tak perlu diperbarui di dua tempat. */}
+          {!builtIn && (
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">
+                Label
+              </span>
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                maxLength={60}
+                placeholder="Follow us on Instagram"
+                className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+              />
+            </label>
+          )}
 
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">
@@ -675,17 +600,28 @@ function LinkFormModal({
             </span>
             <input
               type="text"
-              value={url}
+              value={builtIn && !builtIn.urlKey ? builtIn.defaultUrl : url}
               onChange={(e) => setUrl(e.target.value)}
               maxLength={500}
-              placeholder="instagram.com/sohosocialhouse"
-              className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+              // WhatsApp: nomornya satu sumber di Settings, jadi terkunci.
+              disabled={!!builtIn && !builtIn.urlKey}
+              placeholder={
+                builtIn
+                  ? builtIn.defaultUrl || "Paste a link"
+                  : "instagram.com/sohosocialhouse"
+              }
+              title={builtIn ? builtIn.defaultUrl : undefined}
+              className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60 disabled:opacity-60"
             />
             <span className="mt-1 block text-[10px] text-muted-foreground">
-              https:// is added automatically if you leave it out.
+              {builtIn
+                ? (builtIn.lockedReason ??
+                  "Leave empty to keep using the address from your bar data.")
+                : "https:// is added automatically if you leave it out."}
             </span>
           </label>
 
+          {!builtIn && (
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">
               Description (optional)
@@ -699,9 +635,11 @@ function LinkFormModal({
               className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
           </label>
+          )}
 
           {/* Pemilih ikon — grid kurasi, bukan seluruh lucide (bundle & pilihan
               terlalu banyak justru menyulitkan). */}
+          {!builtIn && (
           <div>
             <span className="text-xs font-medium text-muted-foreground">
               Icon
@@ -727,6 +665,7 @@ function LinkFormModal({
               ))}
             </div>
           </div>
+          )}
 
           <div className="flex items-center justify-between rounded-lg border border-border p-3">
             <div>
@@ -745,7 +684,9 @@ function LinkFormModal({
             <Button
               type="submit"
               variant="gold"
-              disabled={saving || !label.trim() || !url.trim()}
+              // Bawaan: URL boleh kosong (= pakai nilai otomatis), dan
+              // labelnya memang tak diminta di form ini.
+              disabled={saving || (!builtIn && (!label.trim() || !url.trim()))}
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {isNew ? "Add link" : "Save changes"}
