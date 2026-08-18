@@ -31,12 +31,23 @@ interface Props {
   initial: BarSettings;
   /** Nomor WA CS tersimpan (null = belum diatur, pakai default). */
   initialContactWa: string | null;
+  /** Nomor efektif (punya bar, atau default) — utk keterangan "sedang dipakai". */
+  effectiveContactWa: string;
 }
 
-export function SettingsManager({ barId, initial, initialContactWa }: Props) {
+export function SettingsManager({
+  barId,
+  initial,
+  initialContactWa,
+  effectiveContactWa,
+}: Props) {
   return (
     <div className="space-y-6">
-      <ContactSection barId={barId} initial={initialContactWa} />
+      <ContactSection
+        barId={barId}
+        initial={initialContactWa}
+        effective={effectiveContactWa}
+      />
       <OperatingHoursSection barId={barId} initial={initial.operatingHours} />
       <ReservationSection barId={barId} initial={initial.reservationConfig} />
       <ChargeSection barId={barId} initial={initial.chargeConfig} />
@@ -57,9 +68,12 @@ export function SettingsManager({ barId, initial, initialContactWa }: Props) {
 function ContactSection({
   barId,
   initial,
+  effective,
 }: {
   barId: string;
   initial: string | null;
+  /** Nomor yang BENAR-BENAR dipakai sekarang (punya bar, atau default). */
+  effective: string;
 }) {
   const [wa, setWa] = React.useState(initial ?? "");
   const [saving, setSaving] = React.useState(false);
@@ -103,7 +117,15 @@ function ContactSection({
             placeholder="081228814542"
             className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
           />
+          {/* Tampilkan nomor yang SEDANG dipakai — tanpa ini admin tak tahu
+              tombol Contact us menuju ke mana saat kolomnya masih kosong
+              (yang terlihat cuma placeholder abu-abu). */}
           <span className="mt-1 block text-[10px] text-muted-foreground">
+            Currently in use:{" "}
+            <span className="font-mono text-foreground/80">{effective}</span>
+            {!initial && " (default)"}
+          </span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
             Any common format works — spaces, dashes, +62, or a leading 0.
             Leave empty to use the default number.
           </span>

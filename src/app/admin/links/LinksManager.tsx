@@ -35,6 +35,8 @@ interface Props {
   initialLinks: LinkTreeItem[];
   initialConfig: LinkTreeConfig;
   publicUrl: string;
+  /** Nomor CS efektif — ditampilkan supaya admin tahu tautan WA menuju ke mana. */
+  contactWa: string;
 }
 
 export function LinksManager({
@@ -42,6 +44,7 @@ export function LinksManager({
   initialLinks,
   initialConfig,
   publicUrl,
+  contactWa,
 }: Props) {
   const confirm = useConfirm();
   const [links, setLinks] = React.useState(initialLinks);
@@ -99,7 +102,24 @@ export function LinksManager({
     }
   }
 
-  async function saveConfig(patch: Partial<LinkTreeConfig>) {
+  /**
+   * Nilai config yang TERAKHIR TERSIMPAN di server. Dibandingkan saat onBlur
+   * supaya kolom yang cuma di-klik lalu ditinggalkan tak memicu simpan &
+   * toast "Saved". Tak bisa membandingkan dengan `config`, karena state itu
+   * sudah ikut berubah saat mengetik.
+   */
+  const savedConfig = React.useRef(initialConfig);
+
+  async function saveConfig(
+    patch: Partial<LinkTreeConfig>,
+    silentIfSame = false
+  ) {
+    if (silentIfSame) {
+      const unchanged = Object.entries(patch).every(
+        ([k, v]) => savedConfig.current[k as keyof LinkTreeConfig] === v
+      );
+      if (unchanged) return;
+    }
     const next = { ...config, ...patch };
     setConfig(next);
     setSavingConfig(true);
@@ -110,6 +130,7 @@ export function LinksManager({
         toast.error(res.error ?? "Failed to save");
         return;
       }
+      savedConfig.current = next;
       toast.success("Saved");
     } catch (err) {
       setConfig(config);
@@ -172,7 +193,7 @@ export function LinksManager({
               onChange={(e) =>
                 setConfig((c) => ({ ...c, headline: e.target.value }))
               }
-              onBlur={() => saveConfig({ headline: config.headline })}
+              onBlur={() => saveConfig({ headline: config.headline }, true)}
               placeholder="SOHO Social House"
               className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
@@ -188,7 +209,7 @@ export function LinksManager({
               onChange={(e) =>
                 setConfig((c) => ({ ...c, tagline: e.target.value }))
               }
-              onBlur={() => saveConfig({ tagline: config.tagline })}
+              onBlur={() => saveConfig({ tagline: config.tagline }, true)}
               placeholder="Purwokerto · Open daily"
               className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
             />
@@ -222,26 +243,20 @@ export function LinksManager({
               saveConfig({ appLabel: config.appLabel, appUrl: config.appUrl })
             }
           />
+          {/* WhatsApp SENGAJA tanpa kolom timpa: nomornya satu sumber di
+              Settings → Customer service. Kalau bisa ditimpa di sini, admin
+              harus ingat memperbarui dua tempat saat nomor berubah. */}
           <BuiltInRow
             icon="whatsapp"
             title="Chat on WhatsApp"
-            hint="Uses the CS number from your settings"
+            hint={
+              contactWa
+                ? `Uses ${contactWa} from Settings`
+                : "Uses the CS number from Settings"
+            }
             checked={config.showWhatsapp}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showWhatsapp: v })}
-            label={config.whatsappLabel}
-            url={config.whatsappUrl}
-            urlPlaceholder="Auto: wa.me with your CS number"
-            onLabelChange={(v) =>
-              setConfig((c) => ({ ...c, whatsappLabel: v }))
-            }
-            onUrlChange={(v) => setConfig((c) => ({ ...c, whatsappUrl: v }))}
-            onCommit={() =>
-              saveConfig({
-                whatsappLabel: config.whatsappLabel,
-                whatsappUrl: config.whatsappUrl,
-              })
-            }
           />
           <BuiltInRow
             icon="map-pin"
@@ -449,13 +464,17 @@ function BuiltInRow({
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
-  label: string;
-  url: string;
-  urlPlaceholder: string;
-  onLabelChange: (v: string) => void;
-  onUrlChange: (v: string) => void;
-  onCommit: () => void;
+  /** Kolom timpa. Dikosongkan semua = baris hanya punya sakelar (mis.
+   *  WhatsApp, yang nomornya satu sumber di Settings). */
+  label?: string;
+  url?: string;
+  urlPlaceholder?: string;
+  onLabelChange?: (v: string) => void;
+  onUrlChange?: (v: string) => void;
+  onCommit?: () => void;
 }) {
+  // Nilai kolom saat difokus — pembanding untuk memutuskan perlu simpan.
+  const focusedValue = React.useRef("");
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3 space-y-3">
       <div className="flex items-center gap-3">
@@ -474,24 +493,36 @@ function BuiltInRow({
         />
       </div>
 
-      {/* Kolom timpa — hanya relevan kalau tautannya ditampilkan. */}
-      {checked && (
+      {/* Kolom timpa — hanya relevan kalau tautannya ditampilkan.
+          onFocus mencatat nilai awal; onBlur hanya menyimpan kalau benar-benar
+          berubah, supaya klik-lalu-tinggalkan tak memicu toast "Saved". */}
+      {checked && onCommit && (
         <div className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-12">
           <input
             type="text"
-            value={label}
+            value={label ?? ""}
             maxLength={60}
-            onChange={(e) => onLabelChange(e.target.value)}
-            onBlur={onCommit}
+            onChange={(e) => onLabelChange?.(e.target.value)}
+            onFocus={(e) => {
+              focusedValue.current = e.target.value;
+            }}
+            onBlur={(e) => {
+              if (e.target.value !== focusedValue.current) onCommit();
+            }}
             placeholder={`Auto: ${title}`}
             className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
           />
           <input
             type="text"
-            value={url}
+            value={url ?? ""}
             maxLength={500}
-            onChange={(e) => onUrlChange(e.target.value)}
-            onBlur={onCommit}
+            onChange={(e) => onUrlChange?.(e.target.value)}
+            onFocus={(e) => {
+              focusedValue.current = e.target.value;
+            }}
+            onBlur={(e) => {
+              if (e.target.value !== focusedValue.current) onCommit();
+            }}
             placeholder={urlPlaceholder}
             className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
           />

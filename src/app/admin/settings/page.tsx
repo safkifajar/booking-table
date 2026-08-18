@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import { getBarSettings, getBarContactWa } from "@/lib/settings-actions";
+import { resolveWa } from "@/lib/contact";
 import { SettingsManager } from "./SettingsManager";
 
 export default async function AdminSettingsPage() {
@@ -26,6 +27,7 @@ export default async function AdminSettingsPage() {
           barId={bar.id}
           initial={settings}
           initialContactWa={contactWa}
+          effectiveContactWa={resolveWa(contactWa)}
         />
       </div>
     </main>

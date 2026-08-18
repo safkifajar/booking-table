@@ -1,5 +1,7 @@
 import { requireAdmin } from "@/lib/admin";
 import { getLinksForAdmin, getLinkTreeConfig } from "@/lib/link-tree-actions";
+import { getBarContactWa } from "@/lib/settings-actions";
+import { resolveWa } from "@/lib/contact";
 import { LinksManager } from "./LinksManager";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +24,14 @@ function publicLinkUrl(): string {
 
 export default async function AdminLinksPage() {
   const bar = await requireAdmin();
-  const [links, config] = await Promise.all([
+  const [links, config, barWa] = await Promise.all([
     getLinksForAdmin(bar.id),
     getLinkTreeConfig(bar.id),
+    getBarContactWa(),
   ]);
+  // Nomor EFEKTIF (punya bar, atau default) — supaya admin tahu tautan
+  // WhatsApp di halaman publik menuju ke nomor mana.
+  const contactWa = resolveWa(barWa);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-4">
@@ -42,6 +48,7 @@ export default async function AdminLinksPage() {
         initialLinks={links}
         initialConfig={config}
         publicUrl={publicLinkUrl()}
+        contactWa={contactWa}
       />
     </div>
   );
