@@ -243,6 +243,35 @@ export interface LinkTreeConfig {
   whatsappLabel: string;
   addressUrl: string;
   addressLabel: string;
+  /**
+   * Posisi tiap tautan dalam SATU daftar bersama tautan kustom.
+   *
+   * Bawaan tak punya baris di bar_links, jadi urutannya tak bisa ikut
+   * disimpan di sana — disimpan di sini sebagai angka yang dibandingkan
+   * dengan bar_links.sort_order.
+   *
+   * Nilai awalnya NEGATIF (-3,-2,-1), bukan 1-3: tautan kustom yang dibuat
+   * sebelum fitur ini ada sudah memakai sort_order 1..n, jadi nomor positif
+   * akan bentrok & menyelipkan tautan lama ke tengah tautan bawaan. Begitu
+   * admin memindah sesuatu, reorderLinks() menomori ulang SEMUANYA 1..n dan
+   * angka negatif ini tak terpakai lagi.
+   */
+  appOrder: number;
+  whatsappOrder: number;
+  addressOrder: number;
+}
+
+/** Kunci config penyimpan urutan tiap tautan bawaan. */
+export const BUILT_IN_ORDER_KEYS = {
+  "builtin-app": "appOrder",
+  "builtin-wa": "whatsappOrder",
+  "builtin-address": "addressOrder",
+} as const satisfies Record<string, keyof LinkTreeConfig>;
+
+export type BuiltInLinkId = keyof typeof BUILT_IN_ORDER_KEYS;
+
+export function isBuiltInLinkId(id: string): id is BuiltInLinkId {
+  return id in BUILT_IN_ORDER_KEYS;
 }
 
 export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
@@ -258,4 +287,9 @@ export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
   whatsappLabel: "",
   addressUrl: "",
   addressLabel: "",
+  // Negatif = selalu di atas tautan kustom (sort_order-nya mulai dari 1),
+  // sehingga data lama tampil persis seperti sebelum fitur ini ada.
+  appOrder: -3,
+  whatsappOrder: -2,
+  addressOrder: -1,
 };

@@ -28,7 +28,10 @@ import {
   type BuiltInDefaults,
   type LinkTreeItem,
 } from "@/lib/link-tree-actions";
-import type { LinkTreeConfig } from "@/lib/settings-constants";
+import {
+  BUILT_IN_ORDER_KEYS,
+  type LinkTreeConfig,
+} from "@/lib/settings-constants";
 import { cn, getActionErrorMessage } from "@/lib/utils";
 
 interface Props {
@@ -55,6 +58,14 @@ export function LinksManager({
   const [creating, setCreating] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [savingConfig, setSavingConfig] = React.useState(false);
+
+  /**
+   * Nilai config yang TERAKHIR TERSIMPAN di server. Dibandingkan saat onBlur
+   * supaya kolom yang cuma di-klik lalu ditinggalkan tak memicu simpan &
+   * toast "Saved". Tak bisa membandingkan dengan `config`, karena state itu
+   * sudah ikut berubah saat mengetik.
+   */
+  const savedConfig = React.useRef(initialConfig);
 
   async function handleDelete(link: LinkTreeItem) {
     const ok = await confirm({
@@ -88,39 +99,112 @@ export function LinksManager({
     if (next < 0 || next >= links.length) return;
     const reordered = [...links];
     [reordered[index], reordered[next]] = [reordered[next], reordered[index]];
+
+    // Urutan bawaan tersimpan di config. State config WAJIB ikut diperbarui:
+    // saveConfig() mengirim `config` utuh, jadi menyalakan sakelar setelah
+    // memindah urutan akan menulis balik posisi lama kalau tak disinkronkan.
+    const orderPatch: Partial<LinkTreeConfig> = {};
+    reordered.forEach((l, i) => {
+      const key = BUILT_IN_ORDER_KEYS[l.id as keyof typeof BUILT_IN_ORDER_KEYS];
+      if (key) orderPatch[key] = i + 1;
+    });
+
+    const prevLinks = links;
+    const prevConfig = config;
     setLinks(reordered); // optimistis — urutan terasa langsung
+    setConfig((c) => ({ ...c, ...orderPatch }));
     try {
       const res = await reorderLinks(
         barId,
         reordered.map((l) => l.id)
       );
       if (!res.ok) {
-        setLinks(links); // kembalikan kalau gagal
+        setLinks(prevLinks); // kembalikan kalau gagal
+        setConfig(prevConfig);
         toast.error(res.error ?? "Failed to save order");
+        return;
       }
+      savedConfig.current = { ...savedConfig.current, ...orderPatch };
     } catch (err) {
-      setLinks(links);
+      setLinks(prevLinks);
+      setConfig(prevConfig);
       toast.error(getActionErrorMessage(err, "Failed to save order"));
     }
   }
 
   /**
-   * Nilai config yang TERAKHIR TERSIMPAN di server. Dibandingkan saat onBlur
-   * supaya kolom yang cuma di-klik lalu ditinggalkan tak memicu simpan &
-   * toast "Saved". Tak bisa membandingkan dengan `config`, karena state itu
-   * sudah ikut berubah saat mengetik.
+   * Keterangan & kolom timpa tiap tautan bawaan — null utk tautan kustom.
+   *
+   * WhatsApp sengaja TANPA `fields`: nomornya satu sumber di Settings →
+   * Customer service. Kalau bisa ditimpa di sini, admin harus ingat
+   * memperbarui dua tempat setiap nomornya berganti.
    */
-  const savedConfig = React.useRef(initialConfig);
+  function builtInConfig(id: string) {
+    switch (id) {
+      case "builtin-app":
+        return {
+          hint: "Sends visitors to the customer app",
+          fields: {
+            labelKey: "appLabel",
+            urlKey: "appUrl",
+            labelPlaceholder: defaults.appLabel,
+            urlPlaceholder: defaults.appUrl,
+          },
+        } as const;
+      case "builtin-wa":
+        return {
+          hint: `Uses ${defaults.whatsappNumber} from Settings`,
+          fields: null,
+        } as const;
+      case "builtin-address":
+        return {
+          hint: defaults.addressUrl
+            ? "Opens Google Maps with the bar address"
+            : "Add your address in Settings, or type a URL below",
+          fields: {
+            labelKey: "addressLabel",
+            urlKey: "addressUrl",
+            labelPlaceholder: defaults.addressLabel,
+            urlPlaceholder:
+              defaults.addressUrl ||
+              "Paste a Google Maps link — no address set",
+          },
+        } as const;
+      default:
+        return null;
+    }
+  }
 
+  /** Sakelar tampil/sembunyi bawaan — sekaligus perbarui daftarnya. */
+  async function toggleBuiltIn(id: string, visible: boolean) {
+    const key =
+      id === "builtin-app"
+        ? "showApp"
+        : id === "builtin-wa"
+          ? "showWhatsapp"
+          : "showAddress";
+    setLinks((arr) =>
+      arr.map((l) => (l.id === id ? { ...l, isActive: visible } : l))
+    );
+    // Gagal simpan → kembalikan sakelarnya, jangan biarkan layar berbohong.
+    const ok = await saveConfig({ [key]: visible });
+    if (!ok) {
+      setLinks((arr) =>
+        arr.map((l) => (l.id === id ? { ...l, isActive: !visible } : l))
+      );
+    }
+  }
+
+  /** @returns true kalau tersimpan — pemanggil bisa mengembalikan tampilannya. */
   async function saveConfig(
     patch: Partial<LinkTreeConfig>,
     silentIfSame = false
-  ) {
+  ): Promise<boolean> {
     if (silentIfSame) {
       const unchanged = Object.entries(patch).every(
         ([k, v]) => savedConfig.current[k as keyof LinkTreeConfig] === v
       );
-      if (unchanged) return;
+      if (unchanged) return true;
     }
     const next = { ...config, ...patch };
     setConfig(next);
@@ -130,13 +214,15 @@ export function LinksManager({
       if (!res.ok) {
         setConfig(config);
         toast.error(res.error ?? "Failed to save");
-        return;
+        return false;
       }
       savedConfig.current = next;
       toast.success("Saved");
+      return true;
     } catch (err) {
       setConfig(config);
       toast.error(getActionErrorMessage(err, "Failed to save"));
+      return false;
     } finally {
       setSavingConfig(false);
     }
@@ -219,82 +305,15 @@ export function LinksManager({
         </div>
       </Card>
 
-      {/* Tautan bawaan — tak bisa diedit, hanya dinyalakan/dimatikan */}
-      <Card className="p-5 space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold">Built-in links</h2>
-          <p className="text-xs text-muted-foreground">
-            The greyed-out text is what each link uses right now, taken from
-            your bar data. Leave a field empty to keep it in sync, or type your
-            own label and URL to override it.
-          </p>
-        </div>
-        <div className="space-y-3">
-          <BuiltInRow
-            icon="smartphone"
-            title="Open the app"
-            hint="Sends visitors to the customer app"
-            checked={config.showApp}
-            disabled={savingConfig}
-            onChange={(v) => saveConfig({ showApp: v })}
-            label={config.appLabel}
-            url={config.appUrl}
-            labelPlaceholder={defaults.appLabel}
-            urlPlaceholder={defaults.appUrl}
-            onLabelChange={(v) => setConfig((c) => ({ ...c, appLabel: v }))}
-            onUrlChange={(v) => setConfig((c) => ({ ...c, appUrl: v }))}
-            onCommit={() =>
-              saveConfig({ appLabel: config.appLabel, appUrl: config.appUrl })
-            }
-          />
-          {/* WhatsApp SENGAJA tanpa kolom timpa: nomornya satu sumber di
-              Settings → Customer service. Kalau bisa ditimpa di sini, admin
-              harus ingat memperbarui dua tempat saat nomor berubah. */}
-          <BuiltInRow
-            icon="whatsapp"
-            title="Chat on WhatsApp"
-            hint={`Uses ${defaults.whatsappNumber} from Settings`}
-            checked={config.showWhatsapp}
-            disabled={savingConfig}
-            onChange={(v) => saveConfig({ showWhatsapp: v })}
-          />
-          <BuiltInRow
-            icon="map-pin"
-            title="Find us"
-            hint={
-              defaults.addressUrl
-                ? "Opens Google Maps with the bar address"
-                : "Add your address in Settings, or type a URL below"
-            }
-            checked={config.showAddress}
-            disabled={savingConfig}
-            onChange={(v) => saveConfig({ showAddress: v })}
-            label={config.addressLabel}
-            url={config.addressUrl}
-            labelPlaceholder={defaults.addressLabel}
-            urlPlaceholder={
-              defaults.addressUrl || "Paste a Google Maps link — no address set"
-            }
-            onLabelChange={(v) => setConfig((c) => ({ ...c, addressLabel: v }))}
-            onUrlChange={(v) => setConfig((c) => ({ ...c, addressUrl: v }))}
-            onCommit={() =>
-              saveConfig({
-                addressLabel: config.addressLabel,
-                addressUrl: config.addressUrl,
-              })
-            }
-          />
-        </div>
-      </Card>
-
-      {/* Tautan kustom */}
+      {/* SATU daftar: bawaan & kustom bercampur, semuanya bisa diurutkan.
+          Yang bawaan tak bisa dihapus — hanya disembunyikan lewat sakelar. */}
       <Card className="p-5 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold">Your links</h2>
             <p className="text-xs text-muted-foreground">
-              {links.length} link{links.length === 1 ? "" : "s"} · shown after
-              the built-in ones
+              {links.length} link{links.length === 1 ? "" : "s"} · drag order
+              with the arrows — this is the order visitors see
             </p>
           </div>
           <Button variant="gold" size="sm" onClick={() => setCreating(true)}>
@@ -303,82 +322,137 @@ export function LinksManager({
           </Button>
         </div>
 
-        {links.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center">
-            <p className="text-sm font-medium">No links yet</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Add your Instagram, menu, playlist, or anything else.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {links.map((l, i) => (
+        <div className="space-y-2">
+          {links.map((l, i) => {
+            const builtIn = builtInConfig(l.id);
+            return (
               <div
                 key={l.id}
-                className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3"
+                className="rounded-lg border border-border bg-background/40 p-3 space-y-3"
               >
-                {/* Urutan */}
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    aria-label="Move up"
-                    disabled={i === 0}
-                    onClick={() => move(i, -1)}
-                    className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Move down"
-                    disabled={i === links.length - 1}
-                    onClick={() => move(i, 1)}
-                    className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <div className="flex items-center gap-3">
+                  {/* Urutan */}
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      aria-label="Move up"
+                      disabled={i === 0}
+                      onClick={() => move(i, -1)}
+                      className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Move down"
+                      disabled={i === links.length - 1}
+                      onClick={() => move(i, 1)}
+                      className="rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-25"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
 
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-                  <LinkIcon name={l.icon} className="h-4 w-4" />
-                </span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+                    <LinkIcon name={l.icon} className="h-4 w-4" />
+                  </span>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium truncate">{l.label}</p>
-                    {!l.isActive && (
-                      <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                        Hidden
-                      </Badge>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">{l.label}</p>
+                      {builtIn && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1 py-0"
+                        >
+                          Built-in
+                        </Badge>
+                      )}
+                      {!l.isActive && !builtIn && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1 py-0"
+                        >
+                          Hidden
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {builtIn ? builtIn.hint : l.url}
+                    </p>
+                  </div>
+
+                  {/* Bawaan: sakelar tampil/sembunyi, tanpa tombol hapus.
+                      Kustom: edit & hapus seperti biasa. */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {builtIn ? (
+                      <Toggle
+                        checked={l.isActive}
+                        onChange={(v) => toggleBuiltIn(l.id, v)}
+                        disabled={savingConfig}
+                        label={l.label}
+                      />
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditing(l)}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(l)}
+                          disabled={busyId === l.id}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          {busyId === l.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {l.url}
-                  </p>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => setEditing(l)}>
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(l)}
-                    disabled={busyId === l.id}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                  >
-                    {busyId === l.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                </div>
+                {/* Kolom timpa bawaan — hanya saat tautannya ditampilkan.
+                    WhatsApp sengaja tak punya: nomornya satu sumber di
+                    Settings, agar tak perlu diperbarui di dua tempat. */}
+                {builtIn?.fields && l.isActive && (
+                  <OverrideFields
+                    label={config[builtIn.fields.labelKey]}
+                    url={config[builtIn.fields.urlKey]}
+                    labelPlaceholder={builtIn.fields.labelPlaceholder}
+                    urlPlaceholder={builtIn.fields.urlPlaceholder}
+                    onLabelChange={(v) =>
+                      setConfig((c) => ({ ...c, [builtIn.fields!.labelKey]: v }))
+                    }
+                    onUrlChange={(v) =>
+                      setConfig((c) => ({ ...c, [builtIn.fields!.urlKey]: v }))
+                    }
+                    onCommit={() =>
+                      saveConfig({
+                        [builtIn.fields!.labelKey]:
+                          config[builtIn.fields!.labelKey],
+                        [builtIn.fields!.urlKey]: config[builtIn.fields!.urlKey],
+                      })
+                    }
+                  />
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Built-in links can be hidden but not deleted. The greyed-out text in
+          their fields is what they use right now — leave a field empty to keep
+          it in sync with your bar data.
+        </p>
       </Card>
 
       {(creating || editing) && (
@@ -445,19 +519,13 @@ function Toggle({
 }
 
 /**
- * Baris tautan bawaan: sakelar tampil/sembunyi + kolom label & URL opsional.
+ * Kolom label & URL untuk MENIMPA tautan bawaan.
  *
- * Kolom dibiarkan KOSONG = pakai nilai otomatis dari data bar. Admin hanya
- * mengisi kalau ingin menimpanya (mis. titik Google Maps yang lebih tepat,
- * atau nomor WA promo yang beda dari CS).
+ * Dibiarkan KOSONG = pakai nilai otomatis dari data bar (placeholder abu-abu
+ * menunjukkan nilai itu). Admin hanya mengisi kalau ingin menimpanya — mis.
+ * titik Google Maps yang lebih tepat daripada hasil pencarian teks.
  */
-function BuiltInRow({
-  icon,
-  title,
-  hint,
-  checked,
-  disabled,
-  onChange,
+function OverrideFields({
   label,
   url,
   labelPlaceholder,
@@ -466,83 +534,54 @@ function BuiltInRow({
   onUrlChange,
   onCommit,
 }: {
-  icon: string;
-  title: string;
-  hint: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (v: boolean) => void;
-  /** Kolom timpa. Dikosongkan semua = baris hanya punya sakelar (mis.
-   *  WhatsApp, yang nomornya satu sumber di Settings). */
-  label?: string;
-  url?: string;
+  label: string;
+  url: string;
   /** Nilai OTOMATIS yang berlaku saat kolom dibiarkan kosong. */
-  labelPlaceholder?: string;
-  urlPlaceholder?: string;
-  onLabelChange?: (v: string) => void;
-  onUrlChange?: (v: string) => void;
-  onCommit?: () => void;
+  labelPlaceholder: string;
+  urlPlaceholder: string;
+  onLabelChange: (v: string) => void;
+  onUrlChange: (v: string) => void;
+  onCommit: () => void;
 }) {
   // Nilai tiap kolom saat difokus — pembanding untuk memutuskan perlu simpan.
   // Dipisah per kolom agar tak bergantung pada urutan blur/focus browser.
   const focusedLabel = React.useRef("");
   const focusedUrl = React.useRef("");
   return (
-    <div className="rounded-lg border border-border bg-background/40 p-3 space-y-3">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-          <LinkIcon name={icon} className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">{hint}</p>
-        </div>
-        <Toggle
-          checked={checked}
-          onChange={onChange}
-          disabled={disabled}
-          label={title}
-        />
-      </div>
-
-      {/* Kolom timpa — hanya relevan kalau tautannya ditampilkan.
-          onFocus mencatat nilai awal; onBlur hanya menyimpan kalau benar-benar
-          berubah, supaya klik-lalu-tinggalkan tak memicu toast "Saved". */}
-      {checked && onCommit && (
-        <div className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-12">
-          <input
-            type="text"
-            value={label ?? ""}
-            maxLength={60}
-            onChange={(e) => onLabelChange?.(e.target.value)}
-            onFocus={(e) => {
-              focusedLabel.current = e.target.value;
-            }}
-            onBlur={(e) => {
-              if (e.target.value !== focusedLabel.current) onCommit();
-            }}
-            placeholder={labelPlaceholder ?? title}
-            title={labelPlaceholder ?? title}
-            className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-          />
-          <input
-            type="text"
-            value={url ?? ""}
-            maxLength={500}
-            onChange={(e) => onUrlChange?.(e.target.value)}
-            onFocus={(e) => {
-              focusedUrl.current = e.target.value;
-            }}
-            onBlur={(e) => {
-              if (e.target.value !== focusedUrl.current) onCommit();
-            }}
-            placeholder={urlPlaceholder}
-            // URL bawaan sering lebih panjang dari kolomnya — hover utk penuh.
-            title={urlPlaceholder}
-            className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
-          />
-        </div>
-      )}
+    // onFocus mencatat nilai awal; onBlur hanya menyimpan kalau benar-benar
+    // berubah, supaya klik-lalu-tinggalkan tak memicu toast "Saved".
+    <div className="grid gap-2 sm:grid-cols-2 pl-0 sm:pl-[4.5rem]">
+      <input
+        type="text"
+        value={label}
+        maxLength={60}
+        onChange={(e) => onLabelChange(e.target.value)}
+        onFocus={(e) => {
+          focusedLabel.current = e.target.value;
+        }}
+        onBlur={(e) => {
+          if (e.target.value !== focusedLabel.current) onCommit();
+        }}
+        placeholder={labelPlaceholder}
+        title={labelPlaceholder}
+        className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+      />
+      <input
+        type="text"
+        value={url}
+        maxLength={500}
+        onChange={(e) => onUrlChange(e.target.value)}
+        onFocus={(e) => {
+          focusedUrl.current = e.target.value;
+        }}
+        onBlur={(e) => {
+          if (e.target.value !== focusedUrl.current) onCommit();
+        }}
+        placeholder={urlPlaceholder}
+        // URL bawaan sering lebih panjang dari kolomnya — hover utk penuh.
+        title={urlPlaceholder}
+        className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
+      />
     </div>
   );
 }

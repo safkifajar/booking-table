@@ -18,7 +18,9 @@ import { staffRoles } from "@/lib/db/schema/extras";
 import { requireProfile } from "@/lib/auth-v2/current";
 import { isLinkIcon } from "@/lib/link-icons";
 import {
+  BUILT_IN_ORDER_KEYS,
   DEFAULT_LINK_TREE_CONFIG,
+  isBuiltInLinkId,
   type LinkTreeConfig,
 } from "@/lib/settings-constants";
 import { resolveWa } from "@/lib/contact";
@@ -143,7 +145,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
       icon: "smartphone",
       description: "Book a table, order, and join the night",
       isActive: true,
-      sortOrder: -3,
+      sortOrder: config.appOrder,
       isBuiltIn: true,
     });
   }
@@ -156,7 +158,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
       icon: "whatsapp",
       description: "Questions, bookings, or anything else",
       isActive: true,
-      sortOrder: -2,
+      sortOrder: config.whatsappOrder,
       isBuiltIn: true,
     });
   }
@@ -171,7 +173,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
       icon: "map-pin",
       description: bar.address ?? null,
       isActive: true,
-      sortOrder: -1,
+      sortOrder: config.addressOrder,
       isBuiltIn: true,
     });
   }
@@ -180,8 +182,23 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
     barName: bar.name,
     logoUrl: bar.logoUrl,
     config,
-    links: [...builtIn, ...custom],
+    links: sortLinks([...builtIn, ...custom]),
   };
+}
+
+/**
+ * Urutkan bawaan & kustom sebagai SATU daftar.
+ *
+ * Seri dimenangkan tautan bawaan: tautan kustom yang dibuat sebelum fitur
+ * pengurutan ini ada sudah memakai sort_order 1..n — persis menabrak nomor
+ * bawaan. Tanpa aturan ini urutannya jadi acak bagi data lama.
+ */
+function sortLinks(items: LinkTreeItem[]): LinkTreeItem[] {
+  return [...items].sort(
+    (a, b) =>
+      a.sortOrder - b.sortOrder ||
+      Number(b.isBuiltIn ?? false) - Number(a.isBuiltIn ?? false)
+  );
 }
 
 /** URL aplikasi customer — dibangun dari AUTH_URL (buang subdomain admin). */
@@ -245,22 +262,79 @@ export async function getBuiltInDefaults(
 // READ — ADMIN (semua tautan, termasuk yang nonaktif)
 // ============================================================
 
+/**
+ * SATU daftar untuk admin: bawaan + kustom, urut sesuai tampilan publik.
+ *
+ * Beda dari getLinkTree(): yang nonaktif tetap disertakan — baik tautan
+ * kustom maupun bawaan yang sakelarnya mati — sebab admin harus bisa
+ * melihat & menyalakannya lagi.
+ */
 export async function getLinksForAdmin(barId: string): Promise<LinkTreeItem[]> {
   await requireAdminForBar(barId);
-  const rows = await db
-    .select({
-      id: barLinks.id,
-      label: barLinks.label,
-      url: barLinks.url,
-      icon: barLinks.icon,
-      description: barLinks.description,
-      isActive: barLinks.isActive,
-      sortOrder: barLinks.sortOrder,
-    })
-    .from(barLinks)
-    .where(eq(barLinks.barId, barId))
-    .orderBy(asc(barLinks.sortOrder), asc(barLinks.createdAt));
-  return rows;
+  const [[bar], custom] = await Promise.all([
+    db
+      .select({
+        address: bars.address,
+        contactWa: bars.contactWa,
+        linkTreeConfig: bars.linkTreeConfig,
+      })
+      .from(bars)
+      .where(eq(bars.id, barId))
+      .limit(1),
+    db
+      .select({
+        id: barLinks.id,
+        label: barLinks.label,
+        url: barLinks.url,
+        icon: barLinks.icon,
+        description: barLinks.description,
+        isActive: barLinks.isActive,
+        sortOrder: barLinks.sortOrder,
+      })
+      .from(barLinks)
+      .where(eq(barLinks.barId, barId))
+      .orderBy(asc(barLinks.sortOrder), asc(barLinks.createdAt)),
+  ]);
+
+  const config: LinkTreeConfig = {
+    ...DEFAULT_LINK_TREE_CONFIG,
+    ...((bar?.linkTreeConfig as Partial<LinkTreeConfig>) ?? {}),
+  };
+
+  const builtIn: LinkTreeItem[] = [
+    {
+      id: "builtin-app",
+      label: config.appLabel?.trim() || "Open the app",
+      url: config.appUrl?.trim() || appUrl(),
+      icon: "smartphone",
+      description: "Sends visitors to the customer app",
+      isActive: config.showApp,
+      sortOrder: config.appOrder,
+      isBuiltIn: true,
+    },
+    {
+      id: "builtin-wa",
+      label: config.whatsappLabel?.trim() || "Chat on WhatsApp",
+      url: `https://wa.me/${resolveWa(bar?.contactWa)}`,
+      icon: "whatsapp",
+      description: "Uses the CS number from Settings",
+      isActive: config.showWhatsapp,
+      sortOrder: config.whatsappOrder,
+      isBuiltIn: true,
+    },
+    {
+      id: "builtin-address",
+      label: config.addressLabel?.trim() || "Find us",
+      url: config.addressUrl?.trim() || mapsUrl(bar?.address ?? null),
+      icon: "map-pin",
+      description: "Opens Google Maps with the bar address",
+      isActive: config.showAddress,
+      sortOrder: config.addressOrder,
+      isBuiltIn: true,
+    },
+  ];
+
+  return sortLinks([...builtIn, ...custom]);
 }
 
 export async function getLinkTreeConfig(
@@ -317,11 +391,31 @@ export async function createLink(
     return { ok: false, error: "URL must start with http://, https://, mailto:, or tel:" };
   }
 
-  // Taruh di paling bawah: MAX(sort_order) + 1.
-  const [maxRow] = await db
-    .select({ max: sql<number>`COALESCE(MAX(${barLinks.sortOrder}), 0)::int` })
-    .from(barLinks)
-    .where(eq(barLinks.barId, barId));
+  // Taruh di paling bawah. Nomor bawaan ikut dihitung: kalau admin sudah
+  // memindah urutan, bawaan bisa bernomor lebih besar dari semua kustom —
+  // tanpa ini tautan baru muncul di tengah, bukan di bawah.
+  const [maxRow, [barRow]] = await Promise.all([
+    db
+      .select({ max: sql<number>`COALESCE(MAX(${barLinks.sortOrder}), 0)::int` })
+      .from(barLinks)
+      .where(eq(barLinks.barId, barId))
+      .then((r) => r[0]),
+    db
+      .select({ cfg: bars.linkTreeConfig })
+      .from(bars)
+      .where(eq(bars.id, barId))
+      .limit(1),
+  ]);
+  const cfg: LinkTreeConfig = {
+    ...DEFAULT_LINK_TREE_CONFIG,
+    ...((barRow?.cfg as Partial<LinkTreeConfig>) ?? {}),
+  };
+  const lastPosition = Math.max(
+    Number(maxRow?.max ?? 0),
+    cfg.appOrder,
+    cfg.whatsappOrder,
+    cfg.addressOrder
+  );
 
   await db.insert(barLinks).values({
     barId,
@@ -330,7 +424,7 @@ export async function createLink(
     icon: data.icon,
     description: data.description?.trim() || null,
     isActive: data.isActive,
-    sortOrder: Number(maxRow?.max ?? 0) + 1,
+    sortOrder: lastPosition + 1,
   });
 
   await logActivity({
@@ -396,6 +490,13 @@ export async function updateLink(
 export async function deleteLink(
   linkId: string
 ): Promise<{ ok: boolean; error?: string }> {
+  // Bawaan tak boleh dihapus — hanya dimatikan lewat sakelarnya. Tanpa
+  // penjagaan ini permintaannya lolos diam-diam sbg "berhasil" (id-nya tak
+  // ada di tabel), padahal tautannya masih tampil di halaman publik.
+  if (isBuiltInLinkId(linkId)) {
+    return { ok: false, error: "Built-in links can't be deleted" };
+  }
+
   const [existing] = await db
     .select({ barId: barLinks.barId, label: barLinks.label })
     .from(barLinks)
@@ -419,7 +520,13 @@ export async function deleteLink(
   return { ok: true };
 }
 
-/** Simpan urutan baru (drag & drop / tombol naik-turun). */
+/**
+ * Simpan urutan baru untuk SELURUH daftar — bawaan & kustom bercampur.
+ *
+ * Keduanya tinggal di tempat berbeda (bawaan di bars.link_tree_config,
+ * kustom di baris bar_links), jadi satu posisi dipecah ke dua tujuan dalam
+ * SATU transaksi: urutan setengah tersimpan akan mengacak daftarnya.
+ */
 export async function reorderLinks(
   barId: string,
   orderedIds: string[]
@@ -427,13 +534,38 @@ export async function reorderLinks(
   await requireAdminForBar(barId);
   if (orderedIds.length === 0) return { ok: true };
 
-  // Satu transaksi: urutan tak boleh setengah tersimpan.
   await db.transaction(async (tx) => {
+    // Baca config di DALAM transaksi: dibaca-lalu-ditulis, jadi tak boleh
+    // memakai salinan basi kalau ada penyimpanan lain bersamaan.
+    const [row] = await tx
+      .select({ cfg: bars.linkTreeConfig })
+      .from(bars)
+      .where(eq(bars.id, barId))
+      .limit(1);
+    const cfg: LinkTreeConfig = {
+      ...DEFAULT_LINK_TREE_CONFIG,
+      ...((row?.cfg as Partial<LinkTreeConfig>) ?? {}),
+    };
+
+    let touchedConfig = false;
     for (const [i, id] of orderedIds.entries()) {
+      const position = i + 1;
+      if (isBuiltInLinkId(id)) {
+        cfg[BUILT_IN_ORDER_KEYS[id]] = position;
+        touchedConfig = true;
+      } else {
+        await tx
+          .update(barLinks)
+          .set({ sortOrder: position })
+          .where(and(eq(barLinks.id, id), eq(barLinks.barId, barId)));
+      }
+    }
+
+    if (touchedConfig) {
       await tx
-        .update(barLinks)
-        .set({ sortOrder: i + 1 })
-        .where(and(eq(barLinks.id, id), eq(barLinks.barId, barId)));
+        .update(bars)
+        .set({ linkTreeConfig: cfg })
+        .where(eq(bars.id, barId));
     }
   });
 
@@ -455,6 +587,13 @@ const configSchema = z.object({
   whatsappLabel: z.string().trim().max(60),
   addressUrl: z.string().trim().max(500),
   addressLabel: z.string().trim().max(60),
+  // Urutan diatur reorderLinks(), tapi ikut dikirim utuh oleh form config —
+  // tanpa field ini Zod membuangnya & posisi bawaan balik ke awal.
+  // Negatif diizinkan: itu nilai awal yang menaruh bawaan di atas (lihat
+  // DEFAULT_LINK_TREE_CONFIG).
+  appOrder: z.number().int().min(-9).max(999),
+  whatsappOrder: z.number().int().min(-9).max(999),
+  addressOrder: z.number().int().min(-9).max(999),
 });
 
 export async function updateLinkTreeConfig(
