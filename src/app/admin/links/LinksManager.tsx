@@ -188,7 +188,13 @@ export function LinksManager({
     values: { url: string; isActive: boolean }
   ): Promise<boolean> {
     const patch: Partial<LinkTreeConfig> = { [edit.showKey]: values.isActive };
-    if (edit.urlKey) patch[edit.urlKey] = values.url.trim();
+    if (edit.urlKey) {
+      // Sama dengan nilai otomatis → simpan KOSONG, bukan sebagai timpaan.
+      // Kalau dipaku, tautannya berhenti ikut berubah saat alamat bar
+      // diperbarui — padahal admin tak mengubah apa pun di sini.
+      const typed = values.url.trim();
+      patch[edit.urlKey] = typed === edit.defaultUrl ? "" : typed;
+    }
 
     const ok = await saveConfig(patch);
     if (!ok) return false;
@@ -504,11 +510,10 @@ function LinkFormModal({
 }) {
   const isNew = !initial;
   const [label, setLabel] = React.useState(initial?.label ?? "");
-  // Bawaan: kolom URL menampilkan TIMPAAN saja. Yang sedang berlaku tampil
-  // sebagai placeholder, supaya jelas mana yang diketik admin & mana otomatis.
-  const [url, setUrl] = React.useState(
-    builtIn ? (initial?.url === builtIn.defaultUrl ? "" : (initial?.url ?? "")) : (initial?.url ?? "")
-  );
+  // Kolom URL diisi nilai yang SEDANG BERLAKU — termasuk untuk bawaan yang
+  // belum pernah ditimpa. Admin bisa langsung melihat & menyunting alamatnya
+  // tanpa mengetik ulang dari nol.
+  const [url, setUrl] = React.useState(initial?.url ?? "");
   const [description, setDescription] = React.useState(
     initial?.description ?? ""
   );
@@ -616,7 +621,7 @@ function LinkFormModal({
             <span className="mt-1 block text-[10px] text-muted-foreground">
               {builtIn
                 ? (builtIn.lockedReason ??
-                  "Leave empty to keep using the address from your bar data.")
+                  "Edit it to point somewhere else, or clear the field to go back to your bar data.")
                 : "https:// is added automatically if you leave it out."}
             </span>
           </label>
