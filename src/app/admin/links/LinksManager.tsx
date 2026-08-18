@@ -25,6 +25,7 @@ import {
   deleteLink,
   reorderLinks,
   updateLinkTreeConfig,
+  type BuiltInDefaults,
   type LinkTreeItem,
 } from "@/lib/link-tree-actions";
 import type { LinkTreeConfig } from "@/lib/settings-constants";
@@ -35,8 +36,9 @@ interface Props {
   initialLinks: LinkTreeItem[];
   initialConfig: LinkTreeConfig;
   publicUrl: string;
-  /** Nomor CS efektif — ditampilkan supaya admin tahu tautan WA menuju ke mana. */
-  contactWa: string;
+  /** Nilai otomatis tautan bawaan — dipakai sbg placeholder kolom timpa,
+   *  supaya admin tahu tiap tautan menuju ke mana tanpa membuka halaman publik. */
+  defaults: BuiltInDefaults;
 }
 
 export function LinksManager({
@@ -44,7 +46,7 @@ export function LinksManager({
   initialLinks,
   initialConfig,
   publicUrl,
-  contactWa,
+  defaults,
 }: Props) {
   const confirm = useConfirm();
   const [links, setLinks] = React.useState(initialLinks);
@@ -222,8 +224,9 @@ export function LinksManager({
         <div>
           <h2 className="text-sm font-semibold">Built-in links</h2>
           <p className="text-xs text-muted-foreground">
-            Filled in automatically from your bar data. Leave the fields empty
-            to keep them in sync, or type your own label and URL to override.
+            The greyed-out text is what each link uses right now, taken from
+            your bar data. Leave a field empty to keep it in sync, or type your
+            own label and URL to override it.
           </p>
         </div>
         <div className="space-y-3">
@@ -236,7 +239,8 @@ export function LinksManager({
             onChange={(v) => saveConfig({ showApp: v })}
             label={config.appLabel}
             url={config.appUrl}
-            urlPlaceholder="Auto: your customer app URL"
+            labelPlaceholder={defaults.appLabel}
+            urlPlaceholder={defaults.appUrl}
             onLabelChange={(v) => setConfig((c) => ({ ...c, appLabel: v }))}
             onUrlChange={(v) => setConfig((c) => ({ ...c, appUrl: v }))}
             onCommit={() =>
@@ -249,11 +253,7 @@ export function LinksManager({
           <BuiltInRow
             icon="whatsapp"
             title="Chat on WhatsApp"
-            hint={
-              contactWa
-                ? `Uses ${contactWa} from Settings`
-                : "Uses the CS number from Settings"
-            }
+            hint={`Uses ${defaults.whatsappNumber} from Settings`}
             checked={config.showWhatsapp}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showWhatsapp: v })}
@@ -261,13 +261,20 @@ export function LinksManager({
           <BuiltInRow
             icon="map-pin"
             title="Find us"
-            hint="Opens Google Maps with the bar address"
+            hint={
+              defaults.addressUrl
+                ? "Opens Google Maps with the bar address"
+                : "Add your address in Settings, or type a URL below"
+            }
             checked={config.showAddress}
             disabled={savingConfig}
             onChange={(v) => saveConfig({ showAddress: v })}
             label={config.addressLabel}
             url={config.addressUrl}
-            urlPlaceholder="Auto: Google Maps search for your address"
+            labelPlaceholder={defaults.addressLabel}
+            urlPlaceholder={
+              defaults.addressUrl || "Paste a Google Maps link — no address set"
+            }
             onLabelChange={(v) => setConfig((c) => ({ ...c, addressLabel: v }))}
             onUrlChange={(v) => setConfig((c) => ({ ...c, addressUrl: v }))}
             onCommit={() =>
@@ -453,6 +460,7 @@ function BuiltInRow({
   onChange,
   label,
   url,
+  labelPlaceholder,
   urlPlaceholder,
   onLabelChange,
   onUrlChange,
@@ -468,13 +476,17 @@ function BuiltInRow({
    *  WhatsApp, yang nomornya satu sumber di Settings). */
   label?: string;
   url?: string;
+  /** Nilai OTOMATIS yang berlaku saat kolom dibiarkan kosong. */
+  labelPlaceholder?: string;
   urlPlaceholder?: string;
   onLabelChange?: (v: string) => void;
   onUrlChange?: (v: string) => void;
   onCommit?: () => void;
 }) {
-  // Nilai kolom saat difokus — pembanding untuk memutuskan perlu simpan.
-  const focusedValue = React.useRef("");
+  // Nilai tiap kolom saat difokus — pembanding untuk memutuskan perlu simpan.
+  // Dipisah per kolom agar tak bergantung pada urutan blur/focus browser.
+  const focusedLabel = React.useRef("");
+  const focusedUrl = React.useRef("");
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3 space-y-3">
       <div className="flex items-center gap-3">
@@ -504,12 +516,13 @@ function BuiltInRow({
             maxLength={60}
             onChange={(e) => onLabelChange?.(e.target.value)}
             onFocus={(e) => {
-              focusedValue.current = e.target.value;
+              focusedLabel.current = e.target.value;
             }}
             onBlur={(e) => {
-              if (e.target.value !== focusedValue.current) onCommit();
+              if (e.target.value !== focusedLabel.current) onCommit();
             }}
-            placeholder={`Auto: ${title}`}
+            placeholder={labelPlaceholder ?? title}
+            title={labelPlaceholder ?? title}
             className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
           />
           <input
@@ -518,12 +531,14 @@ function BuiltInRow({
             maxLength={500}
             onChange={(e) => onUrlChange?.(e.target.value)}
             onFocus={(e) => {
-              focusedValue.current = e.target.value;
+              focusedUrl.current = e.target.value;
             }}
             onBlur={(e) => {
-              if (e.target.value !== focusedValue.current) onCommit();
+              if (e.target.value !== focusedUrl.current) onCommit();
             }}
             placeholder={urlPlaceholder}
+            // URL bawaan sering lebih panjang dari kolomnya — hover utk penuh.
+            title={urlPlaceholder}
             className="h-9 px-3 rounded-md bg-input border border-border text-xs focus:outline-none focus:border-primary/60"
           />
         </div>

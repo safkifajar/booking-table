@@ -162,12 +162,7 @@ export async function getLinkTree(slug?: string): Promise<LinkTreeData | null> {
   }
   // Alamat: tampil kalau ada URL kustom ATAU alamat bar terisi — tanpa
   // keduanya tak ada yang bisa dituju.
-  const addressUrl =
-    config.addressUrl?.trim() ||
-    (bar.address
-      ? // Google Maps pencarian teks — tak perlu koordinat.
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bar.address)}`
-      : "");
+  const addressUrl = config.addressUrl?.trim() || mapsUrl(bar.address);
   if (config.showAddress && addressUrl) {
     builtIn.push({
       id: "builtin-address",
@@ -201,6 +196,49 @@ function appUrl(): string {
   } catch {
     return "/";
   }
+}
+
+/** Google Maps pencarian teks — tak perlu koordinat. "" bila alamat kosong. */
+function mapsUrl(address: string | null): string {
+  return address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : "";
+}
+
+/** Nilai bawaan tiap tautan built-in — apa adanya, tanpa timpaan config. */
+export interface BuiltInDefaults {
+  appLabel: string;
+  appUrl: string;
+  addressLabel: string;
+  addressUrl: string;
+  whatsappNumber: string;
+}
+
+/**
+ * Nilai OTOMATIS tautan bawaan, untuk ditampilkan di admin sebagai placeholder.
+ *
+ * Halaman publik merakit nilai ini sendiri saat render, jadi admin tak pernah
+ * melihatnya — kolom timpaan yang kosong terlihat seperti data hilang padahal
+ * tautannya berfungsi. Dipakai bersama getLinkTree() supaya yang ditampilkan
+ * di admin persis yang dipakai publik.
+ */
+export async function getBuiltInDefaults(
+  barId: string
+): Promise<BuiltInDefaults> {
+  await requireAdminForBar(barId);
+  const [bar] = await db
+    .select({ address: bars.address, contactWa: bars.contactWa })
+    .from(bars)
+    .where(eq(bars.id, barId))
+    .limit(1);
+
+  return {
+    appLabel: "Open the app",
+    appUrl: appUrl(),
+    addressLabel: "Find us",
+    addressUrl: mapsUrl(bar?.address ?? null),
+    whatsappNumber: resolveWa(bar?.contactWa),
+  };
 }
 
 // ============================================================
