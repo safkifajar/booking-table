@@ -31,7 +31,7 @@ import {
   getExistingSubscription,
   subscribePush,
   unsubscribePush,
-  notificationPermission,
+  pushFailureMessage,
 } from "@/lib/push-client";
 import { saveSubscription, removeSubscription } from "@/lib/push";
 
@@ -115,17 +115,13 @@ export function ProfileMenuList({
       // Aktifkan — minta izin + subscribe.
       setPushState((s) => ({ ...s, busy: true }));
       try {
-        const sub = await subscribePush();
-        if (!sub) {
-          toast.error(
-            notificationPermission() === "denied"
-              ? "Notification permission blocked. Enable it from your browser settings."
-              : "Notification permission denied"
-          );
+        const res = await subscribePush();
+        if (!res.ok) {
+          toast.error(pushFailureMessage(res.reason));
           setPushState((s) => ({ ...s, busy: false }));
           return;
         }
-        await saveSubscription(sub);
+        await saveSubscription(res.subscription);
         toast.success("Notifications enabled for this device");
         setPushState((s) => ({ ...s, active: true, busy: false }));
       } catch (err) {
