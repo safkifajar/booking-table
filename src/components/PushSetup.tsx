@@ -9,6 +9,7 @@ import {
   getExistingSubscription,
   subscribePush,
   notificationPermission,
+  pushFailureMessage,
 } from "@/lib/push-client";
 import { saveSubscription } from "@/lib/push";
 import { getActionErrorMessage } from "@/lib/utils";
@@ -43,13 +44,13 @@ function usePushSetup() {
   const enable = React.useCallback(async (): Promise<boolean> => {
     setBusy(true);
     try {
-      const sub = await subscribePush();
-      if (!sub) {
-        toast.error("Notification permission denied or not supported");
+      const res = await subscribePush();
+      if (!res.ok) {
+        toast.error(pushFailureMessage(res.reason));
         if (notificationPermission() === "denied") setCanOffer(false);
         return false;
       }
-      await saveSubscription(sub);
+      await saveSubscription(res.subscription);
       toast.success("Notifications enabled for this device");
       setCanOffer(false);
       return true;

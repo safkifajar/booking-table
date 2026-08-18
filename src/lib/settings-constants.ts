@@ -205,3 +205,91 @@ export function calculateDP(
   const rounded = Math.ceil(raw / 100) * 100;
   return Math.min(rounded, Math.max(0, Math.round(grandTotal)));
 }
+
+// ============================================================
+// LINK TREE (halaman publik link.<domain> untuk bio Instagram)
+// ============================================================
+
+/**
+ * Judul/subjudul halaman + preferensi tampil untuk 3 tautan BAWAAN.
+ *
+ * Yang bawaan sengaja tak disimpan sebagai baris di bar_links: dirakit dari
+ * data yang sudah ada (bars.address, CONTACT_WA) supaya admin tak perlu
+ * mengetik ulang & tautannya ikut berubah kalau datanya berubah. Yang
+ * tersimpan di sini hanya "tampilkan atau tidak".
+ */
+export interface LinkTreeConfig {
+  /** Judul di atas daftar tautan. Kosong → pakai nama bar. */
+  headline: string;
+  /** Kalimat singkat di bawah judul. */
+  tagline: string;
+  /** Tampilkan tautan "Open the app" (ke domain customer). */
+  showApp: boolean;
+  /** Tampilkan tautan WhatsApp CS. */
+  showWhatsapp: boolean;
+  /** Tampilkan tautan alamat (buka Google Maps). */
+  showAddress: boolean;
+  /**
+   * URL & label KUSTOM untuk tiga tautan bawaan. KOSONG = pakai nilai
+   * otomatis dari data yang ada (domain app, CONTACT_WA, bars.address).
+   *
+   * Disediakan karena nilai otomatis tak selalu pas: Google Maps hasil
+   * pencarian teks bisa salah menunjuk, dan nomor WA promo kadang beda
+   * dari nomor CS.
+   */
+  appUrl: string;
+  appLabel: string;
+  whatsappUrl: string;
+  whatsappLabel: string;
+  addressUrl: string;
+  addressLabel: string;
+  /**
+   * Posisi tiap tautan dalam SATU daftar bersama tautan kustom.
+   *
+   * Bawaan tak punya baris di bar_links, jadi urutannya tak bisa ikut
+   * disimpan di sana — disimpan di sini sebagai angka yang dibandingkan
+   * dengan bar_links.sort_order.
+   *
+   * Nilai awalnya NEGATIF (-3,-2,-1), bukan 1-3: tautan kustom yang dibuat
+   * sebelum fitur ini ada sudah memakai sort_order 1..n, jadi nomor positif
+   * akan bentrok & menyelipkan tautan lama ke tengah tautan bawaan. Begitu
+   * admin memindah sesuatu, reorderLinks() menomori ulang SEMUANYA 1..n dan
+   * angka negatif ini tak terpakai lagi.
+   */
+  appOrder: number;
+  whatsappOrder: number;
+  addressOrder: number;
+}
+
+/** Kunci config penyimpan urutan tiap tautan bawaan. */
+export const BUILT_IN_ORDER_KEYS = {
+  "builtin-app": "appOrder",
+  "builtin-wa": "whatsappOrder",
+  "builtin-address": "addressOrder",
+} as const satisfies Record<string, keyof LinkTreeConfig>;
+
+export type BuiltInLinkId = keyof typeof BUILT_IN_ORDER_KEYS;
+
+export function isBuiltInLinkId(id: string): id is BuiltInLinkId {
+  return id in BUILT_IN_ORDER_KEYS;
+}
+
+export const DEFAULT_LINK_TREE_CONFIG: LinkTreeConfig = {
+  headline: "",
+  tagline: "",
+  showApp: true,
+  showWhatsapp: true,
+  showAddress: true,
+  // Kosong = otomatis. Admin hanya mengisi kalau ingin menimpanya.
+  appUrl: "",
+  appLabel: "",
+  whatsappUrl: "",
+  whatsappLabel: "",
+  addressUrl: "",
+  addressLabel: "",
+  // Negatif = selalu di atas tautan kustom (sort_order-nya mulai dari 1),
+  // sehingga data lama tampil persis seperti sebelum fitur ini ada.
+  appOrder: -3,
+  whatsappOrder: -2,
+  addressOrder: -1,
+};

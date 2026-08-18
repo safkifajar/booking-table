@@ -12,7 +12,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { bars } from "@/lib/db/schema/venue";
@@ -30,6 +30,7 @@ import {
   type OperatingHours,
   type ReservationConfig,
 } from "./settings-constants";
+import { normalizeWaNumber } from "./contact";
 
 // ============================================================
 // ADMIN GUARD
@@ -226,4 +227,66 @@ export async function updateChargeConfig(
   // Tax/service memengaruhi tagihan di banyak tempat → revalidate luas.
   revalidatePath("/admin/settings");
   revalidatePath("/staff/cashier");
+}
+
+// ============================================================
+// KONTAK CS (nomor WhatsApp)
+// ============================================================
+
+/**
+ * Nomor WhatsApp CS bar. TANPA guard — nomor ini memang publik (tombol
+ * "Contact us" di /auth & /profile), dan halaman-halaman itu diakses
+ * sebelum login.
+ *
+ * Dipakai halaman SERVER lalu dialirkan lewat props ke komponen client,
+ * karena komponen client tak bisa membaca DB.
+ *
+ * Return null kalau admin belum mengisi → pemanggil pakai fallback
+ * (lihat resolveWa di lib/contact.ts).
+ */
+export async function getBarContactWa(): Promise<string | null> {
+  const [row] = await db
+    .select({ wa: bars.contactWa })
+    .from(bars)
+    .orderBy(asc(bars.createdAt))
+    .limit(1);
+  return row?.wa ?? null;
+}
+
+const contactSchema = z.object({
+  contactWa: z.string().trim().max(30),
+});
+
+export async function updateBarContact(
+  barId: string,
+  input: z.infer<typeof contactSchema>
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdminForBar(barId);
+  const data = contactSchema.parse(input);
+
+  // Dirapikan ke format wa.me ("0812-3456" -> "628123456"). Kosong = boleh,
+  // artinya kembali ke default. Tapi isian yang TAK MASUK AKAL ditolak —
+  // lebih baik gagal jelas daripada tombol CS menuju nomor rusak.
+  const raw = data.contactWa.trim();
+  let normalized: string | null = null;
+  if (raw) {
+    normalized = normalizeWaNumber(raw);
+    if (!normalized) {
+      return {
+        ok: false,
+        error: "That doesn't look like a valid WhatsApp number",
+      };
+    }
+  }
+
+  await db
+    .update(bars)
+    .set({ contactWa: normalized })
+    .where(eq(bars.id, barId));
+
+  // Nomor dipakai di /auth, /profile, & halaman link → revalidate luas.
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+  revalidatePath("/link");
+  return { ok: true };
 }

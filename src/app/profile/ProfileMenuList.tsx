@@ -31,7 +31,7 @@ import {
   getExistingSubscription,
   subscribePush,
   unsubscribePush,
-  notificationPermission,
+  pushFailureMessage,
 } from "@/lib/push-client";
 import { saveSubscription, removeSubscription } from "@/lib/push";
 
@@ -50,6 +50,7 @@ export function ProfileMenuList({
   isPrivate,
   membership,
   pendingInviteCount = 0,
+  contactWa,
 }: {
   avatarUrl: string | null;
   displayName: string;
@@ -60,6 +61,8 @@ export function ProfileMenuList({
   membership: { key: "basic" | "premium" | "vip"; name: string; expiresAt: string | null };
   /** Jumlah undangan meja yang menunggu keputusan → lencana di menu. */
   pendingInviteCount?: number;
+  /** Nomor WA CS dari pengaturan bar (kosong = pakai default). */
+  contactWa?: string | null;
 }) {
   const confirm = useConfirm();
   const [signingOut, setSigningOut] = React.useState(false);
@@ -112,17 +115,13 @@ export function ProfileMenuList({
       // Aktifkan — minta izin + subscribe.
       setPushState((s) => ({ ...s, busy: true }));
       try {
-        const sub = await subscribePush();
-        if (!sub) {
-          toast.error(
-            notificationPermission() === "denied"
-              ? "Notification permission blocked. Enable it from your browser settings."
-              : "Notification permission denied"
-          );
+        const res = await subscribePush();
+        if (!res.ok) {
+          toast.error(pushFailureMessage(res.reason));
           setPushState((s) => ({ ...s, busy: false }));
           return;
         }
-        await saveSubscription(sub);
+        await saveSubscription(res.subscription);
         toast.success("Notifications enabled for this device");
         setPushState((s) => ({ ...s, active: true, busy: false }));
       } catch (err) {
@@ -301,7 +300,7 @@ export function ProfileMenuList({
       <Section title="Help">
         <MenuGroup>
           <a
-            href={waUrl()}
+            href={waUrl(contactWa)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/40 active:bg-muted/60 transition group"

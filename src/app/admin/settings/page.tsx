@@ -1,10 +1,14 @@
 import { requireAdmin } from "@/lib/admin";
-import { getBarSettings } from "@/lib/settings-actions";
+import { getBarSettings, getBarContactWa } from "@/lib/settings-actions";
+import { resolveWa } from "@/lib/contact";
 import { SettingsManager } from "./SettingsManager";
 
 export default async function AdminSettingsPage() {
   const bar = await requireAdmin();
-  const settings = await getBarSettings(bar.id);
+  const [settings, contactWa] = await Promise.all([
+    getBarSettings(bar.id),
+    getBarContactWa(),
+  ]);
 
   return (
     <main className="flex-1 pb-12">
@@ -19,7 +23,12 @@ export default async function AdminSettingsPage() {
           </p>
         </div>
 
-        <SettingsManager barId={bar.id} initial={settings} />
+        <SettingsManager
+          barId={bar.id}
+          initial={settings}
+          initialContactWa={contactWa}
+          effectiveContactWa={resolveWa(contactWa)}
+        />
       </div>
     </main>
   );

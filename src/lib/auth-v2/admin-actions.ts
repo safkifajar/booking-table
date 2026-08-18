@@ -22,6 +22,7 @@ import { db } from "@/lib/db/client";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { users } from "@/lib/db/schema/auth";
 import { verifyPassword } from "@/lib/auth-v2/password";
+import { adminLoginUrl } from "@/lib/auth-v2/permissions";
 import {
   defaultDashboardFor,
   type StaffRoleName,
@@ -119,12 +120,17 @@ export async function adminSignInAction(formData: {
 }
 
 /**
- * Admin sign out — clear session, redirect ke admin login.
+ * Admin sign out — clear session, lalu ke halaman login ADMIN.
  *
- * signOut() tidak redirect (redirect: false) supaya kita pakai
- * Next.js redirect() yang preserve host subdomain.
+ * Kenapa URL ABSOLUT ke subdomain admin, bukan redirect("/login") relatif:
+ * path relatif diselesaikan Next terhadap AUTH_URL (host customer), jadi
+ * admin mendarat di halaman login CUSTOMER. Dengan menyusun host
+ * "admin.<domain>" secara eksplisit, admin selalu kembali ke /login admin.
+ *
+ * Pola penyusunan host-nya sama dengan setup-password invite staff
+ * (lib/staff-actions.ts).
  */
 export async function adminSignOutAction(): Promise<void> {
   await signOut({ redirect: false });
-  redirect("/login");
+  redirect(adminLoginUrl());
 }

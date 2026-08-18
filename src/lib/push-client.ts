@@ -3,6 +3,8 @@
  * Dipakai komponen PushSetup. Bukan server action (jalan di browser).
  */
 
+import * as Sentry from "@sentry/nextjs";
+
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
 /** Convert VAPID public key (base64url) → Uint8Array (applicationServerKey). */
@@ -57,29 +59,89 @@ export async function getExistingSubscription(): Promise<PushSubscription | null
  * Minta izin + subscribe. Return PushSubscription (plain JSON) untuk dikirim
  * ke server, atau null kalau ditolak/gagal.
  */
-export async function subscribePush(): Promise<{
-  endpoint: string;
-  keys: { p256dh: string; auth: string };
-} | null> {
-  if (!pushSupported()) return null;
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return null;
+export type PushSubscribeResult =
+  | {
+      ok: true;
+      subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
+    }
+  | { ok: false; reason: "unsupported" | "denied" | "service-error" };
 
-  const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
-    });
+export async function subscribePush(): Promise<PushSubscribeResult> {
+  if (!pushSupported()) return { ok: false, reason: "unsupported" };
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return { ok: false, reason: "denied" };
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+      });
+    }
+    // Serialize ke plain object (PushSubscription tidak langsung serializable).
+    const json = sub.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+      return { ok: false, reason: "service-error" };
+    }
+    return {
+      ok: true,
+      subscription: {
+        endpoint: json.endpoint,
+        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+      },
+    };
+  } catch (err) {
+    // Izin SUDAH diberi, tapi layanan push browser (FCM/Mozilla) menolak —
+    // mis. "Registration failed - push service error". Biasanya perangkat tak
+    // bisa menjangkau server push: jaringan diblokir, jam sistem melenceng,
+    // atau Google Play Services bermasalah. Pesan mentahnya tak berarti bagi
+    // tamu, jadi dipetakan ke satu sebab yang bisa ditindaklanjuti — tapi
+    // tetap dicatat agar kita bisa melihat kejadian nyatanya.
+    reportPushFailure(err);
+    return { ok: false, reason: "service-error" };
   }
-  // Serialize ke plain object (PushSubscription tidak langsung serializable).
-  const json = sub.toJSON();
-  if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return null;
-  return {
-    endpoint: json.endpoint,
-    keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
-  };
+}
+
+/**
+ * Pesan siap tampil untuk tiap sebab gagal — SATU sumber, dipakai semua
+ * layar. Menyebut langkah yang bisa dicoba tamu; pesan mentah browser
+ * ("Registration failed - push service error") tak berarti apa pun.
+ */
+export function pushFailureMessage(
+  reason: "unsupported" | "denied" | "service-error"
+): string {
+  switch (reason) {
+    case "denied":
+      return "Notifications are blocked. Allow them in your browser settings, then try again.";
+    case "unsupported":
+      return "This browser can't receive notifications. Try Chrome, or install the app to your home screen.";
+    case "service-error":
+      return "Couldn't reach the notification service. Check your connection and try again.";
+  }
+}
+
+/**
+ * Catat kegagalan subscribe ke Sentry — diam-diam, tak mengganggu alur.
+ *
+ * Dikirim sebagai MESSAGE, bukan exception: galat layanan push bertipe
+ * "AbortError", yang masuk daftar ignoreErrors di instrumentation-client
+ * (di sana ia noise navigasi). Di sini ia justru sinyal yang kita cari,
+ * jadi dikemas ulang supaya lolos filter itu.
+ */
+function reportPushFailure(err: unknown) {
+  try {
+    const detail =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    Sentry.captureMessage(`Push subscribe failed — ${detail}`, {
+      level: "warning",
+      tags: { area: "push-subscribe" },
+      extra: { userAgent: navigator.userAgent },
+    });
+  } catch {
+    /* jangan sampai pelaporan galat ikut menggagalkan alurnya */
+  }
 }
 
 export function notificationPermission(): NotificationPermission | null {

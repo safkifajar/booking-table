@@ -77,8 +77,24 @@ export const authConfig = {
     authorized({ auth, request }) {
       const path = request.nextUrl.pathname;
       const host = request.headers.get("host") ?? "";
-      const isAdminSubdomain = host.startsWith("admin.");
+      const fwd = request.headers.get("x-forwarded-host") ?? "";
+      const isAdminSubdomain =
+        host.startsWith("admin.") || fwd.startsWith("admin.");
+      // Link-tree (link.<domain>) PUBLIK sepenuhnya — dipasang di bio
+      // Instagram. Callback ini jalan SEBELUM middleware.ts, jadi tanpa
+      // pengecualian di sini pengunjung bisa dilempar ke login walau
+      // middleware sudah mengizinkan.
+      const isLinkSubdomain =
+        host.startsWith("link.") || fwd.startsWith("link.");
       const isLoggedIn = !!auth?.user?.id;
+
+      // Cek PATH juga, bukan cuma host: setelah middleware me-rewrite ke
+      // /link, Next 16 menjalankan ulang pipeline dgn `host` yang sudah
+      // dinormalkan (subdomain "link." hilang) — tanpa cek path ini,
+      // pengunjung dilempar ke /auth?next=/link pada jalan kedua.
+      if (isLinkSubdomain || path === "/link" || path.startsWith("/link/")) {
+        return true;
+      }
 
       // Admin subdomain: middleware.ts yang handle gate, callback skip
       if (isAdminSubdomain) return true;

@@ -10,6 +10,7 @@ import {
   subscribePush,
   unsubscribePush,
   notificationPermission,
+  pushFailureMessage,
 } from "@/lib/push-client";
 import { saveSubscription, removeSubscription } from "@/lib/push";
 import { getActionErrorMessage } from "@/lib/utils";
@@ -63,13 +64,13 @@ export function PushToggle() {
   async function turnOn() {
     setBusy(true);
     try {
-      const sub = await subscribePush();
-      if (!sub) {
+      const res = await subscribePush();
+      if (!res.ok) {
         setPerm(notificationPermission());
-        toast.error("Notification permission denied or not supported");
+        toast.error(pushFailureMessage(res.reason));
         return;
       }
-      await saveSubscription(sub);
+      await saveSubscription(res.subscription);
       setEnabled(true);
       setPerm("granted");
       toast.success("Notifications enabled for this device");

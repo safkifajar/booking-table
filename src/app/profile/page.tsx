@@ -6,6 +6,7 @@ import { ProfileMenuList } from "./ProfileMenuList";
 import { getMembershipStatus } from "@/lib/membership";
 import { getMyPendingInviteCount } from "@/lib/actions";
 import { getBarBySlug } from "@/lib/queries";
+import { getBarContactWa } from "@/lib/settings-actions";
 import { HomeBottomNav } from "@/components/HomeBottomNav";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SohoGlow } from "@/components/ui/soho-glow";
@@ -32,10 +33,12 @@ export default async function ProfilePage() {
   // Badge level membership EFEKTIF (PRD Membership M12) + jumlah undangan pending
   // + bar (untuk bottom nav — barId dipakai tombol Story).
   const barSlug = process.env.NEXT_PUBLIC_BAR_SLUG ?? "soho-purwokerto";
-  const [membership, pendingInviteCount, bar] = await Promise.all([
+  const [membership, pendingInviteCount, bar, contactWa] = await Promise.all([
     getMembershipStatus(profile.id),
     getMyPendingInviteCount(),
     getBarBySlug(barSlug),
+    // Nomor CS dari pengaturan bar — komponen client tak bisa baca DB.
+    getBarContactWa(),
   ]);
 
   return (
@@ -76,6 +79,7 @@ export default async function ProfilePage() {
             expiresAt: membership.expires_at?.toISOString() ?? null,
           }}
           pendingInviteCount={pendingInviteCount}
+          contactWa={contactWa}
         />
       </div>
 

@@ -12,6 +12,7 @@ import {
   ChartBar,
   ChevronDown,
   Settings,
+  Link as LinkIcon,
   Image as ImageIcon,
   Users,
   UserCircle,
@@ -174,6 +175,12 @@ const NAV: NavItem[] = [
         href: "/admin/settings",
         label: "Settings",
         icon: <Settings className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/links",
+        label: "Link Page",
+        icon: <LinkIcon className="h-4 w-4" />,
       },
       {
         type: "leaf",

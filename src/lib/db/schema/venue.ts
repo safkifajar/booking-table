@@ -20,6 +20,11 @@ export const bars = pgTable("bars", {
   name: text("name").notNull(),
   tagline: text("tagline"),
   address: text("address"),
+  /**
+   * Nomor WhatsApp CS — format 62... tanpa +/spasi (sesuai wa.me).
+   * NULL/kosong = pakai default dari lib/contact.ts (env atau nomor bawaan).
+   */
+  contactWa: text("contact_wa"),
   logoUrl: text("logo_url"),
   coverUrl: text("cover_url"),
   theme: jsonb("theme").default({}).notNull(),
@@ -27,6 +32,12 @@ export const bars = pgTable("bars", {
   reservationConfig: jsonb("reservation_config").default({}).notNull(),
   /** Pajak & service charge (%) + pembulatan. Lihat ChargeConfig. */
   chargeConfig: jsonb("charge_config").default({}).notNull(),
+  /**
+   * Halaman link-tree publik (link.<domain>): judul, subjudul, & preferensi
+   * tampil untuk 3 tautan BAWAAN (aplikasi/WA/alamat). Tautan kustom ada di
+   * tabel bar_links. Lihat LinkTreeConfig.
+   */
+  linkTreeConfig: jsonb("link_tree_config").default({}).notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 

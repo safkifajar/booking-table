@@ -11,6 +11,7 @@ import {
   updateOperatingHours,
   updateReservationConfig,
   updateChargeConfig,
+  updateBarContact,
 } from "@/lib/settings-actions";
 import {
   DAY_KEYS,
@@ -28,15 +29,118 @@ import {
 interface Props {
   barId: string;
   initial: BarSettings;
+  /** Nomor WA CS tersimpan (null = belum diatur, pakai default). */
+  initialContactWa: string | null;
+  /** Nomor efektif (punya bar, atau default) — utk keterangan "sedang dipakai". */
+  effectiveContactWa: string;
 }
 
-export function SettingsManager({ barId, initial }: Props) {
+export function SettingsManager({
+  barId,
+  initial,
+  initialContactWa,
+  effectiveContactWa,
+}: Props) {
   return (
     <div className="space-y-6">
+      <ContactSection
+        barId={barId}
+        initial={initialContactWa}
+        effective={effectiveContactWa}
+      />
       <OperatingHoursSection barId={barId} initial={initial.operatingHours} />
       <ReservationSection barId={barId} initial={initial.reservationConfig} />
       <ChargeSection barId={barId} initial={initial.chargeConfig} />
     </div>
+  );
+}
+
+// ============================================================
+// KONTAK CS (nomor WhatsApp)
+// ============================================================
+
+/**
+ * Nomor WA CS — dipakai tombol "Contact us" di /auth & /profile, pengajuan
+ * lupa password, dan tautan WhatsApp di halaman link publik.
+ *
+ * Dulu hardcode di lib/contact.ts (hanya bisa diganti lewat env + redeploy).
+ */
+function ContactSection({
+  barId,
+  initial,
+  effective,
+}: {
+  barId: string;
+  initial: string | null;
+  /** Nomor yang BENAR-BENAR dipakai sekarang (punya bar, atau default). */
+  effective: string;
+}) {
+  const [wa, setWa] = React.useState(initial ?? "");
+  const [saving, setSaving] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await updateBarContact(barId, { contactWa: wa });
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to save");
+        return;
+      }
+      toast.success("Contact number saved");
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Failed to save"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="mb-4">
+        <h2 className="text-base font-semibold">Customer service</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          WhatsApp number used by the &quot;Contact us&quot; buttons, password
+          reset requests, and your public link page.
+        </p>
+      </div>
+
+      <div className="flex items-end gap-2 flex-wrap">
+        <label className="flex-1 min-w-[220px]">
+          <span className="text-xs font-medium text-muted-foreground">
+            WhatsApp number
+          </span>
+          <input
+            type="text"
+            value={wa}
+            maxLength={30}
+            onChange={(e) => setWa(e.target.value)}
+            placeholder="081228814542"
+            className="mt-1 w-full h-10 px-3 rounded-md bg-input border border-border text-sm focus:outline-none focus:border-primary/60"
+          />
+          {/* Tampilkan nomor yang SEDANG dipakai — tanpa ini admin tak tahu
+              tombol Contact us menuju ke mana saat kolomnya masih kosong
+              (yang terlihat cuma placeholder abu-abu). */}
+          <span className="mt-1 block text-[10px] text-muted-foreground">
+            Currently in use:{" "}
+            <span className="font-mono text-foreground/80">{effective}</span>
+            {!initial && " (default)"}
+          </span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            Any common format works — spaces, dashes, +62, or a leading 0.
+            Leave empty to use the default number.
+          </span>
+        </label>
+        <Button
+          type="button"
+          variant="gold"
+          size="sm"
+          onClick={save}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Card>
   );
 }
 
