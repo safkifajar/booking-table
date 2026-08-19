@@ -49,8 +49,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     process.env.RESEND_FROM ??
     "noreply@booking-table.dev";
 
-  // OneSignal didahulukan (kuota lebih longgar, tanpa batas harian).
-  if (oneSignalAppId && oneSignalKey) {
+  // EMAIL_PROVIDER memaksa pilihan; tanpa itu OneSignal didahulukan (kuota
+  // lebih longgar, tanpa batas harian). Perlu dipaksa saat satu penyedia
+  // kredensialnya sudah ada tapi belum boleh mengirim — mis. domain masih
+  // menunggu persetujuan.
+  const forced = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+
+  if (forced !== "resend" && oneSignalAppId && oneSignalKey) {
     return sendViaOneSignal(input, {
       appId: oneSignalAppId,
       apiKey: oneSignalKey,
