@@ -6,8 +6,9 @@ export const metadata = {
 };
 
 /**
- * Halaman "lupa password" — user isi email lalu diarahkan ke WhatsApp CS
- * dengan pesan yang sudah terisi. Reset dilakukan admin setelah verifikasi.
+ * Halaman "lupa password" — user isi email, tautan reset dikirim ke email
+ * itu. WhatsApp CS tetap ada sebagai jalur cadangan untuk tamu yang tak bisa
+ * membuka emailnya.
  */
 export default async function ForgotPasswordPage() {
   // Nomor CS dari DB (server) → props ke komponen client.
