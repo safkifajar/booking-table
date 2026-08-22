@@ -23,12 +23,19 @@ import { createHash, randomBytes } from "crypto";
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, verificationTokens } from "@/lib/db/schema/auth";
+import { staffRoles } from "@/lib/db/schema/extras";
 import { hashPassword } from "./password";
 import { sendEmail } from "./email-service";
 import { passwordResetEmail } from "./email-template";
 
 /** Berapa lama tautan reset berlaku. */
 const TOKEN_TTL_MINUTES = 30;
+
+/**
+ * Siapa yang meminta: staff (panel admin) atau tamu (aplikasi customer).
+ * Menentukan domain tautan & halaman tempat password disetel.
+ */
+export type ResetAudience = "customer" | "admin";
 
 /**
  * Penanda identifier supaya token reset tak tertukar dengan token magic-link,
@@ -40,12 +47,19 @@ function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-/** URL dasar aplikasi customer — dipakai merangkai tautan reset. */
-function appBaseUrl(): string {
+/**
+ * URL dasar untuk tautan reset.
+ *
+ * `admin` = domain panel staff, selain itu domain aplikasi tamu. Salah
+ * domain berarti staff dilempar ke aplikasi tamu (dan sebaliknya) — di
+ * production keduanya subdomain berbeda dengan sesi login terpisah.
+ */
+function baseUrlFor(audience: ResetAudience): string {
   const base = process.env.AUTH_URL ?? "http://localhost:3000";
   try {
     const url = new URL(base);
-    url.hostname = url.hostname.replace(/^(admin|link)\./, "");
+    const bare = url.hostname.replace(/^(admin|link)\./, "");
+    url.hostname = audience === "admin" ? `admin.${bare}` : bare;
     url.pathname = "/";
     url.search = "";
     return url.toString().replace(/\/$/, "");
@@ -60,7 +74,8 @@ function appBaseUrl(): string {
  * Selalu `{ ok: true }` — lihat catatan keamanan di atas.
  */
 export async function requestPasswordReset(
-  emailRaw: string
+  emailRaw: string,
+  audience: ResetAudience = "customer"
 ): Promise<{ ok: true }> {
   const email = emailRaw.trim().toLowerCase();
   if (!email || !email.includes("@")) return { ok: true };
@@ -73,6 +88,20 @@ export async function requestPasswordReset(
 
   // Email tak terdaftar → berhenti diam-diam, jawaban tetap sama.
   if (!user?.email) return { ok: true };
+
+  // Halaman admin hanya melayani yang PUNYA peran staff aktif. Tanpa ini,
+  // siapa pun bisa memakai halaman lupa-password admin untuk mengirimi
+  // dirinya tautan berdomain admin — terlihat resmi & memudahkan penipuan.
+  if (audience === "admin") {
+    const [staff] = await db
+      .select({ role: staffRoles.role })
+      .from(staffRoles)
+      .where(
+        and(eq(staffRoles.profileId, user.id), eq(staffRoles.isActive, true))
+      )
+      .limit(1);
+    if (!staff) return { ok: true };
+  }
 
   const identifier = `${RESET_PREFIX}${email}`;
 
@@ -91,7 +120,8 @@ export async function requestPasswordReset(
     expires,
   });
 
-  const link = `${appBaseUrl()}/auth/reset?token=${rawToken}&email=${encodeURIComponent(email)}`;
+  const path = audience === "admin" ? "/reset" : "/auth/reset";
+  const link = `${baseUrlFor(audience)}${path}?token=${rawToken}&email=${encodeURIComponent(email)}`;
   const tpl = passwordResetEmail(link, TOKEN_TTL_MINUTES);
 
   try {
