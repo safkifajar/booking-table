@@ -406,3 +406,101 @@ This email was sent to ${email}.
 
   return { html, text };
 }
+
+// ============================================================
+// PASSWORD RESET EMAIL
+// ============================================================
+
+/**
+ * Email tautan reset password.
+ *
+ * Mengembalikan `subject` juga (beda dari template lain yang subjek-nya
+ * ditentukan pemanggil) supaya judul & isi email tetap sepasang.
+ */
+export function passwordResetEmail(
+  url: string,
+  expiresInMinutes: number
+): { subject: string; html: string; text: string } {
+  const subject = "Reset your SOHO password";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${subject}</title>
+</head>
+<body style="margin:0;padding:0;background:${COLORS.bg};color:${COLORS.text};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:${COLORS.bg};padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width:520px;background:${COLORS.card};border:1px solid ${COLORS.border};border-radius:16px;overflow:hidden;">
+
+          <tr>
+            <td style="padding:32px 32px 8px 32px;">
+              <div style="display:inline-block;width:48px;height:1px;background:${COLORS.primary};vertical-align:middle;"></div>
+              <span style="margin-left:12px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${COLORS.primary};font-weight:600;vertical-align:middle;">
+                SOHO Social House
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:8px 32px 16px 32px;">
+              <h1 style="margin:0;font-size:24px;line-height:1.3;font-weight:700;color:${COLORS.text};">
+                Reset your password
+              </h1>
+              <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:${COLORS.muted};">
+                Tap the button below to choose a new password. This link works
+                once and expires in ${expiresInMinutes} minutes.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:8px 32px 24px 32px;">
+              <a href="${url}"
+                 style="display:inline-block;padding:14px 28px;background:${COLORS.primary};color:#ffffff;text-decoration:none;border-radius:999px;font-size:15px;font-weight:600;">
+                Choose a new password
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 24px 32px;">
+              <p style="margin:0;font-size:12px;line-height:1.6;color:${COLORS.muted};">
+                If the button doesn't work, copy this link into your browser:
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;line-height:1.5;word-break:break-all;color:${COLORS.primaryLight};">
+                ${url}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 32px 32px;border-top:1px solid ${COLORS.border};">
+              <p style="margin:16px 0 0 0;font-size:12px;line-height:1.6;color:${COLORS.muted};">
+                Didn't ask for this? You can ignore this email — your password
+                stays the same.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Reset your SOHO password
+
+Open this link to choose a new password:
+${url}
+
+The link works once and expires in ${expiresInMinutes} minutes.
+
+Didn't ask for this? Ignore this email — your password stays the same.`;
+
+  return { subject, html, text };
+}

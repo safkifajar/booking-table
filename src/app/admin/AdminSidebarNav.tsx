@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Settings,
   Link as LinkIcon,
+  Mail,
   Image as ImageIcon,
   Users,
   UserCircle,
@@ -181,6 +182,12 @@ const NAV: NavItem[] = [
         href: "/admin/links",
         label: "Link Page",
         icon: <LinkIcon className="h-4 w-4" />,
+      },
+      {
+        type: "leaf",
+        href: "/admin/email-logs",
+        label: "Email Log",
+        icon: <Mail className="h-4 w-4" />,
       },
       {
         type: "leaf",

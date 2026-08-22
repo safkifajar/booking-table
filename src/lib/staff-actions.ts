@@ -302,6 +302,7 @@ async function sendStaffInvite(args: {
     const result = await sendEmail({
       to: args.email,
       subject: `Kamu di-invite jadi ${ROLE_LABELS[args.role]} di ${barName}`,
+      kind: "staff_invite",
       html,
       text,
     });

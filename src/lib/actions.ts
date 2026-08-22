@@ -932,6 +932,7 @@ export async function sendBookingInvites(sessionId: string): Promise<void> {
       await sendEmail({
         to: u.email,
         subject: `Invite to table ${tableLabel}`,
+        kind: "table_invite",
         html: tpl.html,
         text: tpl.text,
       });
@@ -1611,6 +1612,7 @@ export async function inviteUsersToSession(
       await sendEmail({
         to: u.email,
         subject: `Invite to table ${tableLabel}`,
+        kind: "table_invite",
         html: tpl.html,
         text: tpl.text,
       });

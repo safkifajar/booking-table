@@ -1,12 +1,21 @@
 /**
  * Email service abstraction.
  *
- * Sekarang pakai Resend, tapi interface generic supaya bisa swap
- * provider lain (Postmark, SES, SendGrid, SMTP biasa) cuma ganti impl.
+ * DUA PROVIDER, dipilih otomatis:
+ *   1. OneSignal — dipakai kalau ONESIGNAL_APP_ID + ONESIGNAL_REST_API_KEY ada.
+ *   2. Resend    — cadangan, dipakai kalau cuma RESEND_API_KEY yang ada.
  *
- * Dry-run mode: kalau RESEND_API_KEY tidak ada (development),
+ * OneSignal didahulukan karena kuota gratisnya 10.000 email/bulan TANPA batas
+ * harian, sedangkan Resend gratis dibatasi 100/hari. Batas harian itu jadi
+ * penghalang nyata begitu OTP registrasi ikut lewat email.
+ *
+ * Interface-nya sengaja generic: pemanggil (magic link, undangan staff, reset
+ * password) tak tahu provider mana yang dipakai, jadi berpindah provider tak
+ * menyentuh mereka.
+ *
+ * Dry-run mode: kalau tak ada kredensial provider mana pun (development),
  * email di-log ke console saja, tidak benar-benar kirim. Useful untuk:
- * - Development tanpa Resend account
+ * - Development tanpa akun email
  * - Testing di CI
  * - Demo untuk client tanpa setup email
  */
@@ -18,6 +27,11 @@ export interface SendEmailInput {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Jenis email, untuk penyaringan di Admin → Email Log. Teks bebas supaya
+   * menambah jenis baru tak perlu migrasi.
+   */
+  kind?: string;
 }
 
 export interface SendEmailResult {
@@ -26,12 +40,104 @@ export interface SendEmailResult {
 }
 
 /**
+ * Kirim email + CATAT hasilnya ke email_logs.
+ *
+ * Pencatatan dibungkus di sini, bukan di tiap pemanggil: kalau diserahkan ke
+ * pemanggil, satu yang lupa mencatat membuat log terlihat lengkap padahal
+ * bolong — persis saat sedang menelusuri email yang hilang.
+ *
+ * Kegagalan MENCATAT tak boleh menggagalkan pengiriman: emailnya sudah
+ * terkirim, dan melempar galat di sini akan membuat pemanggil mengira
+ * sebaliknya.
+ */
+export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  const provider = resolveProviderName();
+  try {
+    const result = await sendEmailRaw(input);
+    void recordEmailLog({
+      input,
+      provider: result.dryRun ? "dry-run" : provider,
+      status: result.dryRun ? "dry_run" : "success",
+      messageId: result.id,
+    });
+    return result;
+  } catch (err) {
+    void recordEmailLog({
+      input,
+      provider,
+      status: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+/** Nama penyedia yang AKAN dipakai — sama logikanya dgn sendEmailRaw. */
+function resolveProviderName(): string {
+  const forced = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+  if (
+    forced !== "resend" &&
+    process.env.ONESIGNAL_APP_ID &&
+    process.env.ONESIGNAL_REST_API_KEY
+  ) {
+    return "onesignal";
+  }
+  return process.env.RESEND_API_KEY ? "resend" : "dry-run";
+}
+
+async function recordEmailLog(entry: {
+  input: SendEmailInput;
+  provider: string;
+  status: string;
+  messageId?: string | null;
+  error?: string;
+}): Promise<void> {
+  try {
+    const { db } = await import("@/lib/db/client");
+    const { emailLogs } = await import("@/lib/db/schema/email-logs");
+    await db.insert(emailLogs).values({
+      recipient: entry.input.to,
+      subject: entry.input.subject,
+      kind: entry.input.kind ?? "other",
+      status: entry.status,
+      provider: entry.provider,
+      providerMessageId: entry.messageId ?? null,
+      error: entry.error ?? null,
+      bodyHtml: entry.input.html,
+    });
+  } catch (err) {
+    console.error("[email-log] gagal mencatat:", err);
+  }
+}
+
+/**
  * Send email. Throws kalau gagal.
  * Return id (provider message id) + flag dryRun.
  */
-export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+async function sendEmailRaw(input: SendEmailInput): Promise<SendEmailResult> {
+  const oneSignalAppId = process.env.ONESIGNAL_APP_ID;
+  const oneSignalKey = process.env.ONESIGNAL_REST_API_KEY;
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM ?? "noreply@booking-table.dev";
+  // EMAIL_FROM dipakai kedua provider; RESEND_FROM tetap dibaca supaya
+  // konfigurasi lama tak perlu diubah saat rilis.
+  const from =
+    process.env.EMAIL_FROM ??
+    process.env.RESEND_FROM ??
+    "noreply@booking-table.dev";
+
+  // EMAIL_PROVIDER memaksa pilihan; tanpa itu OneSignal didahulukan (kuota
+  // lebih longgar, tanpa batas harian). Perlu dipaksa saat satu penyedia
+  // kredensialnya sudah ada tapi belum boleh mengirim — mis. domain masih
+  // menunggu persetujuan.
+  const forced = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+
+  if (forced !== "resend" && oneSignalAppId && oneSignalKey) {
+    return sendViaOneSignal(input, {
+      appId: oneSignalAppId,
+      apiKey: oneSignalKey,
+      from,
+    });
+  }
 
   // Dry-run mode — log only, jangan kirim.
   if (!apiKey) {
@@ -70,4 +176,69 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
 
   return { id: data?.id ?? null, dryRun: false };
+}
+
+/**
+ * Kirim lewat OneSignal Create Message API.
+ *
+ * `include_unsubscribed: true` WAJIB untuk email transaksional (reset
+ * password, OTP, undangan staff): tanpa itu tamu yang pernah berhenti
+ * berlangganan email promosi ikut tak menerima email yang dibutuhkannya
+ * untuk masuk ke akun sendiri.
+ *
+ * Alamat yang belum dikenal otomatis dibuatkan subscription oleh OneSignal,
+ * jadi tak perlu mendaftarkan tamu lebih dulu.
+ */
+async function sendViaOneSignal(
+  input: SendEmailInput,
+  cfg: { appId: string; apiKey: string; from: string }
+): Promise<SendEmailResult> {
+  // `from` boleh berbentuk "Nama <alamat@domain>" — OneSignal minta nama &
+  // alamat terpisah, jadi dipecah di sini.
+  const match = cfg.from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  const fromName = match?.[1] || process.env.EMAIL_FROM_NAME;
+  const fromAddress = match?.[2] ?? cfg.from;
+
+  const res = await fetch("https://api.onesignal.com/notifications", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Key ${cfg.apiKey}`,
+    },
+    body: JSON.stringify({
+      app_id: cfg.appId,
+      email_to: [input.to],
+      email_subject: input.subject,
+      email_body: input.html,
+      email_from_address: fromAddress,
+      ...(fromName ? { email_from_name: fromName } : {}),
+      ...(process.env.EMAIL_REPLY_TO
+        ? { email_reply_to: process.env.EMAIL_REPLY_TO }
+        : {}),
+      include_unsubscribed: true,
+    }),
+  });
+
+  const body = (await res.json().catch(() => null)) as {
+    id?: string;
+    errors?: unknown;
+  } | null;
+
+  if (!res.ok) {
+    // Sertakan pesan asli OneSignal — tanpa itu kegagalan kirim cuma terlihat
+    // sebagai "gagal" tanpa petunjuk (domain belum terverifikasi, kuota habis,
+    // alamat masuk daftar suppression).
+    const detail = body?.errors
+      ? JSON.stringify(body.errors)
+      : `HTTP ${res.status}`;
+    throw new Error(`OneSignal error: ${detail}`);
+  }
+
+  // OneSignal membalas 200 dengan `errors` terisi utk kegagalan sebagian —
+  // mis. alamat ada di daftar suppression. Itu BUKAN sukses.
+  if (body?.errors) {
+    throw new Error(`OneSignal error: ${JSON.stringify(body.errors)}`);
+  }
+
+  return { id: body?.id ?? null, dryRun: false };
 }

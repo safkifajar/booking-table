@@ -44,6 +44,7 @@ export const magicLinkProvider = Resend({
     const result = await sendEmail({
       to: email,
       subject: "Sign in ke booking-table",
+      kind: "magic_link",
       html,
       text,
     });
