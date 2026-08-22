@@ -408,7 +408,7 @@ function EmailBodyModal({
               </div>
               <pre className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-background/60 p-3 text-[11px] leading-relaxed">
                 <code className="whitespace-pre-wrap break-all font-mono">
-                  {html}
+                  {linkify(html)}
                 </code>
               </pre>
             </div>
@@ -417,4 +417,40 @@ function EmailBodyModal({
       </div>
     </div>
   );
+}
+
+/**
+ * Ubah setiap URL di dalam teks jadi tautan yang bisa diklik.
+ *
+ * Dipakai pada HTML MENTAH — jadi URL-nya muncul dua kali: sekali di dalam
+ * atribut href, sekali sebagai teks tampilan. Keduanya tetap bisa diklik,
+ * dan itu memang yang dibutuhkan: admin ingin membuka tautan reset untuk
+ * memeriksa apakah benar-benar berfungsi.
+ *
+ * Tanda kutip & kurung sudut sengaja TIDAK ikut tertangkap, supaya URL di
+ * dalam href="..." berhenti tepat di kutip penutupnya.
+ */
+function linkify(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const re = /https?:\/\/[^\s"'<>]+/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <a
+        key={`${m.index}-${m[0].length}`}
+        href={m[0]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary underline underline-offset-2 hover:text-primary/80"
+      >
+        {m[0]}
+      </a>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
 }
