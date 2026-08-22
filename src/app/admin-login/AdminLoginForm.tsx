@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff, Shield, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -153,10 +154,13 @@ export function AdminLoginForm({ next, initialError, initialEmail }: Props) {
           </Button>
         </form>
 
-        <div className="pt-4 border-t border-border">
-          <p className="text-[10px] text-muted-foreground text-center">
-            Lupa password? Hubungi superadmin SOHO.
-          </p>
+        <div className="pt-4 border-t border-border text-center">
+          <Link
+            href="/forgot"
+            className="text-xs text-muted-foreground underline underline-offset-4 transition hover:text-foreground"
+          >
+            Forgot password?
+          </Link>
         </div>
       </CardContent>
     </Card>

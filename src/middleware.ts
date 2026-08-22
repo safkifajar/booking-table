@@ -117,8 +117,12 @@ export default authMiddleware(async (req) => {
     // Public paths admin (tidak butuh login):
     // - /login          (admin sign in)
     // - /setup-password (karyawan baru klik dari email)
+    // - /forgot,/reset  (staff lupa password — justru dibuka saat BELUM login)
     const isPublicAdminPath =
-      path === "/login" || path === "/setup-password";
+      path === "/login" ||
+      path === "/setup-password" ||
+      path === "/forgot" ||
+      path === "/reset";
 
     // Belum login & bukan public path → redirect ke /login (pertahankan host
     // admin asli; nextUrl.host bisa sudah dinormalkan ke host server).
@@ -143,6 +147,13 @@ export default authMiddleware(async (req) => {
 
     // /setup-password tidak butuh rewrite, file langsung di /setup-password/
     if (path === "/setup-password") {
+      return NextResponse.next();
+    }
+
+    // Lupa password staff — file langsung di /forgot/ & /reset/, tak perlu
+    // rewrite. Keduanya HARUS lolos sebelum blok rewrite /admin/* di bawah,
+    // kalau tidak dialihkan ke /admin/forgot yang tak ada → 404.
+    if (path === "/forgot" || path === "/reset") {
       return NextResponse.next();
     }
 
