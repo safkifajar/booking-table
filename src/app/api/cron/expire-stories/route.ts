@@ -1,5 +1,6 @@
 /**
- * Cron job: hapus story yang sudah expire (lebih dari 24 jam).
+ * Cron job: hapus story yang sudah expire (lebih dari 24 jam), sekaligus
+ * pembersihan berkala lain yang tak butuh jadwal sendiri.
  *
  * Production: trigger via systemd timer panggil endpoint ini berkala
  * (lihat docs/DEPLOYMENT.md section "Cron Jobs"). Tiap 15 menit.
@@ -13,6 +14,8 @@
  */
 
 import { expireOldStories } from "@/lib/stories-expire";
+import { purgeOldEmailLogs } from "@/lib/email-log-actions";
+import { purgeExpiredResetTokens } from "@/lib/auth-v2/reset-password";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,7 +29,23 @@ export async function POST(request: Request) {
   }
 
   const result = await expireOldStories();
-  return Response.json(result);
+
+  // Menumpang jadwal ini daripada menyiapkan timer systemd sendiri —
+  // keduanya cuma menghapus baris tua & tak bergantung waktu tertentu.
+  // Kegagalannya TIDAK boleh menggagalkan penghapusan story, jadi
+  // dijalankan terpisah & hasilnya sekadar dilaporkan.
+  const [emailLogs, resetTokens] = await Promise.allSettled([
+    purgeOldEmailLogs(),
+    purgeExpiredResetTokens(),
+  ]);
+
+  return Response.json({
+    ...result,
+    emailLogsPurged:
+      emailLogs.status === "fulfilled" ? emailLogs.value : "failed",
+    resetTokensPurged:
+      resetTokens.status === "fulfilled" ? resetTokens.value : "failed",
+  });
 }
 
 // GET untuk health check (tidak butuh secret)

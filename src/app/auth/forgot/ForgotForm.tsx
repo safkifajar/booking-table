@@ -59,10 +59,9 @@ export function ForgotForm({ contactWa }: { contactWa?: string | null }) {
           </span>
           <h1 className="mt-4 text-2xl font-bold text-white">Check your email</h1>
           <p className="mt-2 text-sm leading-relaxed text-white/70">
-            If{" "}
-            <span className="font-medium text-white">{email.trim()}</span> has an
-            account, we&apos;ve sent a link to reset your password. It expires in
-            30 minutes.
+            If <span className="font-medium text-white">{email.trim()}</span>{" "}
+            has an account, we&apos;ve sent a link to reset your password. It
+            expires in 30 minutes.
           </p>
           <p className="mt-4 text-sm leading-relaxed text-white/50">
             Nothing arrived? Check your spam folder, or contact us on WhatsApp.

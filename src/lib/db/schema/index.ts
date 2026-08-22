@@ -32,3 +32,4 @@ export * from "./revenue-split";
 export * from "./activity-logs";
 
 export * from "./link-tree";
+export * from "./email-logs";

@@ -98,6 +98,7 @@ export async function requestPasswordReset(
     await sendEmail({
       to: email,
       subject: tpl.subject,
+      kind: "password_reset",
       html: tpl.html,
       text: tpl.text,
     });

@@ -27,6 +27,11 @@ export interface SendEmailInput {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * Jenis email, untuk penyaringan di Admin → Email Log. Teks bebas supaya
+   * menambah jenis baru tak perlu migrasi.
+   */
+  kind?: string;
 }
 
 export interface SendEmailResult {
@@ -35,10 +40,81 @@ export interface SendEmailResult {
 }
 
 /**
+ * Kirim email + CATAT hasilnya ke email_logs.
+ *
+ * Pencatatan dibungkus di sini, bukan di tiap pemanggil: kalau diserahkan ke
+ * pemanggil, satu yang lupa mencatat membuat log terlihat lengkap padahal
+ * bolong — persis saat sedang menelusuri email yang hilang.
+ *
+ * Kegagalan MENCATAT tak boleh menggagalkan pengiriman: emailnya sudah
+ * terkirim, dan melempar galat di sini akan membuat pemanggil mengira
+ * sebaliknya.
+ */
+export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  const provider = resolveProviderName();
+  try {
+    const result = await sendEmailRaw(input);
+    void recordEmailLog({
+      input,
+      provider: result.dryRun ? "dry-run" : provider,
+      status: result.dryRun ? "dry_run" : "success",
+      messageId: result.id,
+    });
+    return result;
+  } catch (err) {
+    void recordEmailLog({
+      input,
+      provider,
+      status: "failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+/** Nama penyedia yang AKAN dipakai — sama logikanya dgn sendEmailRaw. */
+function resolveProviderName(): string {
+  const forced = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
+  if (
+    forced !== "resend" &&
+    process.env.ONESIGNAL_APP_ID &&
+    process.env.ONESIGNAL_REST_API_KEY
+  ) {
+    return "onesignal";
+  }
+  return process.env.RESEND_API_KEY ? "resend" : "dry-run";
+}
+
+async function recordEmailLog(entry: {
+  input: SendEmailInput;
+  provider: string;
+  status: string;
+  messageId?: string | null;
+  error?: string;
+}): Promise<void> {
+  try {
+    const { db } = await import("@/lib/db/client");
+    const { emailLogs } = await import("@/lib/db/schema/email-logs");
+    await db.insert(emailLogs).values({
+      recipient: entry.input.to,
+      subject: entry.input.subject,
+      kind: entry.input.kind ?? "other",
+      status: entry.status,
+      provider: entry.provider,
+      providerMessageId: entry.messageId ?? null,
+      error: entry.error ?? null,
+      bodyHtml: entry.input.html,
+    });
+  } catch (err) {
+    console.error("[email-log] gagal mencatat:", err);
+  }
+}
+
+/**
  * Send email. Throws kalau gagal.
  * Return id (provider message id) + flag dryRun.
  */
-export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+async function sendEmailRaw(input: SendEmailInput): Promise<SendEmailResult> {
   const oneSignalAppId = process.env.ONESIGNAL_APP_ID;
   const oneSignalKey = process.env.ONESIGNAL_REST_API_KEY;
   const apiKey = process.env.RESEND_API_KEY;
