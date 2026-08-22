@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Copy,
   Eye,
   Loader2,
   Search,
@@ -97,7 +98,7 @@ export function EmailLogList({
     <div className="space-y-3">
       {/* Ringkasan — angkanya TIDAK ikut tersaring, supaya bisa dipakai
           berpindah antar-status. */}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:max-w-lg">
         {(
           [
             ["all", "All", total],
@@ -111,7 +112,7 @@ export function EmailLogList({
             type="button"
             onClick={() => pushParams({ status: key, page: 1 })}
             className={cn(
-              "rounded-lg border px-3 py-2 text-left transition",
+              "rounded-lg border px-3 py-2 text-center transition",
               status === key
                 ? "border-primary/60 bg-primary/10"
                 : "border-border bg-background/40 hover:bg-muted/40"
@@ -174,7 +175,7 @@ export function EmailLogList({
                   <th className="pb-2 pr-3 font-medium">Type</th>
                   <th className="pb-2 pr-3 font-medium">Status</th>
                   <th className="pb-2 pr-3 font-medium">Sent at</th>
-                  <th className="pb-2 font-medium text-right">Body</th>
+                  <th className="pb-2 font-medium text-right">Source</th>
                 </tr>
               </thead>
               <tbody>
@@ -224,7 +225,7 @@ export function EmailLogList({
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label="View email body"
+                        aria-label="View email source"
                         onClick={() => setViewing(r)}
                       >
                         <Eye className="h-3.5 w-3.5" />
@@ -312,11 +313,11 @@ export function EmailLogList({
 }
 
 /**
- * Pratinjau isi email.
+ * Isi email sebagai HTML MENTAH, bukan tampilan jadinya.
  *
- * Dirender di dalam <iframe sandbox> — HTML email berasal dari template kita
- * sendiri, tapi menyuntikkannya langsung ke halaman admin berarti CSS-nya
- * bisa membocor ke luar dan skrip apa pun ikut jalan di sesi admin.
+ * Untuk menelusuri masalah, yang dibutuhkan justru sumbernya — tautan yang
+ * benar-benar tertanam, gaya yang dipakai, karakter yang lolos. Tampilan
+ * jadinya sudah bisa dilihat di kotak masuk penerima.
  */
 function EmailBodyModal({
   row,
@@ -388,12 +389,29 @@ function EmailBodyModal({
               No body was stored for this email.
             </p>
           ) : (
-            <iframe
-              title="Email preview"
-              sandbox=""
-              srcDoc={html}
-              className="h-[60vh] w-full rounded-lg border border-border bg-white"
-            />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {html.length.toLocaleString("en-US")} characters
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(html);
+                    toast.success("HTML copied");
+                  }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy
+                </Button>
+              </div>
+              <pre className="max-h-[60vh] overflow-auto rounded-lg border border-border bg-background/60 p-3 text-[11px] leading-relaxed">
+                <code className="whitespace-pre-wrap break-all font-mono">
+                  {html}
+                </code>
+              </pre>
+            </div>
           )}
         </div>
       </div>
