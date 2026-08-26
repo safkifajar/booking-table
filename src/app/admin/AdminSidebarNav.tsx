@@ -37,6 +37,11 @@ interface NavLeaf {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /**
+   * true = hanya untuk role "admin". Manager lolos requireAdmin tapi ditolak
+   * di halamannya — menampilkan menu yang pasti gagal cuma memancing klik.
+   */
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -47,6 +52,28 @@ interface NavGroup {
 }
 
 type NavItem = NavLeaf | NavGroup;
+
+/**
+ * Peran staff apa pun. Dipakai seluas ini karena requireAdmin() memakai tipe
+ * yang sama — mempersempitnya di sini cuma memaksa cast di pemanggil.
+ */
+type AdminRole = "admin" | "manager" | "cashier" | "waiter";
+
+/**
+ * Buang menu yang tak boleh dibuka role ini, termasuk grup yang jadi kosong
+ * setelahnya — grup kosong menyisakan judul yang tak bisa dibuka apa-apa.
+ */
+function navFor(role: AdminRole): NavItem[] {
+  if (role === "admin") return NAV;
+  const visible = (l: NavLeaf) => !l.adminOnly;
+  return NAV.map((item) =>
+    item.type === "leaf"
+      ? item
+      : { ...item, children: item.children.filter(visible) }
+  ).filter((item) =>
+    item.type === "leaf" ? visible(item) : item.children.length > 0
+  );
+}
 
 const NAV: NavItem[] = [
   {
@@ -188,6 +215,7 @@ const NAV: NavItem[] = [
         href: "/admin/email-logs",
         label: "Email Log",
         icon: <Mail className="h-4 w-4" />,
+        adminOnly: true,
       },
       {
         type: "leaf",
@@ -230,14 +258,15 @@ function useMounted(): boolean {
   );
 }
 
-export function AdminSidebarNav() {
+export function AdminSidebarNav({ role }: { role: AdminRole }) {
   const pathname = usePathname();
   const mounted = useMounted();
   const activePath = mounted ? pathname : "";
+  const items = navFor(role);
 
   return (
     <nav className="space-y-1">
-      {NAV.map((item) =>
+      {items.map((item) =>
         item.type === "leaf" ? (
           <SidebarLeaf key={item.href} item={item} pathname={activePath} />
         ) : (
@@ -340,7 +369,7 @@ function isActive(pathname: string, href: string): boolean {
  * menu (sama dengan sidebar desktop). Menggantikan bottom nav yang dulu hanya
  * memuat 3 halaman.
  */
-export function AdminMobileMenu() {
+export function AdminMobileMenu({ role }: { role: AdminRole }) {
   const rawPathname = usePathname();
   const mounted = useMounted();
   const pathname = mounted ? rawPathname : "";
@@ -421,7 +450,7 @@ export function AdminMobileMenu() {
 
             <div className="flex-1 overflow-y-auto px-3 py-3">
               <nav className="space-y-1">
-                {NAV.map((item) =>
+                {navFor(role).map((item) =>
                   item.type === "leaf" ? (
                     <SidebarLeaf
                       key={item.href}

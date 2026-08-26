@@ -16,12 +16,10 @@ import { requireAdmin } from "@/lib/admin";
 /** Berapa lama catatan disimpan sebelum dibuang otomatis. */
 const RETENTION_DAYS = 90;
 
-async function requireAdminRole() {
+/** @returns true kalau role-nya admin. */
+async function isAdminRole(): Promise<boolean> {
   const bar = await requireAdmin();
-  if (bar.role !== "admin") {
-    throw new Error("Only admin can view email logs");
-  }
-  return bar;
+  return bar.role === "admin";
 }
 
 export interface EmailLogRow {
@@ -41,6 +39,8 @@ export interface EmailLogPage {
   total: number;
   /** Jumlah per status, untuk ringkasan di atas tabel. */
   counts: { success: number; failed: number; dryRun: number };
+  /** true = role ini tak berhak melihat log (bukan admin). */
+  forbidden?: boolean;
 }
 
 /**
@@ -55,7 +55,18 @@ export async function getEmailLogs(params: {
   search?: string;
   status?: string;
 }): Promise<EmailLogPage> {
-  await requireAdminRole();
+  // Manager/kasir/waiter → daftar KOSONG, bukan galat. Melempar galat di
+  // Server Component membuat seluruh halaman rusak dengan pesan yang
+  // disensor Next.js ("An error occurred…"), bukan penolakan yang bisa
+  // dimengerti. Menunya juga sudah disembunyikan dari mereka.
+  if (!(await isAdminRole())) {
+    return {
+      rows: [],
+      total: 0,
+      counts: { success: 0, failed: 0, dryRun: 0 },
+      forbidden: true,
+    };
+  }
 
   const page = Math.max(1, params.page ?? 1);
   const perPage = Math.min(100, Math.max(10, params.perPage ?? 10));
@@ -123,7 +134,9 @@ export async function getEmailLogs(params: {
 export async function getEmailLogBody(
   id: string
 ): Promise<{ ok: boolean; html?: string; error?: string }> {
-  await requireAdminRole();
+  if (!(await isAdminRole())) {
+    return { ok: false, error: "Only admins can view email contents" };
+  }
   const [row] = await db
     .select({ html: emailLogs.bodyHtml })
     .from(emailLogs)
