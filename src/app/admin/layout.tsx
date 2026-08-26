@@ -21,7 +21,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   // Guard: hanya admin/manager boleh masuk (redirect kalau bukan).
-  await requireAdmin();
+  const bar = await requireAdmin();
   const [user, profile] = await Promise.all([
     getCurrentUser(),
     getCurrentProfile(),
@@ -33,7 +33,7 @@ export default async function AdminLayout({
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           {/* Mobile: hamburger → drawer berisi semua menu (pengganti bottom nav) */}
-          <AdminMobileMenu />
+          <AdminMobileMenu role={bar.role} />
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-md overflow-hidden border border-border shrink-0">
               <Image
@@ -63,7 +63,7 @@ export default async function AdminLayout({
       <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 flex gap-6">
         {/* Sidebar (desktop) */}
         <aside className="hidden md:flex w-56 flex-col py-6 shrink-0 sticky top-[57px] h-[calc(100vh-57px)]">
-          <AdminSidebarNav />
+          <AdminSidebarNav role={bar.role} />
         </aside>
 
         {/* Main — bottom nav dihapus, jadi tak perlu padding bawah ekstra. */}

@@ -29,7 +29,7 @@ export default async function AdminEmailLogsPage({ searchParams }: PageProps) {
   const pageNum = Math.max(1, Number(page) || 1);
   const pageSize = [10, 20, 50, 100].includes(Number(size)) ? Number(size) : 10;
 
-  const { rows, total, counts } = await getEmailLogs({
+  const { rows, total, counts, forbidden } = await getEmailLogs({
     page: pageNum,
     perPage: pageSize,
     search: q,
@@ -46,15 +46,25 @@ export default async function AdminEmailLogsPage({ searchParams }: PageProps) {
         </p>
       </div>
 
-      <EmailLogList
-        rows={rows}
-        total={total}
-        counts={counts}
-        page={pageNum}
-        pageSize={pageSize}
-        search={q ?? ""}
-        status={status ?? "all"}
-      />
+      {forbidden ? (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+          <p className="text-sm font-medium">Admins only</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            This log contains guest email addresses and password reset links,
+            so it&apos;s limited to admin accounts.
+          </p>
+        </div>
+      ) : (
+        <EmailLogList
+          rows={rows}
+          total={total}
+          counts={counts}
+          page={pageNum}
+          pageSize={pageSize}
+          search={q ?? ""}
+          status={status ?? "all"}
+        />
+      )}
     </div>
   );
 }
