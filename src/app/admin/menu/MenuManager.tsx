@@ -64,13 +64,24 @@ export function MenuManager({
   const [categories, setCategories] = React.useState(initialCategories);
   const [items, setItems] = React.useState(initialItems);
 
-  // Sync state dengan props saat parent re-fetch (router.refresh setelah import)
-  React.useEffect(() => {
+  // Sinkronkan dgn props saat server mengirim data baru (router.refresh
+  // setelah impor). Dibandingkan SAAT RENDER, bukan lewat useEffect:
+  // setState di dalam efek membuat komponen render dua kali untuk satu
+  // perubahan — sekali dgn data lama, sekali dgn yang baru. Di halaman
+  // sebesar ini kedipannya terasa.
+  //
+  // State-nya tetap perlu karena daftar ini juga diubah secara lokal
+  // (tambah/ubah/hapus) supaya tanggapannya langsung terasa.
+  const [prevCategories, setPrevCategories] = React.useState(initialCategories);
+  if (prevCategories !== initialCategories) {
+    setPrevCategories(initialCategories);
     setCategories(initialCategories);
-  }, [initialCategories]);
-  React.useEffect(() => {
+  }
+  const [prevItems, setPrevItems] = React.useState(initialItems);
+  if (prevItems !== initialItems) {
+    setPrevItems(initialItems);
     setItems(initialItems);
-  }, [initialItems]);
+  }
   const [filterCategoryId, setFilterCategoryId] = React.useState<string | "all">(
     "all"
   );
@@ -116,9 +127,16 @@ export function MenuManager({
     [filteredItems, safePage, pageSize]
   );
 
-  React.useEffect(() => {
+  // Kembali ke halaman 1 saat filter/pencarian/ukuran halaman berubah.
+  // Dibandingkan saat render, bukan lewat useEffect: dgn efek, pengguna
+  // sempat melihat halaman lama SEBELUM ter-reset — dua render untuk satu
+  // perubahan.
+  const filterKey = `${filterCategoryId}|${pageSize}|${itemQuery}`;
+  const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
     setPage(0);
-  }, [filterCategoryId, pageSize, itemQuery]);
+  }
 
   // Tabs
   return (
@@ -791,10 +809,14 @@ function CategoriesTab({
     });
   }, [categories, isSub, nameById, filterParentId, query]);
 
-  // Reset ke page 0 saat search/filter/pageSize berubah.
-  React.useEffect(() => {
+  // Kembali ke halaman 1 saat filter/pencarian/ukuran halaman berubah —
+  // lihat catatan pada daftar item di atas.
+  const catFilterKey = `${filterParentId}|${pageSize}|${query}`;
+  const [prevCatFilterKey, setPrevCatFilterKey] = React.useState(catFilterKey);
+  if (prevCatFilterKey !== catFilterKey) {
+    setPrevCatFilterKey(catFilterKey);
     setPage(0);
-  }, [filterParentId, pageSize, query]);
+  }
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -1044,17 +1066,23 @@ function ItemFormModal({
     initial?.prepMinutes ?? 5
   );
   const [file, setFile] = React.useState<File | null>(null);
-  const [preview, setPreview] = React.useState<string | null>(
-    initial?.imageUrl ?? null
-  );
   const [submitting, setSubmitting] = React.useState(false);
 
+  // URL pratinjau DITURUNKAN dari `file`, bukan disimpan di state: dgn state
+  // + useEffect, komponen render sekali TANPA pratinjau lalu sekali dengan —
+  // gambar berkedip muncul setelah dipilih.
+  const objectUrl = React.useMemo(
+    () => (file ? URL.createObjectURL(file) : null),
+    [file]
+  );
+  const preview = objectUrl ?? initial?.imageUrl ?? null;
+
+  // Efeknya tinggal MEMBERSIHKAN. URL objek menahan berkasnya di memori
+  // sampai dicabut, jadi ini tetap wajib.
   React.useEffect(() => {
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    if (!objectUrl) return;
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [objectUrl]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1779,9 +1807,19 @@ function MoneyInput({
   onChange: (n: number) => void;
 }) {
   const [text, setText] = React.useState(formatNumber(value));
-  React.useEffect(() => {
+
+  // Ikuti `value` saat DIUBAH DARI LUAR (mis. form di-reset). Dibandingkan
+  // saat render, bukan lewat useEffect — dgn efek, kolom sempat menampilkan
+  // angka lama satu render.
+  //
+  // Yang dibandingkan NILAI-nya, bukan teksnya: saat pengguna menghapus
+  // seluruh isi, text menjadi "" sedangkan value menjadi 0. Kalau teks yang
+  // dibandingkan, kolom langsung terisi "0" lagi & mustahil dikosongkan.
+  const [prevValue, setPrevValue] = React.useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
     setText(formatNumber(value));
-  }, [value]);
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const digitsOnly = e.target.value.replace(/\D/g, "");
