@@ -49,3 +49,7 @@ next-env.d.ts
 # Seluruh isi docs/ diabaikan; DEPLOYMENT.md & schema.md yang sudah terlanjur
 # ter-commit tetap ada di repo (gitignore tak mencabut file yang sudah track).
 docs/
+
+# Pengaturan alat bantu ngoding — milik mesin masing-masing, bukan bagian
+# aplikasi. settings.local.json bahkan berisi izin perintah per-orang.
+.claude/

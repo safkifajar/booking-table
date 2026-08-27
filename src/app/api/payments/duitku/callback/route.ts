@@ -13,6 +13,49 @@ import { activateMembershipTx } from "@/lib/membership-actions";
  *
  * WAJIB balas HTTP 200 supaya Duitku tak retry berulang.
  */
+/**
+ * Catat kejadian callback ke activity_logs — jejak yang bertahan setelah log
+ * PM2 dirotasi.
+ *
+ * Sukses TIDAK dicatat di sini: pembayaran meja sudah dicatat logSystem di
+ * markPaymentPaidBySystem, dan membership di activateMembershipTx. Yang
+ * dicatat hanya jalur GAGAL, yang sebelumnya tak berjejak sama sekali.
+ *
+ * barId diambil dari bar pertama (sistem ini satu-bar); kegagalan mencatat
+ * tak boleh menggagalkan callback — Duitku akan retry kalau kita balas
+ * non-200, padahal pembayarannya sendiri mungkin sudah beres.
+ */
+async function logPaymentCallback(input: {
+  action: string;
+  summary: string;
+  meta: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const { db } = await import("@/lib/db/client");
+    const { bars } = await import("@/lib/db/schema/venue");
+    const { asc } = await import("drizzle-orm");
+    const { logSystem } = await import("@/lib/activity-log");
+
+    const [bar] = await db
+      .select({ id: bars.id })
+      .from(bars)
+      .orderBy(asc(bars.createdAt))
+      .limit(1);
+    if (!bar) return;
+
+    await logSystem({
+      barId: bar.id,
+      action: input.action,
+      category: "payment",
+      entityType: "payment",
+      summary: input.summary,
+      meta: input.meta,
+    });
+  } catch (err) {
+    console.error("[duitku/callback] gagal mencatat jejak:", err);
+  }
+}
+
 export async function POST(req: NextRequest) {
   let params: URLSearchParams;
   try {
@@ -61,6 +104,19 @@ export async function POST(req: NextRequest) {
       merchantCodeMasuk: merchantCode,
       merchantCodeEnv: process.env.DUITKU_MERCHANT_CODE ?? "(tak diset)",
     });
+    // Jejak PERMANEN: console.log hilang saat log PM2 dirotasi, sedangkan
+    // signature tak valid hampir selalu berarti salah konfigurasi yang perlu
+    // ditelusuri berhari-hari kemudian. SENGAJA tanpa signature/apiKey.
+    await logPaymentCallback({
+      action: "payment.callback_rejected",
+      summary: `Duitku callback rejected — invalid signature (${merchantOrderId || "no order id"})`,
+      meta: {
+        merchantOrderId,
+        resultCode,
+        apiKeyKosong: !process.env.DUITKU_API_KEY,
+        merchantCodeMasuk: merchantCode,
+      },
+    });
     // Balas 200 supaya Duitku berhenti retry (tapi jangan proses).
     return new NextResponse("Invalid signature", { status: 200 });
   }
@@ -90,6 +146,13 @@ export async function POST(req: NextRequest) {
           // Bukan error — jangan minta Duitku retry.
           console.warn("[duitku/callback] tak ada baris pending untuk", {
             merchantOrderId,
+          });
+          // Ini kasus PALING berbahaya: uang masuk tapi tak terkait ke
+          // apa pun. Wajib punya jejak permanen — tamu akan menagih.
+          await logPaymentCallback({
+            action: "payment.callback_unmatched",
+            summary: `Duitku callback had no matching pending row (${merchantOrderId})`,
+            meta: { merchantOrderId, resultCode, amount },
           });
         }
       }
