@@ -14,7 +14,7 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
@@ -28,7 +28,7 @@ import {
 } from "@/lib/db/schema/membership-transactions";
 import { payments, orders } from "@/lib/db/schema/orders";
 import { tableSessions } from "@/lib/db/schema/sessions";
-import { tables, floorAreas } from "@/lib/db/schema/venue";
+import { bars, tables, floorAreas } from "@/lib/db/schema/venue";
 import { profiles } from "@/lib/db/schema/profiles";
 import { users } from "@/lib/db/schema/auth";
 import { staffRoles } from "@/lib/db/schema/extras";
@@ -42,6 +42,7 @@ import { getChargeConfig } from "@/lib/settings-actions";
 import { getBarBySlug } from "@/lib/queries";
 import { computeBillTotals } from "@/lib/settings-constants";
 import { settleRevenueSplitForMembershipTx } from "@/lib/revenue-split";
+import { logSystem } from "@/lib/activity-log";
 import {
   generateMemberVouchers,
   getGeneratedCounts,
@@ -744,6 +745,35 @@ export async function activateMembershipTx(txId: string): Promise<boolean> {
     .from(membershipLevels)
     .where(eq(membershipLevels.key, row.levelKey))
     .limit(1);
+  // Jejak PERMANEN aktivasi membership.
+  //
+  // Pembayaran meja sudah dicatat logSystem di markPaymentPaidBySystem, tapi
+  // membership belum — padahal sama-sama uang masuk lewat gateway. Tanpa ini
+  // satu-satunya jejaknya console.log yang hilang saat log PM2 dirotasi,
+  // sehingga keluhan "saya sudah bayar tapi membership tak aktif" tak bisa
+  // ditelusuri lagi setelah beberapa hari.
+  const [defaultBar] = await db
+    .select({ id: bars.id })
+    .from(bars)
+    .orderBy(asc(bars.createdAt))
+    .limit(1);
+  if (defaultBar) {
+    await logSystem({
+      barId: defaultBar.id,
+      action: "membership.activated",
+      category: "payment",
+      entityType: "membership_transaction",
+      entityId: txId,
+      summary: `${level?.name ?? row.levelKey} membership activated`,
+      meta: {
+        profileId: row.profileId,
+        levelKey: row.levelKey,
+        periodEnd: row.periodEnd?.toISOString() ?? null,
+        voucherCount,
+      },
+    });
+  }
+
   await createNotification({
     profileId: row.profileId,
     type: "general",
