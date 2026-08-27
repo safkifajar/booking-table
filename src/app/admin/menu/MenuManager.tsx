@@ -105,10 +105,25 @@ export function MenuManager({
   const confirm = useConfirm();
   const router = useRouter();
 
+  // Kategori INDUK dicocokkan beserta seluruh sub-kategorinya.
+  //
+  // Angka pada label filter ("Appetizer & Snack (15)") berasal dari
+  // c.itemCount yang MENJUMLAHKAN sub-kategori, sedangkan item menempel di
+  // sub-kategori — bukan di induknya. Tanpa ini, memfilter ke induk selalu
+  // menghasilkan "0 items" walau labelnya jelas menyebut 15.
+  const categoryIdsInFilter = React.useMemo(() => {
+    if (filterCategoryId === "all") return null;
+    const ids = new Set<string>([filterCategoryId]);
+    for (const c of categories) {
+      if (c.parent_id === filterCategoryId) ids.add(c.id);
+    }
+    return ids;
+  }, [categories, filterCategoryId]);
+
   const filteredItems = React.useMemo(() => {
     const q = itemQuery.trim().toLowerCase();
     return items.filter((i) => {
-      if (filterCategoryId !== "all" && i.categoryId !== filterCategoryId)
+      if (categoryIdsInFilter && !categoryIdsInFilter.has(i.categoryId))
         return false;
       if (!q) return true;
       return (
@@ -117,7 +132,7 @@ export function MenuManager({
         i.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [items, filterCategoryId, itemQuery]);
+  }, [items, categoryIdsInFilter, itemQuery]);
 
   // Kembali ke halaman 1 saat filter/pencarian/ukuran halaman berubah.
   // Dibandingkan saat render, bukan lewat useEffect: dgn efek, pengguna
