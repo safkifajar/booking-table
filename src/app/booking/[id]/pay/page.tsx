@@ -94,10 +94,12 @@ export default async function BookingPayPage({ params }: PageProps) {
     payAtCashier?: boolean;
   };
   const isCashier = !!meta.payAtCashier;
-  if (!isCashier && !meta.qrString) {
-    // DP pending tapi tak ada QR (mis. gateway gagal) → serahkan ke detail.
-    redirect(`/session/${id}`);
-  }
+  // DP pending tapi QRIS tak pernah terbuat (gateway gagal / belum aktif).
+  //
+  // JANGAN mengalihkan ke /session/[id]: penjaga di sana melempar host balik
+  // ke sini selama DP belum lunas, jadi tamu terjebak bolak-balik & layarnya
+  // hitam. Tampilkan penjelasannya di sini beserta jalan keluarnya.
+  const qrisUnavailable = !isCashier && !meta.qrString;
 
   // Sisa detik: dari expiresAt kalau ada, kalau tidak dari created_at + 60s.
   const DP_TIMEOUT_MS = 60 * 1000;
@@ -115,7 +117,9 @@ export default async function BookingPayPage({ params }: PageProps) {
       secondsLeft={secondsLeft}
       sessionId={id}
       barSlug={row.bar_slug}
-      mode={isCashier ? "cashier" : "qris"}
+      mode={
+        qrisUnavailable ? "unavailable" : isCashier ? "cashier" : "qris"
+      }
       tableLabel={row.table_label}
     />
   );

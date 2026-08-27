@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Loader2, X } from "lucide-react";
+import { AlertTriangle, Banknote, Loader2, X } from "lucide-react";
 import { QrisPaymentDialog } from "@/components/session/QrisPaymentDialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,10 +36,25 @@ export function BookingPayView({
   secondsLeft: number;
   sessionId: string;
   barSlug: string;
-  mode?: "qris" | "cashier";
+  mode?: "qris" | "cashier" | "unavailable";
   tableLabel?: string;
 }) {
   const router = useRouter();
+
+  // Gateway gagal membuat QRIS. Sebelumnya halaman ini mengalihkan ke
+  // /session/[id], padahal penjaga di sana melempar balik ke sini selama DP
+  // belum lunas — tamu terjebak bolak-balik & layarnya hitam.
+  if (mode === "unavailable") {
+    return (
+      <QrisUnavailableView
+        paymentId={paymentId}
+        amount={amount}
+        sessionId={sessionId}
+        barSlug={barSlug}
+        tableLabel={tableLabel}
+      />
+    );
+  }
 
   if (mode === "cashier") {
     return (
@@ -210,6 +225,102 @@ function CashierWaitView({
           )}
           Cancel booking
         </Button>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * QRIS tak bisa dibuat (gateway sedang bermasalah / belum aktif).
+ *
+ * Menampilkan penjelasan & jalan keluar, BUKAN mengalihkan: halaman detail
+ * sesi menolak host selama DP belum lunas, jadi pengalihan ke sana membuat
+ * tamu terlempar bolak-balik tanpa henti.
+ *
+ * Dua jalan keluar diberikan — bayar di kasir (mejanya tetap dipesan), atau
+ * batalkan booking supaya mejanya tak terkunci menunggu pembayaran yang tak
+ * mungkin diselesaikan.
+ */
+function QrisUnavailableView({
+  paymentId,
+  amount,
+  sessionId,
+  barSlug,
+  tableLabel,
+}: {
+  paymentId: string;
+  amount: number;
+  sessionId: string;
+  barSlug: string;
+  tableLabel?: string;
+}) {
+  const router = useRouter();
+  const [cancelling, setCancelling] = React.useState(false);
+
+  async function handleCancel() {
+    setCancelling(true);
+    try {
+      const res = await cancelPayment(paymentId);
+      // Bisa saja callback gateway masuk tepat saat ini — kalau ternyata
+      // sudah lunas, jangan batalkan, antar ke mejanya.
+      if (res.status === "paid") {
+        router.replace(`/session/${sessionId}`);
+        return;
+      }
+      router.replace(`/bar/${barSlug}`);
+    } catch (err) {
+      toast.error(getActionErrorMessage(err, "Couldn't cancel the booking"));
+      setCancelling(false);
+    }
+  }
+
+  return (
+    <div className="min-h-dvh bg-background flex items-center justify-center px-4 py-10">
+      <Card className="w-full max-w-sm p-6 text-center space-y-5">
+        <div className="space-y-3">
+          <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+            <AlertTriangle className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold">QRIS is unavailable</h1>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+              We couldn&apos;t generate a QRIS code for this payment right now.
+              Your table{tableLabel ? ` ${tableLabel}` : ""} is still reserved —
+              you can pay at the cashier instead.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background/50 px-4 py-3">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+            Down payment
+          </p>
+          <p className="mt-0.5 text-xl font-semibold">{formatIDR(amount)}</p>
+        </div>
+
+        <div className="space-y-2">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => router.replace(`/bar/${barSlug}`)}
+          >
+            <Banknote className="h-4 w-4" />
+            I&apos;ll pay at the cashier
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={handleCancel}
+            disabled={cancelling}
+          >
+            {cancelling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+            Cancel booking
+          </Button>
+        </div>
       </Card>
     </div>
   );
