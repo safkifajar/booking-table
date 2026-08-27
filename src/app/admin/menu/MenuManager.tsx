@@ -119,24 +119,30 @@ export function MenuManager({
     });
   }, [items, filterCategoryId, itemQuery]);
 
-  // Reset ke page 0 kalau filter / pageSize ganti (atau items berkurang)
+  // Kembali ke halaman 1 saat filter/pencarian/ukuran halaman berubah.
+  // Dibandingkan saat render, bukan lewat useEffect: dgn efek, pengguna
+  // sempat melihat halaman lama SEBELUM ter-reset.
+  //
+  // HARUS di ATAS perhitungan halaman di bawahnya. Kalau ditaruh setelahnya,
+  // safePage & pagedItems pada render ini terlanjur memakai `page` yang lama
+  // — dan untuk kategori yang isinya lebih sedikit dari halaman itu,
+  // hasilnya daftar KOSONG walau jumlahnya jelas tertulis di filter.
+  const filterKey = `${filterCategoryId}|${pageSize}|${itemQuery}`;
+  const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
+  let effectivePage = page;
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(0);
+    // Dipakai SEKARANG juga: setPage baru berlaku di render berikutnya.
+    effectivePage = 0;
+  }
+
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
+  const safePage = Math.max(0, Math.min(effectivePage, totalPages - 1));
   const pagedItems = React.useMemo(
     () => filteredItems.slice(safePage * pageSize, (safePage + 1) * pageSize),
     [filteredItems, safePage, pageSize]
   );
-
-  // Kembali ke halaman 1 saat filter/pencarian/ukuran halaman berubah.
-  // Dibandingkan saat render, bukan lewat useEffect: dgn efek, pengguna
-  // sempat melihat halaman lama SEBELUM ter-reset — dua render untuk satu
-  // perubahan.
-  const filterKey = `${filterCategoryId}|${pageSize}|${itemQuery}`;
-  const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
-  if (prevFilterKey !== filterKey) {
-    setPrevFilterKey(filterKey);
-    setPage(0);
-  }
 
   // Tabs
   return (
@@ -813,13 +819,16 @@ function CategoriesTab({
   // lihat catatan pada daftar item di atas.
   const catFilterKey = `${filterParentId}|${pageSize}|${query}`;
   const [prevCatFilterKey, setPrevCatFilterKey] = React.useState(catFilterKey);
+  let effectivePage = page;
   if (prevCatFilterKey !== catFilterKey) {
     setPrevCatFilterKey(catFilterKey);
     setPage(0);
+    // Dipakai SEKARANG juga: setPage baru berlaku di render berikutnya.
+    effectivePage = 0;
   }
 
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
+  const safePage = Math.max(0, Math.min(effectivePage, totalPages - 1));
   const rows = React.useMemo(
     () => allRows.slice(safePage * pageSize, (safePage + 1) * pageSize),
     [allRows, safePage, pageSize]
