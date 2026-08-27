@@ -12,6 +12,27 @@ import { usePathname, useSearchParams } from "next/navigation";
  *   `window.dispatchEvent(new Event("progress:done"))` for Server Actions
  *   that don't change the URL.
  */
+/**
+ * Cari <a> terdekat ke ATAS dari elemen yang diklik.
+ *
+ * Ditulis manual, tidak memakai Element.closest(): di WebKit (Safari &
+ * Chrome iOS, yang memakai mesin yang sama) closest() pada pohon DOM yang
+ * dalam bisa melempar "Maximum call stack size exceeded" — galatnya muncul
+ * dari dalam mesin browser sehingga stack-nya menunjuk `undefined` dan tak
+ * bisa ditelusuri. Perulangan di bawah berjalan datar dan dibatasi
+ * kedalamannya, jadi tak bisa menghabiskan stack.
+ */
+const MAX_DEPTH = 25;
+
+function findAnchor(el: HTMLElement | null): HTMLAnchorElement | null {
+  let node: HTMLElement | null = el;
+  for (let i = 0; node && i < MAX_DEPTH; i++) {
+    if (node.tagName === "A") return node as HTMLAnchorElement;
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export function TopProgressBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -62,7 +83,7 @@ export function TopProgressBar() {
   React.useEffect(() => {
     function onClick(e: MouseEvent) {
       const target = e.target as HTMLElement | null;
-      const anchor = target?.closest?.("a");
+      const anchor = findAnchor(target);
       if (!anchor) return;
       const href = anchor.getAttribute("href");
       if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;

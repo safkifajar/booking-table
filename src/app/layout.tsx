@@ -59,9 +59,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // `translate="no"` + class notranslate: Google Translate menyisipkan
+    // <font> ke dalam teks & memindahkan node DOM, sehingga React kehilangan
+    // node yang dipeganginya. Akibatnya galat beruntun yang mustahil
+    // ditelusuri — "NotFoundError: The object can not be found here",
+    // "Maximum call stack size exceeded", "Rendered more hooks than during
+    // the previous render" — semuanya dari dalam mesin browser, stack-nya
+    // menunjuk `undefined`. Terpantau nyata di Chrome iOS (WebKit).
+    //
+    // Aplikasinya memang sudah berbahasa Inggris, jadi tak ada yang hilang
+    // dengan mematikan terjemahan otomatis.
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      translate="no"
+      className={`notranslate ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <SplashScreen />
