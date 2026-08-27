@@ -200,10 +200,16 @@ export function calculateDP(
   minDownPaymentPercent: number
 ): number {
   if (minDownPaymentPercent <= 0) return 0;
-  if (minDownPaymentPercent >= 100) return Math.max(0, Math.round(grandTotal));
-  const raw = (grandTotal * minDownPaymentPercent) / 100;
+  // Jepit SEKALI di awal supaya kedua cabang di bawah ikut terlindungi.
+  // Sebelumnya hanya cabang >=100 yang menjepit, sehingga total negatif
+  // menghasilkan DP negatif lewat cabang sebagian (Math.min(-500, 0) = -500).
+  // Pemanggil sekarang selalu mengirim computeBillTotals().total yang tak
+  // pernah negatif, tapi perlindungannya jangan bergantung pada fungsi lain.
+  const total = Math.max(0, Math.round(grandTotal));
+  if (minDownPaymentPercent >= 100) return total;
+  const raw = (total * minDownPaymentPercent) / 100;
   const rounded = Math.ceil(raw / 100) * 100;
-  return Math.min(rounded, Math.max(0, Math.round(grandTotal)));
+  return Math.min(rounded, total);
 }
 
 // ============================================================
