@@ -26,9 +26,12 @@ export function ReceiptView({ detail }: Props) {
     window.print();
   }
 
-  const date = new Date(
-    detail.payments.find((p) => p.paid_at)?.paid_at ?? Date.now()
-  );
+  // Tanggal struk diambil dari waktu pembayaran. Date.now() SENGAJA tak
+  // dipakai sebagai cadangan: nilainya berbeda antara HTML yang dirakit
+  // server & yang dirender browser, sehingga tanggal di struk berubah
+  // sendiri setelah halaman dimuat — pada dokumen yang dicetak itu fatal.
+  const paidAt = detail.payments.find((p) => p.paid_at)?.paid_at ?? null;
+  const date = paidAt ? new Date(paidAt) : null;
 
   return (
     <div className="space-y-4">
@@ -67,14 +70,16 @@ export function ReceiptView({ detail }: Props) {
           {detail.is_walk_in && detail.opened_by_staff_name && (
             <Row label="Opened by" value={detail.opened_by_staff_name} />
           )}
-          <Row
-            label="Date"
-            value={date.toLocaleString("en-GB", {
-              dateStyle: "medium",
-              timeStyle: "short",
-              hour12: false,
-            })}
-          />
+          {date && (
+            <Row
+              label="Date"
+              value={date.toLocaleString("en-GB", {
+                dateStyle: "medium",
+                timeStyle: "short",
+                hour12: false,
+              })}
+            />
+          )}
           <Row label="Trx No." value={`#${detail.session_id.slice(0, 8).toUpperCase()}`} />
         </div>
 

@@ -50,9 +50,11 @@ export function TransactionDetailView({
   const expiresAtMs = detail.expiresAt
     ? new Date(detail.expiresAt).getTime()
     : null;
-  const [secondsLeft, setSecondsLeft] = React.useState(
-    expiresAtMs ? Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000)) : 0
-  );
+  // Mulai dari null, BUKAN dari Date.now(): HTML yang dirakit server &
+  // yang dirender browser akan berbeda beberapa detik, dan React
+  // mengeluhkan ketidakcocokan itu. Efek hitung-mundur di bawah mengisinya
+  // pada tik pertama.
+  const [secondsLeft, setSecondsLeft] = React.useState<number | null>(null);
 
   // Render QR image from qrString (only if we have it — owner/staff).
   React.useEffect(() => {
@@ -73,6 +75,10 @@ export function TransactionDetailView({
   // Countdown + poll status while pending.
   React.useEffect(() => {
     if (!isPending) return;
+    // Isi SEGERA supaya angkanya tak kosong selama satu detik pertama.
+    if (expiresAtMs) {
+      setSecondsLeft(Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000)));
+    }
     const tick = setInterval(() => {
       if (expiresAtMs) {
         setSecondsLeft(Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000)));
@@ -95,9 +101,13 @@ export function TransactionDetailView({
     };
   }, [isPending, expiresAtMs, detail.id, router]);
 
-  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
-  const ss = String(secondsLeft % 60).padStart(2, "0");
-  const expired = isPending && expiresAtMs != null && secondsLeft <= 0;
+  // secondsLeft null = tik pertama belum jalan. Tampilkan "--:--", JANGAN
+  // dianggap nol — `null <= 0` bernilai benar, dan QRIS akan terlihat
+  // kedaluwarsa padahal masih berlaku.
+  const mm = secondsLeft === null ? "--" : String(Math.floor(secondsLeft / 60)).padStart(2, "0");
+  const ss = secondsLeft === null ? "--" : String(secondsLeft % 60).padStart(2, "0");
+  const expired =
+    isPending && expiresAtMs != null && secondsLeft !== null && secondsLeft <= 0;
 
   const statusMeta = expired
     ? { label: "Cancelled", Icon: XCircle, color: "text-muted-foreground", ring: "border-muted-foreground/30 bg-muted/30" }

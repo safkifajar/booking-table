@@ -12,6 +12,12 @@ import { maybeSendExpiryReminder } from "@/lib/membership-actions";
  */
 export async function MembershipBanner({ profileId }: { profileId: string }) {
   const status = await getMembershipStatus(profileId);
+  // Server component: dirender SEKALI per permintaan, jadi "hasil berubah
+  // saat render ulang" yang dikhawatirkan aturan ini tak berlaku di sini.
+  // Waktu acuan diambil sekali supaya seluruh perhitungan memakai titik yang
+  // sama.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
 
   // Pengingat H-3 (Fase 5) — lazy via kunjungan home, dedup 4 hari di server.
   // Fire-and-forget: kegagalan tak boleh menggagalkan render home.
@@ -27,8 +33,10 @@ export async function MembershipBanner({ profileId }: { profileId: string }) {
       : "Upgrade to see & connect with more members";
     cta = status.expired ? "Renew" : "Upgrade";
   } else if (status.expires_at) {
+    // Waktu acuan diambil SEKALI di awal, bukan dipanggil di tengah render:
+    // render yang memanggil Date.now() hasilnya berbeda tiap kali dijalankan.
     const daysLeft = Math.ceil(
-      (status.expires_at.getTime() - Date.now()) / 86_400_000
+      (status.expires_at.getTime() - now) / 86_400_000
     );
     if (daysLeft > 7) return null;
     title = `${status.name} expires in ${daysLeft <= 1 ? "1 day" : `${daysLeft} days`}`;

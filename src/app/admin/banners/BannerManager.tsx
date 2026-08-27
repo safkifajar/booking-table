@@ -204,8 +204,16 @@ function BannerRow({
   onDelete: () => void;
   onNotify: () => void;
 }) {
-  const now = Date.now();
+  // Waktu acuan diambil setelah komponen terpasang, bukan saat render:
+  // render yang memanggil Date.now() menghasilkan HTML berbeda di server &
+  // browser. Sebelum terisi, banner dianggap BELUM tayang — lebih aman
+  // daripada terlanjur menampilkannya sebagai aktif lalu berubah.
+  const [now, setNow] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    setNow(Date.now());
+  }, []);
   const inWindow =
+    now !== null &&
     (!banner.startsAt || banner.startsAt.getTime() <= now) &&
     (!banner.endsAt || banner.endsAt.getTime() >= now);
   const showing = banner.isActive && inWindow;
