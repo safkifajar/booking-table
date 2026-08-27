@@ -389,11 +389,15 @@ export function AdminMobileMenu({ role }: { role: AdminRole }) {
     setTimeout(() => setOpen(false), ANIM_MS);
   }
 
-  // Tutup drawer saat pindah halaman (tanpa animasi — halaman sudah berganti).
-  React.useEffect(() => {
+  // Tutup drawer saat pindah halaman (tanpa animasi — halaman sudah
+  // berganti). Diperiksa saat render, bukan lewat useEffect: dgn efek,
+  // drawer sempat tampak menutupi halaman baru satu render.
+  const [prevPathname, setPrevPathname] = React.useState(rawPathname);
+  if (prevPathname !== rawPathname) {
+    setPrevPathname(rawPathname);
     setVisible(false);
     setOpen(false);
-  }, [rawPathname]);
+  }
 
   // Kunci scroll body selama drawer terbuka.
   React.useEffect(() => {

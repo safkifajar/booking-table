@@ -39,8 +39,21 @@ export function ItemsList({ items, totalRevenue }: Props) {
     });
   }, [items, query, activeCategory]);
 
+  // Kembali ke halaman 1 saat filter/pencarian berubah. Diperiksa SAAT
+  // RENDER & dipakai lewat effectivePage — setPage baru berlaku di render
+  // berikutnya, jadi kalau hanya memanggil setPage(0), render ini terlanjur
+  // memakai nomor halaman lama & daftarnya bisa tampil kosong.
+  const filterKey = `${query}|${activeCategory}|${pageSize}`;
+  const [prevFilterKey, setPrevFilterKey] = React.useState(filterKey);
+  let effectivePage = page;
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(0);
+    effectivePage = 0;
+  }
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const safePage = Math.min(page, totalPages - 1);
+  const safePage = Math.max(0, Math.min(effectivePage, totalPages - 1));
   const start = safePage * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
 
@@ -51,11 +64,6 @@ export function ItemsList({ items, totalRevenue }: Props) {
     items.forEach((it, idx) => m.set(it.menu_item_id, idx + 1));
     return m;
   }, [items]);
-
-  // Reset ke page 0 saat filter / pageSize berubah
-  React.useEffect(() => {
-    setPage(0);
-  }, [query, activeCategory, pageSize]);
 
   return (
     <div className="space-y-3">

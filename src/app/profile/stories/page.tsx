@@ -19,6 +19,11 @@ import { STORY_TEXT_STYLE_CLASS } from "@/lib/story-constants";
  * Future: bisa diperluas jadi arsip permanent dengan opt-in save.
  */
 export default async function ProfileStoriesPage() {
+  // Server component: dirender sekali per permintaan (lihat catatan di
+  // MembershipBanner). Dialirkan ke tiap kartu supaya seluruh sisa waktu
+  // dihitung dari titik yang sama.
+  // eslint-disable-next-line react-hooks/purity
+  const renderedAt = Date.now();
   const profile = await getCurrentProfile();
   if (!profile) {
     redirect("/auth?next=/profile/stories");
@@ -60,7 +65,7 @@ export default async function ProfileStoriesPage() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {rows.map((s) => (
-                <StoryCard key={s.id} story={s} />
+                <StoryCard key={s.id} story={s} renderedAt={renderedAt} />
               ))}
             </div>
           </div>
@@ -72,7 +77,9 @@ export default async function ProfileStoriesPage() {
 
 function StoryCard({
   story,
+  renderedAt,
 }: {
+  renderedAt: number;
   story: {
     id: string;
     kind: "image" | "text";
@@ -86,9 +93,11 @@ function StoryCard({
     area_name: string | null;
   };
 }) {
+  // Waktu acuan diterima sebagai prop, bukan dipanggil di sini: render yang
+  // memanggil Date.now() hasilnya berbeda tiap kali dijalankan.
   const expireMinutes = Math.max(
     0,
-    Math.floor((story.expiresAt.getTime() - Date.now()) / 60_000)
+    Math.floor((story.expiresAt.getTime() - renderedAt) / 60_000)
   );
   const expireLabel =
     expireMinutes < 60 ? `${expireMinutes}m` : `${Math.floor(expireMinutes / 60)}h`;

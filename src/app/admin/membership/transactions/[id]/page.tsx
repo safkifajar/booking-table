@@ -52,6 +52,11 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 /** Detail satu transaksi membership — rincian tagihan, periode, voucher benefit. */
 export default async function MembershipTxDetailPage({ params }: PageProps) {
+  // Server component: dirender sekali per permintaan (lihat catatan di
+  // MembershipBanner). Diambil sekali supaya semua voucher dinilai
+  // kedaluwarsa dari titik waktu yang sama.
+  // eslint-disable-next-line react-hooks/purity
+  const renderedAt = Date.now();
   await requireAdmin();
   const { id } = await params;
   const d = await getMembershipTxDetail(id).catch(() => null);
@@ -181,7 +186,7 @@ export default async function MembershipTxDetailPage({ params }: PageProps) {
             <div className="space-y-2">
               {d.vouchers.map((v) => {
                 const expired =
-                  !v.used_at && new Date(v.expires_at).getTime() < Date.now();
+                  !v.used_at && new Date(v.expires_at).getTime() < renderedAt;
                 const usable = v.used_at || v.reserved;
                 const inner = (
                   <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 hover:bg-muted/30 transition">

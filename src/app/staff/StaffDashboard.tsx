@@ -99,9 +99,12 @@ export function StaffDashboard({ initialQueue, initialTables, barId }: Props) {
       .filter((item) => item.status !== "served") as QueueItem[];
   }, [initialQueue, optimistic]);
 
-  // Reset optimistic state setiap initialQueue berubah (after router.refresh)
-  // Items yang masih di initialQueue tapi server sudah update → optimistic match.
-  React.useEffect(() => {
+  // Buang penanda optimistik yang sudah dikonfirmasi server. Saat render,
+  // bukan lewat useEffect: dgn efek, satu render sempat memakai penanda basi
+  // — di dasbor yang menerima pembaruan realtime, itu terasa berkedip.
+  const [prevQueue, setPrevQueue] = React.useState(initialQueue);
+  if (prevQueue !== initialQueue) {
+    setPrevQueue(initialQueue);
     setOptimistic((prev) => {
       if (prev.size === 0) return prev;
       // Hapus optimistic untuk item yang sudah tidak ada di queue (= server confirm served)
@@ -119,7 +122,7 @@ export function StaffDashboard({ initialQueue, initialTables, barId }: Props) {
       }
       return next;
     });
-  }, [initialQueue]);
+  }
 
   // Realtime via SSE → /api/realtime/staff/[barId]. Server Actions trigger
   // Postgres NOTIFY → endpoint stream → router.refresh().

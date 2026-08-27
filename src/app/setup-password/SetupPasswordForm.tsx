@@ -160,7 +160,7 @@ export function SetupPasswordForm({ token, email }: Props) {
             />
             {confirmPassword.length > 0 && confirmPassword !== password && (
               <p className="text-[10px] text-red-400 mt-1">
-                Doesn't match the new password
+                Doesn&apos;t match the new password
               </p>
             )}
           </div>
