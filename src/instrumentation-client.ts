@@ -28,6 +28,38 @@ Sentry.init({
     "NetworkError when attempting to fetch resource",
     "Load failed",
   ],
+
+  /**
+   * Buang galat yang jelas BUKAN dari aplikasi kita.
+   *
+   * Ekstensi browser & skrip pihak ketiga yang disuntikkan ke halaman
+   * melempar galat dengan ciri khas: pesan teracak satu-dua huruf
+   * ("Error: Da"), atau stack yang menunjuk `undefined`/`chrome-extension://`
+   * karena berkas sumbernya tak pernah kita muat. Selama ini semuanya masuk
+   * dan menutupi bug sungguhan.
+   */
+  beforeSend(event) {
+    const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+    const files = frames.map((f) => f.filename ?? "");
+
+    // Tak ada satu pun frame yang berasal dari berkas kita → bukan bug kita.
+    const asing = (f: string) =>
+      f.startsWith("chrome-extension://") ||
+      f.startsWith("moz-extension://") ||
+      f.startsWith("safari-extension://") ||
+      f === "undefined" ||
+      f === "<anonymous>" ||
+      f === "";
+    if (files.length > 0 && files.every(asing)) return null;
+
+    // Pesan teracak sangat pendek tanpa spasi — khas kode yang diminifikasi
+    // pihak lain ("Da", "xN"). Galat kita selalu punya kalimat yang bisa
+    // dibaca.
+    const msg = event.exception?.values?.[0]?.value ?? "";
+    if (/^[A-Za-z$_]{1,3}$/.test(msg.trim())) return null;
+
+    return event;
+  },
 });
 
 // Wajib untuk Next.js App Router: melaporkan waktu navigasi antar-halaman.
