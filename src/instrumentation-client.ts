@@ -27,6 +27,11 @@ Sentry.init({
     "Failed to fetch",
     "NetworkError when attempting to fetch resource",
     "Load failed",
+    // Google Translate menyisipkan <font> & memindahkan node, sehingga React
+    // kehilangan node yang dipeganginya. Halaman sudah diberi
+    // translate="no", tapi tab yang terlanjur menyala tetap memunculkannya.
+    "The object can not be found here",
+    "NotFoundError",
   ],
 
   /**
