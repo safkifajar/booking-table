@@ -137,20 +137,27 @@ export function OpenTableForm({
   // Potongan menutup seluruh tagihan → tak ada yang ditagih ke gateway.
   const fullyCovered = voucher !== null && payableTotal === 0;
 
-  // Semua akun dilepas (diganti nama manual) → voucher ikut dibuang supaya
-  // tak terkirim diam-diam.
-  React.useEffect(() => {
-    if (!canUseVoucher && voucher) {
+  // Voucher dibuang saat pijakannya berubah. Diperiksa SAAT RENDER, bukan
+  // lewat useEffect: dgn efek, satu render sempat menampilkan potongan yang
+  // sudah tak sah — dan di layar ini itu berarti kasir melihat nominal tagih
+  // yang salah, walau sesaat.
+  //
+  // Dua pemicunya:
+  //  1. Semua akun dilepas (diganti nama manual) → voucher tak punya pemilik
+  //     lagi, jangan sampai terkirim diam-diam.
+  //  2. Nominal berubah (item ditambah/dikurangi) → potongan bisa tak lagi
+  //     memenuhi syarat (mis. minimum belanja). Kasir menerapkannya ulang.
+  const [prevBillTotal, setPrevBillTotal] = React.useState(bill.total);
+  if (prevBillTotal !== bill.total) {
+    setPrevBillTotal(bill.total);
+    if (voucher) {
       setVoucher(null);
       setVoucherInput("");
     }
-  }, [canUseVoucher, voucher]);
-
-  // Nominal berubah (item ditambah/dikurangi) → potongan bisa tak lagi valid
-  // (mis. minimum belanja). Buang, biar kasir menerapkannya ulang.
-  React.useEffect(() => {
+  } else if (!canUseVoucher && voucher) {
     setVoucher(null);
-  }, [bill.total]);
+    setVoucherInput("");
+  }
 
   async function applyVoucher() {
     const code = voucherInput.trim().toUpperCase();
@@ -196,14 +203,17 @@ export function OpenTableForm({
   }, [floorMap, selectedTableId]);
   const capacity = selectedTable?.capacity ?? 8;
 
-  // Trim daftar tamu kalau pindah ke meja berkapasitas lebih kecil.
-  React.useEffect(() => {
+  // Potong daftar tamu kalau pindah ke meja berkapasitas lebih kecil.
+  // Saat render, supaya kasir tak sempat melihat tamu yang melebihi
+  // kapasitas meja barunya.
+  const [prevTableId, setPrevTableId] = React.useState(selectedTableId);
+  if (prevTableId !== selectedTableId) {
+    setPrevTableId(selectedTableId);
     if (selectedTable && guestNames.length > selectedTable.capacity) {
       setGuestNames((prev) => prev.slice(0, selectedTable.capacity));
       setGuestAccounts((prev) => prev.slice(0, selectedTable.capacity));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTableId]);
+  }
 
   function updateGuestName(index: number, value: string) {
     setGuestNames((prev) => {
@@ -878,13 +888,21 @@ function GuestRow({
   const [loading, setLoading] = React.useState(false);
 
   // Debounce pencarian (300ms).
+  //
+  // Pengosongan hasil saat kolom kosong SENGAJA lewat kunci turunan di
+  // bawah, bukan di dalam efek ini: setState sinkron di dalam efek membuat
+  // hasil pencarian lama sempat tampil satu render setelah kolom dikosongkan.
+  const kosong = !searching || query.trim().length < 1;
+  const [prevKosong, setPrevKosong] = React.useState(kosong);
+  if (prevKosong !== kosong) {
+    setPrevKosong(kosong);
+    if (kosong && results.length > 0) setResults([]);
+  }
+
   React.useEffect(() => {
     if (!searching) return;
     const q = query.trim();
-    if (q.length < 1) {
-      setResults([]);
-      return;
-    }
+    if (q.length < 1) return;
     let alive = true;
     setLoading(true);
     const t = setTimeout(() => {

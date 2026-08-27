@@ -16,6 +16,10 @@ import "server-only";
  *   membungkus try/catch; backfill menambal yang bolong.
  */
 
+import { computeSplit, type SchemeCategory } from "@/lib/revenue-split-math";
+// Diteruskan supaya pemakai lama tak perlu tahu perpindahan berkasnya.
+export { computeSplit, type SchemeCategory };
+
 import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
@@ -30,12 +34,6 @@ import { membershipTransactions } from "@/lib/db/schema/membership-transactions"
 import { getChargeConfig } from "@/lib/settings-actions";
 import { DEFAULT_CHARGE_CONFIG, type ChargeConfig } from "@/lib/settings-constants";
 
-export interface SchemeCategory {
-  name: string;
-  percentMilli: number;
-  method: string | null;
-  isRemainderSink: boolean;
-}
 
 /** Skema aktif utk waktu paid tertentu (versi terbaru dgn effective_at <= t). */
 export async function getActiveScheme(paidAt: Date): Promise<
@@ -60,36 +58,6 @@ export async function getActiveScheme(paidAt: Date): Promise<
     .where(eq(splitSchemeCategories.schemeId, scheme.id))
     .orderBy(asc(splitSchemeCategories.sortOrder));
   return { ...scheme, categories: cats };
-}
-
-/**
- * Hitung pembagian murni (dipakai engine + simulasi UI).
- * base = porsi subtotal; serviceCollected = service yang terkumpul.
- */
-export function computeSplit(input: {
-  base: number;
-  serviceCollected: number;
-  method: string;
-  categories: SchemeCategory[];
-}): { category: string; amount: number }[] {
-  const out: { category: string; amount: number }[] = [];
-  let allocated = 0;
-  let sink: string | null = null;
-  for (const c of input.categories) {
-    if (c.isRemainderSink) {
-      sink = c.name;
-      continue; // sink dihitung terakhir dari sisa
-    }
-    if (c.method != null && c.method !== input.method) continue;
-    const amount = Math.round((input.base * c.percentMilli) / 100_000);
-    out.push({ category: c.name, amount });
-    allocated += amount;
-  }
-  if (sink) {
-    // Sisa (positif/negatif) ke penampung — Σ selalu = serviceCollected.
-    out.push({ category: sink, amount: input.serviceCollected - allocated });
-  }
-  return out;
 }
 
 /** Porsi subtotal & service dari nominal payment (yang sudah incl. charge). */

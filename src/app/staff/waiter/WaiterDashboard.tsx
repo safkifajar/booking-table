@@ -157,8 +157,13 @@ export function WaiterDashboard({
     [initialQueue, optimistic]
   );
 
-  // Reset optimistic state when initialQueue changes (server confirmed)
-  React.useEffect(() => {
+  // Buang penanda optimistik yang sudah dikonfirmasi server. Saat render,
+  // bukan lewat useEffect: dgn efek, satu render sempat memakai penanda basi
+  // — di dasbor yang menerima pembaruan realtime terus-menerus, itu terasa
+  // sebagai daftar yang berkedip.
+  const [prevQueue, setPrevQueue] = React.useState(initialQueue);
+  if (prevQueue !== initialQueue) {
+    setPrevQueue(initialQueue);
     setOptimistic((prev) => {
       if (prev.size === 0) return prev;
       const next = new Set<string>();
@@ -169,7 +174,7 @@ export function WaiterDashboard({
       }
       return next;
     });
-  }, [initialQueue]);
+  }
 
   async function handleMarkServed(itemId: string) {
     setOptimistic((prev) => new Set(prev).add(itemId));
@@ -345,11 +350,10 @@ function QueueView({
   }, [servedItems]);
 
   // Sheet meja pending yang semua itemnya keburu served → tutup otomatis.
-  React.useEffect(() => {
-    if (sheet?.kind === "pending" && !pendingGroups.has(sheet.sessionId)) {
-      setSheet(null);
-    }
-  }, [sheet, pendingGroups]);
+  // Saat render, supaya waiter tak sempat melihat sheet kosong.
+  if (sheet?.kind === "pending" && !pendingGroups.has(sheet.sessionId)) {
+    setSheet(null);
+  }
 
   const sheetItems: WaiterQueueItem[] = sheet
     ? sheet.kind === "pending"
