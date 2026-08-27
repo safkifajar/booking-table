@@ -1,85 +1,108 @@
-# Booking Table — SOHO Social House
+# Booking Table — RATS Social / SOHO Social House
 
-Social table booking demo: open table, invite circle, order together, split bill.
+Aplikasi social table booking: buka meja, undang teman, pesan bersama, bagi tagihan. Dilengkapi panel admin, mode staff (waiter & kasir), membership, dan pembayaran QRIS.
 
-Built with **Next.js 16** · **React 19** · **Tailwind v4** · **Supabase** · **TypeScript**.
+Stack: **Next.js 16** · **React 19** · **TypeScript** · **Tailwind v4** · **PostgreSQL 16** · **Drizzle ORM** · **Auth.js v5**
 
 ---
 
-## Quick Start (15 minutes)
+## Prasyarat
 
-### 1. Supabase: reset & migrate
+- Node.js 24 LTS
+- Docker (untuk PostgreSQL lokal) atau PostgreSQL 16 yang sudah terpasang
+- npm
 
-Login ke Supabase dashboard → project kamu → **SQL Editor**.
+---
 
-Jalankan tiga file SQL secara berurutan:
+## Setup Lokal
 
-| Step | File | Apa yang dilakukan |
-|---|---|---|
-| 1 | [supabase/migrations/0000_reset.sql](supabase/migrations/0000_reset.sql) | **Hapus semua table, type, function di schema public** dari project lama. ⚠️ Destructive — pastikan benar project yang sudah di-pause. |
-| 2 | [supabase/migrations/0001_schema.sql](supabase/migrations/0001_schema.sql) | Create 13 tables, enums, RLS policies, realtime publication |
-| 3 | [supabase/migrations/0002_seed.sql](supabase/migrations/0002_seed.sql) | Seed SOHO Social House: 2 area, 24 meja, 35+ menu item |
-
-**Caranya:** copy isi file → paste ke SQL Editor → **Run**. Lakukan satu per satu, pastikan tidak ada error sebelum lanjut ke file berikutnya.
-
-### 2. Aktifkan Anonymous Sign-In (untuk demo cepat)
-
-Tanpa step ini, mode "Masuk sebagai Tamu" tidak akan jalan.
-
-Supabase dashboard → **Authentication → Providers → Anonymous Sign-Ins** → **Enable**.
-
-(Magic link via email tetap berjalan tanpa ini.)
-
-### 3. Dapatkan kredensial API
-
-Supabase dashboard → **Settings → API**, copy:
-- `Project URL`
-- `anon public` key
-
-### 4. Set env variable lokal
-
-Copy file `.env.local.example` ke `.env.local`:
+### 1. Nyalakan database
 
 ```bash
-cp .env.local.example .env.local
+docker compose up -d
 ```
 
-Edit `.env.local`:
+Menjalankan PostgreSQL 16 di `localhost:5432` dan Adminer di `localhost:8080` untuk melihat isi tabel.
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
-NEXT_PUBLIC_BAR_SLUG=soho-purwokerto
+### 2. Siapkan environment
+
+```bash
+cp .env.example .env.local
 ```
 
-### 5. Jalankan dev server
+Yang wajib diisi supaya aplikasi jalan:
+
+| Variabel | Keterangan |
+|---|---|
+| `DATABASE_URL` | Default docker compose: `postgres://postgres:postgres_dev_only@localhost:5432/booking_table` |
+| `AUTH_SECRET` | Generate dengan `npx auth secret` |
+| `AUTH_URL` | Dev: `http://localhost:3000` |
+| `NEXT_PUBLIC_BAR_SLUG` | `soho-purwokerto` |
+
+Sisanya opsional untuk pengembangan lokal: Resend (email), Duitku (pembayaran), VAPID (push notification), Sentry (pemantauan error). Penjelasan tiap variabel ada di komentar `.env.example`.
+
+### 3. Siapkan skema database
+
+```bash
+bash scripts/pre-migrate.sh    # DDL yang harus jalan lebih dulu
+npm run db:push                # sinkronkan skema tabel dari src/lib/db/schema
+bash scripts/apply-sql.sh      # function, trigger, dan constraint
+```
+
+Ketiganya harus dijalankan berurutan. `db:push` hanya menyinkronkan struktur tabel, sedangkan function, trigger, dan constraint anti double-booking hidup di file SQL bernomor di folder `drizzle/`. Melewati langkah ketiga membuat panel admin gagal memuat dan race condition double-booking lolos.
+
+### 4. Isi data awal
+
+```bash
+npm run db:seed
+```
+
+Idempoten, aman diulang. Mengisi bar, area lantai, meja, dan menu.
+
+### 5. Buat akun admin
+
+```bash
+npx tsx scripts/create-admin.ts owner@example.com 'PasswordKuat123!' "Owner"
+```
+
+Idempoten juga. Email baru akan dibuatkan akun, email yang sudah ada akan direset passwordnya dan dipastikan berperan admin.
+
+### 6. Jalankan
 
 ```bash
 npm run dev
 ```
 
-Buka [http://localhost:3000](http://localhost:3000).
+Buka [http://localhost:3000](http://localhost:3000). Panel admin di `/admin-login`, mode staff di `/staff`.
 
 ---
 
-## Demo Flow
+## Perintah
 
-Skenario presentasi ke client:
+| Perintah | Kegunaan |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` | Build produksi |
+| `npm start` | Jalankan hasil build |
+| `npm run lint` | ESLint |
+| `npm run db:push` | Sinkronkan skema tabel ke database |
+| `npm run db:seed` | Isi data awal |
+| `npx drizzle-kit generate` | Buat file migrasi dari perubahan skema |
+| `npx drizzle-kit studio` | Jelajahi data lewat antarmuka web |
 
-1. **Landing** (`/`) — hero SOHO, tombol "Browse Tables"
-2. **Floor plan** (`/bar/soho-purwokerto`) — denah interaktif 2 area (Indoor + Rooftop)
-   - Hijau pulse = meja open (ada session)
-   - Gelap = available
-   - Tap meja kosong → bottom sheet → "Open This Table"
-3. **Sign in cepat** (`/auth`) — pilih "Masuk sebagai Tamu", masukkan nama
-4. **Open table form** (`/open-table?tableId=...`) — pilih judul, visibility (public/friends/invite), vibe tags
-5. **Session page** (`/session/[id]`) — tabs:
-   - **Meja**: lihat members + invite link
-   - **Menu**: kategori cocktails / bites / mains — tap untuk add to order
-   - **Bill**: rincian per anggota (siapa pesan apa)
-   - **Split**: equal / itemized / custom + mock payment QRIS/GoPay/Card/Cash
-6. **Invite teman** — tap "Invite" di header → link disalin → buka di browser lain (atau incognito) → sign in tamu lain → join meja
-7. **Realtime** — order baru, member baru, payment masuk → semua tab refresh otomatis
+---
+
+## Peran Pengguna
+
+| Peran | Masuk lewat | Bisa apa |
+|---|---|---|
+| Tamu / member | `/auth` | Buka meja, gabung meja, pesan, bagi tagihan, teman, cerita, membership |
+| Waiter | `/staff` | Terima pesanan, kelola meja |
+| Kasir | `/staff/cashier` | Pembayaran, struk, tutup shift, data pelanggan |
+| Manager | `/admin-login` | Sebagian besar panel admin |
+| Admin | `/admin-login` | Seluruh panel admin termasuk Email Log dan staff |
+
+Peran staff disimpan di tabel `staff_roles` dengan nilai `waiter`, `cashier`, `manager`, dan `admin`.
 
 ---
 
@@ -88,97 +111,128 @@ Skenario presentasi ke client:
 ```
 src/
 ├── app/
-│   ├── page.tsx               # Landing
-│   ├── layout.tsx             # Root + Sonner toast
-│   ├── auth/                  # Sign in (email + anonymous)
-│   ├── bar/[slug]/            # Floor plan
-│   ├── open-table/            # Open table form
-│   ├── session/[id]/          # Live session (members/menu/bill/split)
-│   └── join/[code]/           # Join via invite link
-├── components/
-│   ├── ui/                    # Button, Card, Badge, Avatar
-│   ├── floor/FloorMap.tsx     # SVG interactive map
-│   ├── menu/MenuPicker.tsx    # Menu catalog + add to order sheet
-│   └── session/SplitPayment.tsx # Equal/itemized/custom split
+│   ├── page.tsx              # Landing
+│   ├── auth/                 # Masuk, lupa & reset password
+│   ├── bar/[slug]/           # Denah lantai
+│   ├── open-table/           # Form buka meja
+│   ├── session/[id]/         # Meja aktif: anggota, menu, tagihan, bagi bayar
+│   ├── booking/[id]/pay/     # Pembayaran reservasi
+│   ├── profile/              # Profil, teman, cerita, sesi login, privasi
+│   ├── network/              # Jejaring antar member
+│   ├── membership/           # Tingkat membership & voucher
+│   ├── promo/                # Banner promo
+│   ├── qr/[tableId]/         # Masuk lewat QR meja
+│   ├── staff/                # Waiter & kasir
+│   ├── admin/                # Panel admin (30+ halaman)
+│   └── api/
+│       ├── auth/             # Auth.js
+│       ├── realtime/         # SSE per bar, sesi, staff, user
+│       ├── payments/duitku/  # Callback gateway
+│       └── cron/             # Pengingat booking, notifikasi banner, kedaluwarsa cerita
 ├── lib/
-│   ├── supabase/              # client, server, middleware
-│   ├── actions.ts             # Server Actions (open, join, order, pay)
-│   ├── queries.ts             # Server-side data fetchers
-│   ├── auth.ts                # Auth helpers (require user/profile)
-│   └── utils.ts               # formatIDR, initials, etc.
+│   ├── db/                   # Drizzle client & schema (45 tabel, 18 enum)
+│   ├── auth-v2/              # Helper autentikasi
+│   ├── realtime/             # LISTEN/NOTIFY Postgres untuk SSE
+│   ├── payments/             # Driver mock & Duitku
+│   ├── storage/              # Driver penyimpanan berkas
+│   ├── actions.ts            # Server action inti
+│   ├── queries.ts            # Pengambilan data sisi server
+│   └── *-actions.ts          # Server action per modul
+├── components/
 ├── hooks/
-│   └── useSessionRealtime.ts  # Supabase realtime subscription
-├── types/
-│   └── db.ts                  # TypeScript types matching schema
-└── middleware.ts              # Supabase session refresh
+└── middleware.ts             # Penjagaan rute
 ```
-
----
-
-## Schema Overview
-
-Lihat [docs/schema.md](docs/schema.md) untuk dokumentasi lengkap.
-
-**Tables (13):** `profiles`, `bars`, `floor_areas`, `tables`, `table_sessions`, `session_members`, `session_invites`, `menu_categories`, `menu_items`, `orders`, `order_items`, `payments`, `staff_roles`
-
-**Key design:**
-- `order_items.added_by_member_id` → tracks **siapa pesan apa** untuk split itemized
-- `table_sessions` unique partial index → hanya 1 session aktif per meja
-- Harga as **integer (rupiah)**, no float
-- `unit_price` di-snapshot saat order → harga menu boleh berubah tanpa pengaruhi order lama
-- **RLS aktif** untuk semua table — public read untuk bar/menu, member-only untuk order/payment
 
 ---
 
 ## Realtime
 
-Halaman session subscribe ke 4 table via `useSessionRealtime`:
-- `table_sessions` — status meja
-- `session_members` — orang join/leave
-- `order_items` — pesanan baru
-- `payments` — pembayaran masuk
+Memakai **Server-Sent Events** di atas **LISTEN/NOTIFY PostgreSQL**, bukan layanan realtime pihak ketiga.
 
-Setiap event memicu `router.refresh()` → server re-fetch & update UI. Cocok untuk demo. Untuk production scale, ganti ke optimistic UI dengan local state.
+- `src/lib/realtime/listener.ts` memegang koneksi Postgres khusus untuk LISTEN, terpisah dari pool Drizzle supaya query biasa tidak kehabisan slot koneksi
+- `src/lib/realtime/notify.ts` mengirim notifikasi saat data berubah
+- Endpoint SSE tersedia per bar, per sesi, per staff, dan per pengguna di `src/app/api/realtime/`
 
 ---
 
-## Production Roadmap (post-demo)
+## Pembayaran
 
-| Fitur | Status demo | Untuk go-live |
-|---|---|---|
-| Payment | Mock — semua `method='mock'` jadi `status='paid'` | Integrasi Midtrans/Xendit snap |
-| Auth | Email magic link + anonymous | Tambah Google/Phone OTP |
-| Waiter mode | Skema staff_roles ada | UI khusus untuk waiter (tablet view) |
-| Admin dashboard | Skema staff_roles ada | UI manage menu, table layout, analytics |
-| Push notif | Belum | OneSignal / FCM untuk "your order is ready" |
-| QR per meja | Belum | Print sticker QR → scan → langsung ke session yang aktif |
-| Custom split | Placeholder | Per-item assignment, % share |
+Diatur lewat `PAYMENT_GATEWAY`:
+
+- `mock` — pembayaran ditandai lunas secara manual, dipakai untuk demo dan pengembangan
+- `duitku` — QRIS sungguhan, butuh `DUITKU_MERCHANT_CODE`, `DUITKU_API_KEY`, dan `DUITKU_CALLBACK_URL` yang juga didaftarkan di dashboard Duitku
+
+`NEXT_PUBLIC_DEMO_MODE=true` membuat seluruh pembayaran otomatis lunas. Wajib `false` di produksi.
+
+---
+
+## Penyimpanan Berkas
+
+Avatar dan cerita disimpan lewat driver di `src/lib/storage/`, diatur `STORAGE_DRIVER`. Default `local`. Di produksi isi `UPLOADS_DIR` dengan folder di luar project, misalnya `/var/lib/booking-table/uploads`, supaya berkas tidak ikut terbundel saat build dan tidak hilang saat deploy berikutnya.
+
+---
+
+## Database
+
+45 tabel dan 18 enum, didefinisikan di `src/lib/db/schema/`. Modul besarnya: sesi meja dan anggota, pesanan dan item, pembayaran dan pembagian tagihan, membership dan voucher, teman dan blokir, cerita, notifikasi dan push, banner, log aktivitas, log email, serta permintaan hapus akun.
+
+Folder `drizzle/` berisi 61 file SQL. Sebagian hanya jejak riwayat migrasi, sebagian lagi berisi function, trigger, dan constraint yang dijalankan `scripts/apply-sql.sh` setiap deploy.
+
+---
+
+## Skrip Bantu
+
+| Skrip | Kegunaan |
+|---|---|
+| `scripts/deploy.sh` | Deploy ke VPS: sync, install, migrasi, build, reload PM2 |
+| `scripts/setup-production.sh` | Penyiapan awal server |
+| `scripts/pre-migrate.sh` | DDL yang harus jalan sebelum `db:push` |
+| `scripts/apply-sql.sh` | Function, trigger, dan constraint setelah `db:push` |
+| `scripts/create-admin.ts` | Buat atau promosikan akun admin |
+| `scripts/seed.ts` | Data awal |
+| `scripts/reset-menu-dev.ts` | Reset menu saat pengembangan |
+| `scripts/test-*.ts` | Skrip verifikasi manual per modul, dijalankan dengan `npx tsx` |
+
+Skrip `test-*.ts` adalah pemeriksaan manual, bukan test otomatis. Project ini belum punya kerangka pengujian.
+
+---
+
+## Deploy
+
+Panduan lengkap ada di [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Hostinger KVM VPS, Ubuntu 22.04 atau 24.04, nginx, Let's Encrypt, PM2, dan ufw. Termasuk pengaturan dua environment staging dan production di satu server.
+
+Deploy rutin cukup `bash scripts/deploy.sh`. Urutannya: sync branch, `npm ci`, pre-migrate, `db:push --force`, apply-sql, build, lalu reload PM2. Build yang gagal menghentikan proses sebelum PM2 di-reload, sehingga versi lama tetap berjalan.
+
+---
+
+## Dokumen Lain
+
+Folder `docs/` berisi PRD per fitur: bagi hasil, rework pembayaran berbasis tagihan, email transaksi, teman, split QRIS oleh host, kontrol pesanan host, membership, dan multi order prepaid.
+
+Catatan: [docs/schema.md](docs/schema.md) masih menggambarkan skema 13 tabel dari era Supabase dan belum diperbarui ke skema 45 tabel yang berlaku sekarang. Acuan skema yang sahih ada di `src/lib/db/schema/`.
 
 ---
 
 ## Troubleshooting
 
-**`Failed to fetch` saat sign in tamu**
-→ Anonymous sign-in belum diaktifkan di Supabase. Lihat step 2.
+**Panel admin error 500 setelah setup**
+Function dan trigger belum terpasang. Jalankan `bash scripts/apply-sql.sh`.
 
-**`uniq_active_session_per_table` error saat open table**
-→ Meja sudah punya session aktif. Reset dengan `update table_sessions set status='closed' where status in ('open','locked')` di SQL Editor.
+**`db:push` menggantung menunggu jawaban prompt**
+Ada perubahan yang dianggap berisiko kehilangan data. Jalankan `bash scripts/pre-migrate.sh` lebih dulu.
 
-**Tidak ada meja muncul di floor plan**
-→ Seed belum jalan. Run `0002_seed.sql`.
+**Tidak ada meja yang muncul di denah lantai**
+Data awal belum diisi. Jalankan `npm run db:seed`.
 
-**RLS blocking semua queries**
-→ Pastikan user sudah sign in. Cek di Supabase Auth → Users apakah ada record.
+**Tidak bisa masuk `/admin`**
+Belum ada akun admin. Jalankan `npx tsx scripts/create-admin.ts`.
 
----
+**Pembayaran tidak pernah berubah jadi lunas**
+Periksa `PAYMENT_GATEWAY` dan `NEXT_PUBLIC_DEMO_MODE`. Untuk Duitku, pastikan URL callback sudah didaftarkan di dashboard Duitku.
 
-## Tech Notes
-
-- **Mobile-first** — testing utama di Chrome devtools mobile preview
-- **Currency** — `formatIDR()` di [src/lib/utils.ts](src/lib/utils.ts)
-- **Theme** — dark + gold (#C9A961) di [src/app/globals.css](src/app/globals.css)
-- **No external API keys** untuk demo (semua mock di sisi payment)
+**Perubahan realtime tidak sampai ke browser**
+Periksa koneksi database masih hidup dan endpoint SSE di `/api/realtime/` dapat diakses. Reverse proxy perlu mengizinkan koneksi terbuka lama dan mematikan buffering.
 
 ---
 
-Demo for SOHO Social House Purwokerto.
+Dibuat untuk SOHO Social House Purwokerto.
