@@ -46,8 +46,10 @@ next-env.d.ts
 !/public/uploads/.gitkeep
 
 # Dokumen internal — LOKAL saja, jangan ikut repo (permintaan user).
-# Seluruh isi docs/ diabaikan; DEPLOYMENT.md & schema.md yang sudah terlanjur
-# ter-commit tetap ada di repo (gitignore tak mencabut file yang sudah track).
+# Seluruh isi docs/ diabaikan. DEPLOYMENT.md tetap di repo (sudah ter-track
+# sebelum aturan ini & dirujuk README). schema.md DICABUT 2026-08-28: ia
+# dibangkitkan `npm run docs:schema` dari database, jadi menyimpan salinannya
+# di repo cuma menghasilkan versi usang yang menyesatkan.
 docs/
 
 # Pengaturan alat bantu ngoding — milik mesin masing-masing, bukan bagian
