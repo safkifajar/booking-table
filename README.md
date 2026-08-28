@@ -209,7 +209,17 @@ Deploy rutin cukup `bash scripts/deploy.sh`. Urutannya: sync branch, `npm ci`, p
 
 Folder `docs/` berisi PRD per fitur: bagi hasil, rework pembayaran berbasis tagihan, email transaksi, teman, split QRIS oleh host, kontrol pesanan host, membership, dan multi order prepaid.
 
-Catatan: [docs/schema.md](docs/schema.md) masih menggambarkan skema 13 tabel dari era Supabase dan belum diperbarui ke skema 45 tabel yang berlaku sekarang. Acuan skema yang sahih ada di `src/lib/db/schema/`.
+### Skema database
+
+Acuan yang sahih ada di `src/lib/db/schema/` (Drizzle ORM) dan migrasi SQL di `drizzle/`.
+
+Untuk gambaran menyeluruh — seluruh tabel, enum, relasi beserta ON DELETE-nya, dan index — bangkitkan `docs/schema.md` dari database yang sedang berjalan:
+
+```bash
+npm run docs:schema
+```
+
+Sengaja DIBANGKITKAN, bukan ditulis tangan lalu disimpan di repo: versi lama yang ditulis manual ditinggalkan begitu saja & akhirnya menggambarkan 13 tabel era Supabase padahal skemanya sudah 45 tabel. Dokumen yang salah lebih menyesatkan daripada tak ada dokumen. Berkas hasilnya lokal saja (`docs/` diabaikan git), jadi selalu segar saat dibutuhkan.
 
 ---
 
