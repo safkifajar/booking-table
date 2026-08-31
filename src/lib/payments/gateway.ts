@@ -128,7 +128,8 @@ const mockGateway: PaymentGateway = {
 // - Status:   {base}/webapi/api/merchant/transactionStatus
 //   signature = MD5(merchantCode + merchantOrderId + apiKey)
 // - Callback verify (di route): MD5(merchantCode + amount + merchantOrderId + apiKey)
-// QRIS paymentMethod = "SP".
+// QRIS paymentMethod: diatur lewat DUITKU_QRIS_CHANNEL (NQ=Nobu, SP=ShopeePay,
+// DQ=DANA, LQ=LinkAja, SQ=Nusapay, GQ=Gudang Voucher). Default "SP".
 // ============================================================
 
 import { createHash } from "node:crypto";
@@ -163,12 +164,31 @@ function duitkuConfig() {
   return { merchantCode, apiKey, env, base, callbackUrl, returnUrl };
 }
 
+/**
+ * Kode kanal QRIS di Duitku, bisa diatur lewat env DUITKU_QRIS_CHANNEL.
+ *
+ * Kode ini HARUS cocok dengan kanal yang AKTIF di dashboard Duitku. Kalau
+ * tidak, Duitku menolak permintaannya & tamu melihat "QRIS unavailable" —
+ * mengaktifkan kanal lain di dashboard tak menolong selama kode di sini
+ * masih menunjuk kanal yang dimatikan.
+ *
+ * Kode yang tersedia (per dokumentasi Duitku):
+ *   NQ = Nobu     SP = ShopeePay   DQ = DANA
+ *   LQ = LinkAja  SQ = Nusapay     GQ = Gudang Voucher
+ *
+ * Default "SP" mempertahankan perilaku sebelumnya untuk pemasangan yang
+ * belum menyetel env ini.
+ */
+function qrisChannelCode(): string {
+  const kode = process.env.DUITKU_QRIS_CHANNEL?.trim().toUpperCase();
+  return kode && kode.length > 0 ? kode : "SP";
+}
+
 /** Map PaymentMethod internal → kode paymentMethod Duitku. */
 function duitkuMethodCode(method: PaymentMethod): string {
-  // QRIS → "SP" (ShopeePay QRIS / QRIS umum di Duitku).
-  if (method === "qris") return "SP";
-  // Fallback: perlakukan sama seperti QRIS utk sekarang (integrasi awal).
-  return "SP";
+  if (method === "qris") return qrisChannelCode();
+  // Metode lain belum punya pemetaan sendiri — diperlakukan sebagai QRIS.
+  return qrisChannelCode();
 }
 
 const duitkuGateway: PaymentGateway = {
