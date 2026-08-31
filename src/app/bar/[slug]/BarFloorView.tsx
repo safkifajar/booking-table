@@ -409,10 +409,19 @@ export function BarFloorView({
         {mainTab === "menu" ? (
           <MenuList menu={menu} />
         ) : (
-          // Seluruh isi tab Floor jadi SATU area scroll (denah + jadwal). Yg
-          // di luar (tab Floor/Menu) tetap diam — persis pola tab Menu. Tinggi
-          // = sisa layar s/d tepat di atas bottom nav.
-          <div className="max-h-[calc(100dvh-13rem)] overflow-y-auto overscroll-contain -mx-4 sm:-mx-6 px-4 sm:px-6">
+          // Isi tab Floor menggulir bersama HALAMAN, bukan di wadahnya
+          // sendiri.
+          //
+          // Dulu wadah ini punya tinggi dipatok calc(100dvh-13rem) +
+          // overscroll-contain. Angka 13rem menebak tinggi header & bottom
+          // nav; begitu isinya lebih pendek dari itu, tersisa ruang kosong di
+          // bawah daftar — menggulir dari situ tak menggerakkan apa pun,
+          // sebab wadahnya sudah mentok DAN overscroll-contain menahan
+          // gulirannya merembet ke halaman.
+          //
+          // <main> pembungkusnya sudah punya pb-32 untuk bottom nav, jadi
+          // area gulir bertingkat memang tak diperlukan.
+          <div className="-mx-4 sm:-mx-6 px-4 sm:px-6">
         {/* Legend — denah cerminkan kondisi SEKARANG: Available (abu) & sedang
             dipakai (merah). Reservasi tak mewarnai meja (info di jadwal). */}
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-4">
