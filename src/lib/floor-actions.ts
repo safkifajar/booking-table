@@ -11,11 +11,12 @@
  */
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, max, sql } from "drizzle-orm";
+import { and, eq, inArray, max, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { floorAreas, tables } from "@/lib/db/schema/venue";
 import { tableSessions } from "@/lib/db/schema/sessions";
+import { tableMoveRequests } from "@/lib/db/schema/move-requests";
 import { requireAdmin } from "@/lib/admin";
 import { tableSize } from "@/lib/table-size";
 
@@ -249,7 +250,7 @@ export async function deleteTable(tableId: string) {
     .select({ areaId: tables.areaId })
     .from(tables)
     .where(eq(tables.id, tableId));
-  if (!row) throw new Error("Table not found");
+  if (!row) return { ok: false as const, error: "Table not found" };
   await assertAreaInBar(row.areaId, bar.id);
 
   // Tolak kalau ada session aktif.
@@ -264,13 +265,56 @@ export async function deleteTable(tableId: string) {
     )
     .limit(1);
   if (active) {
-    throw new Error(
-      "Table is in use/booked, can't delete. Wait until it's finished."
-    );
+    return {
+      ok: false as const,
+      error: "This table is in use or booked. Wait until the session ends.",
+    };
+  }
+
+  // RIWAYAT juga memblokir — bukan cuma sesi aktif.
+  //
+  // table_sessions.table_id & table_move_requests memakai ON DELETE RESTRICT,
+  // jadi meja yang PERNAH dipakai tak bisa dihapus walau sesinya sudah
+  // ditutup. Itu perlindungan yang benar (menghapusnya berarti memutus jejak
+  // transaksi & uang), tapi sebelumnya tak diperiksa di sini — admin dapat
+  // galat mentah "Failed query: delete from tables..." tanpa penjelasan.
+  const [bekas] = await db
+    .select({ id: tableSessions.id })
+    .from(tableSessions)
+    .where(eq(tableSessions.tableId, tableId))
+    .limit(1);
+  if (bekas) {
+    return {
+      ok: false as const,
+      error:
+        "This table has past sessions, so deleting it would break the " +
+        "transaction history. Turn it off instead — it stays out of the " +
+        "floor plan but the records remain.",
+    };
+  }
+
+  const [pindah] = await db
+    .select({ id: tableMoveRequests.id })
+    .from(tableMoveRequests)
+    .where(
+      or(
+        eq(tableMoveRequests.fromTableId, tableId),
+        eq(tableMoveRequests.toTableId, tableId)
+      )
+    )
+    .limit(1);
+  if (pindah) {
+    return {
+      ok: false as const,
+      error:
+        "This table appears in a table-move request, so deleting it would " +
+        "break that record. Turn it off instead.",
+    };
   }
 
   await db.delete(tables).where(eq(tables.id, tableId));
   revalidatePath("/admin/floor");
+  return { ok: true as const };
 }
 
 // ============================================================

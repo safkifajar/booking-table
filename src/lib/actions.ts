@@ -751,6 +751,13 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
       console.error("[openTable] DP gateway charge failed:", err);
       // Lepas reservasi voucher — DP akan ditangani manual tanpa diskon ini.
       await releaseVoucherForPayment(dpPaymentId).catch(() => {});
+      // Buang baris pending-nya juga. Tanpa itu ia tak pernah punya
+      // expiresAt, dan penjagaan anti-bayar-ganda menganggapnya "masih
+      // hidup" selamanya — tagihan terkunci & tamu tak bisa mencoba lagi.
+      await db
+        .delete(payments)
+        .where(eq(payments.id, dpPaymentId))
+        .catch(() => {});
       // Don't throw — session tetap exist, staff bisa handle manual
     }
     }
@@ -3279,13 +3286,26 @@ export async function payShare(input: z.infer<typeof paySchema>): Promise<{
   }
 
   const gateway = getPaymentGateway();
-  const chargeResult = await gateway.createCharge({
-    paymentId: newPayment.id,
-    amount: chargeAmount,
-    method: data.method,
-    payerName: member.displayName,
-    description: `Self-pay table - ${data.sessionId.slice(0, 8)}`,
-  });
+  let chargeResult;
+  try {
+    chargeResult = await gateway.createCharge({
+      paymentId: newPayment.id,
+      amount: chargeAmount,
+      method: data.method,
+      payerName: member.displayName,
+      description: `Self-pay table - ${data.sessionId.slice(0, 8)}`,
+    });
+  } catch (err) {
+    // Gateway menolak (mis. kanal QRIS tak aktif) — baris pending yang sudah
+    // tersimpan HARUS dibuang.
+    //
+    // Kalau dibiarkan, ia tak pernah punya expiresAt, dan penjagaan
+    // anti-bayar-ganda di atas menganggap pembayaran tanpa expiry sebagai
+    // "masih hidup" — sehingga tagihan terkunci SELAMANYA dan tamu tak bisa
+    // mencoba lagi dengan cara apa pun.
+    await db.delete(payments).where(eq(payments.id, newPayment.id));
+    throw err;
+  }
 
   // 5. Update payment dengan hasil gateway (+ metadata QRIS di split_meta).
   await db
@@ -3503,8 +3523,10 @@ export async function createSplitBatch(
       results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "skipped", qrString: null, expiresAt: null, note: "Already has a pending payment" });
       continue;
     }
+    // Dideklarasikan DI LUAR try supaya blok catch bisa membuang barisnya.
+    let pay: { id: string } | undefined;
     try {
-      const [pay] = await db
+      [pay] = await db
         .insert(payments)
         .values({
           orderId: order.id,
@@ -3566,6 +3588,11 @@ export async function createSplitBatch(
       results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: cr.status, qrString: cr.qrString ?? null, expiresAt: cr.expiresAt ?? null });
     } catch (err) {
       console.error("[createSplitBatch] gagal utk member", t.memberId, err);
+      // Buang baris pending-nya — lihat catatan di payShare: pending tanpa
+      // expiresAt mengunci tagihan selamanya bagi anggota ini.
+      if (pay?.id) {
+        await db.delete(payments).where(eq(payments.id, pay.id)).catch(() => {});
+      }
       results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "error", qrString: null, expiresAt: null, note: "Gateway error" });
     }
   }
