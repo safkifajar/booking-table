@@ -205,6 +205,21 @@ interface SessionViewProps {
 }
 
 export function SessionView(props: SessionViewProps) {
+  // Segarkan halaman saat ada perubahan yang menyangkut penonton ini.
+  //
+  // Diperlukan terutama untuk yang sedang MENUNGGU disetujui bergabung:
+  // ia melihat halaman ini (bukan /preview), tapi belum jadi anggota
+  // sehingga tak berhak atas saluran SESI. Yang didengarkan saluran
+  // PENGGUNA — createNotification mengirim sinyal ke sana saat host
+  // menyetujui atau menolak. Tanpa ini ia harus memuat ulang sendiri.
+  const sseRouter = useRouter();
+  React.useEffect(() => {
+    if (!props.myProfileId) return;
+    const es = new EventSource(`/api/realtime/user/${props.myProfileId}`);
+    es.onmessage = () => sseRouter.refresh();
+    return () => es.close();
+  }, [props.myProfileId, sseRouter]);
+
   // Tab awal bisa ditentukan lewat ?tab= — dipakai saat kembali dari halaman
   // detail order supaya user mendarat lagi di tab Bill (asalnya dari list order
   // di sana), bukan terlempar ke Vibe.
@@ -513,11 +528,6 @@ function SessionHeader(props: SessionViewProps) {
           <h1 className="text-base sm:text-lg font-semibold truncate">
             Table Details
           </h1>
-          {props.session.title && (
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {props.session.title}
-            </p>
-          )}
           {props.openedByStaff && (
             <div className="flex items-center gap-1 mt-0.5">
               <Sparkles className="h-3 w-3 text-primary/70" />
