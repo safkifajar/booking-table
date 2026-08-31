@@ -41,9 +41,12 @@ import {
   assertActiveStaffOfSession,
 } from "@/lib/auth-v2/session-auth";
 import { formatIDR, isDbConstraintError } from "@/lib/utils";
-import { notify } from "@/lib/realtime/notify";
-import { channels } from "@/lib/realtime/channels";
 import { logActivity } from "@/lib/activity-log";
+import {
+  notifySessionAndStaff,
+  recordSessionInvites,
+  markSessionInviteResponded,
+} from "@/lib/session-shared";
 import * as profileActions from "@/lib/profile-actions";
 import {
   createNotification,
@@ -170,35 +173,6 @@ const addOrderItemSchema = z.object({
 const joinSchema = z.object({
   sessionId: z.string().uuid(),
 });
-
-// ============================================================
-// REALTIME NOTIFY HELPER
-// ============================================================
-
-/**
- * Notify both session channel + staff bar channel (best-effort, parallel).
- * Dipanggil setelah commit perubahan apapun yang affect session view atau
- * staff dashboard (members, orders, items, payments).
- *
- * Failure di-swallow di notify() — tidak block main flow.
- */
-async function notifySessionAndStaff(sessionId: string): Promise<void> {
-  // Lookup bar_id (kalau session masih ada — closed sessions tetap valid)
-  const [row] = await db
-    .select({ bar_id: floorAreas.barId })
-    .from(tableSessions)
-    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
-    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
-    .where(eq(tableSessions.id, sessionId));
-
-  await Promise.all([
-    notify(channels.session(sessionId)),
-    row ? notify(channels.staff(row.bar_id)) : Promise.resolve(),
-    // Bar channel juga di-notify supaya floor map (/bar/[slug]) auto-update
-    // saat session/member/order/payment berubah.
-    row ? notify(channels.bar(row.bar_id)) : Promise.resolve(),
-  ]);
-}
 
 // ============================================================
 // SESSION LIFECYCLE
@@ -798,61 +772,6 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
 
   // Walk-in / tanpa DP / DP sudah paid → langsung ke session view.
   redirect(`/session/${sessionId}`);
-}
-
-/**
- * Catat/segarkan arsip undangan (session_invites) — record untuk /profile/invites.
- * Upsert per (session, invitee): undang-ulang orang yang sama ke sesi ini
- * → reset ke 'pending' + invited_at baru + responded_at null (mengikuti pola
- * friend_requests yang dipakai-ulang per pasangan). Dipanggil saat undangan
- * BENAR-BENAR dikirim (booking: setelah DP lunas; meja aktif: saat host undang).
- */
-async function recordSessionInvites(
-  sessionId: string,
-  invites: { inviterId: string; inviteeId: string }[]
-): Promise<void> {
-  if (invites.length === 0) return;
-  await db
-    .insert(sessionInvites)
-    .values(
-      invites.map((i) => ({
-        sessionId,
-        inviterId: i.inviterId,
-        inviteeId: i.inviteeId,
-        status: "pending" as const,
-      }))
-    )
-    .onConflictDoUpdate({
-      target: [sessionInvites.sessionId, sessionInvites.inviteeId],
-      set: {
-        inviterId: sql`excluded.inviter_id`,
-        status: sql`'pending'::invite_status`,
-        invitedAt: sql`now()`,
-        respondedAt: sql`NULL`,
-      },
-    });
-}
-
-/**
- * Tandai arsip undangan sudah direspon (accepted/declined) atau dibatalkan
- * (cancelled) — untuk record /profile/invites. Best-effort; hanya menyentuh
- * baris yang masih 'pending' supaya tak menimpa status final.
- */
-async function markSessionInviteResponded(
-  sessionId: string,
-  inviteeId: string,
-  status: "accepted" | "declined" | "cancelled"
-): Promise<void> {
-  await db
-    .update(sessionInvites)
-    .set({ status, respondedAt: new Date() })
-    .where(
-      and(
-        eq(sessionInvites.sessionId, sessionId),
-        eq(sessionInvites.inviteeId, inviteeId),
-        eq(sessionInvites.status, "pending")
-      )
-    );
 }
 
 /**
