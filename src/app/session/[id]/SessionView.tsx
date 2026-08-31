@@ -1789,15 +1789,39 @@ function RequestJoinButton({
 }) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
-  const [pending, setPending] = React.useState(alreadyPending);
+  // Status "menunggu" DITURUNKAN dari data server (alreadyPending), bukan
+  // disimpan di state lokal.
+  //
+  // Dulu state lokal disetel true saat tombol ditekan & tak pernah turun
+  // lagi: host MENOLAK → barisnya dihapus → server bilang tak pending, tapi
+  // layar terus menampilkan "Waiting for host approval" sampai pengguna
+  // berpindah halaman. State lokal juga meleset kalau penolakan datang
+  // sebelum server sempat mengabarkan status pending-nya.
+  //
+  // `justRequested` hanya menjembatani jeda sampai router.refresh() selesai,
+  // dan langsung menyerah begitu server menjawab.
+  const [justRequested, setJustRequested] = React.useState(false);
+  const pending = alreadyPending || justRequested;
+
+  // Begitu server menjawab (apa pun jawabannya), lepaskan jembatan itu —
+  // sejak saat itu tampilan sepenuhnya mengikuti server, termasuk kalau
+  // host menolak sebelum status pending-nya sempat terbaca.
+  const [prevAlready, setPrevAlready] = React.useState(alreadyPending);
+  if (prevAlready !== alreadyPending) {
+    setPrevAlready(alreadyPending);
+    setJustRequested(false);
+  }
 
   async function handleRequest() {
     setLoading(true);
     try {
       const res = await requestJoinSession({ sessionId });
       if (res.status === "pending") {
-        setPending(true);
+        setJustRequested(true);
         toast.success(`Request sent to ${hostName}`);
+        // Ambil data server; sejak itu tampilan mengikuti server, dan
+        // penolakan dari host langsung terlihat.
+        router.refresh();
       } else if (res.status === "joined") {
         toast.success("You're already a member of this table");
         router.refresh();
