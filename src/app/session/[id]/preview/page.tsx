@@ -437,6 +437,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
           isHost={isHost}
           myStatus={myMemberStatus}
           loggedIn={!!profile}
+          viewerId={profile?.id ?? null}
           visibility={session.visibility}
           isHostFriend={isHostFriend}
         />

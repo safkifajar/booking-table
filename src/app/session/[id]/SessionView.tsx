@@ -504,9 +504,20 @@ function SessionHeader(props: SessionViewProps) {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
+          {/* Judul TETAP "Table Details" — kolom session.title sebenarnya
+              berisi DESKRIPSI meja (lihat updateSessionInfo: "Field: title
+              (deskripsi)"). Memakainya sebagai judul membuat kepala halaman
+              berubah-ubah mengikuti catatan host, sehingga tamu kehilangan
+              petunjuk sedang berada di layar apa. Deskripsinya ditampilkan
+              di bawah judul. */}
           <h1 className="text-base sm:text-lg font-semibold truncate">
-            {props.session.title ?? "Table Details"}
+            Table Details
           </h1>
+          {props.session.title && (
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {props.session.title}
+            </p>
+          )}
           {props.openedByStaff && (
             <div className="flex items-center gap-1 mt-0.5">
               <Sparkles className="h-3 w-3 text-primary/70" />
