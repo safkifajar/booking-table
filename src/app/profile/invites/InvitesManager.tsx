@@ -15,7 +15,8 @@ import {
   formatRelativeTime,
   getActionErrorMessage,
 } from "@/lib/utils";
-import { acceptInvite, declineInvite, type MyInviteItem } from "@/lib/actions";
+import { acceptInvite, declineInvite } from "@/lib/actions";
+import type { MyInviteItem } from "@/lib/session-membership-actions";
 
 type Tab = "pending" | "history";
 
