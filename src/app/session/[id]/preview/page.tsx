@@ -39,6 +39,13 @@ import {
 } from "@/lib/membership";
 import { getFriendIdSet } from "@/lib/friends";
 
+/**
+ * Disegarkan lewat SSE — tanpa force-dynamic, router.refresh() dapat
+ * salinan cache & tampilannya baru berubah setelah pengguna berpindah
+ * halaman.
+ */
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -437,6 +444,7 @@ export default async function SessionPreviewPage({ params }: PageProps) {
           isHost={isHost}
           myStatus={myMemberStatus}
           loggedIn={!!profile}
+          viewerId={profile?.id ?? null}
           visibility={session.visibility}
           isHostFriend={isHostFriend}
         />

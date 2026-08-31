@@ -205,6 +205,21 @@ interface SessionViewProps {
 }
 
 export function SessionView(props: SessionViewProps) {
+  // Segarkan halaman saat ada perubahan yang menyangkut penonton ini.
+  //
+  // Diperlukan terutama untuk yang sedang MENUNGGU disetujui bergabung:
+  // ia melihat halaman ini (bukan /preview), tapi belum jadi anggota
+  // sehingga tak berhak atas saluran SESI. Yang didengarkan saluran
+  // PENGGUNA — createNotification mengirim sinyal ke sana saat host
+  // menyetujui atau menolak. Tanpa ini ia harus memuat ulang sendiri.
+  const sseRouter = useRouter();
+  React.useEffect(() => {
+    if (!props.myProfileId) return;
+    const es = new EventSource(`/api/realtime/user/${props.myProfileId}`);
+    es.onmessage = () => sseRouter.refresh();
+    return () => es.close();
+  }, [props.myProfileId, sseRouter]);
+
   // Tab awal bisa ditentukan lewat ?tab= — dipakai saat kembali dari halaman
   // detail order supaya user mendarat lagi di tab Bill (asalnya dari list order
   // di sana), bukan terlempar ke Vibe.
@@ -504,8 +519,14 @@ function SessionHeader(props: SessionViewProps) {
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
+          {/* Judul TETAP "Table Details" — kolom session.title sebenarnya
+              berisi DESKRIPSI meja (lihat updateSessionInfo: "Field: title
+              (deskripsi)"). Memakainya sebagai judul membuat kepala halaman
+              berubah-ubah mengikuti catatan host, sehingga tamu kehilangan
+              petunjuk sedang berada di layar apa. Deskripsinya ditampilkan
+              di bawah judul. */}
           <h1 className="text-base sm:text-lg font-semibold truncate">
-            {props.session.title ?? "Table Details"}
+            Table Details
           </h1>
           {props.openedByStaff && (
             <div className="flex items-center gap-1 mt-0.5">
@@ -1768,15 +1789,39 @@ function RequestJoinButton({
 }) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
-  const [pending, setPending] = React.useState(alreadyPending);
+  // Status "menunggu" DITURUNKAN dari data server (alreadyPending), bukan
+  // disimpan di state lokal.
+  //
+  // Dulu state lokal disetel true saat tombol ditekan & tak pernah turun
+  // lagi: host MENOLAK → barisnya dihapus → server bilang tak pending, tapi
+  // layar terus menampilkan "Waiting for host approval" sampai pengguna
+  // berpindah halaman. State lokal juga meleset kalau penolakan datang
+  // sebelum server sempat mengabarkan status pending-nya.
+  //
+  // `justRequested` hanya menjembatani jeda sampai router.refresh() selesai,
+  // dan langsung menyerah begitu server menjawab.
+  const [justRequested, setJustRequested] = React.useState(false);
+  const pending = alreadyPending || justRequested;
+
+  // Begitu server menjawab (apa pun jawabannya), lepaskan jembatan itu —
+  // sejak saat itu tampilan sepenuhnya mengikuti server, termasuk kalau
+  // host menolak sebelum status pending-nya sempat terbaca.
+  const [prevAlready, setPrevAlready] = React.useState(alreadyPending);
+  if (prevAlready !== alreadyPending) {
+    setPrevAlready(alreadyPending);
+    setJustRequested(false);
+  }
 
   async function handleRequest() {
     setLoading(true);
     try {
       const res = await requestJoinSession({ sessionId });
       if (res.status === "pending") {
-        setPending(true);
+        setJustRequested(true);
         toast.success(`Request sent to ${hostName}`);
+        // Ambil data server; sejak itu tampilan mengikuti server, dan
+        // penolakan dari host langsung terlihat.
+        router.refresh();
       } else if (res.status === "joined") {
         toast.success("You're already a member of this table");
         router.refresh();

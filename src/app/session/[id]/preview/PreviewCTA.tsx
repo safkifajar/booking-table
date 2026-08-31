@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,11 +23,28 @@ interface Props {
   visibility: string;
   /** Viewer berteman dgn host? Meja "friends" hanya bisa di-join teman (PRD K3). */
   isHostFriend: boolean;
+  /** Id penonton — untuk mendengarkan keputusan host secara realtime. */
+  viewerId: string | null;
 }
 
 export function PreviewCTA(props: Props) {
+  const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const [status, setStatus] = React.useState(props.myStatus);
+
+  // Dengarkan keputusan host (disetujui / ditolak) secara realtime.
+  //
+  // Halaman ini TIDAK bisa mendengarkan saluran sesi: pemohon belum jadi
+  // anggota, jadi ia tak berhak atas saluran itu. Yang didengarkan saluran
+  // PENGGUNA — createNotification sudah mengirim sinyal ke sana saat host
+  // menyetujui atau menolak. Tanpa ini pemohon harus memuat ulang halaman
+  // untuk tahu keputusannya.
+  React.useEffect(() => {
+    if (!props.viewerId || status !== "pending") return;
+    const es = new EventSource(`/api/realtime/user/${props.viewerId}`);
+    es.onmessage = () => router.refresh();
+    return () => es.close();
+  }, [props.viewerId, status, router]);
 
   const full = props.memberCount >= props.capacity;
 

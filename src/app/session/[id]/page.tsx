@@ -32,6 +32,14 @@ import {
 import { getFriendIdSet } from "@/lib/friends";
 import { SessionView } from "./SessionView";
 
+/**
+ * Halaman ini berubah terus (anggota, pesanan, pembayaran) & disegarkan
+ * lewat SSE. Tanpa force-dynamic, router.refresh() mengambil ulang tapi
+ * dapat salinan cache — tampilannya baru berubah setelah pengguna pindah
+ * tab. Halaman realtime lain (denah bar, dasbor waiter) sudah memakainya.
+ */
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string; tab?: string }>;

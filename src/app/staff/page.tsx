@@ -7,6 +7,13 @@ import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
 import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 
 /**
+ * Disegarkan lewat SSE — tanpa force-dynamic, router.refresh() dapat
+ * salinan cache & tampilannya baru berubah setelah pengguna berpindah
+ * halaman.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * Gateway `/staff` — redirect ke dashboard sesuai role:
  * - admin / manager → /admin (subdomain admin sebenarnya, tapi kalau di domain
  *   utama lewat /staff, kita arahkan ke /admin yang akan 404 di domain utama)
