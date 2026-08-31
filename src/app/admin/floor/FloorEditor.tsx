@@ -286,14 +286,22 @@ function AreaWorkspace({
   async function handleDeleteTable(t: BarTable) {
     const ok = await confirm({
       title: `Delete table ${t.label}?`,
-      description: "Table will be permanently deleted. Not possible if in use.",
+      description:
+        "Permanently removes the table. Only possible if it has never been " +
+        "used — a table with past sessions can be turned off instead.",
       confirmText: "Delete",
       variant: "danger",
     });
     if (!ok) return;
     try {
       await flushDraft();
-      await deleteTable(t.id);
+      const res = await deleteTable(t.id);
+      // Penolakan datang sebagai nilai kembali, bukan galat — tanpa
+      // memeriksanya, meja yang GAGAL dihapus tetap memunculkan "deleted".
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to delete table");
+        return;
+      }
       toast.success(`Table ${t.label} deleted`);
       setSelectedTableId(null);
       router.refresh();
