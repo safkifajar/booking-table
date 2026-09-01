@@ -32,8 +32,8 @@ import {
   cancelUnpaidOrder,
   cancelPayment,
   regenerateMemberPayment,
-  type OrderDetail,
 } from "@/lib/actions";
+import type { OrderDetail } from "@/lib/order-types";
 import type { PayableMethod } from "@/types/db";
 import { toast } from "sonner";
 

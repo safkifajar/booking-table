@@ -32,7 +32,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { formatIDR, initials, cn, getActionErrorMessage } from "@/lib/utils";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { PaymentConfetti } from "@/components/PaymentConfetti";
-import type { SessionOrderSummary } from "@/lib/actions";
+import type { SessionOrderSummary } from "@/lib/order-types";
 import {
   createOrder,
   closeSession,
