@@ -44,6 +44,17 @@ export interface OrderDetail {
   isStaff: boolean;
   /** Pemanggil kasir (staff role cashier) — utk opsi bayar cash/mark-paid. */
   isCashier: boolean;
+  /**
+   * Dasbor tempat staf ini pulang (/staff/waiter, /staff/cashier, /admin).
+   * NULL utk tamu.
+   *
+   * Dikirim dari server karena UI cuma tahu isStaff/isCashier — tak cukup
+   * membedakan waiter dari manager. Dipakai saat membatalkan booking:
+   * sesinya ikut mati, jadi tak ada halaman sesi untuk kembali, dan
+   * memulangkan staf ke "/" melemparnya ke aplikasi TAMU (lalu tertahan
+   * wizard onboarding, karena profil staf tak pernah di-onboard).
+   */
+  staffHome: string | null;
   /** Boleh membuat pembayaran utk order ini (host/staff & masih ada sisa). */
   canPay: boolean;
   /** View-only: penonton non-member — nominal/pemesan/pembayaran di-redaksi. */

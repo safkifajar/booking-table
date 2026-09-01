@@ -36,7 +36,11 @@ import { orders, orderItems, payments } from "@/lib/db/schema/orders";
 import { staffRoles } from "@/lib/db/schema/extras";
 import { profiles } from "@/lib/db/schema/profiles";
 import { requireProfile } from "@/lib/auth-v2/current";
-import { can, type StaffRoleName } from "@/lib/auth-v2/permissions";
+import {
+  can,
+  defaultDashboardFor,
+  type StaffRoleName,
+} from "@/lib/auth-v2/permissions";
 import { isSessionHost } from "@/lib/auth-v2/session-auth";
 import { formatIDR } from "@/lib/utils";
 import { logActivity } from "@/lib/activity-log";
@@ -690,6 +694,7 @@ export async function getOrderDetail(
     isHost,
     isStaff,
     isCashier,
+    staffHome: staff ? defaultDashboardFor(staff.role as StaffRoleName) : null,
     // Kasir TETAP boleh menerima pembayaran (mis. tamu bayar tunai di meja kasir
     // walau QRIS-nya masih hidup) — ia punya kontrol & bisa membatalkan QRIS.
     // Pemilik order (anggota yang memesan sendiri) juga boleh membayar — tapi

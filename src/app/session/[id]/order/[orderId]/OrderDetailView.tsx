@@ -104,9 +104,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       const res = await cancelUnpaidOrder(detail.id);
       // Kalau ini DP booking yang belum terkonfirmasi, seluruh booking ikut
       // batal (sesi cancelled) → JANGAN kembali ke halaman sesi (sudah mati);
-      // keluar ke home supaya tidak memantul & meja tidak tampak aktif.
+      // keluar supaya tidak memantul & meja tidak tampak aktif.
+      //
+      // Staf pulang ke DASBORNYA, bukan "/": home itu aplikasi TAMU, yang
+      // melempar ke /bar/[slug] lalu tertahan wizard onboarding — profil staf
+      // memang tak pernah di-onboard, jadi waiter tersangkut di situ.
       if (res.bookingCancelled) {
-        router.replace("/");
+        router.replace(detail.staffHome ?? "/");
         return;
       }
       router.push(backHref);
@@ -227,7 +231,9 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
       // halaman tunggu → tampak "malah berhasil booking"); keluar dari sesi.
       if (res.bookingCancelled) {
         toast.success("Booking cancelled");
-        router.replace("/");
+        // Sama seperti handleCancelOrder: staf pulang ke dasbornya, bukan ke
+        // aplikasi tamu.
+        router.replace(detail.staffHome ?? "/");
         return;
       }
       toast.success("Payment cancelled");
