@@ -575,7 +575,9 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
                             : p.method.toUpperCase()}{" "}
                           · {fmtTime(p.paid_at ?? p.created_at)}
                         </div>
-                        {/* Kasir yang memproses (pay-at-cashier) */}
+                        {/* Staf yang memproses — kasir yang mengkonfirmasi
+                            pay-at-cashier, ATAU kasir/waiter yang membuat
+                            pembayarannya (QRIS/cash). */}
                         {p.confirmed_by && p.status === "paid" && (
                           <div className="text-[11px] text-muted-foreground/80">
                             processed by{" "}

@@ -1194,6 +1194,16 @@ export async function cashierCreatePayment(
     throw new Error("Invalid bar access");
   }
 
+  // Nama staf yang memproses — kasir MAUPUN waiter. Tamu perlu tahu siapa
+  // yang menerima uangnya, dan saat selisih kas muncul, baris pembayarannya
+  // sendiri yang menunjuk penanggung jawabnya. Diambil sekali di sini karena
+  // dipakai ketiga cabang pembayaran di bawah.
+  const [staffProfile] = await db
+    .select({ name: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, ctx.profileId));
+  const processedByName = staffProfile?.name ?? null;
+
   // 2. Order yang dibayar. Multi-order: pakai orderId kalau diberi (dicek milik
   //    sesi); else fallback ke order non-unpaid terbaru.
   let order: { id: string } | undefined;
@@ -1304,7 +1314,11 @@ export async function cashierCreatePayment(
         method: "voucher",
         status: "paid",
         splitMode: "equal" as SplitMode,
-        splitMeta: { voucherCode: voucher.code, voucherId: voucher.voucherId },
+        splitMeta: {
+          voucherCode: voucher.code,
+          voucherId: voucher.voucherId,
+          processedByName,
+        },
         paidAt: new Date(),
       })
       .returning({ id: payments.id });
@@ -1364,6 +1378,7 @@ export async function cashierCreatePayment(
       splitMeta: {
         cashReceived: data.cashReceived,
         change,
+        processedByName,
         ...(voucher
           ? { voucherCode: voucher.code, voucherDiscount: voucher.discount }
           : {}),
@@ -1410,6 +1425,7 @@ export async function cashierCreatePayment(
       splitMeta: {
         cashReceived: data.cashReceived,
         change,
+        processedByName,
         qrString: chargeResult.qrString ?? null,
         redirectUrl: chargeResult.redirectUrl ?? null,
         expiresAt: chargeResult.expiresAt ?? null,

@@ -729,7 +729,7 @@ export async function getOrderDetail(
       ? []
       : payRows.map((p) => {
           const meta =
-            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null; confirmedByName?: string | null } | null) ?? {};
+            (p.split_meta as { isDownPayment?: boolean; dpFull?: boolean; payAtCashier?: boolean; supersededByPaid?: boolean; qrString?: string | null; expiresAt?: string | null; confirmedByName?: string | null; processedByName?: string | null } | null) ?? {};
           const isMine = p.paid_by_member_id === myMemberId;
           return {
             id: p.id,
@@ -748,7 +748,12 @@ export async function getOrderDetail(
             paid_by_avatar: p.paid_by_avatar,
             paid_by_member_id: p.paid_by_member_id,
             paid_by_is_host: p.paid_by_role === "host",
-            confirmed_by: meta.confirmedByName ?? null,
+            // Staf yang memproses. Dua jalur berbeda:
+            // - confirmedByName: kasir mengkonfirmasi pembayaran pay-at-cashier
+            // - processedByName: kasir/waiter yang MEMBUAT pembayarannya
+            // Keduanya dijawab lewat satu field supaya UI tak perlu tahu
+            // lewat jalur mana pembayaran itu masuk.
+            confirmed_by: meta.confirmedByName ?? meta.processedByName ?? null,
             qr_string: isMine || isStaff ? meta.qrString ?? null : null,
             // Ikut aturan qr_string: hanya pemilik payment / staff.
             external_ref: isMine || isStaff ? p.external_ref ?? null : null,

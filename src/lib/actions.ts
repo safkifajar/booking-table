@@ -557,7 +557,10 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
             method: data.dpMethod!,
             status: "pending",
             splitMode: "custom",
-            splitMeta: { isDownPayment: true },
+            splitMeta: {
+              isDownPayment: true,
+              ...(dpIsFullPrepay ? { dpFull: true } : {}),
+            },
             paidAt: null,
           })
           .returning({ id: payments.id });
@@ -660,6 +663,11 @@ export async function openTable(input: z.infer<typeof openTableSchema>) {
           amount: dpCharge,
           splitMeta: {
             isDownPayment: true,
+            // Sama seperti jalur pay-at-cashier: DP yang melunasi SELURUH
+            // tagihan ditandai dpFull supaya tampil sbg "Bill", bukan "DP".
+            // Tanpa ini, bayar 100% lewat QRIS tetap berlabel DP — update ini
+            // menimpa splitMeta, jadi flagnya harus ditulis ulang di sini.
+            ...(dpIsFullPrepay ? { dpFull: true } : {}),
             ...(dpDiscount > 0 && dpVoucher
               ? { voucherCode: dpVoucher.code, voucherDiscount: dpDiscount }
               : {}),
