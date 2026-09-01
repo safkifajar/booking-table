@@ -995,6 +995,15 @@ export async function staffOpenTableForCustomer(
     "open_table_for_customer",
     "/staff/waiter"
   );
+
+  // Nama staf yang memproses, ikut tercatat di tiap baris pembayaran —
+  // tamu melihatnya sbg "processed by" di detail order.
+  const [staffProfile] = await db
+    .select({ name: profiles.displayName })
+    .from(profiles)
+    .where(eq(profiles.id, ctx.profileId));
+  const processedByName = staffProfile?.name ?? null;
+
   const {
     tableId,
     guestNames,
@@ -1341,12 +1350,14 @@ export async function staffOpenTableForCustomer(
             ? {
                 isDownPayment: true,
                 dpFull: true,
+                processedByName,
                 voucherCode: voucher!.code,
                 voucherId: voucher!.voucherId,
               }
             : {
                 isDownPayment: true,
                 dpFull: true,
+                processedByName,
                 ...(voucher
                   ? {
                       voucherCode: voucher.code,
@@ -1463,7 +1474,7 @@ export async function staffOpenTableForCustomer(
         .update(payments)
         .set({
           externalRef: `cashier_${paymentId}`,
-          splitMeta: { isDownPayment: true, dpFull: true },
+          splitMeta: { isDownPayment: true, dpFull: true, processedByName },
         })
         .where(eq(payments.id, paymentId));
       await cashierMarkPaymentPaid(paymentId);
@@ -1482,6 +1493,7 @@ export async function staffOpenTableForCustomer(
         splitMeta: {
           isDownPayment: true,
           dpFull: true,
+          processedByName,
           payAtCashier: true,
           expiresAt: new Date(
             Date.now() + PAY_AT_CASHIER_TIMEOUT_SECONDS * 1000
@@ -1516,6 +1528,7 @@ export async function staffOpenTableForCustomer(
         splitMeta: {
           isDownPayment: true,
           dpFull: true,
+          processedByName,
           // Pertahankan info voucher — tanpa ini metadata QRIS menimpanya
           // dan jejak potongan hilang dari struk/riwayat.
           ...(voucher

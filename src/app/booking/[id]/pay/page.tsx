@@ -6,6 +6,7 @@ import { orders } from "@/lib/db/schema/orders";
 import { tableSessions } from "@/lib/db/schema/sessions";
 import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
 import { getCurrentProfile, getStaffRole } from "@/lib/auth-v2/current";
+import { defaultDashboardFor } from "@/lib/auth-v2/permissions";
 import { expireDpIfOverdue } from "@/lib/queries";
 import { BookingPayView } from "./BookingPayView";
 
@@ -117,6 +118,7 @@ export default async function BookingPayPage({ params }: PageProps) {
       secondsLeft={secondsLeft}
       sessionId={id}
       barSlug={row.bar_slug}
+      staffHome={staffRole ? defaultDashboardFor(staffRole) : null}
       mode={
         qrisUnavailable ? "unavailable" : isCashier ? "cashier" : "qris"
       }
