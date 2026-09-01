@@ -25,6 +25,7 @@ export function BookingPayView({
   secondsLeft,
   sessionId,
   barSlug,
+  staffHome = null,
   mode = "qris",
   tableLabel,
 }: {
@@ -36,10 +37,19 @@ export function BookingPayView({
   secondsLeft: number;
   sessionId: string;
   barSlug: string;
+  /**
+   * Dasbor staf pemanggil (NULL utk tamu). Staf yang keluar dari halaman ini
+   * pulang ke sana, BUKAN ke /bar/[slug]: denah itu aplikasi tamu, dan
+   * penjaganya melempar staf ke wizard onboarding — profil staf memang tak
+   * pernah di-onboard, jadi waiter tersangkut di situ.
+   */
+  staffHome?: string | null;
   mode?: "qris" | "cashier" | "unavailable";
   tableLabel?: string;
 }) {
   const router = useRouter();
+  /** Tujuan keluar: dasbor utk staf, denah bar utk tamu. */
+  const exitHref = staffHome ?? `/bar/${barSlug}`;
 
   // Gateway gagal membuat QRIS. Sebelumnya halaman ini mengalihkan ke
   // /session/[id], padahal penjaga di sana melempar balik ke sini selama DP
@@ -51,6 +61,7 @@ export function BookingPayView({
         amount={amount}
         sessionId={sessionId}
         barSlug={barSlug}
+        staffHome={staffHome}
         tableLabel={tableLabel}
       />
     );
@@ -64,6 +75,7 @@ export function BookingPayView({
         secondsLeft={secondsLeft}
         sessionId={sessionId}
         barSlug={barSlug}
+        staffHome={staffHome}
         tableLabel={tableLabel}
       />
     );
@@ -80,9 +92,9 @@ export function BookingPayView({
         // countdown langsung memicu cancel + redirect.
         expirySeconds={Math.max(1, secondsLeft)}
         onPaid={() => router.replace(`/session/${sessionId}`)}
-        onExpired={() => router.replace(`/bar/${barSlug}`)}
-        onCancelled={() => router.replace(`/bar/${barSlug}`)}
-        onClose={() => router.replace(`/bar/${barSlug}`)}
+        onExpired={() => router.replace(exitHref)}
+        onCancelled={() => router.replace(exitHref)}
+        onClose={() => router.replace(exitHref)}
       />
     </div>
   );
@@ -94,6 +106,7 @@ function CashierWaitView({
   secondsLeft,
   sessionId,
   barSlug,
+  staffHome,
   tableLabel,
 }: {
   paymentId: string;
@@ -101,9 +114,12 @@ function CashierWaitView({
   secondsLeft: number;
   sessionId: string;
   barSlug: string;
+  staffHome: string | null;
   tableLabel?: string;
 }) {
   const router = useRouter();
+  /** Tujuan keluar: dasbor utk staf, denah bar utk tamu. */
+  const exitHref = staffHome ?? `/bar/${barSlug}`;
   const [left, setLeft] = React.useState(secondsLeft);
   const [cancelling, setCancelling] = React.useState(false);
   const expiredHandled = React.useRef(false);
@@ -127,10 +143,10 @@ function CashierWaitView({
   // Dorong satu entri history dulu supaya event popstate pertama tertangkap.
   React.useEffect(() => {
     window.history.pushState(null, "", window.location.href);
-    const onPop = () => router.replace(`/bar/${barSlug}`);
+    const onPop = () => router.replace(exitHref);
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [router, barSlug]);
+  }, [router, exitHref]);
 
   // Waktu habis → batalkan (idempoten; kalau ternyata sudah paid → ke session).
   React.useEffect(() => {
@@ -147,9 +163,9 @@ function CashierWaitView({
         // Server sweep (expireDpIfOverdue) tetap membereskan — lanjut redirect.
       }
       toast.error("Booking cancelled. Cashier confirmation time ran out");
-      router.replace(`/bar/${barSlug}`);
+      router.replace(exitHref);
     })();
-  }, [left, paymentId, sessionId, barSlug, router]);
+  }, [left, paymentId, sessionId, exitHref, router]);
 
   async function handleCancel() {
     setCancelling(true);
@@ -160,7 +176,7 @@ function CashierWaitView({
         return;
       }
       toast.success("Booking cancelled");
-      router.replace(`/bar/${barSlug}`);
+      router.replace(exitHref);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Failed to cancel"));
       setCancelling(false);
@@ -246,15 +262,19 @@ function QrisUnavailableView({
   amount,
   sessionId,
   barSlug,
+  staffHome,
   tableLabel,
 }: {
   paymentId: string;
   amount: number;
   sessionId: string;
   barSlug: string;
+  staffHome: string | null;
   tableLabel?: string;
 }) {
   const router = useRouter();
+  /** Tujuan keluar: dasbor utk staf, denah bar utk tamu. */
+  const exitHref = staffHome ?? `/bar/${barSlug}`;
   const [cancelling, setCancelling] = React.useState(false);
 
   async function handleCancel() {
@@ -267,7 +287,7 @@ function QrisUnavailableView({
         router.replace(`/session/${sessionId}`);
         return;
       }
-      router.replace(`/bar/${barSlug}`);
+      router.replace(exitHref);
     } catch (err) {
       toast.error(getActionErrorMessage(err, "Couldn't cancel the booking"));
       setCancelling(false);
@@ -302,7 +322,7 @@ function QrisUnavailableView({
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => router.replace(`/bar/${barSlug}`)}
+            onClick={() => router.replace(exitHref)}
           >
             <Banknote className="h-4 w-4" />
             I&apos;ll pay at the cashier
