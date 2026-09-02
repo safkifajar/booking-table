@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useSessionRealtime } from "@/hooks/useSessionRealtime";
 import Image from "next/image";
 import {
   ArrowLeft,
@@ -56,6 +57,12 @@ function toExpirySeconds(expiresAt: string | null | undefined): number | undefin
 export function OrderDetailView({ detail }: { detail: OrderDetail }) {
   const router = useRouter();
   const confirm = useConfirm();
+  // Halaman ini SEBELUMNYA tak punya realtime sama sekali, padahal isinya
+  // berubah karena orang lain: anggota melunasi bagiannya (host harus
+  // menunggu refresh manual untuk tahu), atau host membatalkan order
+  // sementara anggota masih memegang QR terbuka — QR yang sudah tak berlaku
+  // itu tetap terpampang dan bisa terlanjur dibayar.
+  useSessionRealtime(detail.sessionId);
   const [paySheet, setPaySheet] = React.useState(false);
   const [backBusy, setBackBusy] = React.useState(false);
 
@@ -129,6 +136,31 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
     amount: number;
     expirySeconds?: number;
   } | null>(null);
+
+  /**
+   * QR yang sudah TIDAK BERLAKU harus lenyap dari layar, bukan sekadar
+   * berhenti diperbarui.
+   *
+   * Kalau host membatalkan order sementara anggota masih memegang dialog QR
+   * terbuka, tanpa ini QR-nya tetap terpampang — dan anggota bisa terlanjur
+   * memindainya lalu membayar tagihan yang sudah dibatalkan. Data segar
+   * datang lewat SSE (useSessionRealtime di atas); yang tertinggal hanyalah
+   * state klien ini.
+   *
+   * Diturunkan saat render, BUKAN lewat useEffect+setState — effect yang
+   * memanggil setState memicu render berantai (dan aturan lint
+   * react-hooks/set-state-in-effect).
+   */
+  const activeRow = activeQr
+    ? detail.payments.find((p) => p.id === activeQr.paymentId)
+    : undefined;
+  // Hanya tutup kalau pembayarannya DIKENAL server dan sudah tak pending.
+  // Baris yang belum dikenal berarti QR-nya baru saja dibuat dan data server
+  // belum menyusul — menutupnya di situ justru melenyapkan QR yang sah.
+  const activeQrDead =
+    (activeRow != null && activeRow.status !== "pending") ||
+    detail.status === "cancelled";
+  const visibleQr = activeQr && !activeQrDead ? activeQr : null;
 
   // Waktu sekarang (di-refresh tiap 10 dtk) utk cek expired di history tanpa
   // Date.now() saat render.
@@ -720,13 +752,13 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
 
       {/* QRIS dialog — tampilan seragam: ID transaksi, nominal, countdown, poll,
           cancel. Sama seperti QRIS di flow lain. */}
-      {activeQr && (
+      {visibleQr && (
         <QrisPaymentDialog
-          paymentId={activeQr.paymentId}
-          reference={activeQr.reference}
-          qrString={activeQr.qrString}
-          amount={activeQr.amount}
-          expirySeconds={activeQr.expirySeconds}
+          paymentId={visibleQr.paymentId}
+          reference={visibleQr.reference}
+          qrString={visibleQr.qrString}
+          amount={visibleQr.amount}
+          expirySeconds={visibleQr.expirySeconds}
           onPaid={() => {
             setActiveQr(null);
             router.refresh();

@@ -59,6 +59,7 @@ import {
 import {
   notifyPaymentEvent,
   notifyCashiersPayAtCashier,
+  notifySplitMembers,
 } from "@/lib/payment-notify";
 import {
   isBlockedEitherWay,
@@ -1107,6 +1108,19 @@ export async function createSplitBatch(
   }
 
   await notifySessionAndStaff(data.sessionId);
+
+  // Kabari tiap ANGGOTA bahwa bagiannya siap dibayar. notifySessionAndStaff di
+  // atas hanya menyegarkan layar lewat SSE — anggota yang tak sedang membuka
+  // aplikasi tak tahu apa-apa. Host dilewati di dalam fungsinya (QRIS-nya
+  // sudah terpampang di layarnya sendiri).
+  await notifySplitMembers({
+    sessionId: data.sessionId,
+    orderId: order.id,
+    members: results
+      .filter((r) => r.paymentId && r.status === "pending")
+      .map((r) => ({ memberId: r.memberId, amount: r.amount })),
+  });
+
   // Split bayar-di-kasir: kabari kasir SEKALI (bukan per anggota) kalau ada
   // share pay-at-cashier yang pending.
   if (data.method === "cash") {
