@@ -59,6 +59,15 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const memberCount = detail.member_count;
   const subtotal = detail.subtotal;
   const totalPaid = detail.total_paid;
+  /**
+   * Potongan voucher — baris payments ber-method 'voucher' adalah baris
+   * SINTETIS senilai potongan (lihat settleVoucherForPayment), bukan uang
+   * yang benar-benar masuk. Dipisahkan supaya tak ikut terdaftar sebagai
+   * pembayaran (dulu tampil positif, terbaca seolah tamu membayar sejumlah
+   * itu) dan muncul sebagai baris diskon di ringkasan — seperti yang sudah
+   * dilakukan layar tamu dan struk kasir.
+   */
+  const voucherDiscount = detail.voucher_discount;
 
   const startedAt = new Date(detail.started_at);
   const closedAt = detail.closed_at ? new Date(detail.closed_at) : null;
@@ -320,15 +329,27 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               Payments
             </h3>
             <div className="space-y-1.5 text-xs">
-              {payments.map((p) => {
+              {payments
+                .filter((p) => p.method !== "voucher")
+                .map((p) => {
                 // Rincian per pembayaran (feedback user): amount SUDAH
                 // termasuk charge proporsional -> porsi bill = amount /
                 // (1 + pct/100), charge = selisihnya. Derivasi tampilan —
-                // bisa selisih Rp1 karena pembulatan. Baris voucher =
-                // potongan murni, tanpa rincian.
+                // bisa selisih Rp1 karena pembulatan.
+                //
+                // DISEMBUNYIKAN saat ada potongan voucher: nominal bayar
+                // sudah dikurangi voucher, jadi membaginya dengan (1+pct)
+                // menghasilkan angka yang bukan bill mana pun. Contoh nyata
+                // (2 Sep): tagihan 591.000 dgn voucher 20.000 dibayar
+                // 594.640, dan rincian ini menampilkan "bill 571.769" —
+                // angka yang tak ada di transaksi itu. Nominal totalnya
+                // sendiri sudah benar, jadi cukup rinciannya yang ditahan.
                 const pct = detail.charge_percent;
                 const showBreakdown =
-                  pct > 0 && p.method !== "voucher" && p.amount > 0;
+                  pct > 0 &&
+                  p.method !== "voucher" &&
+                  p.amount > 0 &&
+                  voucherDiscount === 0;
                 const baseShare = showBreakdown
                   ? Math.round(p.amount / (1 + pct / 100))
                   : p.amount;
@@ -434,6 +455,16 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               </span>
               <span className="font-semibold tabular-nums">
                 {formatIDR(detail.charge)}
+              </span>
+            </div>
+          )}
+          {voucherDiscount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-emerald-400 print:text-black/70">
+                Membership voucher
+              </span>
+              <span className="font-semibold tabular-nums text-emerald-400 print:text-black">
+                - {formatIDR(voucherDiscount)}
               </span>
             </div>
           )}

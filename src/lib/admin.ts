@@ -738,7 +738,13 @@ export interface TransactionDetail {
   charge_percent: number;
   /** Label charge sesuai komponen aktif ("Tax & Service"/"Tax"/"Service charge"). */
   charge_label: string;
-  /** subtotal + tax + service. */
+  /**
+   * Potongan voucher — jumlah baris payments ber-method 'voucher', yang
+   * merupakan baris SINTETIS senilai potongan (settleVoucherForPayment),
+   * bukan uang masuk.
+   */
+  voucher_discount: number;
+  /** subtotal + tax + service - voucher_discount (yang benar-benar ditagihkan). */
   total: number;
   total_paid: number;
   /** Riwayat pindah meja (dari→ke), terlama dulu. Kosong = tak pernah pindah. */
@@ -969,6 +975,14 @@ export async function getTransactionDetail(
     .reduce((s, p) => s + p.amount, 0);
   // Tax & service dari config bar → total tagihan.
   const bill = computeBillTotals(subtotal, await getChargeConfig(barId));
+  // Potongan voucher HARUS dikurangkan dari total: computeBillTotals hanya
+  // menghitung dari item, tak tahu-menahu soal diskon. Tanpa ini total di
+  // halaman admin lebih besar dari yang sesungguhnya ditagihkan — pada
+  // transaksi 2 Sep, total tampil 1.182.480 padahal tagihannya 1.162.480.
+  // (Layar tamu & struk kasir sudah benar; keduanya memotong voucher.)
+  const voucherDiscount = paymentsList
+    .filter((p) => p.method === "voucher" && p.status === "paid")
+    .reduce((s, p) => s + p.amount, 0);
 
   const moveHistory: TransactionMoveHistory[] = moveRows.map((m) => ({
     id: m.id,
@@ -1003,7 +1017,8 @@ export async function getTransactionDetail(
     charge: bill.charge,
     charge_percent: bill.chargePercent,
     charge_label: bill.chargeLabel,
-    total: bill.total,
+    voucher_discount: voucherDiscount,
+    total: bill.total - voucherDiscount,
     total_paid: totalPaid,
     move_history: moveHistory,
   };
