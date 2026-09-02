@@ -15,7 +15,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { and, eq, inArray, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, ne, sql, desc } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
@@ -512,9 +512,19 @@ export interface AdminPayment {
 }
 
 /**
- * Daftar SEMUA pembayaran di bar pada rentang waktu. Difilter pakai
+ * Daftar pembayaran di bar pada rentang waktu. Difilter pakai
  * COALESCE(paidAt, createdAt) supaya pending (paidAt null) tetap masuk
  * berdasar waktu dibuat. Urut terbaru.
+ *
+ * BARIS VOUCHER DIKECUALIKAN. Payment ber-method 'voucher' adalah baris
+ * SINTETIS senilai potongan (settleVoucherForPayment), bukan uang yang
+ * masuk ke rekening. Selama ikut terdaftar, ringkasan "Rp X paid" di
+ * halaman Payment Transactions melebih-lebihkan pemasukan sebesar total
+ * voucher — angka yang justru dipakai untuk rekonsiliasi. Jejak vouchernya
+ * tetap terlihat di detail transaksi & struk.
+ *
+ * Pengecualian ditaruh di query, bukan di halaman, supaya Export CSV ikut
+ * bersih tanpa penyaringan kedua yang mudah terlewat.
  */
 export async function getPayments(
   barId: string,
@@ -552,6 +562,7 @@ export async function getPayments(
     .where(
       and(
         eq(floorAreas.barId, barId),
+        ne(payments.method, "voucher"),
         // Cast eksplisit ke timestamptz — `from`/`to` adalah ISO string.
         // Tanpa cast, Date object dikirim sbg toString() yg invalid utk timestamp.
         sql`${atExpr} >= ${from}::timestamptz`,
