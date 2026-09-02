@@ -15,7 +15,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { and, eq, inArray, sql, desc } from "drizzle-orm";
+import { and, eq, inArray, ne, sql, desc } from "drizzle-orm";
 import { alias as aliasedTable } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db/client";
 import { menuCategories, menuItems } from "@/lib/db/schema/menu";
@@ -512,9 +512,19 @@ export interface AdminPayment {
 }
 
 /**
- * Daftar SEMUA pembayaran di bar pada rentang waktu. Difilter pakai
+ * Daftar pembayaran di bar pada rentang waktu. Difilter pakai
  * COALESCE(paidAt, createdAt) supaya pending (paidAt null) tetap masuk
  * berdasar waktu dibuat. Urut terbaru.
+ *
+ * BARIS VOUCHER DIKECUALIKAN. Payment ber-method 'voucher' adalah baris
+ * SINTETIS senilai potongan (settleVoucherForPayment), bukan uang yang
+ * masuk ke rekening. Selama ikut terdaftar, ringkasan "Rp X paid" di
+ * halaman Payment Transactions melebih-lebihkan pemasukan sebesar total
+ * voucher — angka yang justru dipakai untuk rekonsiliasi. Jejak vouchernya
+ * tetap terlihat di detail transaksi & struk.
+ *
+ * Pengecualian ditaruh di query, bukan di halaman, supaya Export CSV ikut
+ * bersih tanpa penyaringan kedua yang mudah terlewat.
  */
 export async function getPayments(
   barId: string,
@@ -552,6 +562,7 @@ export async function getPayments(
     .where(
       and(
         eq(floorAreas.barId, barId),
+        ne(payments.method, "voucher"),
         // Cast eksplisit ke timestamptz — `from`/`to` adalah ISO string.
         // Tanpa cast, Date object dikirim sbg toString() yg invalid utk timestamp.
         sql`${atExpr} >= ${from}::timestamptz`,
@@ -738,7 +749,13 @@ export interface TransactionDetail {
   charge_percent: number;
   /** Label charge sesuai komponen aktif ("Tax & Service"/"Tax"/"Service charge"). */
   charge_label: string;
-  /** subtotal + tax + service. */
+  /**
+   * Potongan voucher — jumlah baris payments ber-method 'voucher', yang
+   * merupakan baris SINTETIS senilai potongan (settleVoucherForPayment),
+   * bukan uang masuk.
+   */
+  voucher_discount: number;
+  /** subtotal + tax + service - voucher_discount (yang benar-benar ditagihkan). */
   total: number;
   total_paid: number;
   /** Riwayat pindah meja (dari→ke), terlama dulu. Kosong = tak pernah pindah. */
@@ -969,6 +986,14 @@ export async function getTransactionDetail(
     .reduce((s, p) => s + p.amount, 0);
   // Tax & service dari config bar → total tagihan.
   const bill = computeBillTotals(subtotal, await getChargeConfig(barId));
+  // Potongan voucher HARUS dikurangkan dari total: computeBillTotals hanya
+  // menghitung dari item, tak tahu-menahu soal diskon. Tanpa ini total di
+  // halaman admin lebih besar dari yang sesungguhnya ditagihkan — pada
+  // transaksi 2 Sep, total tampil 1.182.480 padahal tagihannya 1.162.480.
+  // (Layar tamu & struk kasir sudah benar; keduanya memotong voucher.)
+  const voucherDiscount = paymentsList
+    .filter((p) => p.method === "voucher" && p.status === "paid")
+    .reduce((s, p) => s + p.amount, 0);
 
   const moveHistory: TransactionMoveHistory[] = moveRows.map((m) => ({
     id: m.id,
@@ -1003,7 +1028,8 @@ export async function getTransactionDetail(
     charge: bill.charge,
     charge_percent: bill.chargePercent,
     charge_label: bill.chargeLabel,
-    total: bill.total,
+    voucher_discount: voucherDiscount,
+    total: bill.total - voucherDiscount,
     total_paid: totalPaid,
     move_history: moveHistory,
   };

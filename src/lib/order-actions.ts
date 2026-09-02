@@ -465,17 +465,24 @@ export async function getSessionOrders(
     )
     .orderBy(desc(orders.createdAt));
 
-  // Paid per order.
+  // Paid per order — sekalian potongan voucher, yang dipisah dari nominal
+  // yang benar-benar dibayar. Baris payments ber-method 'voucher' adalah
+  // baris SINTETIS senilai potongan (settleVoucherForPayment), bukan uang
+  // masuk, jadi ia harus MENGURANGI total tagihan.
   const paidRows = await db
     .select({
       orderId: payments.orderId,
       paid: sql<number>`COALESCE(SUM(${payments.amount}), 0)::int`,
+      voucher: sql<number>`COALESCE(SUM(CASE WHEN ${payments.method} = 'voucher' THEN ${payments.amount} ELSE 0 END), 0)::int`,
     })
     .from(payments)
     .innerJoin(orders, eq(orders.id, payments.orderId))
     .where(and(eq(orders.sessionId, sessionId), eq(payments.status, "paid")))
     .groupBy(payments.orderId);
   const paidMap = new Map(paidRows.map((r) => [r.orderId, Number(r.paid)]));
+  const voucherMap = new Map(
+    paidRows.map((r) => [r.orderId, Number(r.voucher)])
+  );
 
   // Pending "pay at cashier" per order (non-DP) → expiresAt terdekat, utk badge
   // + countdown di list & deep-link ke halaman bayar.
@@ -507,6 +514,12 @@ export async function getSessionOrders(
   return rows.map((r) => {
     const bill = computeBillTotals(Number(r.subtotal), charge);
     const paid = paidMap.get(r.id) ?? 0;
+    // computeBillTotals hanya menghitung dari item — tak tahu-menahu soal
+    // diskon. Tanpa dikurangkan di sini, daftar Bill menampilkan angka
+    // SEBELUM potongan, berbeda dari halaman detail order yang memotongnya
+    // (2 Sep: daftar 614.640 vs detail 594.640 untuk order yang sama).
+    const voucher = voucherMap.get(r.id) ?? 0;
+    const total = Math.max(0, bill.total - voucher);
     return {
       id: r.id,
       status: r.status,
@@ -514,8 +527,10 @@ export async function getSessionOrders(
       paidAt: r.paidAt ? r.paidAt.toISOString() : null,
       itemCount: Number(r.itemCount),
       subtotal: bill.subtotal,
-      total: bill.total,
-      outstanding: Math.max(0, bill.total - paid),
+      total,
+      // `paid` memang mencakup baris voucher, dan `total` sudah dikurangi
+      // voucher — keduanya konsisten, sisanya tetap benar.
+      outstanding: Math.max(0, total - (paid - voucher)),
       owner_member_id: r.ownerMemberId,
       ordered_by: r.orderedBy,
       cashier_pending_expires_at: cashierExpiryMap.get(r.id) ?? null,
@@ -759,9 +774,16 @@ export async function getOrderDetail(
             // Keduanya dijawab lewat satu field supaya UI tak perlu tahu
             // lewat jalur mana pembayaran itu masuk.
             confirmed_by: meta.confirmedByName ?? meta.processedByName ?? null,
-            qr_string: isMine || isStaff ? meta.qrString ?? null : null,
-            // Ikut aturan qr_string: hanya pemilik payment / staff.
-            external_ref: isMine || isStaff ? p.external_ref ?? null : null,
+            // HOST ikut boleh melihat QR anggotanya. Dia yang MEMBUAT
+            // pembayaran itu (createSplitBatch) dan berwenang menerbitkan
+            // ulang (regenerateMemberPayment), jadi menyembunyikan QR-nya
+            // tak menambah privasi apa pun — hanya membuat host kehilangan
+            // QR-nya sendiri begitu dialog ditutup, karena tombol "Show QR"
+            // bergantung pada field ini.
+            qr_string: isMine || isStaff || isHost ? meta.qrString ?? null : null,
+            // Ikut aturan qr_string: pemilik payment / staff / host.
+            external_ref:
+              isMine || isStaff || isHost ? p.external_ref ?? null : null,
             expires_at: meta.expiresAt ?? null,
           };
         }),
