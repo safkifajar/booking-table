@@ -1515,6 +1515,8 @@ export async function cashierConfirmPendingPayment(input: {
   expiresAt: string | null;
   amount: number;
   change: number;
+  /** Referensi gateway — layar QR menampilkannya alih-alih UUID internal. */
+  externalRef?: string | null;
 }> {
   const ctx = await requirePermission("receive_payment", "/staff/cashier");
   const data = z
@@ -1665,6 +1667,7 @@ export async function cashierConfirmPendingPayment(input: {
       expiresAt: null,
       amount: payment.amount,
       change: 0,
+      externalRef: cr.externalRef ?? null,
     };
   }
 
@@ -1697,6 +1700,7 @@ export async function cashierConfirmPendingPayment(input: {
     expiresAt: cr.expiresAt ?? null,
     amount: payment.amount,
     change: 0,
+    externalRef: cr.externalRef ?? null,
   };
 }
 

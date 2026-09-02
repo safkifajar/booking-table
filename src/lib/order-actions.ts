@@ -774,9 +774,16 @@ export async function getOrderDetail(
             // Keduanya dijawab lewat satu field supaya UI tak perlu tahu
             // lewat jalur mana pembayaran itu masuk.
             confirmed_by: meta.confirmedByName ?? meta.processedByName ?? null,
-            qr_string: isMine || isStaff ? meta.qrString ?? null : null,
-            // Ikut aturan qr_string: hanya pemilik payment / staff.
-            external_ref: isMine || isStaff ? p.external_ref ?? null : null,
+            // HOST ikut boleh melihat QR anggotanya. Dia yang MEMBUAT
+            // pembayaran itu (createSplitBatch) dan berwenang menerbitkan
+            // ulang (regenerateMemberPayment), jadi menyembunyikan QR-nya
+            // tak menambah privasi apa pun — hanya membuat host kehilangan
+            // QR-nya sendiri begitu dialog ditutup, karena tombol "Show QR"
+            // bergantung pada field ini.
+            qr_string: isMine || isStaff || isHost ? meta.qrString ?? null : null,
+            // Ikut aturan qr_string: pemilik payment / staff / host.
+            external_ref:
+              isMine || isStaff || isHost ? p.external_ref ?? null : null,
             expires_at: meta.expiresAt ?? null,
           };
         }),

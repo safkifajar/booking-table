@@ -873,6 +873,13 @@ export interface SplitBatchMemberResult {
   status: PaymentStatus | "skipped" | "error";
   qrString: string | null;
   expiresAt: string | null;
+  /**
+   * Referensi dari gateway (mis. Duitku). Dipakai layar QR untuk menampilkan
+   * "Reference: DS327..." alih-alih UUID internal kita — nomor inilah yang
+   * bisa ditelusuri tamu & kasir di sisi gateway. NULL kalau gateway tak
+   * memberi (atau pembayaran dibuat tanpa gateway, mis. pay-at-cashier).
+   */
+  externalRef: string | null;
   /** Alasan skip/error (mis. sudah punya pending, atau gateway gagal). */
   note?: string;
 }
@@ -1011,11 +1018,11 @@ export async function createSplitBatch(
 
   for (const t of targets) {
     if (t.amount <= 0) {
-      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: 0, status: "skipped", qrString: null, expiresAt: null, note: "Nothing to pay" });
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: 0, status: "skipped", qrString: null, expiresAt: null, externalRef: null, note: "Nothing to pay" });
       continue;
     }
     if (hasActivePending.has(t.memberId)) {
-      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "skipped", qrString: null, expiresAt: null, note: "Already has a pending payment" });
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "skipped", qrString: null, expiresAt: null, externalRef: null, note: "Already has a pending payment" });
       continue;
     }
     // Dideklarasikan DI LUAR try supaya blok catch bisa membuang barisnya.
@@ -1052,7 +1059,7 @@ export async function createSplitBatch(
             splitMeta: { batchId, payAtCashier: true, expiresAt: batchExpiresAt },
           })
           .where(eq(payments.id, pay.id));
-        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: batchExpiresAt });
+        results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: "pending", qrString: null, expiresAt: batchExpiresAt, externalRef: null });
         continue;
       }
 
@@ -1080,7 +1087,7 @@ export async function createSplitBatch(
         })
         .where(eq(payments.id, pay.id));
 
-      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: cr.status, qrString: cr.qrString ?? null, expiresAt: cr.expiresAt ?? null });
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: pay.id, amount: t.amount, status: cr.status, qrString: cr.qrString ?? null, expiresAt: cr.expiresAt ?? null, externalRef: cr.externalRef ?? null });
     } catch (err) {
       console.error("[createSplitBatch] gagal utk member", t.memberId, err);
       // Buang baris pending-nya — lihat catatan di payShare: pending tanpa
@@ -1088,7 +1095,7 @@ export async function createSplitBatch(
       if (pay?.id) {
         await db.delete(payments).where(eq(payments.id, pay.id)).catch(() => {});
       }
-      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "error", qrString: null, expiresAt: null, note: "Gateway error" });
+      results.push({ memberId: t.memberId, displayName: t.displayName, paymentId: null, amount: t.amount, status: "error", qrString: null, expiresAt: null, externalRef: null, note: "Gateway error" });
     }
   }
 
@@ -1146,6 +1153,8 @@ export async function regenerateMemberPayment(input: {
   status: PaymentStatus;
   qrString: string | null;
   expiresAt: string | null;
+  /** Referensi gateway — layar QR menampilkannya alih-alih UUID internal. */
+  externalRef: string | null;
 }> {
   const profile = await requireProfile();
 
@@ -1378,6 +1387,7 @@ export async function regenerateMemberPayment(input: {
     status: charge.status,
     qrString: charge.qrString ?? null,
     expiresAt: charge.expiresAt ?? null,
+    externalRef: charge.externalRef ?? null,
   };
 }
 

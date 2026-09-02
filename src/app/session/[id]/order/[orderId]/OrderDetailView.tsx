@@ -201,6 +201,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         if (mine?.qrString && mine.paymentId) {
           setActiveQr({
             paymentId: mine.paymentId,
+            reference: mine.externalRef,
             qrString: mine.qrString,
             amount: mine.amount,
             expirySeconds: toExpirySeconds(mine.expiresAt),
@@ -280,6 +281,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         // QRIS pending → tampilkan QR utk di-scan customer di meja kasir.
         setActiveQr({
           paymentId,
+          reference: res.externalRef || null,
           qrString: res.qrString,
           amount: res.amount,
           expirySeconds: toExpirySeconds(res.expiresAt),
@@ -306,6 +308,7 @@ export function OrderDetailView({ detail }: { detail: OrderDetail }) {
         if (mineNow && mineNow.paid_by_member_id === detail.myMemberId) {
           setActiveQr({
             paymentId: res.paymentId,
+            reference: res.externalRef,
             qrString: res.qrString,
             amount: res.amount,
             expirySeconds: toExpirySeconds(res.expiresAt),
