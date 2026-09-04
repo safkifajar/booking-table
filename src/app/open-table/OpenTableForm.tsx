@@ -408,6 +408,10 @@ export function OpenTableForm({
     }
   }
 
+  // max-w-lg mengunci lebar form: halaman ini SENGAJA tampil seperti di ponsel
+  // pada lebar berapa pun. Tamu membukanya dari QR meja, jadi praktis selalu
+  // dari ponsel — tata letak desktop tersendiri hanya menambah permukaan yang
+  // harus diuji tanpa ada yang memakainya.
   return (
     <div className="w-full max-w-lg">
       {/* Header meja — di luar section-card, sebagai judul halaman form.
@@ -1038,11 +1042,13 @@ function MenuPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-0"
       onClick={onClose}
     >
+      {/* Selalu layar penuh — tanpa varian sm:, halaman ini sengaja tampil
+          sama di semua lebar (lihat catatan di pembungkus form). */}
       <div
-        className="w-full h-full sm:h-auto sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl sm:max-h-[90vh] flex flex-col"
+        className="w-full h-full max-w-lg bg-background border border-border shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
