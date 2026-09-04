@@ -14,7 +14,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { formatIDR } from "@/lib/utils";
 import { checkPaymentStatus } from "@/lib/actions";
-import type { SessionPaymentDetail } from "@/lib/actions";
+import type { SessionPaymentDetail } from "@/lib/split-types";
 
 function fmtDateTime(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", {

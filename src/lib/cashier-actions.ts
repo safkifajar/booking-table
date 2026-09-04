@@ -61,7 +61,7 @@ import {
   expireOverdueDpBookings,
   expireOverduePayAtCashierOrders,
 } from "@/lib/queries";
-import { sendBookingInvites } from "@/lib/actions";
+import { sendBookingInvites } from "@/lib/session-shared";
 import { notifyPaymentEvent } from "@/lib/payment-notify";
 import { logActivity, logSystem } from "@/lib/activity-log";
 import { formatIDR } from "@/lib/utils";

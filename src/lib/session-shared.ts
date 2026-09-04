@@ -13,12 +13,21 @@ import "server-only";
  * dipakai satu bagian tetap tinggal di tempatnya, ikut pindah nanti.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { tableSessions, sessionInvites } from "@/lib/db/schema/sessions";
-import { tables, floorAreas } from "@/lib/db/schema/venue";
+import {
+  tableSessions,
+  sessionInvites,
+  sessionMembers,
+} from "@/lib/db/schema/sessions";
+import { tables, floorAreas, bars } from "@/lib/db/schema/venue";
+import { profiles } from "@/lib/db/schema/profiles";
+import { users } from "@/lib/db/schema/auth";
 import { notify } from "@/lib/realtime/notify";
 import { channels } from "@/lib/realtime/channels";
+import { createNotification } from "@/lib/notifications";
+import { sendEmail } from "@/lib/auth-v2/email-service";
+import { tableInviteEmail } from "@/lib/auth-v2/email-template";
 
 /**
  * Beri tahu saluran sesi + saluran staf + saluran bar sekaligus.
@@ -105,4 +114,94 @@ export async function markSessionInviteResponded(
         eq(sessionInvites.status, "pending")
       )
     );
+}
+
+
+/**
+ * Kirim undangan (notif in-app + email) ke SEMUA member 'pending' berundang
+ * (invitedBy not null) di sebuah sesi — self-contained (baca data dari DB via
+ * sessionId, tak butuh state in-memory).
+ *
+ * Dipakai untuk booking yang butuh DP: undangan hanya dikirim SETELAH DP lunas,
+ * bukan saat booking dibuat (yang mungkin belum dibayar / batal). Idempotensi
+ * dijamin PEMANGGIL — dipanggil hanya pada transisi dp_paid_at null→terisi
+ * (sekali seumur booking), jadi tak perlu penanda per-member.
+ *
+ * Best-effort: kegagalan notif/email tak boleh menggagalkan alur pembayaran.
+ */
+export async function sendBookingInvites(sessionId: string): Promise<void> {
+  // Host (pengundang) + meja + bar untuk isi teks undangan.
+  const [meta] = await db
+    .select({
+      hostId: tableSessions.hostId,
+      hostName: profiles.displayName,
+      tableLabel: tables.label,
+      barName: bars.name,
+    })
+    .from(tableSessions)
+    .innerJoin(profiles, eq(profiles.id, tableSessions.hostId))
+    .innerJoin(tables, eq(tables.id, tableSessions.tableId))
+    .innerJoin(floorAreas, eq(floorAreas.id, tables.areaId))
+    .innerJoin(bars, eq(bars.id, floorAreas.barId))
+    .where(eq(tableSessions.id, sessionId));
+  if (!meta) return;
+
+  // Member yang diundang & masih pending (belum accept/decline) + email +
+  // pengundang (untuk arsip).
+  const invited = await db
+    .select({
+      profileId: sessionMembers.profileId,
+      email: users.email,
+      invitedBy: sessionMembers.invitedBy,
+    })
+    .from(sessionMembers)
+    .innerJoin(users, eq(users.id, sessionMembers.profileId))
+    .where(
+      and(
+        eq(sessionMembers.sessionId, sessionId),
+        eq(sessionMembers.status, "pending"),
+        isNotNull(sessionMembers.invitedBy)
+      )
+    );
+  if (invited.length === 0) return;
+
+  // Arsip undangan (record /profile/invites). Upsert: undang-ulang orang yg sama
+  // ke sesi ini reset ke pending. invitedAt = sekarang (waktu undangan benar-2
+  // dikirim = setelah DP lunas), respondedAt di-null-kan.
+  await recordSessionInvites(
+    sessionId,
+    invited
+      .filter((u) => u.invitedBy)
+      .map((u) => ({ inviterId: u.invitedBy as string, inviteeId: u.profileId }))
+  ).catch((e) => console.error("[invite] archive booking:", e));
+
+  const link = `/session/${sessionId}`;
+  const tableLabel = meta.tableLabel ?? "table";
+  await Promise.allSettled(
+    invited.map(async (u) => {
+      await createNotification({
+        profileId: u.profileId,
+        type: "table_invite",
+        title: `${meta.hostName} invited you to table ${tableLabel}`,
+        body: `Open to accept the invite to table ${tableLabel}.`,
+        link,
+        actorId: meta.hostId, // foto pengundang di list notifikasi
+      });
+      const tpl = tableInviteEmail({
+        email: u.email,
+        inviterName: meta.hostName,
+        tableLabel,
+        barName: meta.barName ?? "SOHO",
+        link,
+        mode: "invited",
+      });
+      await sendEmail({
+        to: u.email,
+        subject: `Invite to table ${tableLabel}`,
+        kind: "table_invite",
+        html: tpl.html,
+        text: tpl.text,
+      });
+    })
+  );
 }
