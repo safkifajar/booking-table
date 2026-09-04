@@ -120,8 +120,11 @@ export default async function OpenTablePage({ searchParams }: PageProps) {
     ? flattenMenuTree(await getMenuByBar(row.bar_id))
     : [];
 
+  // items-center DILEPAS dari pembungkus: header form di dalamnya sticky, dan
+  // pemusatan vertikal membuat pembungkusnya lebih pendek dari konten sehingga
+  // sticky tak punya ruang untuk menempel.
   return (
-    <main className="flex-1 flex items-center justify-center px-4 py-8">
+    <main className="flex-1 flex justify-center px-4 pb-8">
       <Suspense>
         <OpenTableForm
           table={{

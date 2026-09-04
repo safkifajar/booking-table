@@ -410,8 +410,12 @@ export function OpenTableForm({
 
   return (
     <div className="w-full max-w-lg">
-      {/* Header meja — di luar section-card, sebagai judul halaman form. */}
-      <div className="mb-4 space-y-3">
+      {/* Header meja — di luar section-card, sebagai judul halaman form.
+          STICKY: identitas meja (nama, area, kapasitas) harus tetap terlihat
+          selagi tamu menggulir memilih tanggal, jam, vibe, dan menu — form ini
+          panjang, dan tanpa ini mudah lupa sedang memesan meja yang mana.
+          Latar buram supaya konten yang lewat di bawahnya tak terbaca menembus. */}
+      <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-3 bg-background/90 px-4 pb-3 pt-8 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -698,34 +702,6 @@ export function OpenTableForm({
             </div>
           )}
 
-          {/* Voucher membership utk DP (PRD Membership rev-3) — hanya saat
-              reservasi ber-DP. Bill tanpa DP: voucher dipakai saat bayar. */}
-          {dpRequired && dpAmount > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Membership voucher{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional — discount on your deposit)
-                </span>
-              </label>
-              <VoucherPicker
-                amount={dpAmount}
-                applied={
-                  voucher
-                    ? {
-                        code: voucher.code,
-                        name: voucher.name,
-                        discount: voucher.discount,
-                      }
-                    : null
-                }
-                checking={voucherChecking}
-                onPick={applyVoucher}
-                onClear={() => setVoucher(null)}
-              />
-            </div>
-          )}
-
           {/* Metode pembayaran DP: QRIS sekarang vs konfirmasi di kasir */}
           {dpRequired && dpAmount > 0 && (
             <div>
@@ -796,6 +772,37 @@ export function OpenTableForm({
                   otherwise the booking is cancelled and the slot reopens.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Voucher membership utk DP (PRD Membership rev-3) — hanya saat
+              reservasi ber-DP. Bill tanpa DP: voucher dipakai saat bayar.
+              DITARUH SETELAH metode pembayaran: nominal tombol bayar di
+              bawahnya sudah memperhitungkan potongan, jadi urutannya mengikuti
+              alur baca — pilih cara bayar, lalu potongan, lalu nominal akhir. */}
+          {dpRequired && dpAmount > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Membership voucher{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional — discount on your deposit)
+                </span>
+              </label>
+              <VoucherPicker
+                amount={dpAmount}
+                applied={
+                  voucher
+                    ? {
+                        code: voucher.code,
+                        name: voucher.name,
+                        discount: voucher.discount,
+                      }
+                    : null
+                }
+                checking={voucherChecking}
+                onPick={applyVoucher}
+                onClear={() => setVoucher(null)}
+              />
             </div>
           )}
         </FormSection>
