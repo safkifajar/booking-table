@@ -408,10 +408,18 @@ export function OpenTableForm({
     }
   }
 
+  // max-w-lg mengunci lebar form: halaman ini SENGAJA tampil seperti di ponsel
+  // pada lebar berapa pun. Tamu membukanya dari QR meja, jadi praktis selalu
+  // dari ponsel — tata letak desktop tersendiri hanya menambah permukaan yang
+  // harus diuji tanpa ada yang memakainya.
   return (
     <div className="w-full max-w-lg">
-      {/* Header meja — di luar section-card, sebagai judul halaman form. */}
-      <div className="mb-4 space-y-3">
+      {/* Header meja — di luar section-card, sebagai judul halaman form.
+          STICKY: identitas meja (nama, area, kapasitas) harus tetap terlihat
+          selagi tamu menggulir memilih tanggal, jam, vibe, dan menu — form ini
+          panjang, dan tanpa ini mudah lupa sedang memesan meja yang mana.
+          Latar buram supaya konten yang lewat di bawahnya tak terbaca menembus. */}
+      <div className="sticky top-0 z-30 -mx-4 mb-4 space-y-3 bg-background/90 px-4 pb-3 pt-8 backdrop-blur-md">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -698,34 +706,6 @@ export function OpenTableForm({
             </div>
           )}
 
-          {/* Voucher membership utk DP (PRD Membership rev-3) — hanya saat
-              reservasi ber-DP. Bill tanpa DP: voucher dipakai saat bayar. */}
-          {dpRequired && dpAmount > 0 && (
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Membership voucher{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional — discount on your deposit)
-                </span>
-              </label>
-              <VoucherPicker
-                amount={dpAmount}
-                applied={
-                  voucher
-                    ? {
-                        code: voucher.code,
-                        name: voucher.name,
-                        discount: voucher.discount,
-                      }
-                    : null
-                }
-                checking={voucherChecking}
-                onPick={applyVoucher}
-                onClear={() => setVoucher(null)}
-              />
-            </div>
-          )}
-
           {/* Metode pembayaran DP: QRIS sekarang vs konfirmasi di kasir */}
           {dpRequired && dpAmount > 0 && (
             <div>
@@ -796,6 +776,37 @@ export function OpenTableForm({
                   otherwise the booking is cancelled and the slot reopens.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Voucher membership utk DP (PRD Membership rev-3) — hanya saat
+              reservasi ber-DP. Bill tanpa DP: voucher dipakai saat bayar.
+              DITARUH SETELAH metode pembayaran: nominal tombol bayar di
+              bawahnya sudah memperhitungkan potongan, jadi urutannya mengikuti
+              alur baca — pilih cara bayar, lalu potongan, lalu nominal akhir. */}
+          {dpRequired && dpAmount > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Membership voucher{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional — discount on your deposit)
+                </span>
+              </label>
+              <VoucherPicker
+                amount={dpAmount}
+                applied={
+                  voucher
+                    ? {
+                        code: voucher.code,
+                        name: voucher.name,
+                        discount: voucher.discount,
+                      }
+                    : null
+                }
+                checking={voucherChecking}
+                onPick={applyVoucher}
+                onClear={() => setVoucher(null)}
+              />
             </div>
           )}
         </FormSection>
@@ -1031,11 +1042,13 @@ function MenuPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 p-0"
       onClick={onClose}
     >
+      {/* Selalu layar penuh — tanpa varian sm:, halaman ini sengaja tampil
+          sama di semua lebar (lihat catatan di pembungkus form). */}
       <div
-        className="w-full h-full sm:h-auto sm:max-w-md bg-background border border-border sm:rounded-2xl shadow-2xl sm:max-h-[90vh] flex flex-col"
+        className="w-full h-full max-w-lg bg-background border border-border shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
